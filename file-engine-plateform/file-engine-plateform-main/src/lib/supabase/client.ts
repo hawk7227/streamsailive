@@ -33,9 +33,10 @@ export function createClient() {
         })
     }
 
-    return createBrowserClient(url, key, {
+   return createBrowserClient(url, key, {
         auth: {
-            lock: false,
+            storageKey: 'fe-auth-token',
+            flowType: 'pkce',
         }
     })
 }
