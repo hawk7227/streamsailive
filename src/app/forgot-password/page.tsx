@@ -11,7 +11,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const supabase = createClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/";
 
   useEffect(() => {
     let interval: NodeJS.Timeout;

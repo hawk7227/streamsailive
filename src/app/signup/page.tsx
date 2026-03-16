@@ -26,7 +26,7 @@ function SignupForm() {
   const supabase = createClient();
   const router = useRouter();
   const { user, updateProfile } = useAuth();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/";
 
   useEffect(() => {
     if (user) {
