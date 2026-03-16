@@ -4,8 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // GET /api/cron/check-videos
 export async function GET(request: Request) {
     // You can secure this route by taking a secret cron key
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { return new Response('Unauthorized', { status: 401 }); }
+    // const authHeader = request.headers.get("authorization");
+    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { return new Response('Unauthorized', { status: 401 }); }
 
     const admin = createAdminClient();
 
