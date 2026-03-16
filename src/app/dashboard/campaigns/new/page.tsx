@@ -36,6 +36,7 @@ export default function CampaignBuilderPage() {
   const [smsMessage, setSmsMessage] = useState("");
   const [mmsMessage, setMmsMessage] = useState("");
   const [mmsMediaUrl, setMmsMediaUrl] = useState("");
+  const [mmsUploading, setMmsUploading] = useState(false);
 
   // Leads State
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -59,6 +60,72 @@ export default function CampaignBuilderPage() {
   const [aiTargetField, setAiTargetField] = useState<'emailSubject' | 'emailBody' | 'sms' | 'mms' | null>(null);
   const [aiCustomPrompt, setAiCustomPrompt] = useState("");
   const [aiSelectedTemplate, setAiSelectedTemplate] = useState<string>("");
+
+  const persistLeadsToCampaign = async (opts: { campaignId: string; workspaceId: string; userId: string }) => {
+    const cleaned = leads
+      .map((l) => ({
+        name: l.name?.trim() || null,
+        email: l.email?.trim() || null,
+        phone: l.phone?.trim() || null,
+        company: l.company?.trim() || null,
+      }))
+      .filter((l) => Boolean(l.email) || Boolean(l.phone));
+
+    if (cleaned.length === 0) return { linked: 0 };
+
+    let linked = 0;
+
+    for (const lead of cleaned) {
+      // Try to find existing lead in this workspace by email OR phone
+      const orParts: string[] = [];
+      if (lead.email) orParts.push(`email.eq.${lead.email}`);
+      if (lead.phone) orParts.push(`phone.eq.${lead.phone}`);
+
+      const { data: existing, error: findError } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("workspace_id", opts.workspaceId)
+        .or(orParts.join(","))
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      let leadId = existing?.id as string | undefined;
+      if (!leadId) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("leads")
+          .insert([
+            {
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
+              company: lead.company,
+              workspace_id: opts.workspaceId,
+              user_id: opts.userId,
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (insertError) throw insertError;
+        leadId = inserted?.id;
+      }
+
+      if (!leadId) continue;
+
+      const { error: linkError } = await supabase
+        .from("campaign_leads")
+        .upsert(
+          [{ campaign_id: opts.campaignId, lead_id: leadId }],
+          { onConflict: "campaign_id,lead_id" }
+        );
+
+      if (linkError) throw linkError;
+      linked++;
+    }
+
+    return { linked };
+  };
 
   // Load existing campaign if editing
   useEffect(() => {
@@ -145,14 +212,28 @@ export default function CampaignBuilderPage() {
           .eq('id', campaignId);
         
         if (error) throw error;
+        await persistLeadsToCampaign({
+          campaignId,
+          workspaceId: profile.current_workspace_id,
+          userId: user.id,
+        });
         alert(status === 'scheduled' ? 'Campaign scheduled successfully!' : 'Campaign updated successfully!');
       } else {
         // Create new campaign
-        const { error } = await supabase
+        const { data: created, error } = await supabase
           .from('campaigns')
-          .insert([campaignData]);
+          .insert([campaignData])
+          .select("id")
+          .single();
         
         if (error) throw error;
+        if (created?.id) {
+          await persistLeadsToCampaign({
+            campaignId: created.id,
+            workspaceId: profile.current_workspace_id,
+            userId: user.id,
+          });
+        }
         alert(status === 'scheduled' ? 'Campaign scheduled successfully!' : 'Campaign saved successfully!');
         router.push('/dashboard/campaigns');
       }
@@ -218,7 +299,11 @@ export default function CampaignBuilderPage() {
   };
 
   const downloadSampleCSV = () => {
-    const csv = 'email,phone,name,company\njohn@example.com,+1234567890,John Doe,Acme Corp\njane@example.com,+0987654321,Jane Smith,Tech Inc';
+    const csv =
+      "email,phone,name,company\n" +
+      "john@example.com,+14155550101,John Doe,Acme Corp\n" +
+      "jane@example.com,+14155550102,Jane Smith,Tech Inc\n" +
+      "sam@example.com,+14155550103,Sam Patel,Globex";
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -226,6 +311,26 @@ export default function CampaignBuilderPage() {
     a.download = 'leads_sample.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const uploadMmsImage = async (file: File) => {
+    setMmsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/storage/upload-campaign-media", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Upload failed");
+      setMmsMediaUrl(data.url);
+    } catch (err) {
+      console.error("MMS image upload failed:", err);
+      alert(`Failed to upload image: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setMmsUploading(false);
+    }
   };
 
   const sendTestEmail = async () => {
@@ -600,16 +705,6 @@ export default function CampaignBuilderPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="flex gap-4 text-center">
-                    <div>
-                        <div className="text-sm font-semibold text-accent-teal">3</div>
-                        <div className="text-[10px] uppercase text-text-muted">Channels</div>
-                    </div>
-                    <div>
-                        <div className="text-sm font-semibold text-accent-teal">$0.18</div>
-                        <div className="text-[10px] uppercase text-text-muted">Est. Cost</div>
-                    </div>
-                  </div>
                   <button className={`w-8 h-8 flex items-center justify-center text-text-secondary transition-transform duration-300 ${!panels.config ? 'rotate-[-90deg]' : ''}`}>
                     ▼
                   </button>
@@ -758,11 +853,25 @@ export default function CampaignBuilderPage() {
                              <div>
                                 <div className="flex justify-between mb-2">
                                     <label className="text-xs font-medium text-text-secondary">Media</label>
+                                    {mmsUploading && (
+                                      <span className="text-[10px] text-text-muted">Uploading…</span>
+                                    )}
                                 </div>
                                 <div className="flex gap-3">
-                                    <button className="flex-1 px-4 py-3 rounded-xl border border-border-color bg-bg-secondary text-text-secondary text-xs hover:text-white hover:border-accent-indigo transition-all">
-                                        🖼️ Select Image
-                                    </button>
+                                    <label className={`flex-1 px-4 py-3 rounded-xl border border-border-color bg-bg-secondary text-text-secondary text-xs hover:text-white hover:border-accent-indigo transition-all cursor-pointer ${mmsUploading ? "opacity-60 cursor-not-allowed" : ""}`}>
+                                        🖼️ {mmsMediaUrl ? "Change Image" : "Select Image"}
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          disabled={mmsUploading}
+                                          onChange={(e) => {
+                                            const f = e.target.files?.[0];
+                                            if (f) void uploadMmsImage(f);
+                                            e.currentTarget.value = "";
+                                          }}
+                                        />
+                                    </label>
                                     <input 
                                         type="text"
                                         value={mmsMediaUrl}
@@ -771,6 +880,18 @@ export default function CampaignBuilderPage() {
                                         placeholder="Or paste image URL"
                                     />
                                 </div>
+                                {mmsMediaUrl && (
+                                  <div className="mt-3">
+                                    <div className="text-[10px] text-text-muted mb-2">Preview image</div>
+                                    <div className="rounded-xl overflow-hidden border border-border-color bg-bg-secondary">
+                                      <img
+                                        src={mmsMediaUrl}
+                                        alt="MMS media"
+                                        className="w-full max-h-56 object-cover"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
                              </div>
                          </div>
                        </div>
@@ -855,7 +976,10 @@ export default function CampaignBuilderPage() {
                         <div className="flex items-center gap-3 p-4 border-b border-white/10">
                             <span className="text-blue-400 text-lg">‹</span>
                             <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs">👤</div>
-                            <span className="text-xs font-semibold">{previewLead?.name || 'Unknown'}</span>
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold truncate">{previewLead?.name || "Unknown"}</div>
+                              <div className="text-[10px] text-white/60 truncate">{previewLead?.phone || previewLead?.email || ""}</div>
+                            </div>
                         </div>
                         {/* Messages */}
                         <div className="flex-1 p-4 space-y-3">
@@ -864,7 +988,17 @@ export default function CampaignBuilderPage() {
                                     ? (substituteVariables(smsMessage, previewLead) || "Your SMS message will appear here...") 
                                     : (
                                         <>
-                                            <div className="w-full h-32 bg-white/20 rounded-lg flex items-center justify-center mb-2 text-2xl">📷</div>
+                                            {mmsMediaUrl ? (
+                                              <div className="w-full h-32 rounded-lg overflow-hidden mb-2 bg-white/10">
+                                                <img
+                                                  src={mmsMediaUrl}
+                                                  alt="MMS media"
+                                                  className="w-full h-full object-cover"
+                                                />
+                                              </div>
+                                            ) : (
+                                              <div className="w-full h-32 bg-white/20 rounded-lg flex items-center justify-center mb-2 text-2xl">📷</div>
+                                            )}
                                             {substituteVariables(mmsMessage, previewLead) || "Your MMS message..."}
                                         </>
                                     )

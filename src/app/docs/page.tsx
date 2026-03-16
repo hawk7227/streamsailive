@@ -367,9 +367,10 @@ export default function ApiDocsPage() {
   const [response, setResponse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   useEffect(() => {
-    setBaseUrl(window.location.origin);
+    setBaseUrl(appUrl);
   }, []);
 
   const selectedEndpoint = Object.values(ENDPOINTS)

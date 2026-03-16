@@ -11,6 +11,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const supabase = createClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -28,7 +29,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     });
 
     if (error) {
@@ -47,7 +48,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     });
 
     if (error) {

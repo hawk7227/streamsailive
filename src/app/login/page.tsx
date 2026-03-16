@@ -17,6 +17,7 @@ export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const { user } = useAuth();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   useEffect(() => {
     if (user) {
@@ -31,7 +32,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${appUrl}/auth/callback`,
       },
     });
 
@@ -82,7 +83,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${appUrl}/auth/callback`,
       },
     });
 

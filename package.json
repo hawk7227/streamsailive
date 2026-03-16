@@ -26,6 +26,7 @@
     "react-dom": "19.2.3",
     "reactflow": "^11.11.4",
     "stripe": "^20.2.0",
+    "twilio": "^5.13.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

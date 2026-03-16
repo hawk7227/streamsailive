@@ -1340,11 +1340,11 @@ export default function PipelineBuilder() {
                         <label className="block text-xs text-gray-500 mb-2">Webhook URL</label>
                         <div className="flex items-center gap-2">
                              <code className="flex-1 px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs font-mono text-gray-300 break-all">
-                                {window.location.origin}/api/v1/webhooks/{id}/{selectedNode.id}
+                                {process.env.NEXT_PUBLIC_APP_URL}/api/v1/webhooks/{id}/{selectedNode.id}
                              </code>
                              <button 
                                 onClick={() => {
-                                    navigator.clipboard.writeText(`${window.location.origin}/api/v1/webhooks/${id}/${selectedNode.id}`);
+                                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL}/api/v1/webhooks/${id}/${selectedNode.id}`);
                                     alert("Copied to clipboard!");
                                 }}
                                 className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg hover:bg-indigo-500/20"

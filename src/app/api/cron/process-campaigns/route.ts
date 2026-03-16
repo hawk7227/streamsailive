@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
+import { sendMms, sendSms } from "@/lib/sms";
 
 export async function GET(request: Request) {
     // const authHeader = request.headers.get("authorization");
@@ -62,9 +63,36 @@ export async function GET(request: Request) {
                             }
                         }
 
-                        // Log missing SMS implementation
-                        if (campaign.channels?.sms || campaign.channels?.mms) {
-                            console.warn(`SMS/MMS skipped for campaign ${campaign.id} (Not Implemented)`);
+                        if (campaign.channels?.sms) {
+                            if (!lead.phone) continue;
+                            try {
+                                await sendSms({
+                                    to: lead.phone,
+                                    body: campaign.sms_message ?? "",
+                                    lead,
+                                });
+                                sentCount++;
+                            } catch (err) {
+                                console.error(`Failed to send SMS to ${lead.phone} for campaign ${campaign.id}:`, err);
+                                errorCount++;
+                            }
+                        }
+
+                        if (campaign.channels?.mms) {
+                            if (!lead.phone) continue;
+                            if (!campaign.mms_media_url) continue;
+                            try {
+                                await sendMms({
+                                    to: lead.phone,
+                                    body: campaign.mms_message ?? "",
+                                    mediaUrl: campaign.mms_media_url,
+                                    lead,
+                                });
+                                sentCount++;
+                            } catch (err) {
+                                console.error(`Failed to send MMS to ${lead.phone} for campaign ${campaign.id}:`, err);
+                                errorCount++;
+                            }
                         }
                     }
                 }

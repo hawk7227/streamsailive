@@ -307,27 +307,25 @@ export default function PipelineListPage() {
       )}
 
       <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full">
-        <div className="mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <button
-              onClick={openCreate}
-              disabled={creating || createMutation.isPending}
-              className="group flex flex-col items-center justify-center h-40 sm:h-48 rounded-2xl border-2 border-dashed border-white/[0.10] hover:border-indigo-500/50 hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#0f0f16] group-hover:bg-indigo-500/10 flex items-center justify-center mb-3 transition-colors">
-                <div className="text-gray-400 group-hover:text-indigo-300 transition-colors">
-                  {creating || createMutation.isPending ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Plus className="w-5 h-5" />
-                  )}
-                </div>
-              </div>
-              <span className="font-medium text-gray-200 group-hover:text-indigo-300 transition-colors">
-                Create Pipeline
-              </span>
-            </button>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-white">Pipelines</h1>
+            <p className="mt-1 text-sm text-gray-400">
+              Manage and build automation workflows for your content.
+            </p>
           </div>
+          <button
+            onClick={openCreate}
+            disabled={creating || createMutation.isPending}
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:from-indigo-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {creating || createMutation.isPending ? (
+              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
+            <span>Create pipeline</span>
+          </button>
         </div>
         {pipelinesLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

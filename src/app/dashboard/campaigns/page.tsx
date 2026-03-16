@@ -407,27 +407,25 @@ export default function CampaignsPage() {
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                <button
-                  onClick={openCreate}
-                  disabled={createMutation.isPending}
-                  className="group flex flex-col items-center justify-center h-40 sm:h-48 rounded-2xl border-2 border-dashed border-zinc-800 hover:border-indigo-500/50 hover:bg-zinc-900/50 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <div className="w-12 h-12 rounded-full bg-zinc-900 group-hover:bg-indigo-500/10 flex items-center justify-center mb-3 transition-colors">
-                    <div className="text-zinc-400 group-hover:text-indigo-400 transition-colors">
-                      {createMutation.isPending ? (
-                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-zinc-200 rounded-full animate-spin" />
-                      ) : (
-                        <span className="text-2xl leading-none">+</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="font-medium text-zinc-300 group-hover:text-indigo-400 transition-colors">
-                    New Campaign
-                  </span>
-                </button>
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold text-zinc-100">Campaigns</h1>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Create and manage multi-channel outreach campaigns.
+                </p>
               </div>
+              <button
+                onClick={openCreate}
+                disabled={createMutation.isPending}
+                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {createMutation.isPending ? (
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                ) : (
+                  <span className="mr-2 text-lg leading-none">+</span>
+                )}
+                <span>New campaign</span>
+              </button>
             </div>
             {campaignsLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
