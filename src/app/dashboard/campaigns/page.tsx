@@ -26,14 +26,44 @@ interface Lead {
   created_at: string;
 }
 
+function CampaignCardSkeleton() {
+  return (
+    <div className="h-48 p-5 bg-zinc-900/30 border border-zinc-800 rounded-2xl relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] to-transparent animate-pulse" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white/[0.06]" />
+            <div className="h-5 w-16 rounded-full bg-white/[0.06]" />
+          </div>
+          <div className="h-3 w-16 rounded bg-white/[0.06]" />
+        </div>
+        <div className="h-5 w-2/3 rounded bg-white/[0.06] mb-3" />
+        <div className="space-y-2">
+          <div className="h-3 w-full rounded bg-white/[0.06]" />
+          <div className="h-3 w-5/6 rounded bg-white/[0.06]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const supabase = createClient();
   const [showLeadsDialog, setShowLeadsDialog] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
-  const { data: campaigns = [], isLoading: loading } = useQuery({
+  const {
+    data: campaigns = [],
+    isLoading: isLoadingCampaigns,
+    isFetching: isFetchingCampaigns,
+  } = useQuery({
     queryKey: ['campaigns'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -44,6 +74,9 @@ export default function CampaignsPage() {
       if (error) throw error;
       return data as Campaign[];
     }
+    ,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const { data: campaignLeads = [], isLoading: leadsLoading } = useQuery({
@@ -57,9 +90,107 @@ export default function CampaignsPage() {
         .eq('campaign_id', selectedCampaignId);
       
       if (error) throw error;
-      return (data || []).map((item: any) => item.leads) as Lead[];
+      type Row = { leads: Lead | null };
+      return ((data as unknown as Row[]) || [])
+        .map((item) => item.leads)
+        .filter((lead): lead is Lead => Boolean(lead));
     },
     enabled: !!selectedCampaignId
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('current_workspace_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile?.current_workspace_id) {
+        throw new Error('No workspace selected');
+      }
+
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert([{
+          name,
+          status: 'draft',
+          channels: { email: true, sms: false, mms: false },
+          user_id: user.id,
+          workspace_id: profile.current_workspace_id,
+          created_at: now,
+          updated_at: now,
+        }])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return data as Campaign;
+    },
+    onMutate: async (name: string) => {
+      await queryClient.cancelQueries({ queryKey: ['campaigns'] });
+      const prev = queryClient.getQueryData<Campaign[]>(['campaigns']) ?? [];
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const now = new Date().toISOString();
+      const optimistic: Campaign = {
+        id: tempId,
+        name,
+        status: 'draft',
+        channels: { email: true, sms: false, mms: false },
+        created_at: now,
+        updated_at: now,
+      };
+      queryClient.setQueryData<Campaign[]>(['campaigns'], [optimistic, ...prev]);
+      return { prev, tempId };
+    },
+    onError: (_err, _name, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['campaigns'], ctx.prev);
+    },
+    onSuccess: (created, _name, ctx) => {
+      queryClient.setQueryData<Campaign[]>(['campaigns'], (old = []) =>
+        old.map((c) => (c.id === ctx?.tempId ? created : c)),
+      );
+      setShowCreateDialog(false);
+      setDraftName('');
+      router.push(`/dashboard/campaigns/${created.id}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    }
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string, name: string }) => {
+      const { error } = await supabase
+        .from('campaigns')
+        .update({ name, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, name }) => {
+      await queryClient.cancelQueries({ queryKey: ['campaigns'] });
+      const prev = queryClient.getQueryData<Campaign[]>(['campaigns']) ?? [];
+      queryClient.setQueryData<Campaign[]>(['campaigns'], (old = []) =>
+        old.map((c) => c.id === id ? { ...c, name, updated_at: new Date().toISOString() } : c)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['campaigns'], ctx.prev);
+    },
+    onSuccess: () => {
+      setShowRenameDialog(false);
+      setSelectedCampaign(null);
+      setDraftName('');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    }
   });
 
   const deleteMutation = useMutation({
@@ -70,6 +201,15 @@ export default function CampaignsPage() {
         .eq('id', id);
       
       if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['campaigns'] });
+      const prev = queryClient.getQueryData<Campaign[]>(['campaigns']) ?? [];
+      queryClient.setQueryData<Campaign[]>(['campaigns'], (old = []) => old.filter((c) => c.id !== id));
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['campaigns'], ctx.prev);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
@@ -99,6 +239,42 @@ export default function CampaignsPage() {
       await deleteMutation.mutateAsync(id);
     } catch (error) {
       console.error('Failed to delete campaign:', error);
+    }
+  };
+
+  const openCreate = () => {
+    setDraftName('');
+    setShowCreateDialog(true);
+  };
+
+  const submitCreate = async () => {
+    const name = draftName.trim();
+    if (!name) return;
+    try {
+      await createMutation.mutateAsync(name);
+    } catch (error) {
+      console.error('Failed to create campaign:', error);
+      alert(`Failed to create campaign: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const openRename = (e: React.MouseEvent, campaign: Campaign) => {
+    e.stopPropagation();
+    setSelectedCampaign(campaign);
+    setDraftName(campaign.name ?? '');
+    setShowRenameDialog(true);
+  };
+
+  const submitRename = async () => {
+    const name = draftName.trim();
+    if (!selectedCampaign || !name || name === selectedCampaign.name) {
+      setShowRenameDialog(false);
+      return;
+    }
+    try {
+      await renameMutation.mutateAsync({ id: selectedCampaign.id, name });
+    } catch (error) {
+      console.error('Failed to rename campaign:', error);
     }
   };
 
@@ -141,35 +317,123 @@ export default function CampaignsPage() {
     return active.join(' • ') || 'No channels';
   };
 
+  const campaignsLoading = isLoadingCampaigns || isFetchingCampaigns;
+
   return (
     <div className="flex h-[calc(100vh-theme(spacing.16))] -m-6 lg:-m-8 overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
       <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 h-14 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-              📧
-            </div>
-            <h1 className="text-lg font-semibold text-zinc-200">
-              My Campaigns
-            </h1>
-          </div>
-          
-          <button
-            onClick={() => router.push('/dashboard/campaigns/new')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            + New Campaign
-          </button>
-        </header>
 
+        {showCreateDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+              <h2 className="text-lg font-semibold text-zinc-100">Create campaign</h2>
+              <p className="mt-2 text-sm text-zinc-400">Enter the campaign name. We’ll create it and open the builder.</p>
+              <input
+                autoFocus
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitCreate();
+                  }
+                }}
+                placeholder="Campaign name"
+                className="mt-4 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              />
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    setDraftName('');
+                  }}
+                  className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void submitCreate()}
+                  disabled={!draftName.trim() || createMutation.isPending}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {createMutation.isPending ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showRenameDialog && selectedCampaign && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+              <h2 className="text-lg font-semibold text-zinc-100">Rename campaign</h2>
+              <p className="mt-2 text-sm text-zinc-400">Update the name for this campaign.</p>
+              <input
+                autoFocus
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitRename();
+                  }
+                }}
+                placeholder="Campaign name"
+                className="mt-4 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              />
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowRenameDialog(false);
+                    setSelectedCampaign(null);
+                    setDraftName('');
+                  }}
+                  className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void submitRename()}
+                  disabled={!draftName.trim() || renameMutation.isPending}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {renameMutation.isPending ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-7xl mx-auto">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="w-8 h-8 border-2 border-zinc-700 border-t-indigo-500 rounded-full animate-spin"></div>
+            <div className="mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <button
+                  onClick={openCreate}
+                  disabled={createMutation.isPending}
+                  className="group flex flex-col items-center justify-center h-40 sm:h-48 rounded-2xl border-2 border-dashed border-zinc-800 hover:border-indigo-500/50 hover:bg-zinc-900/50 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <div className="w-12 h-12 rounded-full bg-zinc-900 group-hover:bg-indigo-500/10 flex items-center justify-center mb-3 transition-colors">
+                    <div className="text-zinc-400 group-hover:text-indigo-400 transition-colors">
+                      {createMutation.isPending ? (
+                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-zinc-200 rounded-full animate-spin" />
+                      ) : (
+                        <span className="text-2xl leading-none">+</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="font-medium text-zinc-300 group-hover:text-indigo-400 transition-colors">
+                    New Campaign
+                  </span>
+                </button>
+              </div>
+            </div>
+            {campaignsLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 12 }).map((_, idx) => (
+                  <CampaignCardSkeleton key={idx} />
+                ))}
               </div>
             ) : campaigns.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -179,8 +443,9 @@ export default function CampaignsPage() {
                 <h2 className="text-2xl font-bold text-zinc-300 mb-2">No campaigns yet</h2>
                 <p className="text-zinc-500 mb-6">Create your first email/SMS/MMS campaign to get started</p>
                 <button
-                  onClick={() => router.push('/dashboard/campaigns/new')}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
+                  onClick={openCreate}
+                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                  disabled={createMutation.isPending}
                 >
                   Create Campaign
                 </button>
@@ -209,6 +474,16 @@ export default function CampaignsPage() {
                     </div>
                     
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
+                      <button
+                        onClick={(e) => openRename(e, campaign)}
+                        className="p-1.5 bg-zinc-800 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-700 rounded-lg transition-colors"
+                        title="Rename Campaign"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 013.536 3.536L12.5 14.572a4 4 0 01-1.414.94L8 16l.488-3.086A4 4 0 019.428 11.5z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21H5" />
+                        </svg>
+                      </button>
                       <button
                         onClick={(e) => handleViewLeads(e, campaign.id)}
                         className="p-1.5 bg-zinc-800 text-zinc-400 hover:text-blue-400 hover:bg-zinc-700 rounded-lg transition-colors"
@@ -279,7 +554,7 @@ export default function CampaignsPage() {
                     👥
                   </div>
                   <h3 className="text-xl font-bold text-zinc-300 mb-2">No leads yet</h3>
-                  <p className="text-zinc-500">This campaign doesn't have any leads assigned yet.</p>
+                  <p className="text-zinc-500">This campaign does not have any leads assigned yet.</p>
                 </div>
               ) : (
                 <div className="p-6 space-y-3">

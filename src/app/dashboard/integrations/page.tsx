@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import IntegrationModal from "@/components/integrations/IntegrationModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 const integrations = [
   {
@@ -25,6 +26,9 @@ const integrations = [
 ];
 
 export default function IntegrationsPage() {
+  const { workspace, workspaceLoading } = useAuth();
+  const workflowId = workspace?.id ?? null;
+
   const [activeTab, setActiveTab] = useState("all");
   const [connectedIntegrations, setConnectedIntegrations] = useState<Set<string>>(new Set());
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
@@ -36,12 +40,19 @@ export default function IntegrationsPage() {
 
   // Fetch integrations from database
   useEffect(() => {
-    fetchIntegrations();
-  }, []);
+    if (workspaceLoading) return;
+    if (!workflowId) {
+      setLoading(false);
+      return;
+    }
+    fetchIntegrations(workflowId);
+  }, [workspaceLoading, workflowId]);
 
-  const fetchIntegrations = async () => {
+  const fetchIntegrations = async (activeWorkflowId: string) => {
     try {
-      const response = await fetch("/api/integrations?workflow_id=default-workflow");
+      const response = await fetch(
+        `/api/integrations?workflow_id=${encodeURIComponent(activeWorkflowId)}`
+      );
       const data = await response.json();
       
       if (data.integrations) {
@@ -63,9 +74,13 @@ export default function IntegrationsPage() {
     setSelectedIntegration(item);
     
     // If integration is already connected, fetch existing credentials
-    if (connectedIntegrations.has(item.id)) {
+    if (workflowId && connectedIntegrations.has(item.id)) {
       try {
-        const response = await fetch(`/api/integrations/credentials?workflow_id=default-workflow&integration_type=${item.id}`);
+        const response = await fetch(
+          `/api/integrations/credentials?workflow_id=${encodeURIComponent(
+            workflowId
+          )}&integration_type=${encodeURIComponent(item.id)}`
+        );
         const data = await response.json();
         
         if (data.credentials) {
@@ -84,14 +99,21 @@ export default function IntegrationsPage() {
       return;
     }
 
+    if (!workflowId) {
+      alert("No active workflow selected.");
+      return;
+    }
+
     try {
       const response = await fetch(
-        `/api/integrations?workflow_id=default-workflow&integration_type=${integrationType}`,
+        `/api/integrations?workflow_id=${encodeURIComponent(
+          workflowId
+        )}&integration_type=${encodeURIComponent(integrationType)}`,
         { method: "DELETE" }
       );
 
       if (response.ok) {
-        await fetchIntegrations();
+        await fetchIntegrations(workflowId);
       }
     } catch (error) {
       console.error("Failed to disconnect integration:", error);
@@ -99,6 +121,11 @@ export default function IntegrationsPage() {
   };
 
   const handleSaveIntegration = async (formData: any) => {
+    if (!workflowId) {
+      alert("No active workflow selected.");
+      return;
+    }
+
     try {
       const response = await fetch("/api/integrations", {
         method: "POST",
@@ -106,7 +133,7 @@ export default function IntegrationsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          workflow_id: "default-workflow",
+          workflow_id: workflowId,
           integration_type: selectedIntegration.id,
           integration_name: selectedIntegration.name,
           credentials: formData,
@@ -115,7 +142,7 @@ export default function IntegrationsPage() {
       });
 
       if (response.ok) {
-        await fetchIntegrations();
+        await fetchIntegrations(workflowId);
         setIsModalOpen(false);
       } else {
         const error = await response.json();
@@ -133,6 +160,11 @@ export default function IntegrationsPage() {
       return;
     }
 
+    if (!workflowId) {
+      alert("No active workflow selected.");
+      return;
+    }
+
     setSendingTestEmail(true);
     try {
       const response = await fetch("/api/integrations/test-email", {
@@ -141,7 +173,7 @@ export default function IntegrationsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          workflow_id: "default-workflow",
+          workflow_id: workflowId,
           test_email: testEmailAddress,
         }),
       });

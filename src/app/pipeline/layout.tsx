@@ -38,12 +38,12 @@ export default function PipelineLayout({
     .toUpperCase() || "U";
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a0f] text-white font-sans">
+    <div className="flex min-h-screen bg-[#0a0a0f] text-white font-sans w-full overflow-x-hidden">
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <main className="flex-1 lg:ml-[260px] p-0">
+      <main className="flex-1 lg:ml-[260px] p-0 min-w-0 overflow-x-hidden">
         {/* Mobile Header - only visible on small screens */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/10 mb-0">
           <button

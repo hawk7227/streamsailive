@@ -361,7 +361,20 @@ export default function ImagePage() {
           <h3 className="text-sm font-medium mb-4">Recent Generations</h3>
           
           {historyLoading && (
-            <p className="text-xs text-text-muted">Loading images...</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {[...Array(10)].map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl bg-bg-tertiary border border-border-color overflow-hidden animate-pulse"
+                >
+                  <div className="aspect-square w-full bg-bg-secondary" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-2.5 w-4/5 bg-bg-secondary rounded" />
+                    <div className="h-2.5 w-2/5 bg-bg-secondary rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
           {!historyLoading && historyError && (
             <p className="text-xs text-accent-red">{historyError}</p>
@@ -370,10 +383,9 @@ export default function ImagePage() {
             <p className="text-xs text-text-muted">No images generated yet</p>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {!historyLoading &&
-              !historyError &&
-              historyItems.map((item) => (
+          {!historyLoading && !historyError && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {historyItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => item.status !== "pending" && item.status !== "processing" ? setPreviewItem(item) : undefined}
@@ -412,8 +424,9 @@ export default function ImagePage() {
                     </p>
                   </div>
                 </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Icons } from './Icons';
-import { Button } from './Overlays';
 import { generatePreviewHtml } from '../utils';
 
 const DEVICE_PRESETS = [
@@ -13,12 +12,29 @@ const DEVICE_PRESETS = [
   { id: 'iphone-16-pro', name: 'iPhone 16 Pro', width: 402, height: 874, icon: '📱' },
 ];
 
-// Helper to get short name
-const getShortName = (name: string) => {
-    return name.replace('iPhone', '').replace('Pixel', '').trim();
-};
+interface MoreActionsMenuProps {
+  onRefresh: () => void;
+  onCopy: () => void;
+  onDownload: () => void;
+  onOpenNewTab: () => void;
+  disabled: boolean;
+}
 
-function MoreActionsMenu({ onRefresh, onCopy, onDownload, onOpenNewTab, disabled }: any) {
+interface DeviceSelectorProps {
+  selected: string;
+  onSelect: (deviceId: string) => void;
+}
+
+interface PreviewPanelProps {
+  isVisible: boolean;
+  code: string;
+  language: string;
+  previewMode: string;
+  setPreviewMode: React.Dispatch<React.SetStateAction<string>>;
+  chatId: string | null;
+}
+
+function MoreActionsMenu({ onRefresh, onCopy, onDownload, onOpenNewTab, disabled }: MoreActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -58,7 +74,7 @@ function MoreActionsMenu({ onRefresh, onCopy, onDownload, onOpenNewTab, disabled
   );
 }
 
-function DeviceSelector({ selected, onSelect }: any) {
+function DeviceSelector({ selected, onSelect }: DeviceSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const device = DEVICE_PRESETS.find(d => d.id === selected);
@@ -103,9 +119,8 @@ function DeviceSelector({ selected, onSelect }: any) {
   );
 }
 
-export default function PreviewPanel({ isVisible, code, language, previewMode, setPreviewMode, chatId }: any) {
+export default function PreviewPanel({ isVisible, code, language, previewMode, setPreviewMode, chatId }: PreviewPanelProps) {
   const [selectedDevice, setSelectedDevice] = useState('responsive');
-  const [copied, setCopied] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
 
   const device = DEVICE_PRESETS.find(d => d.id === selectedDevice);
@@ -117,12 +132,10 @@ export default function PreviewPanel({ isVisible, code, language, previewMode, s
     if (!previewHtml) return 'about:blank';
     const blob = new Blob([previewHtml], { type: 'text/html' });
     return URL.createObjectURL(blob);
-  }, [previewHtml, iframeKey]);
+  }, [previewHtml]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
@@ -144,7 +157,7 @@ export default function PreviewPanel({ isVisible, code, language, previewMode, s
      }
   };
 
-  if (!isVisible) return null;
+  if (!isVisible || !code) return null;
 
   return (
     <div className="flex flex-col h-full bg-zinc-950 border-l border-zinc-800">

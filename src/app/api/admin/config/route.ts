@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         const logo = formData.get('logo') as File | null;
         const scriptWriterPrompt = formData.get('scriptWriterPrompt') as string | null;
         const copilotSystemPrompt = formData.get('copilotSystemPrompt') as string | null;
+        const copilotModel = formData.get('copilotModel') as string | null;
         const marketingCopywriterPrompt = formData.get('marketingCopywriterPrompt') as string | null;
         const copilotAssistantPrompt = formData.get('copilotAssistantPrompt') as string | null;
         const elevenlabsVoiceId = formData.get('elevenlabsVoiceId') as string | null;
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
         if (themeColor) newConfig.themeColor = themeColor;
         if (scriptWriterPrompt) newConfig.scriptWriterPrompt = scriptWriterPrompt;
         if (copilotSystemPrompt) newConfig.copilotSystemPrompt = copilotSystemPrompt;
+        if (copilotModel) newConfig.copilotModel = copilotModel;
         if (marketingCopywriterPrompt) newConfig.marketingCopywriterPrompt = marketingCopywriterPrompt;
         if (copilotAssistantPrompt) newConfig.copilotAssistantPrompt = copilotAssistantPrompt;
         if (elevenlabsVoiceId) newConfig.elevenlabsVoiceId = elevenlabsVoiceId;

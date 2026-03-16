@@ -9,6 +9,7 @@ export interface SiteConfig {
     themeColor: string;
     scriptWriterPrompt: string;
     copilotSystemPrompt: string;
+    copilotModel: string;
     marketingCopywriterPrompt: string;
     copilotAssistantPrompt: string;
     aiProviders?: {
@@ -28,6 +29,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     themeColor: '#000000',
     scriptWriterPrompt: 'You are a professional script writer. Generate engaging content based on the user prompt.',
     copilotSystemPrompt: 'You are an expert full-stack developer. You help the user build web applications. If asked to generate code, provide it in code blocks. If asked to create a landing page or UI, provide the full HTML/Tailwind code.',
+    copilotModel: 'gpt-4o',
     marketingCopywriterPrompt: 'You are a professional marketing copywriter. Generate engaging, concise, and effective marketing content based on the user\'s requirements. Do not include any explanations or additional text - only provide the requested content.',
     copilotAssistantPrompt: 'You are a helpful AI assistant for a {{type}} generation platform.\nContext:\n- Current Page/Type: {{type}}\n- User\'s Current Prompt: "{{prompt}}"\n- Active Settings: {{settings}}\n\nYour goal is to help the user create better content.\nYou have access to tools to DIRECTLY update the user\'s prompt or settings.\n- If the user asks to "make it 16:9" or "change to square", use the \'update_settings\' tool.\n- If the user asks to "rewrite this prompt" or you suggest a better prompt and they agree, use the \'update_prompt\' tool.\n- Always provide a polite text response along with the tool call explanation.\n\nBe concise, friendly, and directly helpful.',
     aiProviders: {

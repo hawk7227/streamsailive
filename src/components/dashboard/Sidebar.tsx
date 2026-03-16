@@ -439,23 +439,6 @@ export default function Sidebar({
                   Settings
                 </Link>
               )}
-              <a
-                href="#"
-                className="flex items-center gap-3 px-3 py-3 rounded-[10px] text-sm font-medium text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-white"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="w-5 h-5"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-                Help
-              </a>
               <button
                 onClick={signOut}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-sm font-medium text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-white text-left"
@@ -483,13 +466,21 @@ export default function Sidebar({
               <span className="text-[13px] text-text-secondary">
                 Generations Used
               </span>
-              <span className="text-[13px] font-semibold">{usageText}</span>
+              {usageLoading && !usage ? (
+                <span className="h-3 w-16 bg-bg-secondary rounded animate-pulse" />
+              ) : (
+                <span className="text-[13px] font-semibold">{usageText}</span>
+              )}
             </div>
             <div className="h-1.5 bg-bg-primary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-accent-indigo to-accent-purple"
-                style={{ width: `${usagePercent}%` }}
-              />
+              {usageLoading && !usage ? (
+                <div className="h-full w-1/3 bg-bg-secondary animate-pulse" />
+              ) : (
+                <div
+                  className="h-full bg-gradient-to-r from-accent-indigo to-accent-purple"
+                  style={{ width: `${usagePercent}%` }}
+                />
+              )}
             </div>
           </div>
           <button

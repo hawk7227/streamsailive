@@ -44,10 +44,12 @@ export default function AIAssistant({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
   // Load history on mount
@@ -83,7 +85,8 @@ export default function AIAssistant({
   // Save history on change, but only after initial load
   useEffect(() => {
     if (isLoaded) {
-      scrollToBottom();
+      // Ensure DOM has painted before scrolling.
+      requestAnimationFrame(scrollToBottom);
       localStorage.setItem("streamsai_chat_history", JSON.stringify(messages));
     }
   }, [messages, isLoaded]);
@@ -188,7 +191,7 @@ export default function AIAssistant({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div
             key={idx}
@@ -236,7 +239,6 @@ export default function AIAssistant({
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="p-3 border-t border-border-color bg-bg-secondary">

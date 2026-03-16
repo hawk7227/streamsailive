@@ -3,7 +3,18 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 
-export async function GET(request: Request) {
+interface ChatRow {
+    id: string;
+    title: string | null;
+    created_at: string;
+    updated_at: string;
+    messages: Array<{ content?: string }> | null;
+}
+
+const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : 'Unknown error';
+
+export async function GET() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -26,7 +37,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        const formattedChats = chats.map((chat: any) => {
+        const formattedChats = (chats as ChatRow[]).map((chat) => {
             const messages = chat.messages || [];
             const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
             // Get a preview from the last message or empty string
@@ -66,7 +77,49 @@ export async function GET(request: Request) {
         });
 
         return NextResponse.json({ data: formattedChats });
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
+    }
+}
+
+export async function POST(request: Request) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { title } = await request.json() as { title?: string };
+    const nextTitle = typeof title === 'string' ? title.trim().substring(0, 100) : '';
+
+    if (!nextTitle) {
+        return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+
+    try {
+        const selection = await getCurrentWorkspaceSelection(admin, user);
+        const workspaceId = selection.current.workspace.id;
+
+        const { data, error } = await admin
+            .from('copilot_chats')
+            .insert({
+                user_id: user.id,
+                workspace_id: workspaceId,
+                title: nextTitle,
+                messages: [],
+            })
+            .select('id, title')
+            .single();
+
+        if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ data });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
     }
 }

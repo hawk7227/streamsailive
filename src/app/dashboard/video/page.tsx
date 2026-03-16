@@ -600,7 +600,20 @@ export default function VideoPage() {
           </div>
           
           {historyLoading && (
-            <p className="text-xs text-text-muted">Loading generations...</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {[...Array(10)].map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl bg-bg-tertiary border border-border-color overflow-hidden animate-pulse"
+                >
+                  <div className="aspect-square w-full bg-bg-secondary" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-2.5 w-4/5 bg-bg-secondary rounded" />
+                    <div className="h-2.5 w-2/5 bg-bg-secondary rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
           {!historyLoading && historyError && (
             <p className="text-xs text-accent-red">{historyError}</p>
@@ -609,10 +622,9 @@ export default function VideoPage() {
             <p className="text-xs text-text-muted">No generations yet</p>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {!historyLoading &&
-              !historyError &&
-              historyItems.map((item) => (
+          {!historyLoading && !historyError && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {historyItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => item.status !== "pending" && item.status !== "processing" ? setPreviewItem(item) : undefined}
@@ -670,8 +682,9 @@ export default function VideoPage() {
                       </span>
                   </div>
                 </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -740,8 +753,8 @@ export default function VideoPage() {
             className="w-full max-w-3xl bg-bg-secondary border border-border-color rounded-2xl shadow-xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-border-color flex items-center justify-between">
-              <div>
+            <div className="px-6 py-4 border-b border-border-color flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">
                   {truncateText(previewItem.title ?? previewItem.prompt, 80)}
                 </h3>
@@ -749,11 +762,11 @@ export default function VideoPage() {
                   VIDEO {previewItem.is_preview ? "(PREVIEW) " : ""}• {formatRelativeTime(previewItem.created_at)}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex w-full items-center gap-3 sm:w-auto sm:justify-end">
                 {previewItem.type === "video" && previewItem.is_preview && (
                   <button
                     onClick={() => handleGenerateFullFromPreview(previewItem)}
-                    className="px-3 py-1.5 rounded-lg border border-accent-indigo text-accent-indigo text-xs font-medium hover:bg-accent-indigo/10 transition-colors"
+                    className="flex-1 sm:flex-none min-h-[44px] px-4 py-2 rounded-lg border border-accent-indigo text-accent-indigo text-sm font-medium hover:bg-accent-indigo/10 transition-colors whitespace-nowrap"
                   >
                     ✨ Generate Full Video
                   </button>
@@ -762,7 +775,7 @@ export default function VideoPage() {
                   type="button"
                   onClick={() => handleDelete(previewItem.id)}
                   disabled={isDeleting}
-                  className="text-text-muted hover:text-accent-red flex items-center justify-center transition-colors disabled:opacity-50"
+                  className="min-h-[44px] min-w-[44px] text-text-muted hover:text-accent-red flex items-center justify-center transition-colors disabled:opacity-50"
                   title="Delete generation"
                 >
                   {isDeleting ? "⏳" : "🗑️"}
@@ -770,7 +783,7 @@ export default function VideoPage() {
                 <button
                   type="button"
                   onClick={() => setPreviewItem(null)}
-                  className="text-text-muted hover:text-white"
+                  className="min-h-[44px] min-w-[44px] text-text-muted hover:text-white flex items-center justify-center"
                 >
                   ✕
                 </button>

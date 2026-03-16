@@ -8,6 +8,36 @@ import { getSiteConfig } from '@/lib/config';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 import { updateHtmlContent } from '@/lib/html-editor';
 
+interface UploadedAttachment {
+    type?: 'knowledge' | 'asset' | string;
+    extracted_content?: string;
+    public_url?: string;
+    name?: string;
+}
+
+interface StoredChatMessage {
+    role: string;
+    content: string;
+    tool_calls?: unknown;
+    tool_call_id?: string;
+}
+
+interface StoredChat {
+    id: string;
+    workspace_id: string;
+    title: string;
+    messages?: StoredChatMessage[];
+}
+
+interface ToolResultMessage {
+    role: 'tool';
+    tool_call_id: string;
+    content: string;
+}
+
+const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : 'Unknown error';
+
 const TOOLS = [
     {
         type: "function",
@@ -50,6 +80,7 @@ const TOOLS = [
 ];
 
 export async function POST(request: Request) {
+    const siteConfig = getSiteConfig();
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -57,7 +88,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { chatId, message, attachments } = await request.json();
+    const { chatId, message, attachments, title } = await request.json() as {
+        chatId?: string;
+        message?: string;
+        attachments?: UploadedAttachment[];
+        title?: string;
+    };
 
     if (!message && (!attachments || attachments.length === 0)) {
         return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -68,15 +104,15 @@ export async function POST(request: Request) {
     try {
         const selection = await getCurrentWorkspaceSelection(admin, user);
         workspaceId = selection.current.workspace.id;
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
     }
 
-    let chat: any;
+    let chat: StoredChat | null = null;
     let isNew = false;
 
     if (chatId && !chatId.startsWith('new-')) {
-        const { data } = await admin.from('copilot_chats').select('*').eq('id', chatId).single();
+        const { data } = await admin.from('copilot_chats').select('*').eq('id', chatId).single<StoredChat>();
         if (data && data.workspace_id === workspaceId) {
             chat = data;
         }
@@ -84,11 +120,16 @@ export async function POST(request: Request) {
 
     if (!chat) {
         // Create new chat
-        const title = message ? message.substring(0, 50) : 'New Chat';
+        const chatTitle =
+            typeof title === 'string' && title.trim()
+                ? title.trim().substring(0, 100)
+                : message
+                ? message.substring(0, 50)
+                : 'New Chat';
         const { data, error } = await admin.from('copilot_chats').insert({
             user_id: user.id,
             workspace_id: workspaceId,
-            title: title,
+            title: chatTitle,
             messages: [],
         }).select().single();
 
@@ -99,8 +140,14 @@ export async function POST(request: Request) {
         isNew = true;
     }
 
+    if (!chat) {
+        return NextResponse.json({ error: 'Failed to create chat' }, { status: 500 });
+    }
+
+    const chatRecord = chat;
+
     // Construct message history for OpenAI
-    const currentMessages = chat.messages || [];
+    const currentMessages = chatRecord.messages || [];
 
     let contextText = '';
     const assetsList = [];
@@ -110,8 +157,12 @@ export async function POST(request: Request) {
     let landingPageId = null;
     let landingPageVersion = 0;
 
-    if (chat) {
-        const { data: lpData } = await admin.from('landing_pages').select('id, html_content, version').eq('copilot_chat_id', chat.id).single();
+    {
+        const { data: lpData } = await admin
+            .from('landing_pages')
+            .select('id, html_content, version')
+            .eq('copilot_chat_id', chatRecord.id)
+            .single();
         if (lpData) {
             currentHtmlContent = lpData.html_content;
             landingPageId = lpData.id;
@@ -161,9 +212,9 @@ export async function POST(request: Request) {
     const userMessageForAi = { role: 'user', content: finalUserContent };
 
     const messagesToSend = [
-        { role: 'system', content: getSiteConfig().copilotSystemPrompt },
-        ...currentMessages.map((m: any) => {
-            const msg: any = { role: m.role, content: m.content };
+        { role: 'system', content: siteConfig.copilotSystemPrompt },
+        ...currentMessages.map((m) => {
+            const msg: StoredChatMessage = { role: m.role, content: m.content };
             if (m.tool_calls) {
                 msg.tool_calls = m.tool_calls;
             }
@@ -183,7 +234,7 @@ export async function POST(request: Request) {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
             },
             body: JSON.stringify({
-                model: "gpt-4o",
+                model: siteConfig.copilotModel,
                 messages: messagesToSend,
                 tools: TOOLS,
                 tool_choice: "auto"
@@ -204,7 +255,7 @@ export async function POST(request: Request) {
             console.log("--> Tool Calls detected:", JSON.stringify(assistantMessage.tool_calls, null, 2));
 
             // Process ALL tool calls, not just the first one
-            const toolResultMessages: any[] = [];
+            const toolResultMessages: ToolResultMessage[] = [];
             let finalHtml = currentHtmlContent;
 
             for (const toolCall of assistantMessage.tool_calls) {
@@ -226,9 +277,9 @@ export async function POST(request: Request) {
                             }
 
                             // Create tool result message for this specific tool call
-                            const toolResultMessage = {
-                                role: 'tool',
-                                tool_call_id: toolCall.id,
+                            const toolResultMessage: ToolResultMessage = {
+                                role: 'tool' as const,
+                                tool_call_id: String(toolCall.id),
                                 content: JSON.stringify({ success: true, message: "HTML updated successfully" })
                             };
                             toolResultMessages.push(toolResultMessage);
@@ -238,9 +289,9 @@ export async function POST(request: Request) {
                             if (!args.chunks) console.warn("--> args.chunks is missing");
 
                             // Still need to respond with a tool message even if it failed
-                            const toolResultMessage = {
-                                role: 'tool',
-                                tool_call_id: toolCall.id,
+                            const toolResultMessage: ToolResultMessage = {
+                                role: 'tool' as const,
+                                tool_call_id: String(toolCall.id),
                                 content: JSON.stringify({ success: false, message: "Missing HTML content or chunks" })
                             };
                             toolResultMessages.push(toolResultMessage);
@@ -249,9 +300,9 @@ export async function POST(request: Request) {
                         console.error("--> Tool execution failed with error:", e);
 
                         // Send error as tool result
-                        const toolResultMessage = {
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
+                        const toolResultMessage: ToolResultMessage = {
+                            role: 'tool' as const,
+                            tool_call_id: String(toolCall.id),
                             content: JSON.stringify({ success: false, message: `Error: ${e}` })
                         };
                         toolResultMessages.push(toolResultMessage);
@@ -260,9 +311,9 @@ export async function POST(request: Request) {
                     console.log(`--> Unknown tool called: ${toolCall.function.name}`);
 
                     // Still respond to unknown tools
-                    const toolResultMessage = {
-                        role: 'tool',
-                        tool_call_id: toolCall.id,
+                    const toolResultMessage: ToolResultMessage = {
+                        role: 'tool' as const,
+                        tool_call_id: String(toolCall.id),
                         content: JSON.stringify({ success: false, message: "Unknown tool" })
                     };
                     toolResultMessages.push(toolResultMessage);
@@ -292,10 +343,10 @@ export async function POST(request: Request) {
             await admin.from('copilot_chats').update({
                 messages: [...updatedMessagesWithTool, ...toolResultMessages, confirmationMessage],
                 updated_at: new Date().toISOString(),
-            }).eq('id', chat.id);
+            }).eq('id', chatRecord.id);
 
             return NextResponse.json({
-                chatId: chat.id,
+                chatId: chatRecord.id,
                 message: confirmationMessage,
                 isNew,
                 updatedHtml: finalHtml
@@ -313,7 +364,7 @@ export async function POST(request: Request) {
         await admin.from('copilot_chats').update({
             messages: updatedMessages,
             updated_at: new Date().toISOString(),
-        }).eq('id', chat.id);
+        }).eq('id', chatRecord.id);
 
         // Check for HTML content to save to landing_pages (OLD LOGIC - kept for 'generate new' flow)
         const content = assistantMessage.content || '';
@@ -336,9 +387,9 @@ export async function POST(request: Request) {
                     await admin.from('landing_pages').insert({
                         user_id: user.id,
                         workspace_id: workspaceId,
-                        copilot_chat_id: chat.id,
+                        copilot_chat_id: chatRecord.id,
                         html_content: htmlContent,
-                        title: chat.title + ' Landing Page',
+                        title: chatRecord.title + ' Landing Page',
                         description: 'Generated from copilot chat',
                     });
                 }
@@ -348,13 +399,13 @@ export async function POST(request: Request) {
         // Return the response, chatId (for redirect if new), and updatedMessages if needed
         // But frontend usually just wants the new message or success
         return NextResponse.json({
-            chatId: chat.id,
+            chatId: chatRecord.id,
             message: assistantMessage,
             isNew
         });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("OpenAI Error:", err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
     }
 }

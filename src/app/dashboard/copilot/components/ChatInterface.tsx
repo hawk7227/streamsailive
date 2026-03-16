@@ -2,22 +2,39 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from './Icons';
 import { Button, ContextWarning, CompactingOverlay } from './Overlays';
 import { CompressionModal } from './Modals';
-import { useFileUpload, formatFileSize, AttachedFile } from '../hooks/useCopilot';
+import { useFileUpload } from '../hooks/useCopilot';
 import { useCompaction, Message } from '../hooks/useCopilot';
+import { extractCodeFromContent } from '../utils';
 
-// Helper to extract code (simplified from HTML version)
-const extractCodeFromContent = (content: string) => {
-  const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-  let match;
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-      const lang = match[1] || 'javascript';
-      const code = match[2].trim();
-      if (code.includes('function App') || code.includes('const App') || code.includes('export default') || code.includes('<div') || lang === 'jsx' || lang === 'tsx' || lang === 'html') {
-          return { code, language: lang };
-      }
-  }
-  return null;
-};
+interface PreviewData {
+    html_content?: string;
+}
+
+interface ChatRecord {
+    messages?: Message[];
+    landingPage?: PreviewData | null;
+}
+
+interface ChatResponse {
+    data?: ChatRecord;
+}
+
+interface AttachmentChip {
+    id: string;
+    name: string;
+    icon?: React.ReactNode;
+    preview?: string;
+}
+
+interface ChatInterfaceProps {
+    chatId: string | null;
+    onChatCreated?: (newId: string) => void;
+    previewOpen: boolean;
+    setPreviewOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    setPreviewCode: React.Dispatch<React.SetStateAction<string>>;
+    setPreviewLanguage: React.Dispatch<React.SetStateAction<string>>;
+    conversationTitle?: string;
+}
 
 const TypingIndicator = () => (
     <div className="flex space-x-1.5 p-2 bg-zinc-800 rounded-xl rounded-tl-none w-fit">
@@ -77,28 +94,6 @@ const MessageContent = ({ content, isThinking }: { content: string, isThinking?:
     );
 };
 
-// Sample Code (Copied from HTML)
-const SAMPLE_CODE = `import React, { useState } from 'react';
-
-function App() {
-  const [count, setCount] = useState(0);
-  
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">Counter App</h1>
-        <p className="text-6xl font-bold text-purple-600 mb-6">{count}</p>
-        <div className="flex gap-4 justify-center">
-          <button onClick={() => setCount(c => c - 1)} className="px-6 py-3 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors">Decrease</button>
-          <button onClick={() => setCount(c => c + 1)} className="px-6 py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors">Increase</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default App;`;
-
 const MessageSkeleton = () => (
     <div className="space-y-6 max-w-3xl mx-auto p-4 animate-pulse">
         {[1, 2, 3].map((i) => (
@@ -111,7 +106,7 @@ const MessageSkeleton = () => (
     </div>
 );
 
-export default function ChatInterface({ chatId, onChatCreated, previewOpen, setPreviewOpen, setPreviewCode, setPreviewLanguage, previewCode }: any) {
+export default function ChatInterface({ chatId, onChatCreated, previewOpen, setPreviewOpen, setPreviewCode, setPreviewLanguage, conversationTitle }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -119,10 +114,11 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
   const [contextTokens, setContextTokens] = useState(0);
   const [showCompressionModal, setShowCompressionModal] = useState(false);
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null); // kept for layout anchor (no scrollIntoView)
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { isCompacting, compactProgress, compactStage, runCompaction } = useCompaction();
+  const { isCompacting, compactProgress, compactStage } = useCompaction();
   const { files: attachedFiles, dragActive, addFiles, removeFile, clearFiles, updateFileType, handleDrag, handleDrop } = useFileUpload();
 
   useEffect(() => {
@@ -130,7 +126,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
         setIsLoadingMessages(true);
         fetch(`/api/copilot/chat/${chatId}`)
             .then(res => res.json())
-            .then(data => {
+            .then((data: ChatResponse) => {
                 if (data.data) {
                     setMessages(data.data.messages || []);
                     
@@ -138,6 +134,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
                     if (data.data.landingPage?.html_content) {
                          setPreviewCode(data.data.landingPage.html_content);
                          setPreviewLanguage('html');
+                         if (!previewOpen) setPreviewOpen(true);
                     } else if (data.data.messages) {
                         // Check last message for code
                         const lastMsg = data.data.messages[data.data.messages.length - 1];
@@ -146,8 +143,18 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
                             if (extracted) {
                                 setPreviewCode(extracted.code);
                                 setPreviewLanguage(extracted.language);
+                                if (!previewOpen) setPreviewOpen(true);
+                            } else {
+                                setPreviewCode('');
+                                setPreviewOpen(false);
                             }
+                        } else {
+                            setPreviewCode('');
+                            setPreviewOpen(false);
                         }
+                    } else {
+                        setPreviewCode('');
+                        setPreviewOpen(false);
                     }
                 }
             })
@@ -156,15 +163,18 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
     } else {
         setMessages([]);
         setIsLoadingMessages(false);
-        if (!previewCode) {
-            setPreviewCode(SAMPLE_CODE);
-            setPreviewLanguage('jsx');
-        }
+        setPreviewCode('');
+        setPreviewOpen(false);
     }
-  }, [chatId]);
+  }, [chatId, previewOpen, setPreviewCode, setPreviewLanguage, setPreviewOpen]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesContainerRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      });
+    }
     const tokens = messages.reduce((acc, m) => acc + Math.ceil((m.content?.length || 0) / 4), 0);
     setContextTokens(tokens);
   }, [messages, isLoadingMessages]);
@@ -217,6 +227,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatId,
+                title: conversationTitle,
                 message: currentInput,
                 attachments: uploadedAttachments // Send the uploaded file records
             })
@@ -272,7 +283,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
 
             <ContextWarning tokens={contextTokens} onCompress={() => setShowCompressionModal(true)} onNewChat={() => setMessages([])} />
 
-            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 scrollbar-thin">
                 <div className="max-w-3xl mx-auto space-y-6">
                     {isLoadingMessages ? (
                         <MessageSkeleton />
@@ -306,7 +317,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
                                      <div className={`max-w-[85%] min-w-0 ${msg.role === 'user' ? 'bg-zinc-800 rounded-2xl rounded-tr-sm px-4 py-3' : 'w-full'}`}>
                                          {msg.attachments && msg.attachments.length > 0 && (
                                              <div className="flex flex-wrap gap-2 mb-2">
-                                                 {msg.attachments.map((att: any) => (
+                                                 {msg.attachments.map((att: AttachmentChip) => (
                                                      <div key={att.id} className="flex items-center gap-2 px-2 py-1 bg-zinc-700 rounded-lg text-xs text-zinc-300">
                                                          {att.preview ? <img src={att.preview} className="w-6 h-6 rounded object-cover" alt="" /> : <span>{att.icon}</span>}
                                                          <span>{att.name}</span>

@@ -234,12 +234,12 @@ export default function LibraryPage() {
   const displayedFiles = filteredFiles.slice(startIndex, endIndex);
 
   return (
-    <div className="flex-1 flex flex-col -m-6 lg:-m-8">
+    <div className="flex-1 flex flex-col w-full min-w-0 overflow-x-hidden">
       {/* Header */}
-      <header className="h-14 bg-bg-secondary border-b border-border-color px-6 lg:px-8 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Library</h1>
-          <span className="text-sm text-text-muted hidden sm:inline">
+      <header className="h-14 bg-bg-secondary border-b border-border-color px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-lg font-semibold truncate">Library</h1>
+          <span className="text-sm text-text-muted hidden md:inline">
             {totalFiles} files • {totalSize} used
           </span>
         </div>
@@ -247,11 +247,11 @@ export default function LibraryPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
-        <div className="max-w-[1400px] mx-auto space-y-6">
+      <main className="flex-1 px-4 py-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
+        <div className="max-w-[1400px] mx-auto space-y-5 sm:space-y-6">
           {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 sm:gap-4 min-w-0">
+            <div className="relative w-full lg:flex-1 lg:max-w-md">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                 🔍
               </span>
@@ -266,7 +266,7 @@ export default function LibraryPage() {
                 className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-border-color bg-bg-secondary text-white text-sm placeholder-text-muted focus:outline-none focus:border-accent-indigo/50"
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 max-w-full">
               {filters.map((filter) => (
                 <button
                   key={filter.id}
@@ -285,7 +285,7 @@ export default function LibraryPage() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-2 ml-auto">
+            <div className="flex gap-2 lg:ml-auto">
               <button
                 onClick={() => setViewMode("grid")}
                 className={`p-2 rounded-lg transition-colors ${
@@ -325,7 +325,7 @@ export default function LibraryPage() {
               `}</style>
 
               {viewMode === "grid" ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {[...Array(10)].map((_, i) => (
                     <div
                       key={i}
@@ -389,7 +389,7 @@ export default function LibraryPage() {
             <>
               {/* File Grid */}
               {viewMode === "grid" ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {displayedFiles.map((file) => (
                     <div
                       key={file.id}
@@ -520,7 +520,7 @@ export default function LibraryPage() {
                   {displayedFiles.map((file) => (
                     <div
                       key={file.id}
-                      className="bg-bg-secondary border border-border-color rounded-xl p-4 flex items-center gap-4 hover:border-accent-indigo/30 transition-all cursor-pointer group"
+                      className="bg-bg-secondary border border-border-color rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 hover:border-accent-indigo/30 transition-all cursor-pointer group"
                       onClick={() =>
                         setPreviewItem({
                           id: file.id,
@@ -540,9 +540,10 @@ export default function LibraryPage() {
                         })
                       }
                     >
-                      <div
-                        className={`w-16 h-16 rounded-lg bg-linear-to-br ${file.gradient} flex items-center justify-center shrink-0 overflow-hidden relative`}
-                      >
+                      <div className="flex items-start gap-3 sm:gap-4 w-full min-w-0">
+                        <div
+                          className={`w-16 h-16 rounded-lg bg-linear-to-br ${file.gradient} flex items-center justify-center shrink-0 overflow-hidden relative`}
+                        >
                         {file.type === "image" && file.output_url ? (
                           <img
                             src={file.output_url}
@@ -567,70 +568,74 @@ export default function LibraryPage() {
                         ) : (
                           <span className="text-2xl">{getFileIcon(file.type)}</span>
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{file.title}</p>
-                        <p className="text-xs text-text-muted">
-                          {file.time} • {file.size}
-                          {file.duration && ` • ${file.duration}`}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${getStatusBadge(file.status, file.progress).className}`}
-                      >
-                        {getStatusBadge(file.status, file.progress).label}
-                      </span>
-                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-primary transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewItem({
-                              id: file.id,
-                              type: file.type === "audio" ? "voice" : (file.type as GenerationRecord["type"]),
-                              prompt: file.prompt,
-                              title: file.title,
-                              status: file.status,
-                              aspect_ratio: null,
-                              duration: file.duration ?? null,
-                              quality: null,
-                              style: null,
-                              output_url: file.output_url,
-                              favorited: file.favorited,
-                              created_at: new Date().toISOString(),
-                              external_id: null,
-                              progress: file.progress,
-                            });
-                          }}
-                        >
-                          {file.type === "video" || file.type === "audio"
-                            ? "▶️"
-                            : "👁️"}
-                        </button>
-                        <button 
-                          className={`p-2 rounded-lg transition-colors ${
-                            file.status === "pending" || file.status === "processing" 
-                              ? "opacity-50 cursor-not-allowed bg-bg-tertiary" 
-                              : "bg-bg-tertiary hover:bg-bg-primary"
-                          }`}
-                          disabled={file.status === "pending" || file.status === "processing"}
-                          onClick={(e) => handleDownload(e, file.output_url, file.title)}
-                        >
-                          ⬇️
-                        </button>
-                        <button 
-                          className={`p-2 rounded-lg transition-colors ${file.favorited ? "bg-accent-amber text-white" : "bg-bg-tertiary hover:bg-bg-primary"}`}
-                          onClick={(e) => handleFavorite(e, file.id, file.favorited)}
-                        >
-                          ⭐
-                        </button>
-                        <button
-                          className="p-2 rounded-lg bg-bg-tertiary hover:bg-red-500/80 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: file.id, title: file.title }); }}
-                          title="Delete"
-                        >
-                          🗑️
-                        </button>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{file.title}</p>
+                              <p className="text-xs text-text-muted">
+                                {file.time} • {file.size}
+                                {file.duration && ` • ${file.duration}`}
+                              </p>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${getStatusBadge(file.status, file.progress).className}`}
+                            >
+                              {getStatusBadge(file.status, file.progress).label}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            <button 
+                              className="px-3 py-2 rounded-lg bg-bg-tertiary hover:bg-bg-primary transition-colors text-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewItem({
+                                  id: file.id,
+                                  type: file.type === "audio" ? "voice" : (file.type as GenerationRecord["type"]),
+                                  prompt: file.prompt,
+                                  title: file.title,
+                                  status: file.status,
+                                  aspect_ratio: null,
+                                  duration: file.duration ?? null,
+                                  quality: null,
+                                  style: null,
+                                  output_url: file.output_url,
+                                  favorited: file.favorited,
+                                  created_at: new Date().toISOString(),
+                                  external_id: null,
+                                  progress: file.progress,
+                                });
+                              }}
+                            >
+                              {file.type === "video" || file.type === "audio" ? "Play" : "Preview"}
+                            </button>
+                            <button 
+                              className={`px-3 py-2 rounded-lg transition-colors text-sm ${
+                                file.status === "pending" || file.status === "processing" 
+                                  ? "opacity-50 cursor-not-allowed bg-bg-tertiary" 
+                                  : "bg-bg-tertiary hover:bg-bg-primary"
+                              }`}
+                              disabled={file.status === "pending" || file.status === "processing"}
+                              onClick={(e) => handleDownload(e, file.output_url, file.title)}
+                            >
+                              Download
+                            </button>
+                            <button 
+                              className={`px-3 py-2 rounded-lg transition-colors text-sm ${file.favorited ? "bg-accent-amber text-white" : "bg-bg-tertiary hover:bg-bg-primary"}`}
+                              onClick={(e) => handleFavorite(e, file.id, file.favorited)}
+                            >
+                              {file.favorited ? "Favorited" : "Favorite"}
+                            </button>
+                            <button
+                              className="px-3 py-2 rounded-lg bg-bg-tertiary hover:bg-red-500/80 transition-colors text-sm"
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: file.id, title: file.title }); }}
+                              title="Delete"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -645,13 +650,13 @@ export default function LibraryPage() {
               Showing {totalFiles === 0 ? 0 : startIndex + 1}-
               {Math.min(endIndex, totalFiles)} of {totalFiles} files
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="px-3 py-1.5 rounded-lg border border-border-color text-text-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-tertiary transition-colors"
               >
-                ← Previous
+                ← Prev
               </button>
               {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
                 const page = currentPage <= 2 ? i + 1 : currentPage - 1 + i;
@@ -690,11 +695,11 @@ export default function LibraryPage() {
           onClick={() => setPreviewItem(null)}
         >
           <div
-            className="w-full max-w-3xl bg-bg-secondary border border-border-color rounded-2xl shadow-xl overflow-hidden"
+            className="w-full max-w-3xl max-h-[calc(100vh-3rem)] bg-bg-secondary border border-border-color rounded-2xl shadow-xl overflow-hidden flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-border-color flex items-center justify-between">
-              <div>
+            <div className="px-4 sm:px-6 py-4 border-b border-border-color flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">
                   {truncateText(previewItem.title ?? previewItem.prompt, 80)}
                 </h3>
@@ -711,15 +716,19 @@ export default function LibraryPage() {
                 ✕
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
               {previewItem.type === "video" && (
                 <div className="space-y-3">
                   {previewItem.output_url ? (
-                    <video
-                      className="w-full rounded-xl border border-border-color bg-black"
-                      controls
-                      src={previewItem.output_url}
-                    />
+                    <div className="w-full rounded-xl border border-border-color bg-black overflow-hidden flex items-center justify-center">
+                      <video
+                        className="w-full max-h-[60vh] object-contain"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        src={previewItem.output_url}
+                      />
+                    </div>
                   ) : (
                     <div className="w-full aspect-video rounded-xl border border-dashed border-border-color flex items-center justify-center text-xs text-text-muted">
                       No video URL set yet.
@@ -733,7 +742,7 @@ export default function LibraryPage() {
                     <img
                       src={previewItem.output_url}
                       alt={previewItem.title ?? previewItem.prompt}
-                      className="w-full max-h-[480px] object-contain rounded-xl border border-border-color bg-black"
+                      className="w-full max-h-[60vh] object-contain rounded-xl border border-border-color bg-black"
                     />
                   ) : (
                     <div className="w-full aspect-video rounded-xl border border-dashed border-border-color flex items-center justify-center text-xs text-text-muted">
@@ -759,7 +768,7 @@ export default function LibraryPage() {
               )}
               {previewItem.type === "script" && (
                 <div className="space-y-3">
-                  <div className="max-h-[340px] overflow-y-auto rounded-xl border border-border-color bg-bg-tertiary p-4 text-sm whitespace-pre-wrap">
+                  <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border-color bg-bg-tertiary p-4 text-sm whitespace-pre-wrap">
                     {previewItem.prompt}
                   </div>
                 </div>

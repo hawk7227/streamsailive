@@ -216,7 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setWorkspacePlanKey(null);
     setWorkspaceLoading(false);
     loadedProfileUserId.current = null;
-    router.push("/login");
+    router.push("/");
   };
 
   const refreshSession = async () => {

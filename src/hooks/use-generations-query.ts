@@ -15,7 +15,7 @@ export function useGenerationsQuery({ type, limit = 12 }: UseGenerationsQueryOpt
     const queryClient = useQueryClient();
     const queryKey = ["generations", type ?? "all"];
 
-    const { data = [], isLoading, error } = useQuery<GenerationRecord[]>({
+    const { data = [], isLoading, isFetching, error } = useQuery<GenerationRecord[]>({
         queryKey,
         queryFn: async () => {
             const serverData = await listGenerations({ type, limit });
@@ -31,7 +31,9 @@ export function useGenerationsQuery({ type, limit = 12 }: UseGenerationsQueryOpt
 
     return {
         historyItems: data,
-        historyLoading: isLoading,
+        // `isLoading` only covers the initial load. We also want skeletons during refetches
+        // (e.g. cache hit + background network request).
+        historyLoading: isLoading || isFetching,
         historyError: error instanceof Error ? error.message : "",
         queryKey,
     };

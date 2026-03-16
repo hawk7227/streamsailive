@@ -1,11 +1,4 @@
 import nodemailer from "nodemailer";
-import { createClient } from "@supabase/supabase-js"; // Use supabase-js for admin/service role if needed, or stick to the pattern used in routes if client is passed in. 
-// Actually, for a lib function, it's better to pass the supabase client OR handle it internally. 
-// Given `test-email` uses `createClient` from `@/lib/supabase/server`, but `cron` uses `@/lib/supabase/admin`, 
-// accepting a supabase client or just the workspace_id and handling auth internally is better.
-// However, to keep it simple and stateless regarding auth, let's have it accept the workspace_id and maybe the supabase client to query integrations.
-
-// Let's import the admin client creator if we need to fetch settings independently of the specific request context
 import { createAdminClient } from "@/lib/supabase/admin";
 
 interface SendEmailParams {
@@ -61,30 +54,14 @@ export async function sendEmail({
         // Initialize Supabase Admin to fetch secrets/integrations securely
         const supabase = createAdminClient();
 
-        // Fetch Integration
-        // We are looking for an active SMTP integration for the workspace.
-        // Assuming a schema where integrations might be linked to workspace directly or via a workflow?
-        // The previous code checked `workflow_integrations`. I'll stick to that pattern but we really need a workspace-level config.
-        // For now, I will try to find *any* active SMTP integration.
-
-        // Note: The original code didn't filter by workspace_id on `workflow_integrations` which is a bit risky if it's a shared table?
-        // If `workflow_integrations` implies it belongs to a workflow, we might be missing a link.
-        // However, for this refactor, I will assume we should try to match the workspace if possible, or just take the first active SMTP one we find 
-        // (which might be the system default if no workspace_id column exists).
-
-        // Let's try to filter by workspace_id if it exists. 
-        // Since I can't verify the schema, I'll use a safe query that works if I just query for 'smtp'.
-        // Realistically, checking the schema would be best, but I will follow the logic: 
-        // Check for `workspace_id` column? No, I'll just query `workflow_integrations` and if I can filter by workspace I would.
-        // Given the previous file didn't use workspace_id, I will assume it might be a global or singular system for now, OR valid for the user context.
-
+        // Fetch the active SMTP integration for this workspace/workflow
         const { data: integration } = await supabase
-            .from("workflow_integrations") // This table name suggests it's tied to workflows...
+            .from("workflow_integrations")
             .select("id")
+            .eq("workflow_id", workspaceId)
             .eq("integration_type", "smtp")
             .eq("is_active", true)
-            .limit(1)
-            .single();
+            .maybeSingle();
 
         let transporter;
 
@@ -110,6 +87,9 @@ export async function sendEmail({
 
                 // Override from details if not provided
                 if (!fromName && from_name) fromName = from_name;
+
+                // If fromEmail is not provided, default to the SMTP username
+                if (!fromEmail && username) fromEmail = username;
             }
         }
 
