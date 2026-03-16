@@ -51,10 +51,10 @@ function isCronMatch(cron: string, date: Date): boolean {
 
 export async function GET(request: Request) {
     // Basic auth protection (optional: check for a secret header from cron job)
-    // const authHeader = request.headers.get('authorization');
-    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    //     return new NextResponse('Unauthorized', { status: 401 });
-    // }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return new NextResponse('Unauthorized', { status: 401 });
+    }
 
     const supabase = createAdminClient();
     const now = new Date(); // Current time (will use UTC methods in helper)
