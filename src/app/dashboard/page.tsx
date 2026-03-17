@@ -372,12 +372,12 @@ export default async function DashboardPage() {
         <div className="bg-bg-secondary border border-border-color rounded-[20px] overflow-hidden">
           <div className="flex items-center justify-between p-5 border-b border-border-color">
             <h3 className="font-semibold">Recent Projects</h3>
-            <a
-              href="#"
+            <Link
+              href="/dashboard/library"
               className="text-[13px] font-medium text-accent-indigo hover:underline"
             >
               View all →
-            </a>
+            </Link>
           </div>
           <div className="p-3 space-y-1">
             {recentProjects.length === 0 && (
@@ -386,8 +386,9 @@ export default async function DashboardPage() {
               </div>
             )}
             {recentProjects.map((project) => (
-              <div
+              <Link
                 key={project.id}
+                href={`/dashboard/library?preview=${project.id}`}
                 className="flex items-center gap-4 p-4 rounded-xl hover:bg-bg-tertiary transition-colors cursor-pointer group"
               >
                 <div className="w-16 h-12 rounded-lg bg-bg-tertiary group-hover:bg-bg-primary flex items-center justify-center flex-shrink-0 text-text-muted transition-colors">
@@ -419,7 +420,7 @@ export default async function DashboardPage() {
                 >
                   {project.type}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -436,7 +437,11 @@ export default async function DashboardPage() {
               </div>
             )}
             {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex gap-3 p-3">
+              <Link
+                key={activity.id}
+                href={`/dashboard/library?preview=${activity.id}`}
+                className="flex gap-3 p-3 rounded-xl hover:bg-bg-tertiary transition-colors"
+              >
                 <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 bg-bg-tertiary">
                   <div className="text-lg">{activity.icon}</div>
                 </div>
@@ -447,7 +452,7 @@ export default async function DashboardPage() {
                   </p>
                   <p className="text-xs text-text-muted">{activity.time}</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

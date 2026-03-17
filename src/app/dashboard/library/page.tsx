@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { listGenerations, updateGeneration, deleteGeneration, type GenerationRecord } from "@/lib/generations";
 import { formatRelativeTime, truncateText } from "@/lib/formatters";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface LibraryFile {
   id: string;
@@ -12,6 +13,7 @@ interface LibraryFile {
   status: string;
   size: string;
   time: string;
+  created_at: string;
   duration?: string;
   gradient: string;
   prompt: string;
@@ -29,6 +31,11 @@ export default function LibraryPage() {
   const [previewItem, setPreviewItem] = useState<GenerationRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hasAutoOpenedPreview, setHasAutoOpenedPreview] = useState(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const previewId = searchParams.get("preview");
   
   const filters = [
     { id: "All", label: "All", icon: "" },
@@ -71,6 +78,7 @@ export default function LibraryPage() {
           status: item.status,
           size: "—",
           time: formatRelativeTime(item.created_at),
+          created_at: item.created_at,
           duration: item.duration ?? undefined,
           gradient,
           prompt: item.prompt,
@@ -103,6 +111,41 @@ export default function LibraryPage() {
 
     return () => clearInterval(interval);
   }, [files]);
+
+  useEffect(() => {
+    if (!previewId) return;
+    if (hasAutoOpenedPreview) return;
+    if (loading) return;
+    if (previewItem) return;
+
+    const match = files.find((f) => f.id === previewId);
+    if (!match) {
+      setHasAutoOpenedPreview(true);
+      return;
+    }
+
+    setPreviewItem({
+      id: match.id,
+      type:
+        match.type === "audio"
+          ? "voice"
+          : (match.type as GenerationRecord["type"]),
+      prompt: match.prompt,
+      title: match.title,
+      status: match.status,
+      aspect_ratio: null,
+      duration: match.duration ?? null,
+      quality: null,
+      style: null,
+      output_url: match.output_url,
+      favorited: match.favorited,
+      created_at: match.created_at,
+      external_id: null,
+      progress: match.progress,
+    });
+
+    setHasAutoOpenedPreview(true);
+  }, [previewId, hasAutoOpenedPreview, loading, previewItem, files]);
 
   const getFileIcon = (type: string) => {
     switch (type) {
@@ -407,7 +450,7 @@ export default function LibraryPage() {
                           style: null,
                           output_url: file.output_url,
                           favorited: file.favorited,
-                          created_at: new Date().toISOString(),
+                          created_at: file.created_at,
                           external_id: null,
                           progress: file.progress,
                         })
@@ -465,7 +508,7 @@ export default function LibraryPage() {
                                 style: null,
                                 output_url: file.output_url,
                                 favorited: file.favorited,
-                                created_at: new Date().toISOString(),
+                                created_at: file.created_at,
                                 external_id: null,
                                 progress: file.progress,
                               });
@@ -534,7 +577,7 @@ export default function LibraryPage() {
                           style: null,
                           output_url: file.output_url,
                           favorited: file.favorited,
-                          created_at: new Date().toISOString(),
+                          created_at: file.created_at,
                           external_id: null,
                           progress: file.progress,
                         })
@@ -602,7 +645,7 @@ export default function LibraryPage() {
                                   style: null,
                                   output_url: file.output_url,
                                   favorited: file.favorited,
-                                  created_at: new Date().toISOString(),
+                                  created_at: file.created_at,
                                   external_id: null,
                                   progress: file.progress,
                                 });
@@ -692,7 +735,10 @@ export default function LibraryPage() {
       {previewItem && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6"
-          onClick={() => setPreviewItem(null)}
+          onClick={() => {
+            setPreviewItem(null);
+            if (previewId) router.replace("/dashboard/library", { scroll: false });
+          }}
         >
           <div
             className="w-full max-w-3xl max-h-[calc(100vh-3rem)] bg-bg-secondary border border-border-color rounded-2xl shadow-xl overflow-hidden flex flex-col"
@@ -710,7 +756,10 @@ export default function LibraryPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setPreviewItem(null)}
+                onClick={() => {
+                  setPreviewItem(null);
+                  if (previewId) router.replace("/dashboard/library", { scroll: false });
+                }}
                 className="text-text-muted hover:text-white"
               >
                 ✕
