@@ -26,7 +26,7 @@ function SignupForm() {
   const supabase = createClient();
   const router = useRouter();
   const { user, updateProfile } = useAuth();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/";
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/").replace(/\/$/, "");
 
   useEffect(() => {
     if (user) {
@@ -39,8 +39,10 @@ function SignupForm() {
     setError("");
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider
-      
+      provider,
+      options: {
+        redirectTo: `${appUrl}/auth/callback`,
+      },
     });
 
     if (error) {
@@ -212,8 +214,8 @@ function SignupForm() {
           return;
         }
 
-        // Workspace created successfully, proceed to onboarding
-        router.push("/onboarding");
+        // Workspace created successfully, proceed to dashboard
+        router.push("/dashboard");
       } catch (error) {
         setError("Failed to create workspace. Please try again.");
         setIsLoading(false);

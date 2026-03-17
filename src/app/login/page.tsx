@@ -17,7 +17,7 @@ export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const { user } = useAuth();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/";
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/").replace(/\/$/, "");
 
   useEffect(() => {
     if (user) {
@@ -30,8 +30,10 @@ export default function LoginPage() {
     setError("");
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider
-     
+      provider,
+      options: {
+        redirectTo: `${appUrl}/auth/callback`,
+      },
     });
 
     if (error) {

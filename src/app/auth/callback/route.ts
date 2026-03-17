@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const origin = requestUrl.origin
+  const envAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+  const origin = envAppUrl ?? (forwardedHost ? `${forwardedProto ?? 'https'}://${forwardedHost}` : requestUrl.origin)
 
   if (code) {
     const supabase = await createClient()
