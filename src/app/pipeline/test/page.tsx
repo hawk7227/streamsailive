@@ -137,25 +137,10 @@ export default function PipelineTestPage() {
   function buildSelectedConcept() { setRunStatus("Building concept into video preview..."); appendLog("Built selected concept."); }
 
   return (
-    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at top left,rgba(168,85,247,0.16),transparent 24%),radial-gradient(circle at top right,rgba(34,211,238,0.14),transparent 24%),linear-gradient(180deg,#050816 0%,#070b1a 40%,#060816 100%)", color:"#fff", padding:24, fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" }}>
-      <div style={{ maxWidth:1680, margin:"0 auto" }}>
+    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at top left,rgba(168,85,247,0.16),transparent 24%),radial-gradient(circle at top right,rgba(34,211,238,0.14),transparent 24%),linear-gradient(180deg,#050816 0%,#070b1a 40%,#060816 100%)", color:"#fff", padding:"8px 12px", fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" }}>
+      <div style={{ maxWidth:"100%", margin:"0 auto" }}>
 
-        {/* HEADER */}
-        <div style={{ display:"grid", gridTemplateColumns:"1.1fr 1fr", gap:20, marginBottom:18 }}>
-          <div>
-            <div style={{ color:"#67e8f9", fontSize:12, letterSpacing:"0.32em", textTransform:"uppercase", marginBottom:10 }}>AI Pipeline + Video Creator</div>
-            <h1 style={{ margin:0, fontSize:46, lineHeight:1.05, fontWeight:800, maxWidth:720 }}>5 design concepts with your same visual layout logic</h1>
-            <p style={{ marginTop:14, maxWidth:720, color:"rgba(255,255,255,0.82)", fontSize:18, lineHeight:1.55 }}>Same mental model, cleaner hierarchy. Left = process. Next = editable guide. Center = assistant + per-step previews. Right = media generation and source intake. Bottom = final workspace.</p>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:14, alignSelf:"start" }}>
-            {[["Neo Control","Premium dark console with strong cyan signal hierarchy",false],["Electric Studio","More creative and high-energy with magenta-cyan contrast",true],["Glass Mission","Soft glassmorphism while keeping the same operational layout",false],["Command Grid","Sharper enterprise control room with stronger segmentation",false],["Stealth Broadcast","Ultra-clean cinematic dark mode with bigger preview emphasis",false]].map(([title,desc,active],i) => (
-              <button key={i} style={{ ...buttonStyle(Boolean(active)), textAlign:"left", padding:16 }} onClick={() => appendLog(`Viewed: ${title}`)}>
-                <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>{title as string}</div>
-                <div style={{ color:"rgba(255,255,255,0.78)", fontSize:16, lineHeight:1.4 }}>{desc as string}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {/* MAIN PANEL */}
         <div style={{ ...panelStyle(), padding:18, borderRadius:34, overflow:"hidden" }}>
@@ -175,7 +160,7 @@ export default function PipelineTestPage() {
           </div>
 
           {/* 4-COLUMN GRID */}
-          <div style={{ display:"grid", gridTemplateColumns:"290px 320px minmax(0,1fr) 300px", gap:14, alignItems:"start" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"260px 300px minmax(0,1fr) 280px", gap:12, alignItems:"start" }}>
 
             {/* COL 1 — STEP BUILDER */}
             <section style={{ ...panelStyle(), padding:14 }}>

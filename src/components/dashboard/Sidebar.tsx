@@ -11,9 +11,13 @@ import { ALL_PLANS, PLAN_ORDER, type PlanKey } from "@/lib/plans";
 export default function Sidebar({
   isOpen,
   onClose,
+  isCollapsed = false,
+  onToggleCollapse,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const pathname = usePathname();
   const { user, signOut, plan, limits, usage, usageLoading, membershipRole } =
@@ -111,21 +115,32 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 w-[260px] bg-bg-secondary border-r border-border-color flex flex-col z-50 transition-transform duration-300 ${
+        className={`fixed top-0 left-0 bottom-0 bg-bg-secondary border-r border-border-color flex flex-col z-50 transition-all duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
+        style={{ width: isCollapsed ? 48 : 260 }}
       >
-        <div className="p-5 border-b border-border-color">
-          <Link href="/" className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center">
-            <img
-              src={config.logoUrl}
-              alt="StreamsAI Logo"
-              className="w-full h-full object-cover"
-            />
-          </div>
-            <span className="text-xl font-bold">{config.appName}</span>
-          </Link>
+        <div className={`border-b border-border-color flex items-center ${isCollapsed ? "justify-center p-2" : "p-5 justify-between"}`}>
+          {!isCollapsed && (
+            <Link href="/" className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center">
+                <img src={config.logoUrl} alt="StreamsAI Logo" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-xl font-bold">{config.appName}</span>
+            </Link>
+          )}
+          <button
+            onClick={onToggleCollapse}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors flex-shrink-0"
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+              {isCollapsed
+                ? <><polyline points="9 18 15 12 9 6" /></>
+                : <><polyline points="15 18 9 12 15 6" /></>
+              }
+            </svg>
+          </button>
         </div>
 
         <nav className="flex-1 p-3 overflow-y-auto space-y-6">

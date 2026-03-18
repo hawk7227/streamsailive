@@ -11,6 +11,7 @@ export default function PipelineLayout({
   children: React.ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -32,31 +33,27 @@ export default function PipelineLayout({
     return null;
   }
 
-  const userInitials = user.email
-    ?.split("@")[0]
-    .slice(0, 2)
-    .toUpperCase() || "U";
+  const userInitials = user.email?.split("@")[0].slice(0, 2).toUpperCase() || "U";
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0f] text-white font-sans w-full overflow-x-hidden">
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
       />
-      <main className="flex-1 lg:ml-[260px] p-0 min-w-0 overflow-x-hidden">
-        {/* Mobile Header - only visible on small screens */}
+      <main
+        className="flex-1 p-0 min-w-0 overflow-x-hidden transition-all duration-300"
+        style={{ marginLeft: isSidebarCollapsed ? 48 : 260 }}
+      >
+        {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/10 mb-0">
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="w-10 h-10 flex items-center justify-center bg-[#12121a] border border-white/10 rounded-xl"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="w-6 h-6"
-            >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="18" x2="21" y2="18" />
