@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
@@ -18,7 +17,6 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ArrowLeft, Search, Save, Play, Trash2 } from "lucide-react";
-import { PipelineTopControlPanel } from "@/components/pipeline/PipelineTopControlPanel";
 import { buildImageToVideoMotionPlan, type PipelineNiche, type AutomationMode, type OutputMode } from "@/lib/pipeline/imageToVideoGovernance";
 
 type Pipeline = {
@@ -52,6 +50,99 @@ const SidebarItem = ({ item, onDragStart }: any) => (
     </div>
   </div>
 );
+
+
+// ── PipelineTopControlPanel (inlined) ─────────────────────────────────────
+
+type AutomationMode = "manual_mode"|"hybrid_mode"|"full_ai_ideas"|"full_ai_ideas_with_rules"|"full_auto_production";
+type OutputMode = "static_image"|"video"|"image_to_video"|"image_and_video"|"full_campaign_pack";
+type PipelineNiche2 = "telehealth"|"ecommerce";
+type ReferenceType = "youtube_url"|"image_upload"|"video_upload"|"document_upload"|"audio_upload"|"web_url";
+type IdeaCard = { id:string; title:string; subtitle:string; angle:string };
+type GovernanceSnapshot = { approvedFactsLoaded:boolean; imageRulesLoaded:boolean; videoRulesLoaded:boolean; marketingLogicLoaded:boolean };
+type ReferencePayload = { type:"youtube_url"|"web_url"; value:string }|{ type:"image_upload"|"video_upload"|"document_upload"|"audio_upload"; file:File };
+
+type PipelineTopControlPanelProps = {
+  niche: PipelineNiche2; setNiche:(v:PipelineNiche2)=>void;
+  automationMode: AutomationMode; setAutomationMode:(v:AutomationMode)=>void;
+  outputMode: OutputMode; setOutputMode:(v:OutputMode)=>void;
+  selectedTemplate:string; setSelectedTemplate:(v:string)=>void;
+  conceptType:string; setConceptType:(v:string)=>void;
+  governance:GovernanceSnapshot; ideas:IdeaCard[]; selectedIdeaId:string|null;
+  onSelectIdea:(idea:IdeaCard)=>void;
+  onAnalyzeReference:(payload:ReferencePayload)=>Promise<void>;
+  onAskAI:(message:string)=>Promise<void>;
+  onRunStep:(step:string)=>void;
+};
+
+function PipelineTopControlPanel({ niche,setNiche,automationMode,setAutomationMode,outputMode,setOutputMode,selectedTemplate,setSelectedTemplate,conceptType,setConceptType,governance,ideas,selectedIdeaId,onSelectIdea,onAnalyzeReference,onAskAI,onRunStep }:PipelineTopControlPanelProps) {
+  const [govOpen,setGovOpen] = useState(false);
+  const [chatInput,setChatInput] = useState("");
+  const [linkInput,setLinkInput] = useState("");
+  const [activeRef,setActiveRef] = useState<ReferenceType>("youtube_url");
+  const fileRef = useRef<HTMLInputElement|null>(null);
+
+  const handleRefClick = (t:ReferenceType) => { setActiveRef(t); if(t!=="youtube_url"&&t!=="web_url") fileRef.current?.click(); };
+  const handleFile = async (e:React.ChangeEvent<HTMLInputElement>) => { const f=e.target.files?.[0]; if(!f)return; await onAnalyzeReference({type:activeRef as any,file:f}); e.target.value=""; };
+  const handleLink = async () => { if(!linkInput.trim())return; await onAnalyzeReference({type:activeRef==="web_url"?"web_url":"youtube_url",value:linkInput.trim()}); };
+
+  const modeOpts = [{v:"manual_mode",l:"Manual"},{v:"hybrid_mode",l:"Hybrid"},{v:"full_ai_ideas",l:"Full AI Ideas"},{v:"full_ai_ideas_with_rules",l:"Full AI + Rules"},{v:"full_auto_production",l:"Full Auto"}];
+  const outOpts = [{v:"static_image",l:"Static Image"},{v:"video",l:"Video"},{v:"image_to_video",l:"Image → Video"},{v:"image_and_video",l:"Image + Video"},{v:"full_campaign_pack",l:"Campaign Pack"}];
+  const refBtns:{t:ReferenceType;l:string}[] = [{t:"youtube_url",l:"YouTube Link"},{t:"image_upload",l:"Image Upload"},{t:"video_upload",l:"Video Upload"},{t:"document_upload",l:"Doc / PDF"},{t:"audio_upload",l:"Audio"},{t:"web_url",l:"Web URL"}];
+
+  return (
+    <div className="w-full bg-[#0f0f18] flex flex-col">
+      <input ref={fileRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" onChange={handleFile}/>
+      <div className="flex items-center gap-2 flex-wrap px-3 pt-2.5 pb-2 border-b border-white/[0.06]">
+        <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
+          <span className="text-white/40">Niche</span>
+          <select value={niche} onChange={e=>setNiche(e.target.value as PipelineNiche2)} className="bg-transparent outline-none text-white/90 text-[11px] cursor-pointer"><option value="telehealth">Telehealth</option><option value="ecommerce">Ecommerce</option></select>
+        </div>
+        <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
+          <span className="text-white/40">Mode</span>
+          <select value={automationMode} onChange={e=>setAutomationMode(e.target.value as AutomationMode)} className="bg-transparent outline-none text-white/90 text-[11px] cursor-pointer">{modeOpts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
+          <span className="text-white/40">Output</span>
+          <select value={outputMode} onChange={e=>setOutputMode(e.target.value as OutputMode)} className="bg-transparent outline-none text-white/90 text-[11px] cursor-pointer">{outOpts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
+          <span className="text-white/40">Template</span>
+          <input value={selectedTemplate} onChange={e=>setSelectedTemplate(e.target.value)} placeholder="e.g. clinical_lifestyle" className="bg-transparent outline-none text-white/90 text-[11px] w-28 placeholder:text-white/20"/>
+        </div>
+        <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
+          <span className="text-white/40">Concept</span>
+          <input value={conceptType} onChange={e=>setConceptType(e.target.value)} placeholder="e.g. trust_first" className="bg-transparent outline-none text-white/90 text-[11px] w-24 placeholder:text-white/20"/>
+        </div>
+      </div>
+      <div className="border-b border-white/[0.06]">
+        <button onClick={()=>setGovOpen(v=>!v)} className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-cyan-300 hover:bg-white/[0.02]">
+          <span className="flex items-center gap-2">&#9670; Governance Snapshot</span>
+          <span className={`text-white/30 text-[10px] transition-transform ${govOpen?"rotate-180":""}`}>&#9660;</span>
+        </button>
+        {govOpen&&<div className="px-3 pb-2.5 grid grid-cols-2 gap-1.5">{[{l:"Approved facts",v:governance.approvedFactsLoaded},{l:"Image rules",v:governance.imageRulesLoaded},{l:"Video rules",v:governance.videoRulesLoaded},{l:"Marketing logic",v:governance.marketingLogicLoaded}].map(({l,v})=><div key={l} className="flex items-center gap-2 bg-white/[0.04] rounded-lg px-2.5 py-1.5 text-[10px]"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${v?"bg-emerald-400":"bg-red-400"}`}/><span className={v?"text-white/60":"text-red-400"}>{l} {v?"loaded":"missing"}</span></div>)}</div>}
+      </div>
+      {ideas.length>0&&<div className="px-3 py-2 border-b border-white/[0.06]"><div className="text-[9px] uppercase tracking-[0.15em] text-white/30 mb-2">Pre-run preview matrix</div><div className="grid grid-cols-3 gap-2">{ideas.map(idea=><button key={idea.id} onClick={()=>onSelectIdea(idea)} className={`rounded-xl border p-2.5 text-left ${selectedIdeaId===idea.id?"border-cyan-400/60 bg-cyan-400/10":"border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"}`}><div className="text-[9px] uppercase text-white/30 mb-1">{idea.angle}</div><div className="text-[11px] font-semibold text-white mb-2">{idea.title}</div><div className="h-14 rounded-lg bg-white/[0.04] mb-2"/><div className="text-center text-[10px] rounded-lg bg-cyan-400 py-1 text-black font-semibold">Select</div></button>)}</div></div>}
+      <div className="px-3 py-2 border-b border-white/[0.06]">
+        <div className="flex items-center gap-1.5 flex-wrap">{refBtns.map(({t,l})=><button key={t} onClick={()=>handleRefClick(t)} className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] whitespace-nowrap border transition-colors ${activeRef===t?"bg-cyan-400/15 text-cyan-300 border-cyan-400/30":"bg-white/[0.05] text-white/60 border-white/[0.07] hover:bg-white/[0.09]"}`}>{l}</button>)}</div>
+        {(activeRef==="youtube_url"||activeRef==="web_url")&&<div className="mt-2 flex gap-2"><input value={linkInput} onChange={e=>setLinkInput(e.target.value)} placeholder={activeRef==="youtube_url"?"Paste YouTube link...":"Paste web URL..."} className="flex-1 rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-1.5 text-[11px] text-white/90 outline-none placeholder:text-white/20"/><button onClick={handleLink} className="rounded-lg bg-cyan-400 px-3 py-1.5 text-[11px] font-semibold text-black">Analyze</button></div>}
+      </div>
+      <div className="px-3 py-2 border-b border-white/[0.06]">
+        <div className="text-[10px] text-white/30 mb-1.5">AI Creative Direction</div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 text-[11px] text-white/40 mb-2">AI will recommend the strongest production path, not just agree.</div>
+        <div className="flex gap-2">
+          <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Ask AI..." className="flex-1 rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-1.5 text-[11px] text-white/90 outline-none placeholder:text-white/20"/>
+          <button onClick={()=>{if(chatInput.trim())void onAskAI(chatInput);}} className="rounded-lg bg-white/[0.07] border border-white/[0.1] px-3 py-1.5 text-[11px] text-cyan-300 flex items-center gap-1.5">Ask</button>
+        </div>
+      </div>
+      <div className="px-3 py-2 flex items-center gap-2 flex-wrap">
+        {["Script","Image","Video","Validator","OCR QA","Export"].map(s=><button key={s} onClick={()=>onRunStep(s)} className="rounded-lg bg-white/[0.05] border border-white/[0.07] px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/[0.09]">{s}</button>)}
+        <button onClick={()=>onRunStep("Run Full Pipeline")} className="ml-auto rounded-lg bg-cyan-400 px-3 py-1.5 text-[11px] font-semibold text-black flex items-center gap-1.5">&#9654; Run Full Pipeline</button>
+      </div>
+    </div>
+  );
+}
+// ── End PipelineTopControlPanel ───────────────────────────────────────────
 
 export default function PipelineBuilder() {
   const { id } = useParams();
@@ -615,3 +706,5 @@ export default function PipelineBuilder() {
     </div>
   );
 }
+
+
