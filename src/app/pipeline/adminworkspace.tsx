@@ -1,4 +1,3 @@
-app/ai-pipeline/page.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
