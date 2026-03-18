@@ -475,8 +475,9 @@ export async function executeNode(node: any, context: any) {
 
   if (type === "scriptWriter") {
     const prompt = replaceVariables(data.content || "", context);
-    const output = await generateContent("script" as GenerationType, prompt, {
-      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+    const output = await generateContent("script" as GenerationType, {
+      prompt,
+      style: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
     });
 
     return {
@@ -488,10 +489,10 @@ export async function executeNode(node: any, context: any) {
 
   if (type === "imageGenerator") {
     const prompt = replaceVariables(data.content || "", context);
-    const output = await generateContent("image" as GenerationType, prompt, {
+    const output = await generateContent("image" as GenerationType, {
+      prompt,
       aspectRatio: data.aspectRatio || "16:9",
-      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
-      imageMode: data?.imageMode || data?.governance?.imageMode,
+      style: data?.imageMode || data?.governance?.imageMode,
     });
 
     return {
@@ -601,14 +602,10 @@ export async function executeNode(node: any, context: any) {
       .filter(Boolean)
       .join("\n");
 
-    const output = await generateContent("video" as GenerationType, providerInstruction, {
-      duration: data.duration || 4,
+    const output = await generateContent("video" as GenerationType, {
+      prompt: providerInstruction,
+      duration: String(data.duration || 4),
       quality: data.quality || "1080p",
-      niche: governance.pipelineType,
-      motionPlan: motionPlan,
-      cameraSystem: finalCameraSystem,
-      timeline: finalTimeline,
-      unsafeForMotion,
     });
 
     return {
@@ -635,9 +632,9 @@ export async function executeNode(node: any, context: any) {
 
   if (type === "voiceGenerator") {
     const prompt = replaceVariables(data.content || "", context);
-    const output = await generateContent("voice" as GenerationType, prompt, {
-      speaker: data.speaker || "Rachel",
-      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+    const output = await generateContent("voice" as GenerationType, {
+      prompt,
+      style: data.speaker || "Rachel",
     });
 
     return {
