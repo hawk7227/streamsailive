@@ -544,8 +544,7 @@ export async function executeNode(node: any, context: any) {
 
     const basePrompt = replaceVariables(data.content || "", context);
 
-    const resolvedMotionPlan =
-      motionSource === "image_only" ? null : motionPlan;
+    const resolvedMotionPlan = motionSource === "image_only" ? null : motionPlan;
 
     const unsafeForMotion =
       resolvedMotionPlan?.validation?.warnings?.includes("high_face_distortion_risk") ||
