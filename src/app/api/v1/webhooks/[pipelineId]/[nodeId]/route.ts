@@ -77,7 +77,7 @@ export async function POST(
             .eq("id", pipelineId);
 
         // Execute Pipeline Logic Server-Side
-        const executionResult = await executePipeline(updatedNodes, pipeline.edges || [], { webhook: payload });
+        const executionResult = await executePipeline(updatedNodes, pipeline.edges || []);
 
         if (executionResult.webhookResponse) {
             return NextResponse.json(executionResult.webhookResponse);
