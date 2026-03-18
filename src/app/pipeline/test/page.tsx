@@ -76,6 +76,8 @@ export default function PipelineTestPage() {
   const [imagePrompt, setImagePrompt] = useState("Generate 10 premium healthcare concept frames with clean composition, dark high-end UI preview compatibility, and strong safe-motion potential.");
   const [inputValue, setInputValue] = useState("");
   const [selectedConceptId, setSelectedConceptId] = useState("c1");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string|null>(null);
+  const [imageBuilding, setImageBuilding] = useState(false);
   const [concepts, setConcepts] = useState<ConceptCard[]>(INITIAL_CONCEPTS);
   const [sampleTitle, setSampleTitle] = useState("How Online Care Works");
   const [sampleBody, setSampleBody] = useState("Simple intake, licensed review, trusted next steps.");
@@ -160,34 +162,63 @@ export default function PipelineTestPage() {
 
   async function buildSelectedConcept() {
     const concept = concepts.find((c) => c.id === selectedConceptId);
-    const prompt = concept ? `${concept.headline}. ${concept.body}. Premium telehealth brand image. Clean, calm, clinical. Dark background.` : "Premium telehealth scene";
+    const prompt = concept
+      ? `${concept.headline}. ${concept.body}. Premium telehealth brand image. Clean, calm, clinical. Dark background with soft gradient.`
+      : "Premium telehealth scene. Calm doctor. Minimal clinic. Dark premium background.";
+    setImageBuilding(true);
+    setGeneratedImageUrl(null);
     setRunStatus("Generating image...");
-    appendLog("Generating image from concept...");
+    appendLog("Submitting image to Kling...");
     try {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "image", prompt }),
+        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "API error");
       const gen = data.data;
-      setRunStatus("✓ Image generated");
       if (gen.output_url) {
-        setSampleTitle(concept?.headline || "Generated");
-        setSampleBody(gen.output_url);
-        appendLog("✓ Image ready: " + gen.output_url.slice(0,60) + "...");
+        setGeneratedImageUrl(gen.output_url);
+        setSampleTitle(concept?.headline || "Generated Image");
+        setRunStatus("✓ Image ready");
+        appendLog("✓ Image generated successfully");
+      } else if (gen.status === "pending") {
+        setRunStatus("Image is processing... (~60s)");
+        appendLog("✓ Submitted (id: " + gen.id + ") — polling...");
+        // Poll every 8s for up to 90s
+        let tries = 0;
+        const poll = async () => {
+          tries++;
+          if (tries > 11) { setRunStatus("Timed out — check Library"); setImageBuilding(false); return; }
+          const lr = await fetch("/api/generations?type=image&limit=5");
+          const ld = await lr.json();
+          const found = ld.data?.find((g: any) => g.id === gen.id);
+          if (found?.output_url) {
+            setGeneratedImageUrl(found.output_url);
+            setSampleTitle(concept?.headline || "Generated Image");
+            setRunStatus("✓ Image ready");
+            appendLog("✓ Image ready after polling");
+            setImageBuilding(false);
+          } else {
+            setTimeout(poll, 8000);
+          }
+        };
+        setTimeout(poll, 8000);
+        return;
       } else {
-        appendLog("✓ Image submitted — status: " + gen.status);
-        setRunStatus("Image generating... check Library in 60s");
+        setRunStatus("Generation failed");
+        appendLog("✗ Image generation failed");
       }
     } catch(e: any) {
       setRunStatus("Error: " + e.message);
       appendLog("✗ Image failed: " + e.message);
     }
+    setImageBuilding(false);
   }
 
   return (
+    <><style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     <div style={{ minHeight:"100vh", background:"radial-gradient(circle at top left,rgba(168,85,247,0.16),transparent 24%),radial-gradient(circle at top right,rgba(34,211,238,0.14),transparent 24%),linear-gradient(180deg,#050816 0%,#070b1a 40%,#060816 100%)", color:"#fff", padding:24, fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" }}>
       <div style={{ maxWidth:1680, margin:"0 auto" }}>
 
@@ -378,10 +409,23 @@ export default function PipelineTestPage() {
                   <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 28%),linear-gradient(180deg,rgba(10,14,35,0.96),rgba(4,8,24,0.98))", padding:12, minHeight:300 }}>
                     <div style={{ height:"100%", borderRadius:16, border:"1px solid rgba(255,255,255,0.10)", padding:14, display:"flex", flexDirection:"column" }}>
                       <div style={{ fontSize:10, letterSpacing:"0.24em", textTransform:"uppercase", color:"rgba(255,255,255,0.52)", marginBottom:10 }}>Three-step Reassurance Ad</div>
-                      <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>{sampleTitle}</div>
-                      <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>{sampleBody}</div>
+                      {generatedImageUrl ? (
+                        <img src={generatedImageUrl} alt="Generated" style={{ width:"100%", borderRadius:10, marginBottom:10, display:"block" }} />
+                      ) : imageBuilding ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, color:"#67e8f9", fontSize:13 }}>
+                          <span style={{ display:"inline-block", width:12, height:12, border:"2px solid rgba(103,232,249,0.3)", borderTopColor:"#67e8f9", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+                          Generating image...
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>{sampleTitle}</div>
+                          <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>{sampleBody}</div>
+                        </>
+                      )}
                       <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
-                        <button style={{ borderRadius:999, background:"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor:"pointer" }} onClick={buildSelectedConcept}>Select &amp; Build</button>
+                        <button style={{ borderRadius:999, background: imageBuilding?"rgba(255,255,255,0.1)":"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor: imageBuilding?"not-allowed":"pointer", opacity: imageBuilding?0.6:1 }} onClick={imageBuilding ? undefined : buildSelectedConcept}>
+                          {imageBuilding ? "Building..." : "Select & Build"}
+                        </button>
                         <button style={{ borderRadius:999, background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.12)", fontWeight:700, padding:"8px 12px", cursor:"pointer" }} onClick={() => setPreviewStatus("Preview opened.")}>Preview</button>
                       </div>
                     </div>
@@ -480,5 +524,6 @@ export default function PipelineTestPage() {
         </div>
       </div>
     </div>
+  </>
   );
 }
