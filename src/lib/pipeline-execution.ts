@@ -825,13 +825,34 @@ export async function executePipeline(nodes: any[], edges: any[]) {
     if (!currentNode) continue;
 
     const context: Record<string, any> = {};
-    for (const [nodeId, result] of results.entries()) {
-      const sourceNode = nodeMap.get(nodeId);
-      if (sourceNode?.data?.label) {
-        const key = sourceNode.data.label.toLowerCase().replace(/\s+/g, "_");
-        context[key] = result;
-      }
-    }
+for (const [nodeId, result] of results.entries()) {
+  const sourceNode = nodeMap.get(nodeId);
+  if (!sourceNode) continue;
+
+  const sourceType =
+    (sourceNode.type === "pipelineNode" ? sourceNode.data?.type : sourceNode.type) || "unknown";
+
+  if (sourceNode?.data?.label) {
+    const key = sourceNode.data.label.toLowerCase().replace(/\s+/g, "_");
+    context[key] = result;
+  }
+
+  if (sourceType === "imageGenerator") {
+    context.image = result;
+  }
+
+  if (sourceType === "imageMotionAnalyzer") {
+    context.motion_plan = result;
+  }
+
+  if (sourceType === "videoGenerator") {
+    context.video = result;
+  }
+
+  if (sourceType === "scriptWriter") {
+    context.script = result;
+  }
+}
 
     const execution = await executeNode(currentNode, context);
     results.set(currentNode.id, execution.output);
