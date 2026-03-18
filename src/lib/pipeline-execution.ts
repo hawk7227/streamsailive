@@ -544,8 +544,9 @@ export async function executeNode(node: any, context: any) {
 
     const basePrompt = replaceVariables(data.content || "", context);
 
-    const resolvedMotionPlan = motionSource === "image_only" ? null : motionPlan;
-
+   resolvedMotionPlan?.validation?.warnings?.includes(...)
+   resolvedMotionPlan?.perception?.riskProfile?.motionRisk
+   resolvedMotionPlan?.shouldUseImageToVideo === false
     const unsafeForMotion =
       resolvedMotionPlan?.validation?.warnings?.includes("high_face_distortion_risk") ||
       resolvedMotionPlan?.perception?.riskProfile?.motionRisk === "high" ||
