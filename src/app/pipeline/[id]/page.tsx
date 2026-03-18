@@ -54,16 +54,14 @@ const SidebarItem = ({ item, onDragStart }: any) => (
 
 // ── PipelineTopControlPanel (inlined) ─────────────────────────────────────
 
-type AutomationMode = "manual_mode"|"hybrid_mode"|"full_ai_ideas"|"full_ai_ideas_with_rules"|"full_auto_production";
-type OutputMode = "static_image"|"video"|"image_to_video"|"image_and_video"|"full_campaign_pack";
-type PipelineNiche2 = "telehealth"|"ecommerce";
+
 type ReferenceType = "youtube_url"|"image_upload"|"video_upload"|"document_upload"|"audio_upload"|"web_url";
 type IdeaCard = { id:string; title:string; subtitle:string; angle:string };
 type GovernanceSnapshot = { approvedFactsLoaded:boolean; imageRulesLoaded:boolean; videoRulesLoaded:boolean; marketingLogicLoaded:boolean };
 type ReferencePayload = { type:"youtube_url"|"web_url"; value:string }|{ type:"image_upload"|"video_upload"|"document_upload"|"audio_upload"; file:File };
 
 type PipelineTopControlPanelProps = {
-  niche: PipelineNiche2; setNiche:(v:PipelineNiche2)=>void;
+  niche: PipelineNiche; setNiche:(v:PipelineNiche)=>void;
   automationMode: AutomationMode; setAutomationMode:(v:AutomationMode)=>void;
   outputMode: OutputMode; setOutputMode:(v:OutputMode)=>void;
   selectedTemplate:string; setSelectedTemplate:(v:string)=>void;
@@ -96,7 +94,7 @@ function PipelineTopControlPanel({ niche,setNiche,automationMode,setAutomationMo
       <div className="flex items-center gap-2 flex-wrap px-3 pt-2.5 pb-2 border-b border-white/[0.06]">
         <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
           <span className="text-white/40">Niche</span>
-          <select value={niche} onChange={e=>setNiche(e.target.value as PipelineNiche2)} className="bg-transparent outline-none text-white/90 text-[11px] cursor-pointer"><option value="telehealth">Telehealth</option><option value="ecommerce">Ecommerce</option></select>
+          <select value={niche} onChange={e=>setNiche(e.target.value as PipelineNiche)} className="bg-transparent outline-none text-white/90 text-[11px] cursor-pointer"><option value="telehealth">Telehealth</option><option value="ecommerce">Ecommerce</option></select>
         </div>
         <div className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px]">
           <span className="text-white/40">Mode</span>
