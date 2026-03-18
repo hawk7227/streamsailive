@@ -1,682 +1,476 @@
 
-import crypto from "crypto";
+import { generateContent } from '@/lib/ai';
+import { GenerationType } from '@/lib/ai/types';
 
-type NodePayload = {
-  type: string;
-  data: Record<string, any>;
+const replaceVariables = (text: string, context: any) => {
+    if (!text) return "";
+    if (typeof text !== 'string') return text;
+    return text.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, path) => {
+        const parts = path.split(".");
+        let current = context;
+        for (const part of parts) {
+            if (current === undefined || current === null) return match;
+            current = current[part];
+        }
+        return current !== undefined ? String(current) : match;
+    });
 };
 
-type ExecutionContext = Record<string, any>;
+export async function executeNode(node: any, context: any) {
+    // Handle ReactFlow generic 'pipelineNode' type
+    const type = (node.type === 'pipelineNode' ? node.data?.type : node.type) || 'unknown';
+    const data = node.data || {};
 
-type PipelineNiche = "telehealth" | "ecommerce";
-type AutomationMode =
-  | "manual_mode"
-  | "hybrid_mode"
-  | "full_ai_ideas"
-  | "full_ai_ideas_with_rules"
-  | "full_auto_production";
+    let output: any = {};
+    const generationId = crypto.randomUUID();
 
-type OutputMode =
-  | "static_image"
-  | "video"
-  | "image_to_video"
-  | "image_and_video"
-  | "full_campaign_pack";
+    // Small processing delay for UX
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-type RiskLevel = "low" | "medium" | "high";
-
-type MotionPlanV2 = {
-  shouldUseImageToVideo: boolean;
-  reason: string;
-  perception: {
-    sceneType: string;
-    subjects: Array<{
-      type: string;
-      category?: string;
-      face?: boolean;
-      pose?: string;
-      emotion?: string;
-    }>;
-    composition: {
-      focalPoint: string;
-      depth: string;
-      negativeSpace: string;
-    };
-    lighting: {
-      type: string;
-      direction: string;
-      contrast: string;
-    };
-    regions: {
-      productPresent: boolean;
-      textPresent: boolean;
-      ctaZonePresent: boolean;
-      logoPresent: boolean;
-      devicePresent: boolean;
-      facePresent: boolean;
-      handsPresent: boolean;
-    };
-    riskProfile: {
-      faceDistortionRisk: RiskLevel;
-      artifactRisk: RiskLevel;
-      objectIntegrityRisk: RiskLevel;
-      motionRisk: RiskLevel;
-    };
-  };
-  intent: {
-    goal: string;
-    format: string;
-    platform: string;
-    audience: string;
-  };
-  strategy: {
-    hookType: string;
-    pacing: string;
-    motionStyle: string;
-    visualHierarchy: string[];
-    attentionCurve: Array<{ t: number; intensity: number }>;
-  };
-  constraints: {
-    face: {
-      mustPreserveIdentity: boolean;
-      maxWarp: number;
-      noMorphing: boolean;
-    };
-    product: {
-      mustMaintainShape: boolean;
-      noScalingDistortion: boolean;
-    };
-    text: {
-      noGeneration: boolean;
-      preserveOriginal: boolean;
-    };
-    motion: {
-      maxSpeed: number;
-      maxCameraShift: number;
-      avoidJitter: boolean;
-    };
-  };
-  cameraSystem: {
-    shotType: string;
-    movement: string;
-    lens: string;
-    stabilization: string;
-    depthEffect: string;
-  };
-  timeline: {
-    camera: Array<{ t: number; action: string }>;
-    subject: Array<{ t: number; action: string }>;
-    overlays: Array<{ t: number; action: string }>;
-  };
-  validation: {
-    passes: string[];
-    warnings: string[];
-    autoFixes: string[];
-  };
-  feedback: {
-    performanceScore: number | null;
-    userApproval: boolean | null;
-    issues: string[];
-    improvements: string[];
-  };
-  modeBehavior: {
-    activeMode: AutomationMode;
-    behavior: string;
-  };
-  governanceApplied: {
-    niche: PipelineNiche;
-    outputMode: OutputMode;
-    governanceExcerpt: string;
-  };
-};
-
-function normalizeString(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function parseJsonMaybe(value: unknown): any {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-function interpolateTemplate(input: string, context: ExecutionContext): string {
-  return input.replace(/\{\{([^}]+)\}\}/g, (_, rawPath) => {
-    const path = rawPath.trim().split(".");
-    let cursor: any = context;
-
-    for (const key of path) {
-      if (cursor == null) return "";
-      cursor = cursor[key];
-    }
-
-    if (cursor == null) return "";
-    if (typeof cursor === "string") return cursor;
     try {
-      return JSON.stringify(cursor);
-    } catch {
-      return String(cursor);
+        // ---------------------------------------------------------------
+        // SCRIPT WRITER — uses AI provider system (e.g. OpenAI gpt-4o-mini)
+        // ---------------------------------------------------------------
+        if (type === 'scriptWriter') {
+            const prompt = data.content || "";
+            const processedPrompt = replaceVariables(prompt, context);
+
+            try {
+                const result = await generateContent('script' as GenerationType, {
+                    prompt: processedPrompt,
+                    style: data.style,
+                });
+
+                output = {
+                    prompt_used: processedPrompt,
+                    script: result.responseText || "No script generated.",
+                    status: result.status,
+                };
+            } catch (err: any) {
+                console.error("[Pipeline] scriptWriter error:", err);
+                output = { status: "error", error: err.message, script: "Failed to generate script." };
+            }
+
+            // ---------------------------------------------------------------
+            // IMAGE GENERATOR — uses AI provider system (e.g. DALL-E, Runway)
+            // ---------------------------------------------------------------
+        } else if (type === 'imageGenerator') {
+            const prompt = data.content || "";
+            const processedPrompt = replaceVariables(prompt, context);
+            const aspectRatio = data.aspectRatio || "16:9";
+
+            try {
+                const result = await generateContent('image' as GenerationType, {
+                    prompt: processedPrompt,
+                    aspectRatio,
+                    quality: data.quality,
+                    style: data.style,
+                });
+
+                output = {
+                    prompt_used: processedPrompt,
+                    aspect_ratio: aspectRatio,
+                    image_url: result.outputUrl || null,
+                    external_id: result.externalId || null,
+                    status: result.status,
+                };
+            } catch (err: any) {
+                console.error("[Pipeline] imageGenerator error:", err);
+                output = {
+                    status: "error",
+                    error: err.message,
+                    image_url: null,
+                };
+            }
+
+            // ---------------------------------------------------------------
+            // VIDEO GENERATOR — uses AI provider system (e.g. Kling, Sora, Veo3)
+            // ---------------------------------------------------------------
+        } else if (type === 'videoGenerator') {
+            const prompt = data.content || "";
+            const processedPrompt = replaceVariables(prompt, context);
+            const duration = data.duration || "8s";
+            const quality = data.quality || "1080p";
+            const aspectRatio = data.aspectRatio || "16:9";
+
+            try {
+                const result = await generateContent('video' as GenerationType, {
+                    prompt: processedPrompt,
+                    duration,
+                    quality,
+                    aspectRatio,
+                    style: data.style,
+                });
+
+                output = {
+                    prompt_used: processedPrompt,
+                    duration,
+                    quality,
+                    aspect_ratio: aspectRatio,
+                    video_url: result.outputUrl || null,
+                    external_id: result.externalId || null,
+                    status: result.status,
+                };
+            } catch (err: any) {
+                console.error("[Pipeline] videoGenerator error:", err);
+                output = {
+                    status: "error",
+                    error: err.message,
+                    video_url: null,
+                };
+            }
+
+            // ---------------------------------------------------------------
+            // VOICE GENERATOR — uses AI provider system (e.g. ElevenLabs, OpenAI TTS)
+            // ---------------------------------------------------------------
+        } else if (type === 'voiceGenerator') {
+            const prompt = data.content || "";
+            const processedPrompt = replaceVariables(prompt, context);
+            const speaker = data.speaker;
+
+            try {
+                const result = await generateContent('voice' as GenerationType, {
+                    prompt: processedPrompt,
+                    style: speaker,   // pass speaker/voice as style hint
+                    quality: data.quality,
+                });
+
+                output = {
+                    text_spoken: processedPrompt,
+                    speaker: speaker || "default",
+                    audio_url: result.outputUrl || null,
+                    external_id: result.externalId || null,
+                    status: result.status,
+                };
+            } catch (err: any) {
+                console.error("[Pipeline] voiceGenerator error:", err);
+                output = {
+                    status: "error",
+                    error: err.message,
+                    audio_url: null,
+                };
+            }
+
+            // ---------------------------------------------------------------
+            // HTTP REQUEST
+            // ---------------------------------------------------------------
+        } else if (type === 'httpRequest') {
+            const method = data.method || "GET";
+            let url = replaceVariables(data.url || "", context);
+            let bodyStr: string | null = null;
+
+            if (data.bodyMode === 'fields' && Array.isArray(data.bodyFields)) {
+                const payloadObj: Record<string, string> = {};
+                data.bodyFields.forEach((field: any) => {
+                    if (field.key) {
+                        payloadObj[field.key] = replaceVariables(field.value || "", context);
+                    }
+                });
+
+                if (method === 'GET' || method === 'HEAD') {
+                    try {
+                        const hasQuery = url.includes('?');
+                        const qs = new URLSearchParams(payloadObj).toString();
+                        if (qs) url += (hasQuery ? '&' : '?') + qs;
+                    } catch (e) {
+                        console.error("Error appending query params", e);
+                    }
+                } else {
+                    bodyStr = JSON.stringify(payloadObj);
+                }
+            } else if (method !== 'GET' && method !== 'HEAD') {
+                bodyStr = data.body ? replaceVariables(data.body, context) : null;
+            }
+
+            const headersStr = data.headers ? replaceVariables(data.headers, context) : "{}";
+            let headers: Record<string, string> = { "Content-Type": "application/json" };
+            try {
+                Object.assign(headers, JSON.parse(headersStr));
+            } catch (e) {
+                console.error("Invalid headers JSON", e);
+            }
+
+            if (data.authType === 'bearer') {
+                headers['Authorization'] = `Bearer ${replaceVariables(data.authToken || "", context)}`;
+            } else if (data.authType === 'apiKey') {
+                const key = replaceVariables(data.authKey || "", context);
+                const value = replaceVariables(data.authValue || "", context);
+                if (key && value) headers[key] = value;
+            } else if (data.authType === 'basic') {
+                const username = replaceVariables(data.authUsername || "", context);
+                const password = replaceVariables(data.authPassword || "", context);
+                const encoded = btoa(`${username}:${password}`);
+                headers['Authorization'] = `Basic ${encoded}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers,
+                    body: (method !== 'GET' && method !== 'HEAD' && bodyStr) ? bodyStr : undefined
+                });
+
+                const contentType = response.headers.get("content-type");
+                let responseData;
+                if (contentType && contentType.includes("application/json")) {
+                    responseData = await response.json();
+                } else {
+                    responseData = await response.text();
+                }
+
+                output = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: responseData,
+                    headers: Object.fromEntries(response.headers.entries())
+                };
+            } catch (fetchError) {
+                output = { status: 0, error: String(fetchError), message: "Request failed" };
+            }
+
+            // ---------------------------------------------------------------
+            // ZAPIER WEBHOOK — always POST JSON to Zapier Catch Hook
+            // ---------------------------------------------------------------
+        } else if (type === 'zapierWebhook') {
+            const webhookUrl = replaceVariables(data.webhookUrl || "", context);
+
+            if (!webhookUrl) {
+                return { success: false, error: "Zapier Webhook URL is required." };
+            }
+
+            // Build payload from key-value fields
+            const payloadObj: Record<string, string> = {};
+            if (Array.isArray(data.bodyFields)) {
+                data.bodyFields.forEach((field: any) => {
+                    if (field.key) {
+                        payloadObj[field.key] = replaceVariables(field.value || "", context);
+                    }
+                });
+            }
+
+            try {
+                const response = await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payloadObj),
+                });
+
+                const contentType = response.headers.get("content-type");
+                let responseData;
+                if (contentType && contentType.includes("application/json")) {
+                    responseData = await response.json();
+                } else {
+                    responseData = await response.text();
+                }
+
+                output = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: responseData,
+                    webhook_url: webhookUrl,
+                    payload_sent: payloadObj,
+                };
+            } catch (fetchError) {
+                output = { status: 0, error: String(fetchError), message: "Zapier webhook request failed" };
+            }
+
+            // ---------------------------------------------------------------
+            // VIDEO EDITOR — json2video SDK
+            // ---------------------------------------------------------------
+        } else if (type === 'videoEditor') {
+            const input = replaceVariables(data.content || "", context);
+            const trimStart = data.trimStart || 0;
+            const trimEnd = data.trimEnd || 0;
+
+            if (process.env.JSON2VIDEO_API_KEY) {
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-var-requires
+                    const SDK = require('json2video-sdk');
+                    const Movie = SDK.Movie;
+
+                    const movie = new Movie();
+                    movie.setAPIKey(process.env.JSON2VIDEO_API_KEY);
+                    movie.set("resolution", "1080");
+                    movie.set("quality", "high");
+
+                    const jsonConfig = data.jsonConfig ? replaceVariables(data.jsonConfig, context) : null;
+                    let advancedConfigApplied = false;
+
+                    if (jsonConfig) {
+                        try {
+                            const parsedConfig = typeof jsonConfig === 'string' ? JSON.parse(jsonConfig) : jsonConfig;
+                            if (parsedConfig.scenes) {
+                                parsedConfig.scenes.forEach((scene: any) => movie.addScene(scene));
+                            }
+                            if (parsedConfig.elements) {
+                                parsedConfig.elements.forEach((element: any) => movie.addElement(element));
+                            }
+                            Object.keys(parsedConfig).forEach(key => {
+                                if (key !== 'scenes' && key !== 'elements') movie.set(key, parsedConfig[key]);
+                            });
+                            advancedConfigApplied = true;
+                        } catch (e) {
+                            console.error("Invalid JSON Config:", e);
+                            throw new Error("Invalid JSON Configuration provided.");
+                        }
+                    }
+
+                    if (!advancedConfigApplied) {
+                        const videoElement: any = { type: "video", src: input };
+                        if (trimStart > 0) videoElement.trim_start = parseFloat(trimStart);
+                        if (trimEnd > 0) videoElement.trim_end = parseFloat(trimEnd);
+                        movie.addElement(videoElement);
+                    }
+
+                    const renderResponse = await movie.render();
+                    if (!renderResponse || !renderResponse.success) {
+                        throw new Error(renderResponse?.message || "Failed to start rendering");
+                    }
+
+                    const waitPromise = movie.waitToFinish();
+                    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 50000));
+                    const raceResult: any = await Promise.race([waitPromise, timeoutPromise]);
+
+                    if (raceResult === 'timeout') {
+                        output = {
+                            status: "processing",
+                            message: "Video is rendering. Check back later.",
+                            project_id: renderResponse.project
+                        };
+                    } else if (raceResult && raceResult.movie) {
+                        output = {
+                            video_url: raceResult.movie.url,
+                            thumbnail_url: raceResult.movie.thumbnail,
+                            status: "success",
+                            project_id: raceResult.project
+                        };
+                    } else {
+                        throw new Error("Unknown error during rendering wait");
+                    }
+                } catch (err: any) {
+                    console.error("JSON2Video Error:", err);
+                    output = { status: "error", error: err.message || String(err) };
+                }
+            } else {
+                output = {
+                    video_url: input || "https://media.w3.org/2010/05/sintel/trailer.mp4",
+                    status: "success",
+                    info: "Mock Video Editor (Missing JSON2VIDEO_API_KEY)"
+                };
+            }
+
+            // ---------------------------------------------------------------
+            // WEBHOOK RESPONSE
+            // ---------------------------------------------------------------
+        } else if (type === 'webhookResponse') {
+            let responseContent: any = data.output || "";
+
+            if (data.bodyMode === 'fields' && Array.isArray(data.bodyFields)) {
+                const responseObj: Record<string, any> = {};
+                data.bodyFields.forEach((field: any) => {
+                    if (field.key) {
+                        responseObj[field.key] = replaceVariables(field.value || "", context);
+                    }
+                });
+                responseContent = responseObj;
+            } else {
+                let processedResponse = replaceVariables(responseContent, context);
+                try {
+                    if (typeof processedResponse === 'string' && (processedResponse.trim().startsWith('{') || processedResponse.trim().startsWith('['))) {
+                        processedResponse = JSON.parse(processedResponse);
+                    }
+                } catch (e) {
+                    // keep as string
+                }
+                responseContent = processedResponse;
+            }
+
+            output = { response: responseContent, status: "success" };
+
+            // ---------------------------------------------------------------
+            // DEFAULT fallback
+            // ---------------------------------------------------------------
+        } else {
+            output = { message: "Node executed successfully", echo: data };
+        }
+
+        return { success: true, output, generationId };
+
+    } catch (error) {
+        console.error("Node Execution Error:", error);
+        return { success: false, error: String(error) };
     }
-  });
 }
 
-function getGovernance(data: Record<string, any>) {
-  const governance = data?.governance || {};
-  return {
-    pipelineType: (governance.pipelineType || data.pipelineType || "telehealth") as PipelineNiche,
-    strategyPrompt: normalizeString(governance.strategyPrompt),
-    copyPrompt: normalizeString(governance.copyPrompt),
-    validatorPrompt: normalizeString(governance.validatorPrompt),
-    imagePrompt: normalizeString(governance.imagePrompt),
-    templatePrompt: normalizeString(governance.templatePrompt),
-    qaInstruction: normalizeString(governance.qaInstruction),
-    approvedFacts: normalizeString(governance.approvedFacts),
-    brandTone: normalizeString(governance.brandTone),
-    styleGuide: normalizeString(governance.styleGuide),
-    bannedPhrases: normalizeString(governance.bannedPhrases),
-    imageToVideo: normalizeString(governance.imageToVideo),
-  };
+export async function executePipeline(nodes: any[], edges: any[], initialContext: any = {}) {
+    const childrenIds = new Set(edges.map(e => e.target));
+    const queue = nodes.filter(n =>
+        !childrenIds.has(n.id) ||
+        n.type === 'webhook' || n.data?.type === 'webhook' ||
+        n.type === 'schedule' || n.data?.type === 'schedule'
+    );
+
+    let webhookResponse = null;
+    const executed = new Set();
+    const visited = new Set();
+    const context = { ...initialContext };
+    const nodeOutputs = new Map();
+
+    console.log("Starting Pipeline Execution. Roots:", queue.map(n => n.id));
+
+    while (queue.length > 0) {
+        const node = queue.shift();
+        if (executed.has(node.id)) continue;
+
+        const nodeType = (node.type === 'pipelineNode' ? node.data?.type : node.type) || node.type;
+        const parents = edges.filter(e => e.target === node.id).map(e => e.source);
+        const allParentsExecuted = parents.every(pid => executed.has(pid));
+        const isTrigger = nodeType === 'webhook' || nodeType === 'schedule';
+
+        if (!allParentsExecuted && parents.length > 0 && !isTrigger) {
+            if (!visited.has(node.id)) {
+                visited.add(node.id);
+                queue.push(node);
+            }
+            continue;
+        }
+
+        if (isTrigger) {
+            executed.add(node.id);
+            const labelKey = (node.data.label || nodeType).toLowerCase().replace(/\s+/g, '_');
+            let triggerOutput;
+            if (nodeType === 'webhook') {
+                triggerOutput = node.data.output ? JSON.parse(node.data.output) : initialContext.webhook;
+            } else if (nodeType === 'schedule') {
+                triggerOutput = initialContext.schedule || { triggeredAt: new Date().toISOString() };
+            }
+            context[labelKey] = triggerOutput;
+        } else {
+            const result: any = await executeNode(node, context);
+
+            if (result.success) {
+                const labelKey = (node.data?.label || nodeType).toLowerCase().replace(/\s+/g, '_');
+                context[labelKey] = result.output;
+                nodeOutputs.set(node.id, result.output);
+
+                if (nodeType === 'webhookResponse') {
+                    webhookResponse = result.output.response;
+                }
+            } else {
+                console.error(`Node ${node.id} failed:`, result.error);
+            }
+            executed.add(node.id);
+        }
+
+        const outgoers = edges.filter(e => e.source === node.id).map(e => nodes.find(n => n.id === e.target));
+        outgoers.forEach(child => {
+            if (child && !executed.has(child.id) && !queue.find(q => q.id === child.id)) {
+                queue.push(child);
+            }
+        });
+
+        if (executed.size === nodes.length) break;
+    }
+
+    return { success: true, context, webhookResponse };
 }
-
-function detectSceneType(input: string): string {
-  const s = input.toLowerCase();
-  if (/comparison|versus|vs\./.test(s)) return "comparison";
-  if (/ui|dashboard|screen|interface/.test(s)) return "ui";
-  if (/product|bottle|package|box|jar|supplement/.test(s)) return "product";
-  if (/portrait|face|woman|man|person|doctor|patient/.test(s)) return "portrait";
-  if (/bedroom|kitchen|living room|routine|lifestyle|home/.test(s)) return "lifestyle";
-  return "unknown";
-}
-
-function buildPerception(input: string, niche: PipelineNiche): MotionPlanV2["perception"] {
-  const s = input.toLowerCase();
-  const facePresent = /face|woman|man|person|doctor|patient/.test(s);
-  const productPresent = /product|bottle|package|box|jar|supplement/.test(s);
-  const devicePresent = /phone|smartphone|laptop|screen|tablet/.test(s);
-  const textPresent = /headline|cta|text|copy|button|shop now|start your visit/.test(s);
-  const handsPresent = /hand|holding|grip/.test(s);
-
-  return {
-    sceneType: detectSceneType(input),
-    subjects: [
-      ...(facePresent
-        ? [{
-            type: "human",
-            category: niche === "telehealth" ? "patient_or_provider" : "model",
-            face: true,
-            pose: "frontal",
-            emotion: "neutral",
-          }]
-        : []),
-      ...(productPresent ? [{ type: "object", category: "product" }] : []),
-      ...(devicePresent ? [{ type: "device", category: "phone_or_screen" }] : []),
-    ],
-    composition: {
-      focalPoint: /left/.test(s) ? "left" : /right/.test(s) ? "right" : "center",
-      depth: /deep|depth|background blur|50mm|85mm/.test(s) ? "deep" : /flat/.test(s) ? "flat" : "shallow",
-      negativeSpace: /left space/.test(s)
-        ? "left"
-        : /right space/.test(s)
-        ? "right"
-        : textPresent
-        ? "left"
-        : "none",
-    },
-    lighting: {
-      type: /studio/.test(s) ? "studio" : /natural/.test(s) ? "natural" : "mixed",
-      direction: /side light|side-lit/.test(s) ? "side" : /backlit/.test(s) ? "back" : "front",
-      contrast: /soft/.test(s) ? "low" : /high contrast/.test(s) ? "high" : "medium",
-    },
-    regions: {
-      productPresent,
-      textPresent,
-      ctaZonePresent: /cta|button|shop now|start your visit/.test(s),
-      logoPresent: /logo/.test(s),
-      devicePresent,
-      facePresent,
-      handsPresent,
-    },
-    riskProfile: {
-      faceDistortionRisk: facePresent ? "medium" : "low",
-      artifactRisk: /crowded|cluttered|busy/.test(s) ? "high" : "medium",
-      objectIntegrityRisk: productPresent || devicePresent ? "medium" : "low",
-      motionRisk: /cluttered|busy|multiple people/.test(s) ? "high" : facePresent ? "medium" : "low",
-    },
-  };
-}
-
-function buildIntent(niche: PipelineNiche, outputMode: OutputMode): MotionPlanV2["intent"] {
-  return {
-    goal: "conversion",
-    format: outputMode === "full_campaign_pack" ? "explainer" : "ad",
-    platform: outputMode === "video" || outputMode === "image_to_video" ? "meta" : "general",
-    audience: niche === "telehealth" ? "warm" : "cold",
-  };
-}
-
-function buildStrategy(
-  niche: PipelineNiche,
-  perception: MotionPlanV2["perception"],
-  intent: MotionPlanV2["intent"]
-): MotionPlanV2["strategy"] {
-  const trustFirst = niche === "telehealth";
-  return {
-    hookType: trustFirst ? "trust" : perception.regions.productPresent ? "benefit" : "clarity",
-    pacing: trustFirst ? "slow" : intent.audience === "cold" ? "moderate" : "fast",
-    motionStyle: trustFirst ? "minimal" : perception.regions.productPresent ? "cinematic" : "minimal",
-    visualHierarchy: trustFirst
-      ? ["primary_subject", "supporting_context", "cta"]
-      : perception.regions.productPresent
-      ? ["product", "supporting_context", "cta"]
-      : ["primary_subject", "cta"],
-    attentionCurve: trustFirst
-      ? [
-          { t: 0, intensity: 0.6 },
-          { t: 1, intensity: 0.75 },
-          { t: 2, intensity: 0.8 },
-        ]
-      : [
-          { t: 0, intensity: 0.85 },
-          { t: 1, intensity: 0.8 },
-          { t: 2, intensity: 0.9 },
-        ],
-  };
-}
-
-function buildConstraints(niche: PipelineNiche): MotionPlanV2["constraints"] {
-  return {
-    face: {
-      mustPreserveIdentity: true,
-      maxWarp: niche === "telehealth" ? 0.01 : 0.02,
-      noMorphing: true,
-    },
-    product: {
-      mustMaintainShape: true,
-      noScalingDistortion: true,
-    },
-    text: {
-      noGeneration: true,
-      preserveOriginal: true,
-    },
-    motion: {
-      maxSpeed: niche === "telehealth" ? 0.45 : 0.7,
-      maxCameraShift: niche === "telehealth" ? 10 : 18,
-      avoidJitter: true,
-    },
-  };
-}
-
-function buildCameraSystem(
-  niche: PipelineNiche,
-  perception: MotionPlanV2["perception"]
-): MotionPlanV2["cameraSystem"] {
-  if (niche === "telehealth") {
-    return {
-      shotType: "medium",
-      movement: "dolly_in",
-      lens: "50mm",
-      stabilization: "locked",
-      depthEffect: perception.composition.depth === "deep" ? "parallax" : "none",
-    };
-  }
-
-  if (perception.regions.productPresent) {
-    return {
-      shotType: "close_up",
-      movement: "dolly_in",
-      lens: "85mm",
-      stabilization: "stabilized",
-      depthEffect: "layered",
-    };
-  }
-
-  return {
-    shotType: "medium",
-    movement: "parallax",
-    lens: "50mm",
-    stabilization: "stabilized",
-    depthEffect: "parallax",
-  };
-}
-
-function buildTimeline(
-  niche: PipelineNiche,
-  perception: MotionPlanV2["perception"]
-): MotionPlanV2["timeline"] {
-  if (niche === "telehealth") {
-    return {
-      camera: [
-        { t: 0, action: "dolly_in_start" },
-        { t: 2.8, action: "dolly_in_end" },
-      ],
-      subject: [
-        { t: 0.8, action: "micro_expression" },
-        { t: 1.4, action: perception.regions.devicePresent ? "phone_adjustment" : "gaze_shift" },
-      ],
-      overlays: [
-        { t: 1.8, action: "headline_focus" },
-        { t: 2.2, action: "cta_focus" },
-      ],
-    };
-  }
-
-  return {
-    camera: [
-      { t: 0, action: perception.regions.productPresent ? "macro_reveal_start" : "dolly_in_start" },
-      { t: 2.6, action: perception.regions.productPresent ? "macro_reveal_end" : "dolly_in_end" },
-    ],
-    subject: [
-      { t: 0.8, action: perception.regions.productPresent ? "product_focus" : "subject_emphasis" },
-    ],
-    overlays: [
-      { t: 1.6, action: "headline_focus" },
-      { t: 2.6, action: "cta_focus" },
-    ],
-  };
-}
-
-function buildValidation(
-  perception: MotionPlanV2["perception"],
-  constraints: MotionPlanV2["constraints"]
-): MotionPlanV2["validation"] {
-  const passes: string[] = ["composition_preserved", "text_generation_blocked"];
-  const warnings: string[] = [];
-  const autoFixes: string[] = [];
-
-  if (perception.riskProfile.faceDistortionRisk === "high") {
-    warnings.push("high_face_distortion_risk");
-    autoFixes.push("switch_to_static_camera");
-    autoFixes.push("reduce_motion_intensity");
-  }
-
-  if (perception.riskProfile.motionRisk === "high") {
-    warnings.push("high_motion_risk");
-    autoFixes.push("reduce_camera_shift");
-  }
-
-  if (constraints.motion.avoidJitter) {
-    passes.push("jitter_avoidance_enabled");
-  }
-
-  if (perception.regions.facePresent) {
-    passes.push("face_integrity_checks_enabled");
-  }
-
-  if (perception.regions.productPresent || perception.regions.devicePresent) {
-    passes.push("object_integrity_checks_enabled");
-  }
-
-  return { passes, warnings, autoFixes };
-}
-
-function modeBehavior(mode: AutomationMode): string {
-  switch (mode) {
-    case "manual_mode":
-      return "User approves every motion and camera decision.";
-    case "hybrid_mode":
-      return "AI proposes motion plan, pauses at key checkpoints.";
-    case "full_ai_ideas":
-      return "AI explores broader motion ideas with lighter constraints.";
-    case "full_ai_ideas_with_rules":
-      return "AI uses governed motion logic with hard safeguards.";
-    case "full_auto_production":
-      return "AI executes the full motion pipeline automatically with fallbacks.";
-    default:
-      return "Governed execution.";
-  }
-}
-
-function shouldApplyImageToVideo(
-  perception: MotionPlanV2["perception"],
-  niche: PipelineNiche
-): { ok: boolean; reason: string } {
-  if (perception.riskProfile.motionRisk === "high") {
-    return { ok: false, reason: "Scene is too cluttered or unstable for safe motion." };
-  }
-  if (
-    niche === "telehealth" &&
-    perception.regions.facePresent &&
-    perception.riskProfile.faceDistortionRisk === "high"
-  ) {
-    return { ok: false, reason: "Face risk too high for trust-preserving telehealth motion." };
-  }
-  if (perception.composition.negativeSpace === "none" && !perception.regions.productPresent) {
-    return { ok: false, reason: "Weak composition or unclear overlay zone for motion-led output." };
-  }
-  return { ok: true, reason: "Image is suitable for governed image-to-video planning." };
-}
-
-function buildImageToVideoMotionPlan(params: {
-  imageInput: string;
-  niche: PipelineNiche;
-  outputMode: OutputMode;
-  automationMode: AutomationMode;
-  governanceText: string;
-}): MotionPlanV2 {
-  const perception = buildPerception(params.imageInput, params.niche);
-  const intent = buildIntent(params.niche, params.outputMode);
-  const strategy = buildStrategy(params.niche, perception, intent);
-  const constraints = buildConstraints(params.niche);
-  const cameraSystem = buildCameraSystem(params.niche, perception);
-  const timeline = buildTimeline(params.niche, perception);
-  const validation = buildValidation(perception, constraints);
-  const usage = shouldApplyImageToVideo(perception, params.niche);
-
-  return {
-    shouldUseImageToVideo: usage.ok,
-    reason: usage.reason,
-    perception,
-    intent,
-    strategy,
-    constraints,
-    cameraSystem,
-    timeline,
-    validation,
-    feedback: {
-      performanceScore: null,
-      userApproval: null,
-      issues: [],
-      improvements: [],
-    },
-    modeBehavior: {
-      activeMode: params.automationMode,
-      behavior: modeBehavior(params.automationMode),
-    },
-    governanceApplied: {
-      niche: params.niche,
-      outputMode: params.outputMode,
-      governanceExcerpt: params.governanceText.slice(0, 800),
-    },
-  };
-}
-
-function asList(text: string): string[] {
-  return text
-    .split(/\n|,/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function buildStrategyVariations(niche: PipelineNiche, approvedFacts: string) {
-  const facts = asList(approvedFacts);
-  const telehealth = [
-    {
-      id: "strategy-1",
-      angle: "privacy_and_speed",
-      hook: "Private care from home",
-      format: "static + short-form video",
-      cta: "Start Your Visit",
-      visualDirection: "calm portrait with negative space",
-      approvedFacts: facts.slice(0, 3),
-    },
-    {
-      id: "strategy-2",
-      angle: "process_clarity",
-      hook: "How online care works",
-      format: "3-step explainer",
-      cta: "See Next Steps",
-      visualDirection: "clean process graphic or calm device scene",
-      approvedFacts: facts.slice(0, 4),
-    },
-    {
-      id: "strategy-3",
-      angle: "reassurance",
-      hook: "Reviewed by a licensed provider",
-      format: "trust-first static",
-      cta: "Begin Secure Intake",
-      visualDirection: "professional medical portrait",
-      approvedFacts: facts.slice(0, 4),
-    },
-  ];
-
-  const ecommerce = [
-    {
-      id: "strategy-1",
-      angle: "premium_benefit",
-      hook: "A better nightly routine",
-      format: "hero image + video cutdown",
-      cta: "SHOP NOW",
-      visualDirection: "premium product hero with clean light",
-      approvedFacts: facts.slice(0, 3),
-    },
-    {
-      id: "strategy-2",
-      angle: "comparison_clarity",
-      hook: "Why premium feels different",
-      format: "comparison static",
-      cta: "SEE THE DIFFERENCE",
-      visualDirection: "clean side-by-side product framing",
-      approvedFacts: facts.slice(0, 4),
-    },
-    {
-      id: "strategy-3",
-      angle: "routine_use",
-      hook: "Easy everyday consistency",
-      format: "lifestyle + product proof",
-      cta: "BUILD YOUR ROUTINE",
-      visualDirection: "routine use scene with hero product emphasis",
-      approvedFacts: facts.slice(0, 4),
-    },
-  ];
-
-  return niche === "telehealth" ? telehealth : ecommerce;
-}
-
-function buildCopyPack(niche: PipelineNiche, approvedFacts: string, brandTone: string) {
-  const facts = asList(approvedFacts);
-  if (niche === "telehealth") {
-    return {
-      tone: brandTone,
-      headlines: [
-        "Private Care From Home",
-        "Start Secure Online Care",
-        "Fast Next Steps, Reviewed",
-        "Care That Fits Your Day",
-        "Online Care With Privacy First",
-      ],
-      subheads: [
-        "Describe your symptoms online and get physician-reviewed next steps.",
-        "Secure intake, licensed review, and treatment when clinically appropriate.",
-        "Private care from home with a calm, direct experience.",
-      ],
-      ctas: ["Start Your Visit", "Begin Secure Intake", "See Next Steps"],
-      approvedFacts: facts,
-    };
-  }
-
-  return {
-    tone: brandTone,
-    headlines: [
-      "A Better Nightly Routine",
-      "Premium Feel, Clear Benefits",
-      "Consistency You Can Enjoy",
-      "Built For Everyday Ease",
-      "Why Premium Feels Different",
-    ],
-    subheads: [
-      "A premium product experience designed for consistency and everyday use.",
-      "Clear positioning, stronger presentation, and a more credible premium feel.",
-      "Designed to feel easy, elevated, and believable.",
-    ],
-    ctas: ["SHOP NOW", "SEE THE DIFFERENCE", "BUILD YOUR ROUTINE"],
-    approvedFacts: facts,
-  };
-}
-
-function buildImagePrompts(niche: PipelineNiche, data: Record<string, any>, governance: ReturnType<typeof getGovernance>) {
-  const useCases =
-    niche === "telehealth"
-      ? [
-          "Landing page hero",
-          "Paid social portrait ad",
-          "Reassurance explainer",
-          "Process clarity creative",
-          "Retargeting trust asset",
-          "Homepage hero",
-          "Comparison tile",
-          "How-it-works card",
-          "SMS/doctor workflow visual",
-          "CTA image lead-in",
-        ]
-      : [
-          "Hero packshot",
-          "Product page image",
-          "Paid social ad",
-          "Retargeting asset",
-          "Comparison ad",
-          "Routine-use tile",
-          "Premium landing hero",
-          "Carousel starter",
-          "Benefit-led ad",
-          "CTA creative",
-        ];
-
-  return Array.from({ length: 10 }).map((_, i) => ({
-    id: `image-prompt-${i + 1}`,
-    scene: niche === "telehealth" ? `calm clinical lifestyle scene ${i + 1}` : `premium commercial product scene ${i + 1}`,
-    subject: niche === "telehealth" ? "adult subject with calm, reassuring expression" : "hero product with believable premium styling",
-    environment: niche === "telehealth" ? "clean home or professional care setting" : "premium commercial studio or lifestyle routine environment",
-    lighting: "soft controlled lighting with premium realism",
-    lens: niche === "telehealth" ? "50mm portrait realism" : "85mm product hero realism",
-    composition: "clear focal hierarchy with overlay-safe negative space",
-    negativeSpace: i % 2 === 0 ? "left" : "right",
-    mood: governance.brandTone || "premium, calm, direct",
-    useCase: useCases[i],
-    prompt: interpolateTemplate(
-      `${governance.imagePrompt}
-Scene: ${niche === "telehealth" ? "telehealth" : "ecommerce"} creative ${i + 1}
-Approved Facts: ${governance.approvedFacts}
-Style Guide: ${governance.styleGuide}`,
-      data
-    ),
-  }));
-}
-
-function buildVideoPrompts(niche: PipelineNiche, governance: ReturnType<typeof getGovernance>) {
-  const telehealthHooks = [
-    "Private care from home",
-    "How online care works",
-    "Fast next steps, reviewed",
-    "Secure intake made simple",
-    "A calmer way to start care",
-    "Licensed review from home",
-    "Private care, fewer steps",
-    "Start care without the wait",
-    "Discreet next steps online",
-    "A simple secure care path",
-  ];
-
-  const ecommerceHooks = [
-    "A better nightly routine",
-    "Why premium feels different",
-    "Built for everyday consistency",
-    "The easier way
