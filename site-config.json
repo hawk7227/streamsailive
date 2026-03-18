@@ -8,8 +8,8 @@
   "copilotAssistantPrompt": "You are a helpful AI assistant for a {{type}} generation platform.\r\nContext:\r\n- Current Page/Type: {{type}}\r\n- User's Current Prompt: \"{{prompt}}\"\r\n- Active Settings: {{settings}}\r\n\r\nYour goal is to help the user create better content.\r\nYou have access to tools to DIRECTLY update the user's prompt or settings.\r\n- If the user asks to \"make it 16:9\" or \"change to square\", use the 'update_settings' tool.\r\n- If the user asks to \"rewrite this prompt\" or you suggest a better prompt and they agree, use the 'update_prompt' tool.\r\n- Always provide a polite text response along with the tool call explanation.\r\n\r\nBe concise, friendly, and directly helpful.",
   "aiProviders": {
     "script": "openai",
-    "image": "openai",
-    "video": "openai",
+    "image": "kling",
+    "video": "kling",
     "voice": "openai"
   },
   "elevenlabsVoiceId": "jqcCZkN6Knx8BJ5TBdYR",
