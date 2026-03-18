@@ -1,7 +1,6 @@
-
 import crypto from "crypto";
-import { generateContent } from '@/lib/ai';
-import { GenerationType } from '@/lib/ai/types';
+import { generateContent } from "@/lib/ai";
+import { GenerationType } from "@/lib/ai/types";
 
 type PipelineNiche = "telehealth" | "ecommerce";
 type AutomationMode =
@@ -139,7 +138,7 @@ const replaceVariables = (text: string, context: any) => {
   });
 };
 
-function normalizeString(value: unknown): string {
+const normalizeString = (value: unknown): string => {
   if (value == null) return "";
   if (typeof value === "string") return value;
   try {
@@ -147,9 +146,9 @@ function normalizeString(value: unknown): string {
   } catch {
     return String(value);
   }
-}
+};
 
-function getGovernance(data: Record<string, any>) {
+const getGovernance = (data: Record<string, any>) => {
   const governance = data?.governance || {};
   return {
     pipelineType: (governance.pipelineType || data.pipelineType || "telehealth") as PipelineNiche,
@@ -165,9 +164,9 @@ function getGovernance(data: Record<string, any>) {
     styleGuide: normalizeString(governance.styleGuide),
     bannedPhrases: normalizeString(governance.bannedPhrases),
   };
-}
+};
 
-function detectSceneType(input: string): string {
+const detectSceneType = (input: string): string => {
   const s = input.toLowerCase();
   if (/comparison|versus|vs\./.test(s)) return "comparison";
   if (/ui|dashboard|screen|interface/.test(s)) return "ui";
@@ -175,9 +174,9 @@ function detectSceneType(input: string): string {
   if (/portrait|face|woman|man|person|doctor|patient/.test(s)) return "portrait";
   if (/bedroom|kitchen|living room|routine|lifestyle|home/.test(s)) return "lifestyle";
   return "unknown";
-}
+};
 
-function buildPerception(input: string, niche: PipelineNiche): MotionPlanV2["perception"] {
+const buildPerception = (input: string, niche: PipelineNiche): MotionPlanV2["perception"] => {
   const s = input.toLowerCase();
   const facePresent = /face|woman|man|person|doctor|patient/.test(s);
   const productPresent = /product|bottle|package|box|jar|supplement/.test(s);
@@ -206,10 +205,10 @@ function buildPerception(input: string, niche: PipelineNiche): MotionPlanV2["per
       negativeSpace: /left space/.test(s)
         ? "left"
         : /right space/.test(s)
-        ? "right"
-        : textPresent
-        ? "left"
-        : "none",
+          ? "right"
+          : textPresent
+            ? "left"
+            : "none",
     },
     lighting: {
       type: /studio/.test(s) ? "studio" : /natural/.test(s) ? "natural" : "mixed",
@@ -232,22 +231,20 @@ function buildPerception(input: string, niche: PipelineNiche): MotionPlanV2["per
       motionRisk: /cluttered|busy|multiple people/.test(s) ? "high" : facePresent ? "medium" : "low",
     },
   };
-}
+};
 
-function buildIntent(niche: PipelineNiche, outputMode: OutputMode): MotionPlanV2["intent"] {
-  return {
-    goal: "conversion",
-    format: outputMode === "full_campaign_pack" ? "explainer" : "ad",
-    platform: outputMode === "video" || outputMode === "image_to_video" ? "meta" : "general",
-    audience: niche === "telehealth" ? "warm" : "cold",
-  };
-}
+const buildIntent = (niche: PipelineNiche, outputMode: OutputMode): MotionPlanV2["intent"] => ({
+  goal: "conversion",
+  format: outputMode === "full_campaign_pack" ? "explainer" : "ad",
+  platform: outputMode === "video" || outputMode === "image_to_video" ? "meta" : "general",
+  audience: niche === "telehealth" ? "warm" : "cold",
+});
 
-function buildStrategy(
+const buildStrategy = (
   niche: PipelineNiche,
   perception: MotionPlanV2["perception"],
   intent: MotionPlanV2["intent"]
-): MotionPlanV2["strategy"] {
+): MotionPlanV2["strategy"] => {
   const trustFirst = niche === "telehealth";
   return {
     hookType: trustFirst ? "trust" : perception.regions.productPresent ? "benefit" : "clarity",
@@ -256,8 +253,8 @@ function buildStrategy(
     visualHierarchy: trustFirst
       ? ["primary_subject", "supporting_context", "cta"]
       : perception.regions.productPresent
-      ? ["product", "supporting_context", "cta"]
-      : ["primary_subject", "cta"],
+        ? ["product", "supporting_context", "cta"]
+        : ["primary_subject", "cta"],
     attentionCurve: trustFirst
       ? [
           { t: 0, intensity: 0.6 },
@@ -270,35 +267,33 @@ function buildStrategy(
           { t: 2, intensity: 0.9 },
         ],
   };
-}
+};
 
-function buildConstraints(niche: PipelineNiche): MotionPlanV2["constraints"] {
-  return {
-    face: {
-      mustPreserveIdentity: true,
-      maxWarp: niche === "telehealth" ? 0.01 : 0.02,
-      noMorphing: true,
-    },
-    product: {
-      mustMaintainShape: true,
-      noScalingDistortion: true,
-    },
-    text: {
-      noGeneration: true,
-      preserveOriginal: true,
-    },
-    motion: {
-      maxSpeed: niche === "telehealth" ? 0.45 : 0.7,
-      maxCameraShift: niche === "telehealth" ? 10 : 18,
-      avoidJitter: true,
-    },
-  };
-}
+const buildConstraints = (niche: PipelineNiche): MotionPlanV2["constraints"] => ({
+  face: {
+    mustPreserveIdentity: true,
+    maxWarp: niche === "telehealth" ? 0.01 : 0.02,
+    noMorphing: true,
+  },
+  product: {
+    mustMaintainShape: true,
+    noScalingDistortion: true,
+  },
+  text: {
+    noGeneration: true,
+    preserveOriginal: true,
+  },
+  motion: {
+    maxSpeed: niche === "telehealth" ? 0.45 : 0.7,
+    maxCameraShift: niche === "telehealth" ? 10 : 18,
+    avoidJitter: true,
+  },
+});
 
-function buildCameraSystem(
+const buildCameraSystem = (
   niche: PipelineNiche,
   perception: MotionPlanV2["perception"]
-): MotionPlanV2["cameraSystem"] {
+): MotionPlanV2["cameraSystem"] => {
   if (niche === "telehealth") {
     return {
       shotType: "medium",
@@ -326,12 +321,12 @@ function buildCameraSystem(
     stabilization: "stabilized",
     depthEffect: "parallax",
   };
-}
+};
 
-function buildTimeline(
+const buildTimeline = (
   niche: PipelineNiche,
   perception: MotionPlanV2["perception"]
-): MotionPlanV2["timeline"] {
+): MotionPlanV2["timeline"] => {
   if (niche === "telehealth") {
     return {
       camera: [
@@ -362,12 +357,12 @@ function buildTimeline(
       { t: 2.6, action: "cta_focus" },
     ],
   };
-}
+};
 
-function buildValidation(
+const buildValidation = (
   perception: MotionPlanV2["perception"],
   constraints: MotionPlanV2["constraints"]
-): MotionPlanV2["validation"] {
+): MotionPlanV2["validation"] => {
   const passes: string[] = ["composition_preserved", "text_generation_blocked"];
   const warnings: string[] = [];
   const autoFixes: string[] = [];
@@ -390,9 +385,9 @@ function buildValidation(
   }
 
   return { passes, warnings, autoFixes };
-}
+};
 
-function modeBehavior(mode: AutomationMode): string {
+const describeModeBehavior = (mode: AutomationMode): string => {
   switch (mode) {
     case "manual_mode":
       return "User approves every motion and camera decision.";
@@ -407,12 +402,12 @@ function modeBehavior(mode: AutomationMode): string {
     default:
       return "Governed execution.";
   }
-}
+};
 
-function shouldApplyImageToVideo(
+const shouldApplyImageToVideo = (
   perception: MotionPlanV2["perception"],
   niche: PipelineNiche
-): { ok: boolean; reason: string } {
+): { ok: boolean; reason: string } => {
   if (perception.riskProfile.motionRisk === "high") {
     return { ok: false, reason: "Scene is too cluttered or unstable for safe motion." };
   }
@@ -427,15 +422,15 @@ function shouldApplyImageToVideo(
     return { ok: false, reason: "Weak composition or unclear overlay zone for motion-led output." };
   }
   return { ok: true, reason: "Image is suitable for governed image-to-video planning." };
-}
+};
 
-function buildImageToVideoMotionPlan(params: {
+const buildImageToVideoMotionPlan = (params: {
   imageInput: string;
   niche: PipelineNiche;
   outputMode: OutputMode;
   automationMode: AutomationMode;
   governanceText: string;
-}): MotionPlanV2 {
+}): MotionPlanV2 => {
   const perception = buildPerception(params.imageInput, params.niche);
   const intent = buildIntent(params.niche, params.outputMode);
   const strategy = buildStrategy(params.niche, perception, intent);
@@ -463,7 +458,7 @@ function buildImageToVideoMotionPlan(params: {
     },
     modeBehavior: {
       activeMode: params.automationMode,
-      behavior: modeBehavior(params.automationMode),
+      behavior: describeModeBehavior(params.automationMode),
     },
     governanceApplied: {
       niche: params.niche,
@@ -471,13 +466,386 @@ function buildImageToVideoMotionPlan(params: {
       governanceExcerpt: params.governanceText.slice(0, 800),
     },
   };
-}
+};
 
 export async function executeNode(node: any, context: any) {
   const type = (node.type === "pipelineNode" ? node.data?.type : node.type) || "unknown";
   const data = node.data || {};
-
-  let output: any = {};
   const generationId = crypto.randomUUID();
 
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  if (type === "scriptWriter") {
+    const prompt = replaceVariables(data.content || "", context);
+    const output = await generateContent("script" as GenerationType, prompt, {
+      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+    });
+
+    return {
+      success: true,
+      output,
+      generationId,
+    };
+  }
+
+  if (type === "imageGenerator") {
+    const prompt = replaceVariables(data.content || "", context);
+    const output = await generateContent("image" as GenerationType, prompt, {
+      aspectRatio: data.aspectRatio || "16:9",
+      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+      imageMode: data?.imageMode || data?.governance?.imageMode,
+    });
+
+    return {
+      success: true,
+      output,
+      generationId,
+    };
+  }
+
+  if (type === "imageMotionAnalyzer") {
+    const governance = getGovernance(data);
+
+    const imageInput =
+      normalizeString(context?.image_motion_source) ||
+      normalizeString(context?.image_generator) ||
+      normalizeString(context?.image) ||
+      normalizeString(context?.image_output) ||
+      normalizeString(data?.content);
+
+    const outputMode = (data?.outputMode || "image_to_video") as OutputMode;
+    const automationMode = (data?.automationMode || "full_ai_ideas_with_rules") as AutomationMode;
+
+    const motionPlan = buildImageToVideoMotionPlan({
+      imageInput,
+      niche: governance.pipelineType,
+      outputMode,
+      automationMode,
+      governanceText: governance.imageToVideo,
+    });
+
+    return {
+      success: true,
+      output: motionPlan,
+      generationId,
+    };
+  }
+
+  if (type === "videoGenerator") {
+    const governance = getGovernance(data);
+
+    const motionPlan =
+      data.motionPlan ||
+      context?.motion_plan ||
+      context?.image_motion_analysis ||
+      null;
+
+    const motionSource = data.motionSource || "auto";
+    const motionIntensity = data.motionIntensity || "controlled";
+    const timelinePreference = data.timelinePreference || "governed";
+
+    const basePrompt = replaceVariables(data.content || "", context);
+
+    const resolvedMotionPlan =
+      motionSource === "image_only" ? null : motionPlan;
+
+    const unsafeForMotion =
+      resolvedMotionPlan?.validation?.warnings?.includes("high_face_distortion_risk") ||
+      resolvedMotionPlan?.perception?.riskProfile?.motionRisk === "high" ||
+      resolvedMotionPlan?.shouldUseImageToVideo === false;
+
+    const finalCameraSystem = unsafeForMotion
+      ? {
+          shotType: "medium",
+          movement: "static",
+          lens: "50mm",
+          stabilization: "locked",
+          depthEffect: "none",
+        }
+      : resolvedMotionPlan?.cameraSystem || {
+          shotType: "medium",
+          movement: "dolly_in",
+          lens: "50mm",
+          stabilization: "locked",
+          depthEffect: "none",
+        };
+
+    const finalTimeline = unsafeForMotion
+      ? {
+          camera: [
+            { t: 0, action: "static_hold_start" },
+            { t: 2.4, action: "static_hold_end" },
+          ],
+          subject: [],
+          overlays: [
+            { t: 1.4, action: "headline_focus" },
+            { t: 2.0, action: "cta_focus" },
+          ],
+        }
+      : resolvedMotionPlan?.timeline || {
+          camera: [{ t: 0, action: "dolly_in_start" }],
+          subject: [{ t: 1.0, action: "subject_emphasis" }],
+          overlays: [{ t: 2.0, action: "cta_focus" }],
+        };
+
+    const providerInstruction = [
+      basePrompt,
+      "",
+      `Pipeline type: ${governance.pipelineType}`,
+      `Motion source: ${motionSource}`,
+      `Motion intensity: ${motionIntensity}`,
+      `Timeline preference: ${timelinePreference}`,
+      `Camera system: ${JSON.stringify(finalCameraSystem)}`,
+      `Timeline: ${JSON.stringify(finalTimeline)}`,
+      `Fallback used: ${unsafeForMotion ? "yes" : "no"}`,
+      unsafeForMotion ? `Fallback reason: ${resolvedMotionPlan?.reason || "Unsafe motion conditions detected."}` : "",
+      resolvedMotionPlan?.strategy ? `Strategy: ${JSON.stringify(resolvedMotionPlan.strategy)}` : "",
+      resolvedMotionPlan?.constraints ? `Constraints: ${JSON.stringify(resolvedMotionPlan.constraints)}` : "",
+      governance.imageToVideo ? `Image-to-video governance: ${governance.imageToVideo}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const output = await generateContent("video" as GenerationType, providerInstruction, {
+      duration: data.duration || 4,
+      quality: data.quality || "1080p",
+      niche: governance.pipelineType,
+      motionPlan: resolvedMotionPlan,
+      cameraSystem: finalCameraSystem,
+      timeline: finalTimeline,
+      unsafeForMotion,
+    });
+
+    return {
+      success: true,
+      output: {
+        ...output,
+        providerReadyInstruction: {
+          mode: data.outputMode || "video",
+          motionPlanAvailable: !!resolvedMotionPlan,
+          motionSource,
+          motionIntensity,
+          timelinePreference,
+          cameraSystem: finalCameraSystem,
+          timeline: finalTimeline,
+          fallbackUsed: unsafeForMotion,
+          fallbackReason: unsafeForMotion
+            ? resolvedMotionPlan?.reason || "Unsafe motion conditions detected."
+            : null,
+        },
+      },
+      generationId,
+    };
+  }
+
+  if (type === "voiceGenerator") {
+    const prompt = replaceVariables(data.content || "", context);
+    const output = await generateContent("voice" as GenerationType, prompt, {
+      speaker: data.speaker || "Rachel",
+      niche: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+    });
+
+    return {
+      success: true,
+      output,
+      generationId,
+    };
+  }
+
+  if (type === "httpRequest") {
+    const url = replaceVariables(data.url || "", context);
+    const method = data.method || "GET";
+
+    let headers: Record<string, string> = {};
+    if (data.headers) {
+      try {
+        headers = typeof data.headers === "string" ? JSON.parse(data.headers) : data.headers;
+      } catch {
+        headers = {};
+      }
+    }
+
+    if (data.authType === "bearer" && data.authToken) {
+      headers.Authorization = `Bearer ${replaceVariables(data.authToken, context)}`;
+    }
+    if (data.authType === "apiKey" && data.authKey && data.authValue) {
+      headers[data.authKey] = replaceVariables(data.authValue, context);
+    }
+    if (data.authType === "basic" && data.authUsername && data.authPassword) {
+      const encoded = Buffer.from(
+        `${replaceVariables(data.authUsername, context)}:${replaceVariables(data.authPassword, context)}`
+      ).toString("base64");
+      headers.Authorization = `Basic ${encoded}`;
+    }
+
+    let body: string | undefined;
+    if (method !== "GET" && method !== "DELETE") {
+      if (data.bodyMode === "fields" && Array.isArray(data.bodyFields)) {
+        const obj: Record<string, string> = {};
+        for (const field of data.bodyFields) {
+          if (field?.key) obj[field.key] = replaceVariables(field.value || "", context);
+        }
+        body = JSON.stringify(obj);
+        if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      } else if (data.body) {
+        body = replaceVariables(data.body, context);
+      }
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body,
+    });
+
+    let output: any;
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      output = await res.json();
+    } else {
+      output = await res.text();
+    }
+
+    return {
+      success: res.ok,
+      output,
+      generationId,
+    };
+  }
+
+  if (type === "zapierWebhook") {
+    const webhookUrl = replaceVariables(data.webhookUrl || "", context);
+
+    const payload: Record<string, any> = {};
+    if (Array.isArray(data.bodyFields)) {
+      for (const field of data.bodyFields) {
+        if (field?.key) payload[field.key] = replaceVariables(field.value || "", context);
+      }
+    }
+
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+
+    return {
+      success: res.ok,
+      output: {
+        status: res.status,
+        body: text,
+        payload,
+      },
+      generationId,
+    };
+  }
+
+  if (type === "webhookResponse") {
+    let output: any = null;
+
+    if (data.bodyMode === "fields" && Array.isArray(data.bodyFields)) {
+      const body: Record<string, any> = {};
+      for (const field of data.bodyFields) {
+        if (field?.key) body[field.key] = replaceVariables(field.value || "", context);
+      }
+      output = body;
+    } else {
+      output = replaceVariables(data.output || "", context);
+      try {
+        output = JSON.parse(output);
+      } catch {
+        // leave as string
+      }
+    }
+
+    return {
+      success: true,
+      output,
+      generationId,
+    };
+  }
+
+  if (type === "schedule") {
+    return {
+      success: true,
+      output: {
+        scheduleType: data.scheduleType || "hourly",
+        cron: data.cron || data.interval || "0 * * * *",
+        content: data.content || "Scheduled pipeline trigger",
+      },
+      generationId,
+    };
+  }
+
+  if (type === "webhook") {
+    return {
+      success: true,
+      output: {
+        status: "listening",
+        method: data.method || "POST",
+      },
+      generationId,
+    };
+  }
+
+  if (type === "imageEditor" || type === "videoEditor") {
+    return {
+      success: true,
+      output: data.output || {
+        editorType: type,
+        status: "ready",
+      },
+      generationId,
+    };
+  }
+
+  return {
+    success: false,
+    error: `Unsupported node type: ${type}`,
+    generationId,
+  };
+}
+
+export async function executePipeline(nodes: any[], edges: any[]) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const results = new Map<string, any>();
+
+  const incomingCount = new Map<string, number>();
+  for (const node of nodes) incomingCount.set(node.id, 0);
+  for (const edge of edges) {
+    incomingCount.set(edge.target, (incomingCount.get(edge.target) || 0) + 1);
+  }
+
+  const queue = nodes.filter((node) => (incomingCount.get(node.id) || 0) === 0);
+
+  while (queue.length > 0) {
+    const currentNode = queue.shift();
+    if (!currentNode) continue;
+
+    const context: Record<string, any> = {};
+    for (const [nodeId, result] of results.entries()) {
+      const sourceNode = nodeMap.get(nodeId);
+      if (sourceNode?.data?.label) {
+        const key = sourceNode.data.label.toLowerCase().replace(/\s+/g, "_");
+        context[key] = result;
+      }
+    }
+
+    const execution = await executeNode(currentNode, context);
+    results.set(currentNode.id, execution.output);
+
+    const outgoing = edges.filter((edge) => edge.source === currentNode.id);
+    for (const edge of outgoing) {
+      const nextCount = (incomingCount.get(edge.target) || 0) - 1;
+      incomingCount.set(edge.target, nextCount);
+      if (nextCount === 0) {
+        const nextNode = nodeMap.get(edge.target);
+        if (nextNode) queue.push(nextNode);
+      }
+    }
+  }
+
+  return Object.fromEntries(results.entries());
+}
