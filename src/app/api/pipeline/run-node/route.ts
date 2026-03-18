@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { executeNode } from "@/lib/pipeline-execution";
+import { buildImageToVideoMotionPlan, type PipelineNiche,
+  type OutputMode,
+  type AutomationMode,
+} from "@/lib/pipeline/imageToVideoGovernance";
 
 // Map pipeline node types to generation table types
 const NODE_TYPE_TO_GENERATION_TYPE: Record<string, string> = {
