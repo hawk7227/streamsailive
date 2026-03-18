@@ -118,7 +118,7 @@ export async function GET(request: Request) {
                     // Run in background (don't await for all to finish if many?)
                     // For MVP, await to catch errors and return status
                     try {
-                        const result = await executePipeline(nodes, pipeline.edges || [], initialContext);
+                        const result = await executePipeline(nodes, pipeline.edges || []);
                         results.push({ pipelineId: pipeline.id, status: 'success', result });
                     } catch (execError) {
                         console.error(`Error executing pipeline ${pipeline.id}:`, execError);
