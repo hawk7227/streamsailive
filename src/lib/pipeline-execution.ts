@@ -544,13 +544,10 @@ export async function executeNode(node: any, context: any) {
 
     const basePrompt = replaceVariables(data.content || "", context);
 
-   resolvedMotionPlan?.validation?.warnings?.includes(...)
-   resolvedMotionPlan?.perception?.riskProfile?.motionRisk
-   resolvedMotionPlan?.shouldUseImageToVideo === false
     const unsafeForMotion =
-      resolvedMotionPlan?.validation?.warnings?.includes?.("high_face_distortion_risk") ||
-      resolvedMotionPlan?.perception?.riskProfile?.motionRisk === "high" ||
-      resolvedMotionPlan?.shouldUseImageToVideo === false;
+      motionPlan?.validation?.warnings?.includes?.("high_face_distortion_risk") ||
+      motionPlan?.perception?.riskProfile?.motionRisk === "high" ||
+      motionPlan?.shouldUseImageToVideo === false;
 
     const finalCameraSystem = unsafeForMotion
       ? {
@@ -560,7 +557,7 @@ export async function executeNode(node: any, context: any) {
           stabilization: "locked",
           depthEffect: "none",
         }
-      : resolvedMotionPlan?.cameraSystem || {
+      : motionPlan?.cameraSystem || {
           shotType: "medium",
           movement: "dolly_in",
           lens: "50mm",
@@ -580,7 +577,7 @@ export async function executeNode(node: any, context: any) {
             { t: 2.0, action: "cta_focus" },
           ],
         }
-      : resolvedMotionPlan?.timeline || {
+      : motionPlan?.timeline || {
           camera: [{ t: 0, action: "dolly_in_start" }],
           subject: [{ t: 1.0, action: "subject_emphasis" }],
           overlays: [{ t: 2.0, action: "cta_focus" }],
@@ -596,9 +593,9 @@ export async function executeNode(node: any, context: any) {
       `Camera system: ${JSON.stringify(finalCameraSystem)}`,
       `Timeline: ${JSON.stringify(finalTimeline)}`,
       `Fallback used: ${unsafeForMotion ? "yes" : "no"}`,
-      unsafeForMotion ? `Fallback reason: ${resolvedMotionPlan?.reason || "Unsafe motion conditions detected."}` : "",
-      resolvedMotionPlan?.strategy ? `Strategy: ${JSON.stringify(resolvedMotionPlan.strategy)}` : "",
-      resolvedMotionPlan?.constraints ? `Constraints: ${JSON.stringify(resolvedMotionPlan.constraints)}` : "",
+      unsafeForMotion ? `Fallback reason: ${motionPlan?.reason || "Unsafe motion conditions detected."}` : "",
+      motionPlan?.strategy ? `Strategy: ${JSON.stringify(motionPlan.strategy)}` : "",
+      motionPlan?.constraints ? `Constraints: ${JSON.stringify(motionPlan.constraints)}` : "",
       governance.imageToVideo ? `Image-to-video governance: ${governance.imageToVideo}` : "",
     ]
       .filter(Boolean)
@@ -608,7 +605,7 @@ export async function executeNode(node: any, context: any) {
       duration: data.duration || 4,
       quality: data.quality || "1080p",
       niche: governance.pipelineType,
-      motionPlan: resolvedMotionPlan,
+      motionPlan: motionPlan,
       cameraSystem: finalCameraSystem,
       timeline: finalTimeline,
       unsafeForMotion,
@@ -620,7 +617,7 @@ export async function executeNode(node: any, context: any) {
         ...output,
         providerReadyInstruction: {
           mode: data.outputMode || "video",
-          motionPlanAvailable: !!resolvedMotionPlan,
+          motionPlanAvailable: !!motionPlan,
           motionSource,
           motionIntensity,
           timelinePreference,
@@ -628,7 +625,7 @@ export async function executeNode(node: any, context: any) {
           timeline: finalTimeline,
           fallbackUsed: unsafeForMotion,
           fallbackReason: unsafeForMotion
-            ? resolvedMotionPlan?.reason || "Unsafe motion conditions detected."
+            ? motionPlan?.reason || "Unsafe motion conditions detected."
             : null,
         },
       },
