@@ -548,7 +548,7 @@ export async function executeNode(node: any, context: any) {
    resolvedMotionPlan?.perception?.riskProfile?.motionRisk
    resolvedMotionPlan?.shouldUseImageToVideo === false
     const unsafeForMotion =
-      resolvedMotionPlan?.validation?.warnings?.includes("high_face_distortion_risk") ||
+      resolvedMotionPlan?.validation?.warnings?.includes?.("high_face_distortion_risk") ||
       resolvedMotionPlan?.perception?.riskProfile?.motionRisk === "high" ||
       resolvedMotionPlan?.shouldUseImageToVideo === false;
 
