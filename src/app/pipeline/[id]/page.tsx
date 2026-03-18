@@ -146,8 +146,8 @@ export default function PipelineBuilder() {
   const { id } = useParams();
   const supabase = createClient();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState<any[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<any[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<any>(null);
 
