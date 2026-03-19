@@ -6,7 +6,7 @@ import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
 
-const allowedTypes: GenerationType[] = ["video", "image", "script", "voice"];
+const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
 type AllowedType = (typeof allowedTypes)[number];
 
@@ -93,6 +93,9 @@ export async function POST(request: Request) {
       duration: payload?.duration,
       quality: payload?.quality,
       style: payload?.style,
+      imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
+      callBackUrl: typeof payload?.callBackUrl === "string" ? payload.callBackUrl : undefined,
+      mode: typeof payload?.mode === "string" ? payload.mode as "standard" | "pro" : "standard",
     });
 
     payload.status = generationResult.status;
@@ -143,6 +146,11 @@ export async function POST(request: Request) {
     output_url: outputUrl,
     external_id: externalId,
     is_preview: typeof payload?.isPreview === "boolean" ? payload.isPreview : false,
+    concept_id: typeof payload?.conceptId === "string" ? payload.conceptId : null,
+    session_id: typeof payload?.sessionId === "string" ? payload.sessionId : null,
+    provider: typeof payload?.provider === "string" ? payload.provider : null,
+    mode: typeof payload?.mode === "string" ? payload.mode : "standard",
+    cost_estimate: typeof payload?.costEstimate === "number" ? payload.costEstimate : null,
   };
 
   const { data, error } = await admin

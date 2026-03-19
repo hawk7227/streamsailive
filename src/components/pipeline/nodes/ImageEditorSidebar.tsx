@@ -209,12 +209,46 @@ export function ImageEditorSidebar({ node, updateNodeData }: ImageEditorSidebarP
         drawImage();
     }, [drawImage]);
 
-    const handleSave = () => {
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+    const handleSave = async () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const dataUrl = canvas.toDataURL("image/png");
-        updateNodeData("output", dataUrl); // Save processed image as output
-        alert("Image saved to node output!");
+        const editedDataUri = canvas.toDataURL("image/png");
+        // Keep local node output updated immediately
+        updateNodeData("output", editedDataUri);
+
+        const originalGenerationId = node.data.generationId || node.id;
+        if (!originalGenerationId) {
+            // No generation ID — just keep the local update
+            setSaveSuccess("Saved locally.");
+            setTimeout(() => setSaveSuccess(null), 2500);
+            return;
+        }
+
+        setIsSaving(true);
+        setSaveError(null);
+        setSaveSuccess(null);
+        try {
+            const res = await fetch("/api/generations/save-edited", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ originalGenerationId, editedDataUri }),
+            });
+            const data = await res.json() as { newGenerationId?: string; outputUrl?: string; error?: string };
+            if (!res.ok) throw new Error(data.error ?? "Save failed");
+            updateNodeData("generationId", data.newGenerationId);
+            updateNodeData("imageUrl", data.outputUrl);
+            setSaveSuccess("Saved to library.");
+            setTimeout(() => setSaveSuccess(null), 3000);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : "Save failed";
+            setSaveError(msg);
+            setTimeout(() => setSaveError(null), 4000);
+        }
+        setIsSaving(false);
     };
 
     const resetSettings = () => {
@@ -404,20 +438,36 @@ export function ImageEditorSidebar({ node, updateNodeData }: ImageEditorSidebarP
                 )}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-white/10 flex gap-2">
-                 <button 
-                    onClick={resetSettings}
-                    className="flex-1 py-2 rounded-lg border border-white/10 hover:bg-white/5 text-xs text-gray-400 flex items-center justify-center gap-2"
-                >
-                    <Undo size={14} /> Reset
-                </button>
-                <button 
-                    onClick={handleSave}
-                    disabled={!imageUrl}
-                    className="flex-[2] py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Save size={14} /> Save Changes
-                </button>
+            <div className="mt-4 pt-4 border-t border-white/10 flex gap-2 flex-col">
+                {saveError && (
+                    <div className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                        ✗ {saveError}
+                    </div>
+                )}
+                {saveSuccess && (
+                    <div className="text-xs text-green-400 bg-green-400/10 border border-green-400/20 rounded-lg px-3 py-2">
+                        ✓ {saveSuccess}
+                    </div>
+                )}
+                <div className="flex gap-2">
+                    <button
+                        onClick={resetSettings}
+                        className="flex-1 py-2 rounded-lg border border-white/10 hover:bg-white/5 text-xs text-gray-400 flex items-center justify-center gap-2"
+                    >
+                        <Undo size={14} /> Reset
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={!imageUrl || isSaving}
+                        className="flex-[2] py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSaving ? (
+                            <><span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                        ) : (
+                            <><Save size={14} /> Save Changes</>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     );

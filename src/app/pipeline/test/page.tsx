@@ -229,11 +229,18 @@ export default function PipelineTestPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId }),
       });
-      const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string } };
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Generation failed");
-      const gen = data.data!;
-      queueAdd({ id: gen.id, type: "image", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
-      log(`✓ Image submitted: ${gen.id.slice(0, 8)}`);
+      const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const gen = data.data;
+      if (!gen) throw new Error("No generation returned");
+      // If already completed (e.g. script), update immediately
+      if (gen.status === "completed" && gen.output_url) {
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: gen.output_url!, status: "completed" } }));
+        log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
+      } else {
+        queueAdd({ id: gen.id, type: "image", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
+        log(`✓ Image submitted: ${gen.id.slice(0, 8)}`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
@@ -254,11 +261,17 @@ export default function PipelineTestPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: imageUrl ? "i2v" : "video", prompt, duration: "5", aspectRatio: "16:9", conceptId, imageUrl }),
       });
-      const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string } };
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Generation failed");
-      const gen = data.data!;
-      queueAdd({ id: gen.id, type: "video", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.20, error: null });
-      log(`✓ Video submitted: ${gen.id.slice(0, 8)}`);
+      const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const gen = data.data;
+      if (!gen) throw new Error("No generation returned");
+      if (gen.status === "completed" && gen.output_url) {
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: gen.output_url!, status: "completed" } }));
+        log(`✓ Video ready: ${gen.id.slice(0, 8)}`);
+      } else {
+        queueAdd({ id: gen.id, type: "video", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.20, error: null });
+        log(`✓ Video submitted: ${gen.id.slice(0, 8)}`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
@@ -326,23 +339,35 @@ export default function PipelineTestPage() {
       });
       const data = await res.json() as { message?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
       const msg = data.message ?? "Done.";
-      setAssistantMessages(p => [...p, { role: "assistant", content: msg }]);
-      // Execute actions
+      const actionCount = (data.actions ?? []).length;
+      setAssistantMessages(p => [...p, { role: "assistant", content: msg + (actionCount > 0 ? ` (executing ${actionCount} action${actionCount > 1 ? "s" : ""}...)` : "") }]);
+      if (actionCount > 0) log(`Assistant: ${actionCount} action(s) — ${(data.actions ?? []).map(a => a.type).join(", ")}`);
+      // Execute actions — fall back to selectedConceptId when action omits it
       for (const action of (data.actions ?? [])) {
-        if (action.type === "generate_image" && action.payload.conceptId) {
-          await generateImage(action.payload.conceptId as string);
-        }
-        if (action.type === "generate_video" && action.payload.conceptId) {
-          await generateVideo(action.payload.conceptId as string);
-        }
-        if (action.type === "update_image_prompt" && action.payload.value) {
+        const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
+        if (action.type === "generate_image") {
+          await generateImage(cid);
+        } else if (action.type === "generate_video") {
+          await generateVideo(cid);
+        } else if (action.type === "generate_i2v") {
+          await generateVideo(cid);
+        } else if (action.type === "update_image_prompt" && action.payload.value) {
           setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
-        }
-        if (action.type === "run_pipeline") {
+        } else if (action.type === "update_strategy_prompt" && action.payload.value) {
+          setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
+        } else if (action.type === "update_copy_prompt" && action.payload.value) {
+          setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
+        } else if (action.type === "run_pipeline") {
           await runPipeline();
-        }
-        if (action.type === "select_concept" && action.payload.conceptId) {
-          setSelectedConceptId(action.payload.conceptId as string);
+        } else if (action.type === "select_concept") {
+          setSelectedConceptId(cid);
+        } else if (action.type === "open_step_config" && action.payload.stepId) {
+          setSelectedStepId(action.payload.stepId as string);
+          setStepConfigOpen(true);
+        } else if (action.type === "set_niche" && action.payload.nicheId) {
+          setNicheId(action.payload.nicheId as string);
+        } else if (action.type === "update_prompt" && action.payload.new_prompt) {
+          setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
         }
       }
     } catch (e) {
