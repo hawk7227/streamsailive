@@ -34,26 +34,34 @@ const DEFAULT_CONFIG: SiteConfig = {
     copilotAssistantPrompt: 'You are a helpful AI assistant for a {{type}} generation platform.\nContext:\n- Current Page/Type: {{type}}\n- User\'s Current Prompt: "{{prompt}}"\n- Active Settings: {{settings}}\n\nYour goal is to help the user create better content.\nYou have access to tools to DIRECTLY update the user\'s prompt or settings.\n- If the user asks to "make it 16:9" or "change to square", use the \'update_settings\' tool.\n- If the user asks to "rewrite this prompt" or you suggest a better prompt and they agree, use the \'update_prompt\' tool.\n- Always provide a polite text response along with the tool call explanation.\n\nBe concise, friendly, and directly helpful.',
     aiProviders: {
         script: 'openai',
-        image: 'openai',
-        video: 'openai',
+        image: 'kling',
+        video: 'kling',
         voice: 'openai'
     },
     elevenlabsVoiceId: 'jqcCZkN6Knx8BJ5TBdYR'
 };
 
 export const getSiteConfig = (): SiteConfig => {
+    let fileConfig: Partial<SiteConfig> = {};
     try {
-        if (!fs.existsSync(CONFIG_PATH)) {
-            return { ...DEFAULT_CONFIG };
+        if (fs.existsSync(CONFIG_PATH)) {
+            const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
+            fileConfig = JSON.parse(fileContent);
         }
-        const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
-        const parsed = JSON.parse(fileContent);
-        // Merge with defaults so new keys always have a fallback
-        return { ...DEFAULT_CONFIG, ...parsed };
     } catch (error) {
         console.error('Error reading site config:', error);
-        return { ...DEFAULT_CONFIG };
     }
+
+    // Allow env vars to override provider routing so production works
+    // without a site-config.json file on disk
+    const envProviders = {
+        script: process.env.AI_PROVIDER_SCRIPT || fileConfig?.aiProviders?.script || DEFAULT_CONFIG.aiProviders!.script,
+        image:  process.env.AI_PROVIDER_IMAGE  || fileConfig?.aiProviders?.image  || DEFAULT_CONFIG.aiProviders!.image,
+        video:  process.env.AI_PROVIDER_VIDEO  || fileConfig?.aiProviders?.video  || DEFAULT_CONFIG.aiProviders!.video,
+        voice:  process.env.AI_PROVIDER_VOICE  || fileConfig?.aiProviders?.voice  || DEFAULT_CONFIG.aiProviders!.voice,
+    };
+
+    return { ...DEFAULT_CONFIG, ...fileConfig, aiProviders: envProviders };
 };
 
 export const updateSiteConfig = (newConfig: Partial<SiteConfig>): SiteConfig => {
