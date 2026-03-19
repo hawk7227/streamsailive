@@ -24,12 +24,13 @@ const providers: Record<string, AIProvider> = {
  */
 export async function generateContent(
     type: GenerationType,
-    options: GenerationOptions
+    options: GenerationOptions,
+    providerOverride?: string
 ): Promise<GenerationResult> {
     const config = getSiteConfig();
 
-    // Default to openai if not configured
-    const providerKey = config.aiProviders?.[type] || "openai";
+    // Allow explicit override (e.g. force "openai" for instant DALL-E)
+    const providerKey = providerOverride || config.aiProviders?.[type] || "openai";
 
     const provider = providers[providerKey.toLowerCase()];
 

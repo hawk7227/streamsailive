@@ -87,16 +87,18 @@ export async function POST(request: Request) {
   let responseText = null;
 
   try {
+    // Allow caller to override provider (e.g. force openai for instant DALL-E)
+    const providerOverride = typeof payload?.provider === "string" ? payload.provider : null;
     const generationResult = await generateContent(type as GenerationType, {
       prompt,
       aspectRatio: payload?.aspectRatio,
       duration: payload?.duration,
       quality: payload?.quality,
-      style: payload?.style,
+      style: providerOverride ?? payload?.style,  // pass provider as style hint
       imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
       callBackUrl: typeof payload?.callBackUrl === "string" ? payload.callBackUrl : undefined,
       mode: typeof payload?.mode === "string" ? payload.mode as "standard" | "pro" : "standard",
-    });
+    }, providerOverride ?? undefined);
 
     payload.status = generationResult.status;
     if (generationResult.outputUrl) {

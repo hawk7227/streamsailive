@@ -222,24 +222,24 @@ export default function PipelineTestPage() {
     const concept = concepts.find(c => c.variantId === conceptId);
     const prompt = stepPrompts.imagery + (concept ? ` Concept: ${concept.headline}. ${concept.body ?? ""}` : "");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing" } }));
-    log(`Submitting image for ${conceptId}...`);
+    log(`Generating image with DALL-E for ${conceptId}...`);
     try {
+      // Force openai provider — bypasses AI_PROVIDER_IMAGE env var
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId }),
+        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId, provider: "openai" }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       const gen = data.data;
       if (!gen) throw new Error("No generation returned");
-      // If already completed (e.g. script), update immediately
       if (gen.status === "completed" && gen.output_url) {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: gen.output_url!, status: "completed" } }));
         log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
       } else {
-        queueAdd({ id: gen.id, type: "image", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
-        log(`✓ Image submitted: ${gen.id.slice(0, 8)}`);
+        queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
+        log(`Image pending: ${gen.id.slice(0, 8)} — polling...`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
