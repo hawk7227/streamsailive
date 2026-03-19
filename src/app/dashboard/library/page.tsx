@@ -5,6 +5,7 @@ import { listGenerations, updateGeneration, deleteGeneration, type GenerationRec
 import { formatRelativeTime, truncateText } from "@/lib/formatters";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 interface LibraryFile {
   id: string;
@@ -98,19 +99,26 @@ export default function LibraryPage() {
   
   const error = queryError instanceof Error ? queryError.message : "";
 
-  // Call the cron job to poll OpenAI if there are pending videos
+  // Supabase Realtime — invalidate query when any generation updates
+  // Replaces the cron polling — completions push instantly from webhook
   useEffect(() => {
-    const hasPendingVideos = files.some(
-      (f) => f.type === "video" && (f.status === "pending" || f.status === "processing")
-    );
-    if (!hasPendingVideos) return;
-
-    const interval = setInterval(() => {
-      fetch("/api/cron/check-videos").catch(console.error);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [files]);
+    const supabase = createClient();
+    const channel = supabase
+      .channel("library-generations")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "generations" },
+        (payload) => {
+          const row = payload.new as { status?: string };
+          // Invalidate to re-fetch when status changes to completed/failed
+          if (row.status === "completed" || row.status === "failed" || payload.eventType === "INSERT") {
+            queryClient.invalidateQueries({ queryKey: ["generations"] });
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   useEffect(() => {
     if (!previewId) return;
