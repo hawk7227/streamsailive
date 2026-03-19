@@ -1,23 +1,10 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
 type StepState = "complete" | "running" | "review" | "queued";
-
-type Step = {
-  id: string;
-  name: string;
-  state: StepState;
-  icon: string;
-};
-
-type ConceptCard = {
-  id: string;
-  title: string;
-  badge: string;
-  headline: string;
-  body: string;
-};
+type Step = { id: string; name: string; state: StepState; icon: string; };
+type ConceptCard = { id: string; title: string; badge: string; headline: string; body: string; };
 
 const STEPS_INITIAL: Step[] = [
   { id: "strategy", name: "Creative Strategy", state: "complete", icon: "◫" },
@@ -35,18 +22,10 @@ const APPROVED_FACTS = [
   "Fast next steps and pharmacy support",
 ];
 
-const MEDIA_INPUTS = [
-  "URL / Link",
-  "Image Upload",
-  "Video Upload",
-  "Doc / PDF",
-  "Audio",
-];
-
 const INITIAL_CONCEPTS: ConceptCard[] = [
   { id: "c1", title: "Concept 1", badge: "Recommended", headline: "How Online Care Works", body: "Simple intake, licensed review, trusted next steps." },
-  { id: "c2", title: "Concept 2", badge: "Preview", headline: "How Online Care Works", body: "Simple intake, licensed review, trusted next steps." },
-  { id: "c3", title: "Concept 3", badge: "Preview", headline: "How Online Care Works", body: "Simple intake, licensed review, trusted next steps." },
+  { id: "c2", title: "Concept 2", badge: "Preview", headline: "Private Care From Home", body: "Secure, discreet, fast. See a licensed provider today." },
+  { id: "c3", title: "Concept 3", badge: "Preview", headline: "Your Health, Simplified", body: "Skip the waiting room. Get expert care on your schedule." },
 ];
 
 function stateStyles(state: StepState) {
@@ -66,163 +45,291 @@ function buttonStyle(active = false): React.CSSProperties {
   return { borderRadius: 12, border: active ? "1px solid rgba(34,211,238,0.6)" : "1px solid rgba(255,255,255,0.12)", background: active ? "linear-gradient(90deg,rgba(217,70,239,0.18),rgba(34,211,238,0.12))" : "rgba(255,255,255,0.05)", color: "#fff", padding: "10px 14px", cursor: "pointer", fontSize: 14, fontWeight: 600 };
 }
 
+function Spinner() {
+  return <span style={{ display:"inline-block", width:12, height:12, border:"2px solid rgba(255,255,255,0.2)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 0.7s linear infinite", flexShrink:0 }} />;
+}
+
+async function callGenerations(type: string, prompt: string, extra?: Record<string,string>) {
+  const res = await fetch("/api/generations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, prompt, ...extra }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `${res.status} error`);
+  return data.data;
+}
+
 export default function PipelineTestPage() {
   const [steps, setSteps] = useState<Step[]>(STEPS_INITIAL);
   const [selectedStepId, setSelectedStepId] = useState("copy");
   const [assistantInput, setAssistantInput] = useState("");
-  const [assistantLog, setAssistantLog] = useState<string[]>(["Context switched to image-to-video planning."]);
+  const [assistantLog, setAssistantLog] = useState<string[]>(["Ready. Click any button to generate real output."]);
   const [strategyPrompt, setStrategyPrompt] = useState("You are a conversion-focused creative generator for a telehealth campaign. Build 3 safe, premium, high-trust concepts optimized for image-to-video motion.");
   const [brandTone, setBrandTone] = useState("Premium, calm, clinically reassuring, modern, highly trustworthy.");
   const [imagePrompt, setImagePrompt] = useState("Generate 10 premium healthcare concept frames with clean composition, dark high-end UI preview compatibility, and strong safe-motion potential.");
-  const [inputValue, setInputValue] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [activeInput, setActiveInput] = useState<string|null>(null);
   const [selectedConceptId, setSelectedConceptId] = useState("c1");
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string|null>(null);
-  const [imageBuilding, setImageBuilding] = useState(false);
-  const [imageError, setImageError] = useState<string|null>(null);
   const [concepts, setConcepts] = useState<ConceptCard[]>(INITIAL_CONCEPTS);
-  const [sampleTitle, setSampleTitle] = useState("How Online Care Works");
-  const [sampleBody, setSampleBody] = useState("Simple intake, licensed review, trusted next steps.");
   const [runStatus, setRunStatus] = useState("Idle");
   const [previewStatus, setPreviewStatus] = useState("Ready");
 
+  // Generated outputs
+  const [canvasImage, setCanvasImage] = useState<string|null>(null);
+  const [canvasVideo, setCanvasVideo] = useState<string|null>(null);
+  const [canvasScript, setCanvasScript] = useState<string|null>(null);
+  const [canvasVideoTaskId, setCanvasVideoTaskId] = useState<string|null>(null);
+
+  // Loading states per action
+  const [busy, setBusy] = useState<Record<string,boolean>>({});
+  const [errors, setErrors] = useState<Record<string,string>>({});
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const selectedStep = useMemo(() => steps.find((s) => s.id === selectedStepId) ?? steps[0], [steps, selectedStepId]);
 
-  function appendLog(text: string) { setAssistantLog((p) => [text, ...p].slice(0, 8)); }
+  function log(text: string) { setAssistantLog((p) => [text, ...p].slice(0, 10)); }
+  function setBusyKey(k: string, v: boolean) { setBusy(p => ({ ...p, [k]: v })); }
+  function setError(k: string, v: string) { setErrors(p => ({ ...p, [k]: v })); }
+  function clearError(k: string) { setErrors(p => ({ ...p, [k]: "" })); }
 
-  function cycleStepState(stepId: string) {
-    setSteps((p) => p.map((s) => { if (s.id !== stepId) return s; const next: Record<StepState,StepState> = { queued:"running", running:"review", review:"complete", complete:"queued" }; return { ...s, state: next[s.state] }; }));
-  }
+  function addStep() { const id = `custom-${Date.now()}`; setSteps((p) => [...p, { id, name: `Custom Step ${p.length - 6}`, state: "queued", icon: "+" }]); log("Added pipeline step."); }
+  function duplicateStep(stepId: string) { setSteps((p) => { const i = p.findIndex((s) => s.id === stepId); if (i === -1) return p; const copy = { ...p[i], id: `${p[i].id}-copy-${Date.now()}`, name: `${p[i].name} Copy`, state: "queued" as StepState }; const n = [...p]; n.splice(i+1,0,copy); return n; }); log("Duplicated step."); }
+  function removeStep(stepId: string) { setSteps((p) => { if (p.length <= 1) return p; const n = p.filter((s) => s.id !== stepId); if (selectedStepId === stepId && n[0]) setSelectedStepId(n[0].id); return n; }); log("Removed step."); }
+  function selectConcept(id: string) { setSelectedConceptId(id); const c = concepts.find((x) => x.id === id); if (c) log(`Selected ${c.title}.`); }
 
-  function addStep() { const id = `custom-${Date.now()}`; setSteps((p) => [...p, { id, name: `Custom Step ${p.length - 6}`, state: "queued", icon: "+" }]); appendLog("Added a new pipeline step."); }
-
-  function duplicateStep(stepId: string) {
-    setSteps((p) => { const i = p.findIndex((s) => s.id === stepId); if (i === -1) return p; const copy = { ...p[i], id: `${p[i].id}-copy-${Date.now()}`, name: `${p[i].name} Copy`, state: "queued" as StepState }; const n = [...p]; n.splice(i+1,0,copy); return n; });
-    appendLog("Duplicated step.");
-  }
-
-  function removeStep(stepId: string) {
-    setSteps((p) => { if (p.length <= 1) return p; const n = p.filter((s) => s.id !== stepId); if (selectedStepId === stepId && n[0]) setSelectedStepId(n[0].id); return n; });
-    appendLog("Removed step.");
-  }
-
-  function handleAssistantSend() {
-    const text = assistantInput.trim(); if (!text) return;
-    const lower = text.toLowerCase(); appendLog(`Assistant: "${text}"`);
-    if (lower.includes("run")) { setRunStatus("Running..."); setTimeout(() => setRunStatus("Complete."), 700); }
-    else if (lower.includes("prompt")) { setStrategyPrompt((p) => `${p}\n\nRefinement: ${text}`); setPreviewStatus("Prompt updated."); }
-    else if (lower.includes("preview")) { setPreviewStatus("Preview refreshed."); }
-    else if (lower.includes("fix")) { setRunStatus("Queued correction."); }
+  // ── AI Assistant ──────────────────────────────────────────────────────────
+  async function handleAssistantSend() {
+    const text = assistantInput.trim();
+    if (!text) return;
     setAssistantInput("");
+    setBusyKey("assistant", true);
+    clearError("assistant");
+    log(`You: "${text}"`);
+    try {
+      const gen = await callGenerations("script", `You are an AI creative director for a telehealth pipeline. The user says: "${text}". Respond helpfully in 2-3 sentences with a concrete recommendation.`);
+      log(`AI: ${(gen.prompt || "").slice(0, 160)}`);
+      setPreviewStatus("Assistant responded.");
+    } catch(e: any) {
+      log(`✗ Assistant error: ${e.message}`);
+      setError("assistant", e.message);
+    }
+    setBusyKey("assistant", false);
   }
 
+  // ── Run Step ──────────────────────────────────────────────────────────────
   async function runStep() {
-    const typeMap: Record<string,string> = {
-      strategy: "script", copy: "script", validator: "script",
-      imagery: "image", i2v: "video", assets: "script", qa: "script",
-    };
+    const typeMap: Record<string,string> = { strategy:"script", copy:"script", validator:"script", imagery:"image", i2v:"video", assets:"script", qa:"script" };
     const genType = typeMap[selectedStep.id] || "script";
-    const prompt = strategyPrompt || `Run ${selectedStep.name} for telehealth campaign`;
+    const prompt = strategyPrompt || `Execute ${selectedStep.name} for a telehealth campaign. Be detailed.`;
+    setBusyKey("runstep", true);
+    clearError("runstep");
     setRunStatus(`Running: ${selectedStep.name}...`);
     setSteps((p) => p.map((s) => s.id === selectedStep.id ? { ...s, state: "running" } : s));
+    log(`Running step: ${selectedStep.name} (${genType})`);
     try {
-      const res = await fetch("/api/generations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: genType, prompt }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "API error");
-      const gen = data.data;
+      const gen = await callGenerations(genType, prompt);
       setSteps((p) => p.map((s) => s.id === selectedStep.id ? { ...s, state: "complete" } : s));
       setRunStatus(`✓ ${selectedStep.name} complete`);
-      if (gen.output_url) setSampleBody(`Output: ${gen.output_url}`);
-      if (gen.prompt) setSampleBody(gen.prompt.slice(0, 200));
-      appendLog(`✓ ${selectedStep.name}: ${gen.status}`);
+      if (genType === "script" && gen.prompt) { setCanvasScript(gen.prompt); log(`✓ Script generated (${gen.prompt.length} chars)`); }
+      if (genType === "image" && gen.output_url) { setCanvasImage(gen.output_url); log("✓ Image ready"); }
+      if (genType === "video") { handleVideoResult(gen); }
     } catch(e: any) {
       setSteps((p) => p.map((s) => s.id === selectedStep.id ? { ...s, state: "review" } : s));
-      setRunStatus(`Error: ${e.message}`);
-      appendLog(`✗ ${selectedStep.name} failed: ${e.message}`);
+      setRunStatus(`✗ Error: ${e.message}`);
+      setError("runstep", e.message);
+      log(`✗ ${selectedStep.name} failed: ${e.message}`);
     }
+    setBusyKey("runstep", false);
   }
 
-  function saveConfig() { appendLog(`Saved config for ${selectedStep.name}.`); setRunStatus("Configuration saved."); }
-
-  function refreshSamples() {
-    const h = inputValue.trim() || "How Online Care Works";
-    const b = inputValue.trim() ? `Preview from: ${inputValue.trim().slice(0,80)}` : "Simple intake, licensed review, trusted next steps.";
-    setSampleTitle(h); setSampleBody(b);
-    setConcepts((p) => p.map((c,i) => i===0 ? { ...c, headline:h, body:b } : c));
-    setPreviewStatus("Refreshed."); appendLog("Refreshed media samples.");
-  }
-
-  function selectConcept(id: string) {
-    setSelectedConceptId(id);
-    const c = concepts.find((x) => x.id === id);
-    if (c) { setSampleTitle(c.headline); setSampleBody(c.body); appendLog(`Selected ${c.title}.`); }
-  }
-
+  // ── Build Image from selected concept ─────────────────────────────────────
   async function buildSelectedConcept() {
     const concept = concepts.find((c) => c.id === selectedConceptId);
     const prompt = concept
-      ? `${concept.headline}. ${concept.body}. Premium telehealth brand image. Clean, calm, clinical. Dark background with soft gradient.`
-      : "Premium telehealth scene. Calm doctor. Minimal clinic. Dark premium background.";
-    setImageBuilding(true);
-    setGeneratedImageUrl(null);
-    setImageError(null);
+      ? `${concept.headline}. ${concept.body}. Premium telehealth brand image. Clean minimal clinic. Calm professional doctor. Dark cinematic background. No text.`
+      : "Premium telehealth brand scene. Professional doctor. Minimal clinic. Dark background.";
+    setBusyKey("image", true);
+    clearError("image");
+    setCanvasImage(null);
     setRunStatus("Generating image...");
-    appendLog("Submitting image to Kling...");
+    log("Submitting image to Kling v2.1...");
     try {
-      const res = await fetch("/api/generations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "API error");
-      const gen = data.data;
+      const gen = await callGenerations("image", prompt, { aspectRatio: "16:9" });
       if (gen.output_url) {
-        setGeneratedImageUrl(gen.output_url);
-        setSampleTitle(concept?.headline || "Generated Image");
+        setCanvasImage(gen.output_url);
         setRunStatus("✓ Image ready");
-        appendLog("✓ Image generated successfully");
+        log("✓ Image generated");
       } else if (gen.status === "pending") {
-        setRunStatus("Image is processing... (~60s)");
-        appendLog("✓ Submitted (id: " + gen.id + ") — polling...");
-        // Poll every 8s for up to 90s
-        let tries = 0;
-        const poll = async () => {
-          tries++;
-          if (tries > 11) { setRunStatus("Timed out — check Library"); setImageBuilding(false); return; }
-          const lr = await fetch("/api/generations?type=image&limit=5");
-          const ld = await lr.json();
-          const found = ld.data?.find((g: any) => g.id === gen.id);
-          if (found?.output_url) {
-            setGeneratedImageUrl(found.output_url);
-            setSampleTitle(concept?.headline || "Generated Image");
-            setRunStatus("✓ Image ready");
-            appendLog("✓ Image ready after polling");
-            setImageBuilding(false);
-          } else {
-            setTimeout(poll, 8000);
-          }
-        };
-        setTimeout(poll, 8000);
+        setRunStatus("Image processing... polling every 8s");
+        log(`✓ Submitted (${gen.id}) — polling...`);
+        pollImage(gen.id);
         return;
       } else {
-        setRunStatus("Generation failed");
-        appendLog("✗ Image generation failed");
+        setRunStatus("✗ Image failed");
+        setError("image", "No output returned");
+        log("✗ Image generation returned no output");
       }
     } catch(e: any) {
-      setRunStatus("Error: " + e.message);
-      appendLog("✗ Image failed: " + e.message);
-      setImageError(e.message);
+      setRunStatus(`✗ ${e.message}`);
+      setError("image", e.message);
+      log(`✗ Image failed: ${e.message}`);
     }
-    setImageBuilding(false);
+    setBusyKey("image", false);
+  }
+
+  function pollImage(genId: string, tries = 0) {
+    if (tries > 12) { setRunStatus("Image timed out — check Library"); setBusyKey("image", false); return; }
+    setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/generations?type=image&limit=20`);
+        const d = await r.json();
+        const found = d.data?.find((g: any) => g.id === genId);
+        if (found?.output_url) {
+          setCanvasImage(found.output_url);
+          setRunStatus("✓ Image ready");
+          log("✓ Image ready after polling");
+          setBusyKey("image", false);
+        } else { pollImage(genId, tries + 1); }
+      } catch { pollImage(genId, tries + 1); }
+    }, 8000);
+  }
+
+  // ── Build Video ───────────────────────────────────────────────────────────
+  async function buildVideo() {
+    const concept = concepts.find((c) => c.id === selectedConceptId);
+    const prompt = concept
+      ? `${concept.headline}. ${concept.body}. Premium telehealth brand video. Calm professional doctor in minimal clinic. Soft cinematic camera push-in. 5 seconds. No text.`
+      : "Premium telehealth brand video. Calm doctor. Minimal clinic. Cinematic. 5 seconds.";
+    setBusyKey("video", true);
+    clearError("video");
+    setCanvasVideo(null);
+    setCanvasVideoTaskId(null);
+    setRunStatus("Submitting video to Kling...");
+    log("Submitting video to Kling v2.6...");
+    try {
+      const gen = await callGenerations("video", prompt, { duration: "5s", aspectRatio: "16:9" });
+      handleVideoResult(gen);
+    } catch(e: any) {
+      setRunStatus(`✗ ${e.message}`);
+      setError("video", e.message);
+      log(`✗ Video failed: ${e.message}`);
+      setBusyKey("video", false);
+    }
+  }
+
+  function handleVideoResult(gen: any) {
+    if (gen.output_url) {
+      setCanvasVideo(gen.output_url);
+      setRunStatus("✓ Video ready");
+      log("✓ Video ready");
+      setBusyKey("video", false);
+    } else if (gen.status === "pending") {
+      const taskId = gen.external_id || gen.id;
+      setCanvasVideoTaskId(taskId);
+      setRunStatus("Video generating... (2–5 min) polling every 15s");
+      log(`✓ Video submitted — task ${taskId?.slice(0,12)}... polling`);
+      pollVideo(gen.id);
+    } else {
+      setRunStatus("✗ Video failed");
+      setError("video", "No output");
+      log("✗ Video returned no output");
+      setBusyKey("video", false);
+    }
+  }
+
+  function pollVideo(genId: string, tries = 0) {
+    if (tries > 24) { setRunStatus("Video timed out — check Library"); setBusyKey("video", false); return; }
+    setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/generations?type=video&limit=20`);
+        const d = await r.json();
+        const found = d.data?.find((g: any) => g.id === genId);
+        if (found?.output_url) {
+          setCanvasVideo(found.output_url);
+          setRunStatus("✓ Video ready");
+          log("✓ Video ready");
+          setBusyKey("video", false);
+        } else { pollVideo(genId, tries + 1); }
+      } catch { pollVideo(genId, tries + 1); }
+    }, 15000);
+  }
+
+  // ── Run Full Pipeline ─────────────────────────────────────────────────────
+  async function runFullPipeline() {
+    setBusyKey("pipeline", true);
+    setRunStatus("Running full pipeline...");
+    log("▶ Full pipeline started: Script → Image → Video");
+    setSteps(p => p.map(s => ({ ...s, state: "queued" })));
+
+    // Step 1: Script
+    setSteps(p => p.map(s => s.id === "copy" ? { ...s, state: "running" } : s));
+    log("Step 1: Generating script...");
+    try {
+      const sg = await callGenerations("script", strategyPrompt);
+      setCanvasScript(sg.prompt || "");
+      setSteps(p => p.map(s => s.id === "copy" ? { ...s, state: "complete" } : s));
+      log("✓ Script done");
+    } catch(e: any) { log(`✗ Script failed: ${e.message}`); setSteps(p => p.map(s => s.id === "copy" ? { ...s, state: "review" } : s)); }
+
+    // Step 2: Image
+    setSteps(p => p.map(s => s.id === "imagery" ? { ...s, state: "running" } : s));
+    log("Step 2: Generating image...");
+    try {
+      const concept = concepts.find(c => c.id === selectedConceptId);
+      const ip = concept ? `${concept.headline}. ${concept.body}. Premium telehealth. Dark cinematic.` : imagePrompt;
+      const ig = await callGenerations("image", ip, { aspectRatio: "16:9" });
+      if (ig.output_url) { setCanvasImage(ig.output_url); log("✓ Image done"); }
+      else if (ig.status === "pending") { log(`✓ Image pending (${ig.id}) — polling`); pollImage(ig.id); }
+      setSteps(p => p.map(s => s.id === "imagery" ? { ...s, state: "complete" } : s));
+    } catch(e: any) { log(`✗ Image failed: ${e.message}`); setSteps(p => p.map(s => s.id === "imagery" ? { ...s, state: "review" } : s)); }
+
+    // Step 3: Video
+    setSteps(p => p.map(s => s.id === "i2v" ? { ...s, state: "running" } : s));
+    log("Step 3: Submitting video...");
+    try {
+      const concept = concepts.find(c => c.id === selectedConceptId);
+      const vp = concept ? `${concept.headline}. ${concept.body}. Telehealth brand video. Cinematic. 5s.` : "Premium telehealth video. 5 seconds.";
+      const vg = await callGenerations("video", vp, { duration: "5s", aspectRatio: "16:9" });
+      handleVideoResult(vg);
+      setSteps(p => p.map(s => s.id === "i2v" ? { ...s, state: "complete" } : s));
+    } catch(e: any) { log(`✗ Video failed: ${e.message}`); setSteps(p => p.map(s => s.id === "i2v" ? { ...s, state: "review" } : s)); }
+
+    setRunStatus("✓ Pipeline complete — image/video polling if pending");
+    setBusyKey("pipeline", false);
+  }
+
+  // ── Media input buttons ───────────────────────────────────────────────────
+  function handleMediaInput(type: string) {
+    setActiveInput(type);
+    if (type === "Image Upload" || type === "Video Upload" || type === "Doc / PDF" || type === "Audio") {
+      fileInputRef.current?.click();
+    }
+    log(`${type} selected — paste URL or upload file below`);
+  }
+
+  async function handleUrlAnalyze() {
+    if (!urlInput.trim()) return;
+    setBusyKey("urlanalyze", true);
+    clearError("urlanalyze");
+    log(`Analyzing: ${urlInput.slice(0, 60)}...`);
+    try {
+      const gen = await callGenerations("script", `Analyze this reference URL and extract key creative insights for a telehealth campaign. URL: ${urlInput}. Return: 1) Main visual style, 2) Key messaging, 3) Recommended image prompt, 4) Recommended video direction.`);
+      log(`✓ Analysis: ${(gen.prompt || "").slice(0, 200)}`);
+      setStrategyPrompt(prev => prev + `\n\n[URL Analysis from ${urlInput}]: ${(gen.prompt || "").slice(0, 300)}`);
+      setRunStatus("✓ URL analyzed — strategy prompt updated");
+    } catch(e: any) {
+      setError("urlanalyze", e.message);
+      log(`✗ Analyze failed: ${e.message}`);
+    }
+    setBusyKey("urlanalyze", false);
   }
 
   return (
-    <><style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <><style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     <div style={{ minHeight:"100vh", background:"radial-gradient(circle at top left,rgba(168,85,247,0.16),transparent 24%),radial-gradient(circle at top right,rgba(34,211,238,0.14),transparent 24%),linear-gradient(180deg,#050816 0%,#070b1a 40%,#060816 100%)", color:"#fff", padding:24, fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" }}>
+      <input ref={fileInputRef} type="file" style={{ display:"none" }} onChange={(e) => { const f = e.target.files?.[0]; if(f) log(`File selected: ${f.name} (${(f.size/1024).toFixed(0)}KB)`); }} />
       <div style={{ maxWidth:1680, margin:"0 auto" }}>
 
         {/* HEADER */}
@@ -234,7 +341,7 @@ export default function PipelineTestPage() {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:14, alignSelf:"start" }}>
             {[["Neo Control","Premium dark console with strong cyan signal hierarchy",false],["Electric Studio","More creative and high-energy with magenta-cyan contrast",true],["Glass Mission","Soft glassmorphism while keeping the same operational layout",false],["Command Grid","Sharper enterprise control room with stronger segmentation",false],["Stealth Broadcast","Ultra-clean cinematic dark mode with bigger preview emphasis",false]].map(([title,desc,active],i) => (
-              <button key={i} style={{ ...buttonStyle(Boolean(active)), textAlign:"left", padding:16 }} onClick={() => appendLog(`Viewed: ${title}`)}>
+              <button key={i} style={{ ...buttonStyle(Boolean(active)), textAlign:"left", padding:16 }} onClick={() => log(`Viewed: ${title}`)}>
                 <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>{title as string}</div>
                 <div style={{ color:"rgba(255,255,255,0.78)", fontSize:16, lineHeight:1.4 }}>{desc as string}</div>
               </button>
@@ -249,13 +356,15 @@ export default function PipelineTestPage() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingBottom:14, borderBottom:"1px solid rgba(255,255,255,0.10)", marginBottom:14 }}>
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
               {["Telehealth Master","Mode: Full AI + Rules","Output: Image → Video","Campaign: Clinical Safety"].map((chip,i) => (
-                <div key={chip} style={{ padding:"10px 14px", borderRadius:14, border: i===0?"1px solid rgba(34,211,238,0.65)":"1px solid rgba(255,255,255,0.14)", background: i===0?"linear-gradient(90deg,rgba(217,70,239,0.18),rgba(34,211,238,0.10))":"rgba(255,255,255,0.05)", fontWeight:700, fontSize:14 }}>{chip}</div>
+                <div key={chip} style={{ padding:"10px 14px", borderRadius:14, border:i===0?"1px solid rgba(34,211,238,0.65)":"1px solid rgba(255,255,255,0.14)", background:i===0?"linear-gradient(90deg,rgba(217,70,239,0.18),rgba(34,211,238,0.10))":"rgba(255,255,255,0.05)", fontWeight:700, fontSize:14 }}>{chip}</div>
               ))}
             </div>
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-              <button style={buttonStyle(false)} onClick={saveConfig}>Save</button>
-              <button style={buttonStyle(false)} onClick={() => { setRunStatus("Paused."); appendLog("Pipeline paused."); }}>Pause</button>
-              <button style={{ ...buttonStyle(true), background:"linear-gradient(90deg,rgba(217,70,239,0.85),rgba(34,211,238,0.88))" }} onClick={() => { setRunStatus("Running..."); setTimeout(() => setRunStatus("Complete."), 800); appendLog("Run full pipeline triggered."); }}>Run Full Pipeline</button>
+              <button style={buttonStyle(false)} onClick={() => log("Config saved.")}>Save</button>
+              <button style={buttonStyle(false)} onClick={() => { setRunStatus("Paused."); log("Pipeline paused."); }}>Pause</button>
+              <button disabled={busy.pipeline} style={{ ...buttonStyle(true), background:"linear-gradient(90deg,rgba(217,70,239,0.85),rgba(34,211,238,0.88))", opacity:busy.pipeline?0.6:1, display:"flex", alignItems:"center", gap:8 }} onClick={runFullPipeline}>
+                {busy.pipeline && <Spinner />}{busy.pipeline ? "Running..." : "Run Full Pipeline"}
+              </button>
             </div>
           </div>
 
@@ -285,8 +394,8 @@ export default function PipelineTestPage() {
                             <div style={{ display:"inline-flex", padding:"5px 10px", borderRadius:999, background:s.pillBg, color:s.pillText, fontSize:11, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase" }}>{s.label}</div>
                           </div>
                           <div style={{ display:"flex", gap:6 }}>
-                            <button style={{ ...buttonStyle(false), padding:8, minWidth:0 }} onClick={(e) => { e.stopPropagation(); duplicateStep(step.id); }} title="Duplicate">⧉</button>
-                            <button style={{ ...buttonStyle(false), padding:8, minWidth:0 }} onClick={(e) => { e.stopPropagation(); removeStep(step.id); }} title="Delete">🗑</button>
+                            <button style={{ ...buttonStyle(false), padding:8, minWidth:0 }} onClick={(e) => { e.stopPropagation(); duplicateStep(step.id); }}>⧉</button>
+                            <button style={{ ...buttonStyle(false), padding:8, minWidth:0 }} onClick={(e) => { e.stopPropagation(); removeStep(step.id); }}>🗑</button>
                           </div>
                         </div>
                       </button>
@@ -328,9 +437,12 @@ export default function PipelineTestPage() {
                   <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.22em", color:"rgba(255,255,255,0.56)", marginBottom:8 }}>Image Prompt</div>
                   <textarea value={imagePrompt} onChange={(e) => setImagePrompt(e.target.value)} style={{ width:"100%", minHeight:120, background:"rgba(0,0,0,0.24)", color:"#fff", border:"1px solid rgba(255,255,255,0.10)", borderRadius:14, padding:12, resize:"vertical", fontSize:14 }} />
                 </div>
+                {errors.runstep && <div style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5" }}>Error: {errors.runstep}</div>}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  <button style={buttonStyle(false)} onClick={saveConfig}>Save Config</button>
-                  <button style={{ ...buttonStyle(true), background:"linear-gradient(90deg,rgba(34,211,238,0.85),rgba(14,165,233,0.85))" }} onClick={runStep}>Run Step</button>
+                  <button style={buttonStyle(false)} onClick={() => log("Config saved.")}>Save Config</button>
+                  <button disabled={busy.runstep} style={{ ...buttonStyle(true), background:"linear-gradient(90deg,rgba(34,211,238,0.85),rgba(14,165,233,0.85))", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:busy.runstep?0.6:1 }} onClick={runStep}>
+                    {busy.runstep && <Spinner />}{busy.runstep ? "Running..." : "Run Step"}
+                  </button>
                 </div>
               </div>
             </section>
@@ -350,9 +462,12 @@ export default function PipelineTestPage() {
                 </div>
                 <div style={{ ...panelStyle(), padding:14, marginBottom:12, fontSize:16, lineHeight:1.6, color:"rgba(255,255,255,0.9)" }}>I can analyze links, images, docs, and video inputs, recommend the best generation path, update step configs, and preview the likely output before you commit to a run.</div>
                 <div style={{ borderRadius:999, border:"1px solid rgba(34,211,238,0.28)", background:"rgba(34,211,238,0.10)", color:"#67e8f9", padding:"12px 16px", fontSize:12, letterSpacing:"0.18em", textTransform:"uppercase", fontWeight:800, marginBottom:12 }}>Context switched to image-to-video planning</div>
+                {errors.assistant && <div style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:8 }}>Error: {errors.assistant}</div>}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10 }}>
-                  <input value={assistantInput} onChange={(e) => setAssistantInput(e.target.value)} placeholder="Ask anything or request a prompt, edit, fix, run, or preview." style={{ width:"100%", background:"rgba(0,0,0,0.26)", color:"#fff", border:"1px solid rgba(255,255,255,0.10)", borderRadius:16, padding:"14px 16px", fontSize:15, outline:"none" }} onKeyDown={(e) => { if(e.key==="Enter") handleAssistantSend(); }} />
-                  <button style={buttonStyle(true)} onClick={handleAssistantSend}>Send</button>
+                  <input value={assistantInput} onChange={(e) => setAssistantInput(e.target.value)} placeholder="Ask anything — get real AI response." style={{ width:"100%", background:"rgba(0,0,0,0.26)", color:"#fff", border:"1px solid rgba(255,255,255,0.10)", borderRadius:16, padding:"14px 16px", fontSize:15, outline:"none" }} onKeyDown={(e) => { if(e.key==="Enter") handleAssistantSend(); }} />
+                  <button disabled={busy.assistant} style={{ ...buttonStyle(true), display:"flex", alignItems:"center", gap:6, opacity:busy.assistant?0.6:1 }} onClick={handleAssistantSend}>
+                    {busy.assistant ? <Spinner /> : null}{busy.assistant ? "..." : "Send"}
+                  </button>
                 </div>
               </div>
 
@@ -374,12 +489,12 @@ export default function PipelineTestPage() {
                           <div style={{ padding:"4px 8px", borderRadius:999, border:"1px solid rgba(34,211,238,0.18)", background:"rgba(34,211,238,0.10)", color:"#67e8f9", fontSize:10, fontWeight:800 }}>{concept.badge}</div>
                         </div>
                         <div style={{ padding:12, minHeight:230, background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 34%),linear-gradient(180deg,rgba(9,13,33,0.96),rgba(3,7,22,0.98))" }}>
-                          <div style={{ borderRadius:16, border:"1px solid rgba(255,255,255,0.10)", background:"rgba(0,0,0,0.22)", padding:14, minHeight:200, display:"flex", flexDirection:"column" }}>
+                          <div style={{ borderRadius:16, border:`1px solid ${sel?"rgba(34,211,238,0.3)":"rgba(255,255,255,0.10)"}`, background:"rgba(0,0,0,0.22)", padding:14, minHeight:200, display:"flex", flexDirection:"column" }}>
                             <div style={{ fontSize:10, letterSpacing:"0.24em", textTransform:"uppercase", color:"rgba(255,255,255,0.52)", marginBottom:12 }}>Preview Frame</div>
-                            <div style={{ fontSize:22, fontWeight:800, lineHeight:1.1, marginBottom:10 }}>{concept.headline}</div>
+                            <div style={{ fontSize:18, fontWeight:800, lineHeight:1.1, marginBottom:10 }}>{concept.headline}</div>
                             <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)", maxWidth:"90%" }}>{concept.body}</div>
                             <div style={{ marginTop:"auto", display:"flex", justifyContent:"space-between", gap:10 }}>
-                              <div style={{ borderRadius:999, background:"#22d3ee", color:"#04121a", fontWeight:800, fontSize:12, padding:"8px 12px" }}>Select</div>
+                              <div style={{ borderRadius:999, background: sel?"#22d3ee":"rgba(34,211,238,0.3)", color:"#04121a", fontWeight:800, fontSize:12, padding:"8px 12px" }}>{sel?"Selected":"Select"}</div>
                               <div style={{ width:42, height:42, borderRadius:12, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.10)" }} />
                             </div>
                           </div>
@@ -397,78 +512,95 @@ export default function PipelineTestPage() {
                 <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.22em", color:"rgba(255,255,255,0.56)", marginBottom:4 }}>Media Generator</div>
                 <div style={{ fontSize:18, fontWeight:800 }}>Image to Video + Source Intake</div>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-                {MEDIA_INPUTS.map((item) => (
-                  <button key={item} style={buttonStyle(false)} onClick={() => { setInputValue(item); appendLog(`${item} selected.`); }}>{item}</button>
+
+              {/* Source intake buttons */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+                {["URL / Link","Image Upload","Video Upload","Doc / PDF","Audio"].map((item) => (
+                  <button key={item} style={{ ...buttonStyle(activeInput===item), fontSize:13, padding:"8px 10px" }} onClick={() => handleMediaInput(item)}>{item}</button>
                 ))}
               </div>
+
+              {/* URL input shown when URL/Link active */}
+              {(activeInput === "URL / Link") && (
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="Paste YouTube, TikTok, or web URL..." style={{ flex:1, background:"rgba(0,0,0,0.26)", color:"#fff", border:"1px solid rgba(255,255,255,0.10)", borderRadius:10, padding:"10px 12px", fontSize:13, outline:"none" }} onKeyDown={e=>{ if(e.key==="Enter") handleUrlAnalyze(); }} />
+                    <button disabled={busy.urlanalyze} style={{ ...buttonStyle(true), fontSize:13, padding:"8px 14px", display:"flex", alignItems:"center", gap:6, opacity:busy.urlanalyze?0.6:1 }} onClick={handleUrlAnalyze}>
+                      {busy.urlanalyze ? <Spinner /> : null}{busy.urlanalyze ? "..." : "Analyze"}
+                    </button>
+                  </div>
+                  {errors.urlanalyze && <div style={{ marginTop:6, fontSize:12, color:"#fca5a5" }}>Error: {errors.urlanalyze}</div>}
+                </div>
+              )}
+
               <div style={{ display:"grid", gap:12 }}>
+                {/* Image panel */}
                 <div style={{ ...panelStyle(), padding:12 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                     <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.18em", color:"rgba(255,255,255,0.56)" }}>Sample PNG Concepts</div>
-                    <button style={buttonStyle(false)} onClick={refreshSamples}>Refresh</button>
+                    <button style={buttonStyle(false)} onClick={buildSelectedConcept} disabled={busy.image}>Refresh</button>
                   </div>
-                  <input value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Type source text or selected upload label..." style={{ width:"100%", background:"rgba(0,0,0,0.26)", color:"#fff", border:"1px solid rgba(255,255,255,0.10)", borderRadius:14, padding:"12px 14px", marginBottom:10, outline:"none" }} />
-                  <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 28%),linear-gradient(180deg,rgba(10,14,35,0.96),rgba(4,8,24,0.98))", padding:12, minHeight:300 }}>
+                  <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 28%),linear-gradient(180deg,rgba(10,14,35,0.96),rgba(4,8,24,0.98))", padding:12, minHeight:280 }}>
                     <div style={{ height:"100%", borderRadius:16, border:"1px solid rgba(255,255,255,0.10)", padding:14, display:"flex", flexDirection:"column" }}>
                       <div style={{ fontSize:10, letterSpacing:"0.24em", textTransform:"uppercase", color:"rgba(255,255,255,0.52)", marginBottom:10 }}>Three-step Reassurance Ad</div>
-                      {generatedImageUrl ? (
-                        <img src={generatedImageUrl} alt="Generated" style={{ width:"100%", borderRadius:10, marginBottom:10, display:"block" }} />
-                      ) : imageBuilding ? (
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, color:"#67e8f9", fontSize:13 }}>
-                          <span style={{ display:"inline-block", width:12, height:12, border:"2px solid rgba(103,232,249,0.3)", borderTopColor:"#67e8f9", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
-                          Generating image...
+                      {canvasImage ? (
+                        <>
+                          <img src={canvasImage} alt="Generated" style={{ width:"100%", borderRadius:10, marginBottom:10, display:"block" }} />
+                          <a href={canvasImage} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#67e8f9", marginBottom:8 }}>Open full size ↗</a>
+                        </>
+                      ) : busy.image ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:8, color:"#67e8f9", fontSize:13, flex:1 }}>
+                          <Spinner />Generating image... (up to 60s)
                         </div>
                       ) : (
                         <>
-                          <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>{sampleTitle}</div>
-                          <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>{sampleBody}</div>
+                          <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>{concepts.find(c=>c.id===selectedConceptId)?.headline}</div>
+                          <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>{concepts.find(c=>c.id===selectedConceptId)?.body}</div>
                         </>
                       )}
-                      {imageError && (
-                        <div style={{ background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:8, wordBreak:"break-all" }}>Error: {imageError}</div>
-                      )}
-                      <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
-                        <button style={{ borderRadius:999, background: imageBuilding?"rgba(255,255,255,0.1)":"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor: imageBuilding?"not-allowed":"pointer", opacity: imageBuilding?0.6:1 }} onClick={imageBuilding ? undefined : buildSelectedConcept}>
-                          {imageBuilding ? "Building..." : "Select & Build"}
+                      {errors.image && <div style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"8px 10px", fontSize:12, color:"#fca5a5", marginTop:8 }}>Error: {errors.image}</div>}
+                      <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap", paddingTop:8 }}>
+                        <button disabled={busy.image} style={{ borderRadius:999, background:busy.image?"rgba(255,255,255,0.1)":"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor:busy.image?"not-allowed":"pointer", opacity:busy.image?0.6:1, display:"flex", alignItems:"center", gap:6 }} onClick={buildSelectedConcept}>
+                          {busy.image ? <><Spinner /> Building...</> : "Select & Build"}
                         </button>
-                        <button style={{ borderRadius:999, background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.12)", fontWeight:700, padding:"8px 12px", cursor:"pointer" }} onClick={() => setPreviewStatus("Preview opened.")}>Preview</button>
+                        <button style={{ borderRadius:999, background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.12)", fontWeight:700, padding:"8px 12px", cursor:"pointer" }} onClick={() => { if(canvasImage) window.open(canvasImage,"_blank"); else setPreviewStatus("No image yet — click Select & Build first."); }}>Preview</button>
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Video panel */}
                 <div style={{ ...panelStyle(), padding:12 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                     <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.18em", color:"rgba(255,255,255,0.56)" }}>Selected Concept → Video Preview</div>
-                    <button style={buttonStyle(false)} onClick={() => { setPreviewStatus("Video preview refreshed."); appendLog("Video preview refreshed."); }}>Refresh</button>
                   </div>
-                  <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 28%),linear-gradient(180deg,rgba(10,14,35,0.96),rgba(4,8,24,0.98))", padding:12, minHeight:260 }}>
+                  <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at top,rgba(34,211,238,0.10),transparent 28%),linear-gradient(180deg,rgba(10,14,35,0.96),rgba(4,8,24,0.98))", padding:12, minHeight:220 }}>
                     <div style={{ height:"100%", borderRadius:16, border:"1px solid rgba(255,255,255,0.10)", padding:14, display:"flex", flexDirection:"column" }}>
                       <div style={{ fontSize:10, letterSpacing:"0.24em", textTransform:"uppercase", color:"rgba(255,255,255,0.52)", marginBottom:10 }}>Motion Preview</div>
-                      <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>Private Care From Home</div>
-                      <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>Subtle camera motion, clean screen movement, reassuring pace.</div>
-                      <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
-                        <button style={{ borderRadius:999, background:"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor:"pointer" }} onClick={async () => {
-              const prompt = "Premium telehealth brand video. Calm doctor in minimal clinic. Soft cinematic camera push-in. 5 seconds.";
-              setRunStatus("Submitting video to Kling...");
-              appendLog("Submitting video generation...");
-              try {
-                const res = await fetch("/api/generations", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ type: "video", prompt, duration: "5s", aspectRatio: "16:9" }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "API error");
-                const gen = data.data;
-                setRunStatus("✓ Video submitted — task: " + (gen.external_id || gen.id)?.slice(0,12) + "...");
-                appendLog("✓ Video pending — will complete in 2–5 min via cron");
-              } catch(e: any) {
-                setRunStatus("Error: " + (e as any).message);
-                appendLog("✗ Video failed: " + (e as any).message);
-              }
-            }}>Start Video Build</button>
-                        <button style={{ borderRadius:999, background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.12)", fontWeight:700, padding:"8px 12px", cursor:"pointer" }} onClick={() => setRunStatus("Video prompt adjusted.")}>Adjust</button>
+                      {canvasVideo ? (
+                        <>
+                          <video src={canvasVideo} controls style={{ width:"100%", borderRadius:10, marginBottom:8, display:"block" }} />
+                          <a href={canvasVideo} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#67e8f9" }}>Download ↗</a>
+                        </>
+                      ) : busy.video ? (
+                        <div style={{ display:"flex", flexDirection:"column", gap:8, flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, color:"#67e8f9", fontSize:13 }}>
+                            <Spinner />Generating video... (2–5 min)
+                          </div>
+                          {canvasVideoTaskId && <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>Task: {canvasVideoTaskId.slice(0,20)}...</div>}
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize:16, fontWeight:800, lineHeight:1.15, marginBottom:8 }}>Private Care From Home</div>
+                          <div style={{ fontSize:13, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>Subtle camera motion, clean screen movement, reassuring pace.</div>
+                        </>
+                      )}
+                      {errors.video && <div style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"8px 10px", fontSize:12, color:"#fca5a5", marginTop:8 }}>Error: {errors.video}</div>}
+                      <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap", paddingTop:8 }}>
+                        <button disabled={busy.video} style={{ borderRadius:999, background:busy.video?"rgba(255,255,255,0.1)":"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor:busy.video?"not-allowed":"pointer", opacity:busy.video?0.6:1, display:"flex", alignItems:"center", gap:6 }} onClick={buildVideo}>
+                          {busy.video ? <><Spinner /> Generating...</> : "Start Video Build"}
+                        </button>
+                        <button style={{ borderRadius:999, background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.12)", fontWeight:700, padding:"8px 12px", cursor:"pointer" }} onClick={() => { if(canvasVideo) window.open(canvasVideo,"_blank"); else log("No video yet — click Start Video Build first."); }}>Adjust</button>
                       </div>
                     </div>
                   </div>
@@ -486,37 +618,50 @@ export default function PipelineTestPage() {
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 {["Final Output","Editor","Export","Publish","Logs"].map((tab,i) => (
-                  <button key={tab} style={{ ...buttonStyle(i===0), background: i===0?"linear-gradient(90deg,rgba(217,70,239,0.85),rgba(34,211,238,0.85))":"rgba(255,255,255,0.05)" }} onClick={() => appendLog(`Opened ${tab} tab.`)}>{tab}</button>
+                  <button key={tab} style={{ ...buttonStyle(i===0), background:i===0?"linear-gradient(90deg,rgba(217,70,239,0.85),rgba(34,211,238,0.85))":"rgba(255,255,255,0.05)" }} onClick={() => log(`Opened ${tab} tab.`)}>{tab}</button>
                 ))}
               </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1.45fr 0.72fr", gap:14 }}>
+              {/* Output Canvas */}
               <div style={{ borderRadius:28, border:"1px solid rgba(255,255,255,0.12)", background:"linear-gradient(180deg,rgba(5,10,25,0.98),rgba(10,18,42,0.95))", padding:16, minHeight:330 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
                   <div style={{ fontSize:18, fontWeight:800 }}>Primary Output Canvas</div>
                   <div style={{ borderRadius:12, border:"1px solid rgba(255,255,255,0.10)", background:"rgba(255,255,255,0.05)", padding:"8px 10px", fontSize:12 }}>1920 × 1080</div>
                 </div>
-                <div style={{ height:240, borderRadius:24, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at center,rgba(34,211,238,0.08),transparent 35%),linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.98))" }} />
+                {canvasVideo ? (
+                  <video src={canvasVideo} controls style={{ width:"100%", borderRadius:18, display:"block" }} />
+                ) : canvasImage ? (
+                  <img src={canvasImage} alt="Output" style={{ width:"100%", borderRadius:18, display:"block" }} />
+                ) : canvasScript ? (
+                  <div style={{ borderRadius:18, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(0,0,0,0.3)", padding:16, minHeight:240, fontSize:14, lineHeight:1.8, color:"rgba(255,255,255,0.85)", whiteSpace:"pre-wrap" }}>{canvasScript}</div>
+                ) : (
+                  <div style={{ height:240, borderRadius:24, border:"1px solid rgba(255,255,255,0.10)", background:"radial-gradient(circle at center,rgba(34,211,238,0.08),transparent 35%),linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.98))", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>
+                    Run a step or generate content to see output here
+                  </div>
+                )}
               </div>
+
+              {/* Status + Log */}
               <div style={{ display:"grid", gap:12 }}>
                 <div style={{ ...panelStyle(), padding:14 }}>
                   <div style={{ fontSize:18, fontWeight:800, marginBottom:10 }}>Run Status</div>
                   <div style={{ display:"grid", gap:8 }}>
-                    {[["Planning","done"],["Concept Generation","active"],["Motion Render","queued"]].map(([label,status],i) => (
-                      <div key={i} style={{ borderRadius:14, border: status==="active"?"1px solid rgba(34,211,238,0.25)":"1px solid rgba(255,255,255,0.10)", background: status==="active"?"rgba(34,211,238,0.10)":"rgba(255,255,255,0.04)", padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    {[["Script",canvasScript?"done":"queued"],["Image",canvasImage?"done":busy.image?"active":"queued"],["Video",canvasVideo?"done":busy.video?"active":"queued"]].map(([label,status],i) => (
+                      <div key={i} style={{ borderRadius:14, border:status==="active"?"1px solid rgba(34,211,238,0.25)":"1px solid rgba(255,255,255,0.10)", background:status==="active"?"rgba(34,211,238,0.10)":"rgba(255,255,255,0.04)", padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                         <span>{label}</span>
-                        <span style={{ color: status==="done"?"#6ee7b7":status==="active"?"#67e8f9":"#94a3b8" }}>{status==="done"?"✓":status==="active"?"◔":"›"}</span>
+                        <span style={{ color:status==="done"?"#6ee7b7":status==="active"?"#67e8f9":"#94a3b8" }}>{status==="done"?"✓":status==="active"?"◔":"›"}</span>
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginTop:12, fontSize:14, color:"rgba(255,255,255,0.78)" }}><strong>System:</strong> {runStatus}</div>
-                  <div style={{ marginTop:6, fontSize:14, color:"rgba(255,255,255,0.78)" }}><strong>Preview:</strong> {previewStatus}</div>
+                  <div style={{ marginTop:12, fontSize:13, color:"rgba(255,255,255,0.78)", lineHeight:1.6 }}><strong>System:</strong> {runStatus}</div>
+                  <div style={{ marginTop:4, fontSize:13, color:"rgba(255,255,255,0.78)" }}><strong>Preview:</strong> {previewStatus}</div>
                 </div>
                 <div style={{ ...panelStyle(), padding:14 }}>
                   <div style={{ fontSize:18, fontWeight:800, marginBottom:10 }}>Assistant Activity</div>
-                  <div style={{ display:"grid", gap:8 }}>
-                    {assistantLog.map((log,i) => (
-                      <div key={i} style={{ borderRadius:14, border:"1px solid rgba(255,255,255,0.10)", background:"rgba(255,255,255,0.04)", padding:"12px 14px", fontSize:14, lineHeight:1.5, color:"rgba(255,255,255,0.86)" }}>{log}</div>
+                  <div style={{ display:"grid", gap:6 }}>
+                    {assistantLog.map((entry,i) => (
+                      <div key={i} style={{ borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.03)", padding:"10px 12px", fontSize:13, lineHeight:1.5, color:i===0?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.5)" }}>{entry}</div>
                     ))}
                   </div>
                 </div>
@@ -525,11 +670,10 @@ export default function PipelineTestPage() {
           </div>
         </div>
 
-        <div style={{ marginTop:12, color:"rgba(255,255,255,0.58)", fontSize:13, textAlign:"right" }}>
-          Test page — route: /pipeline/test — no live files touched
+        <div style={{ marginTop:12, color:"rgba(255,255,255,0.4)", fontSize:12, textAlign:"right" }}>
+          /pipeline/test — all buttons wired to real API
         </div>
       </div>
     </div>
-  </>
-  );
+  </>;
 }
