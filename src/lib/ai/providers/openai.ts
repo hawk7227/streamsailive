@@ -52,9 +52,9 @@ export class OpenAIProvider implements AIProvider {
 
     private async generateImage(options: GenerationOptions): Promise<GenerationResult> {
         const siteConfig = getSiteConfig();
-        const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY_IMAGES;
+        const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY;
         if (!apiKey) {
-            throw new Error("OPENAI_API_KEY_IMAGES is not set");
+            throw new Error("OPENAI_API_KEY is not set");
         }
 
         const response = await fetch("https://api.openai.com/v1/images/generations", {
@@ -67,7 +67,7 @@ export class OpenAIProvider implements AIProvider {
                 model: "dall-e-3",
                 prompt: options.prompt,
                 n: 1,
-                size: "1024x1024",
+                size: options.aspectRatio === "9:16" ? "1024x1792" : "1792x1024",
             }),
         });
 

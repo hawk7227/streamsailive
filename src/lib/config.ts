@@ -35,7 +35,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     copilotAssistantPrompt: 'You are a helpful AI assistant for a {{type}} generation platform.\nContext:\n- Current Page/Type: {{type}}\n- User\'s Current Prompt: "{{prompt}}"\n- Active Settings: {{settings}}\n\nYour goal is to help the user create better content.\nYou have access to tools to DIRECTLY update the user\'s prompt or settings.\n- If the user asks to "make it 16:9" or "change to square", use the \'update_settings\' tool.\n- If the user asks to "rewrite this prompt" or you suggest a better prompt and they agree, use the \'update_prompt\' tool.\n- Always provide a polite text response along with the tool call explanation.\n\nBe concise, friendly, and directly helpful.',
     aiProviders: {
         script: 'openai',
-        image: 'kling',
+        image: 'openai',
         video: 'kling',
         voice: 'openai',
         i2v: 'kling'

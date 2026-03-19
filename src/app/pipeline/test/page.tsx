@@ -221,7 +221,7 @@ export default function PipelineTestPage() {
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
     const prompt = stepPrompts.imagery + (concept ? ` Concept: ${concept.headline}. ${concept.body ?? ""}` : "");
-    setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "pending" } }));
+    setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing" } }));
     log(`Submitting image for ${conceptId}...`);
     try {
       const res = await fetch("/api/generations", {
@@ -696,7 +696,7 @@ export default function PipelineTestPage() {
                       ) : isActive ? (
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
                           <Spinner size={20} />
-                          <span style={{ fontSize: 11 }}>{qItem ? `${qItem.elapsedSeconds}s elapsed` : "Generating..."}</span>
+                          <span style={{ fontSize: 11 }}>{qItem ? `${qItem.provider} · ${qItem.elapsedSeconds}s` : "Generating..."}</span>
                         </div>
                       ) : (
                         <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No image yet</div>
