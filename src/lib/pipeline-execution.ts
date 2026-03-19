@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 
-type PipelineNiche = "telehealth" | "ecommerce";
+type PipelineNiche = "telehealth" | "ecommerce" | "google_ads" | string;
 type AutomationMode =
   | "manual_mode"
   | "hybrid_mode"
@@ -793,6 +793,128 @@ export async function executeNode(node: any, context: any) {
       },
       generationId,
     };
+  }
+
+  // ── New pipeline step types (7-step governance pipeline) ──────────────
+
+  if (type === "creativeStrategy") {
+    const governance = getGovernance(data);
+    const prompt = data.strategyPrompt || governance.strategyPrompt;
+    const contextPrompt = [
+      `Brand tone: ${governance.brandTone}`,
+      `Approved facts: ${governance.approvedFacts}`,
+      `Banned phrases: ${governance.bannedPhrases}`,
+      data.intakeAnalysis ? `Source brief: ${JSON.stringify(data.intakeAnalysis)}` : "",
+      `User instruction: ${replaceVariables(prompt, context)}`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("script" as GenerationType, { prompt: contextPrompt });
+    return { success: true, output, generationId };
+  }
+
+  if (type === "copyGeneration") {
+    const governance = getGovernance(data);
+    const strategyContext = normalizeString(context?.creativeStrategy) || normalizeString(context?.strategy);
+    const prompt = [
+      data.copyPrompt || governance.copyPrompt,
+      strategyContext ? `Active strategy: ${strategyContext}` : "",
+      `Brand tone: ${governance.brandTone}`,
+      `Field limits: headline ≤${governance.pipelineType === "google_ads" ? "30 chars" : "8 words"}, CTA ≤4 words`,
+      `Approved facts: ${governance.approvedFacts}`,
+      `Banned phrases: ${governance.bannedPhrases}`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("script" as GenerationType, { prompt });
+    return { success: true, output, generationId };
+  }
+
+  if (type === "validator") {
+    // Validator uses GPT-4o as a JUDGE not a generator — strict JSON output only
+    const governance = getGovernance(data);
+    const copyToValidate = normalizeString(context?.copyGeneration) || normalizeString(context?.copy);
+    const prompt = [
+      data.validatorPrompt || governance.validatorPrompt,
+      `Content to validate:\n${copyToValidate}`,
+      `Banned phrases: ${governance.bannedPhrases}`,
+      `Block triggers: ${governance.pipelineType === "telehealth"
+        ? "diagnostic claims, guaranteed outcomes, prescription certainty, banned phrases"
+        : "superlatives, policy violations, banned phrases"}`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("script" as GenerationType, { prompt });
+    return { success: true, output, generationId };
+  }
+
+  if (type === "imageryGeneration") {
+    const governance = getGovernance(data);
+    const conceptData = context?.selectedConcept || context?.copy || "";
+    const basePrompt = data.imagePrompt || governance.imagePrompt;
+    const prompt = [
+      basePrompt,
+      `Concept: ${normalizeString(conceptData)}`,
+      `Style guide: ${governance.styleGuide || "Clean, minimal, premium healthcare setting"}`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("image" as GenerationType, {
+      prompt,
+      aspectRatio: data.aspectRatio || "16:9",
+      callBackUrl: data.callBackUrl,
+    });
+    return { success: true, output, generationId };
+  }
+
+  if (type === "imageToVideoStep") {
+    const governance = getGovernance(data);
+    const imageUrl = normalizeString(context?.imageryGeneration) ||
+      normalizeString(context?.image_generator) ||
+      normalizeString(context?.image);
+    const motionPrompt = data.imageToVideoPrompt || governance.imageToVideo;
+    const prompt = [
+      motionPrompt,
+      `Motion rules — allowed: slow push-in, gentle pan, soft parallax, natural blink.`,
+      `Motion rules — banned: fast zoom, whip pan, face distortion, lip sync.`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("i2v" as GenerationType, {
+      prompt,
+      imageUrl,
+      aspectRatio: data.aspectRatio || "16:9",
+      duration: data.duration || "5",
+      callBackUrl: data.callBackUrl,
+    });
+    return { success: true, output, generationId };
+  }
+
+  if (type === "assetLibrary") {
+    // Asset library step: organises outputs into library structure, no AI call needed
+    const assets = {
+      strategy: normalizeString(context?.creativeStrategy),
+      copy: normalizeString(context?.copyGeneration),
+      validatorStatus: normalizeString(context?.validator),
+      image: normalizeString(context?.imageryGeneration) || normalizeString(context?.imageGenerator),
+      video: normalizeString(context?.imageToVideoStep) || normalizeString(context?.imageMotionAnalyzer),
+    };
+    return { success: true, output: { responseText: JSON.stringify(assets) }, generationId };
+  }
+
+  if (type === "qualityAssurance") {
+    const governance = getGovernance(data);
+    const allOutputs = {
+      strategy: normalizeString(context?.creativeStrategy),
+      copy: normalizeString(context?.copyGeneration),
+      validatorResult: normalizeString(context?.validator),
+      imageUrl: normalizeString(context?.imageryGeneration),
+      videoUrl: normalizeString(context?.imageToVideoStep),
+    };
+    const prompt = [
+      data.qaInstruction || governance.qaInstruction,
+      `All outputs to QA:\n${JSON.stringify(allOutputs, null, 2)}`,
+      `Approved facts: ${governance.approvedFacts}`,
+      `Banned phrases: ${governance.bannedPhrases}`,
+    ].filter(Boolean).join("\n");
+
+    const output = await generateContent("script" as GenerationType, { prompt });
+    return { success: true, output, generationId };
   }
 
   return {

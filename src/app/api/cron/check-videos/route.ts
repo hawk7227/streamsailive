@@ -1,94 +1,117 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadImageToSupabase } from "@/lib/supabase/storage";
 
 // GET /api/cron/check-videos
+// Backup poller — Vercel Cron every 2 minutes.
+// Primary path: POST /api/webhook/video-complete (Kling/Runway callBackUrl)
+// This catches webhook misses.
+
+const CHUNK_SIZE = 10;
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function uploadVideoToSupabase(remoteUrl: string, workspaceId: string): Promise<string> {
+  const res = await fetch(remoteUrl, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get("content-type") ?? "video/mp4";
+  const ext = contentType.includes("webm") ? "webm" : "mp4";
+  const storagePath = `${workspaceId}/${crypto.randomUUID()}.${ext}`;
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from("generations")
+    .upload(storagePath, buffer, { contentType, upsert: true });
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+  const { data } = admin.storage.from("generations").getPublicUrl(storagePath);
+  return data.publicUrl;
+}
+
+type Gen = { id: string; workspace_id: string; external_id: string; provider: string | null; type: string };
+type PollResult = { id: string; status: "completed"|"failed"|"processing"|"skipped"; outputUrl?: string };
+
+async function pollKling(gen: Gen): Promise<PollResult> {
+  const ep = gen.type === "image"
+    ? `https://api.klingai.com/v1/images/generations/${gen.external_id}`
+    : `https://api.klingai.com/v1/videos/text2video/${gen.external_id}`;
+  const res = await fetch(ep, {
+    headers: { Authorization: `Bearer ${process.env.KLING_API_KEY}` },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) return { id: gen.id, status: "skipped" };
+  const d = await res.json() as { data: { task_status: string; task_result?: { videos?: {url:string}[]; images?: {url:string}[] } } };
+  const t = d.data;
+  if (t.task_status === "failed") return { id: gen.id, status: "failed" };
+  if (t.task_status !== "succeed") return { id: gen.id, status: "processing" };
+  const cdnUrl = t.task_result?.videos?.[0]?.url ?? t.task_result?.images?.[0]?.url;
+  if (!cdnUrl) return { id: gen.id, status: "failed" };
+  const outputUrl = gen.type === "video"
+    ? await uploadVideoToSupabase(cdnUrl, gen.workspace_id)
+    : await uploadImageToSupabase(cdnUrl, gen.workspace_id);
+  return { id: gen.id, status: "completed", outputUrl };
+}
+
+async function pollRunway(gen: Gen): Promise<PollResult> {
+  const res = await fetch(`https://api.runwayml.com/v1/tasks/${gen.external_id}`, {
+    headers: { Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`, "X-Runway-Version": "2024-11-06" },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) return { id: gen.id, status: "skipped" };
+  const d = await res.json() as { status: string; output?: string[] };
+  if (d.status === "FAILED") return { id: gen.id, status: "failed" };
+  if (d.status !== "SUCCEEDED") return { id: gen.id, status: "processing" };
+  const cdnUrl = d.output?.[0];
+  if (!cdnUrl) return { id: gen.id, status: "failed" };
+  const outputUrl = await uploadVideoToSupabase(cdnUrl, gen.workspace_id);
+  return { id: gen.id, status: "completed", outputUrl };
+}
+
 export async function GET(request: Request) {
-    // You can secure this route by taking a secret cron key
-    // const authHeader = request.headers.get("authorization");
-    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { return new Response('Unauthorized', { status: 401 }); }
+  const authHeader = request.headers.get("authorization");
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
-    const admin = createAdminClient();
+  const admin = createAdminClient();
+  const { data: pending, error } = await admin
+    .from("generations")
+    .select("id, workspace_id, external_id, provider, type")
+    .in("status", ["pending", "processing"])
+    .not("external_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(100);
 
-    const { data: pendingVideos, error } = await admin
-        .from("generations")
-        .select("*")
-        .eq("type", "video")
-        .eq("status", "pending")
-        .not("external_id", "is", null);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!pending?.length) return NextResponse.json({ checked: 0, updated: 0 });
 
-    if (error || !pendingVideos) {
-        return NextResponse.json({ error: "Failed to fetch pending videos from database" }, { status: 500 });
-    }
+  const results: PollResult[] = [];
+  for (const batch of chunk(pending as Gen[], CHUNK_SIZE)) {
+    const batchResults = await Promise.all(
+      batch.map(gen => {
+        const poll = (gen.provider ?? "kling") === "runway" ? pollRunway : pollKling;
+        return poll(gen).catch(() => ({ id: gen.id, status: "skipped" as const }));
+      })
+    );
+    results.push(...batchResults);
+  }
 
-    const results = [];
+  const toUpdate = results.filter(r => r.status === "completed" || r.status === "failed");
+  await Promise.all(toUpdate.map(r =>
+    admin.from("generations").update({
+      status: r.status,
+      ...(r.outputUrl ? { output_url: r.outputUrl } : {}),
+    }).eq("id", r.id)
+  ));
 
-    for (const video of pendingVideos) {
-        try {
-            const response = await fetch(`https://api.openai.com/v1/videos/${video.external_id}`, {
-                headers: {
-                    Authorization: `Bearer ${process.env.OPENAI_API_KEY_SORA}`,
-                },
-            });
-
-            if (!response.ok) {
-                console.warn(`Sora poll failed for ${video.external_id}`, response.status);
-                continue;
-            }
-
-            const result = await response.json();
-
-            if (result.status === "completed") {
-                // Fetch the compiled mp4 content stream from Sora API
-                const contentRes = await fetch(`https://api.openai.com/v1/videos/${video.external_id}/content`, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.OPENAI_API_KEY_SORA}`,
-                    },
-                });
-
-                if (contentRes.ok) {
-                    const blob = await contentRes.blob();
-                    const arrayBuffer = await blob.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    const fileName = `${video.workspace_id}/${video.id}.mp4`;
-
-                    // Use Supabase Admin to push to storage
-                    const { error: uploadError } = await admin.storage
-                        .from("generations")
-                        .upload(fileName, buffer, {
-                            contentType: "video/mp4",
-                            upsert: true
-                        });
-
-                    if (!uploadError) {
-                        const { data: publicUrlData } = admin.storage.from("generations").getPublicUrl(fileName);
-
-                        await admin.from("generations").update({
-                            status: "completed",
-                            output_url: publicUrlData.publicUrl
-                        }).eq("id", video.id);
-
-                        results.push({ id: video.id, status: "completed", url: publicUrlData.publicUrl });
-                    } else {
-                        console.error(`Failed to upload to generation storage for ${video.id}`, uploadError);
-                    }
-                } else {
-                    console.warn(`Failed to fetch content stream for ${video.external_id}`);
-                }
-            } else if (result.status === "failed") {
-                await admin.from("generations").update({ status: "failed" }).eq("id", video.id);
-                results.push({ id: video.id, status: "failed" });
-            } else {
-                // still generating/queued
-                results.push({ id: video.id, ...result });
-                if (result.progress !== undefined) {
-                    await admin.from("generations").update({ progress: result.progress }).eq("id", video.id);
-                }
-            }
-        } catch (err) {
-            console.error(`Error processing video pending update ${video.id}`, err);
-        }
-    }
-
-    return NextResponse.json({ processed: results.length, details: results });
+  return NextResponse.json({
+    checked: pending.length,
+    updated: toUpdate.length,
+    completed: results.filter(r => r.status === "completed").length,
+    failed: results.filter(r => r.status === "failed").length,
+    processing: results.filter(r => r.status === "processing").length,
+    skipped: results.filter(r => r.status === "skipped").length,
+  });
 }

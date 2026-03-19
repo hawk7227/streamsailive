@@ -1,4 +1,4 @@
-export type GenerationType = "script" | "image" | "video" | "voice";
+export type GenerationType = "script" | "image" | "video" | "i2v" | "voice";
 
 export interface GenerationOptions {
     prompt: string;
@@ -6,6 +6,9 @@ export interface GenerationOptions {
     duration?: string;
     quality?: string;
     style?: string;
+    imageUrl?: string;       // For image-to-video (I2V)
+    callBackUrl?: string;    // Webhook URL for async completion
+    mode?: "standard" | "pro";
 }
 
 export interface GenerationResult {

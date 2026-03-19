@@ -17,6 +17,7 @@ export interface SiteConfig {
         image: string;
         video: string;
         voice: string;
+        i2v: string;
     };
     apiKeys?: Record<string, string>;
     elevenlabsVoiceId?: string;
@@ -36,7 +37,8 @@ const DEFAULT_CONFIG: SiteConfig = {
         script: 'openai',
         image: 'kling',
         video: 'kling',
-        voice: 'openai'
+        voice: 'openai',
+        i2v: 'kling'
     },
     elevenlabsVoiceId: 'jqcCZkN6Knx8BJ5TBdYR'
 };
@@ -59,6 +61,7 @@ export const getSiteConfig = (): SiteConfig => {
         image:  process.env.AI_PROVIDER_IMAGE  || fileConfig?.aiProviders?.image  || DEFAULT_CONFIG.aiProviders!.image,
         video:  process.env.AI_PROVIDER_VIDEO  || fileConfig?.aiProviders?.video  || DEFAULT_CONFIG.aiProviders!.video,
         voice:  process.env.AI_PROVIDER_VOICE  || fileConfig?.aiProviders?.voice  || DEFAULT_CONFIG.aiProviders!.voice,
+        i2v:    process.env.AI_PROVIDER_I2V    || fileConfig?.aiProviders?.i2v    || DEFAULT_CONFIG.aiProviders!.i2v,
     };
 
     return { ...DEFAULT_CONFIG, ...fileConfig, aiProviders: envProviders };

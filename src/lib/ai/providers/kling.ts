@@ -22,137 +22,141 @@ export class KlingProvider implements AIProvider {
     }
 
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
-        if (type === "image") {
-            return this.generateImage(options);
-        } else if (type === "video") {
-            return this.generateVideo(options);
-        }
-
-        console.warn(`KlingProvider called for unsupported type: ${type}`);
-        throw new Error(`Kling provider does not currently support generating ${type}.`);
+        if (type === "image") return this.generateImage(options);
+        if (type === "video") return this.generateVideo(options);
+        if (type === "i2v") return this.generateImageToVideo(options);
+        throw new Error(`KlingProvider does not support type: ${type}`);
     }
 
+    // ── Text-to-Image ────────────────────────────────────────────────────
+    // Fire-and-forget: submits task, returns {status:"pending", externalId}
+    // Completion arrives via callBackUrl webhook or cron poller
     private async generateImage(options: GenerationOptions): Promise<GenerationResult> {
         const token = this.generateToken();
 
-        // 1. Submit the image task
+        const body: Record<string, unknown> = {
+            model_name: "kling-v2-1",
+            prompt: options.prompt,
+            negative_prompt: options.style ?? "",
+            n: 1,
+        };
+        if (options.callBackUrl) body.callBackUrl = options.callBackUrl;
+
         const submitResponse = await fetch("https://api-singapore.klingai.com/v1/images/generations", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
+                Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                model_name: "kling-v2-1",
-                prompt: options.prompt,
-                negative_prompt: "",
-                n: 1,
-            }),
+            body: JSON.stringify(body),
         });
 
         if (!submitResponse.ok) {
             const errorText = await submitResponse.text();
-            console.error("Kling API submit error:", errorText);
-            throw new Error(`Kling Image generation failed: ${submitResponse.statusText}`);
+            throw new Error(`Kling Image submit failed: ${submitResponse.statusText} — ${errorText}`);
         }
 
-        const submitResult = await submitResponse.json();
+        const submitResult = await submitResponse.json() as { code: number; message?: string; data?: { task_id: string } };
 
         if (submitResult.code !== 0 || !submitResult.data?.task_id) {
-            throw new Error(`Kling Image generation failed: ${submitResult.message}`);
+            throw new Error(`Kling Image submit rejected: ${submitResult.message ?? "unknown error"}`);
         }
 
-        const taskId = submitResult.data.task_id;
-        console.log(`[Kling] Image task submitted: ${taskId}. Polling for completion...`);
-
-        // 2. Poll for completion (up to ~60 seconds)
-        const maxRetries = 20;
-        const delayMs = 3000;
-
-        for (let i = 0; i < maxRetries; i++) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-
-            const checkResponse = await fetch(`https://api-singapore.klingai.com/v1/images/generations/${taskId}`, {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                },
-            });
-
-            if (!checkResponse.ok) continue;
-
-            const checkResult = await checkResponse.json();
-
-            if (checkResult.code !== 0) continue;
-
-            const status = checkResult.data?.task_status;
-
-            if (status === "succeed") {
-                const imageUrl = checkResult.data?.task_result?.images?.[0]?.url;
-                if (imageUrl) {
-                    return {
-                        status: "completed",
-                        outputUrl: imageUrl,
-                    };
-                }
-                break;
-            } else if (status === "failed") {
-                console.error("Kling Image generation failed:", checkResult.data?.task_status_msg);
-                return { status: "failed" };
-            }
-            // If "submitted" or "processing", loop continues
-        }
-
-        console.warn(`[Kling] Image generation timed out waiting for task ${taskId}`);
         return {
             status: "pending",
-            externalId: taskId
+            externalId: submitResult.data.task_id,
         };
     }
 
+    // ── Text-to-Video ────────────────────────────────────────────────────
     private async generateVideo(options: GenerationOptions): Promise<GenerationResult> {
         const token = this.generateToken();
 
-        const aspectRatio = options.aspectRatio || "16:9";
-        const durationStr = options.duration || "5";
-        const duration = durationStr.replace("s", "");
+        const aspectRatio = options.aspectRatio ?? "16:9";
+        const duration = (options.duration ?? "5").replace("s", "");
+
+        const body: Record<string, unknown> = {
+            model_name: "kling-v2-6",
+            prompt: options.prompt,
+            negative_prompt: "",
+            duration,
+            mode: options.mode ?? "standard",
+            aspect_ratio: aspectRatio,
+        };
+        if (options.callBackUrl) body.callBackUrl = options.callBackUrl;
 
         const submitResponse = await fetch("https://api-singapore.klingai.com/v1/videos/text2video", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
+                Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                model_name: "kling-v2-6",
-                prompt: options.prompt,
-                negative_prompt: "",
-                duration: duration,
-                mode: "pro",
-                sound: "on",
-                aspect_ratio: aspectRatio,
-            }),
+            body: JSON.stringify(body),
         });
 
         if (!submitResponse.ok) {
             const errorText = await submitResponse.text();
-            console.error("Kling Video API submit error:", errorText);
-            throw new Error(`Kling Video generation failed: ${submitResponse.statusText}`);
+            throw new Error(`Kling Video submit failed: ${submitResponse.statusText} — ${errorText}`);
         }
 
-        const submitResult = await submitResponse.json();
+        const submitResult = await submitResponse.json() as { code: number; message?: string; data?: { task_id: string } };
 
         if (submitResult.code !== 0 || !submitResult.data?.task_id) {
-            console.error("Kling Video generation failed:", submitResult.message);
-            throw new Error(`Kling Video generation failed: ${submitResult.message}`);
+            throw new Error(`Kling Video submit rejected: ${submitResult.message ?? "unknown error"}`);
         }
 
-        const taskId = submitResult.data.task_id;
-
-        // Return pending since videos take several minutes to generate.
         return {
             status: "pending",
-            externalId: taskId,
+            externalId: submitResult.data.task_id,
+        };
+    }
+
+    // ── Image-to-Video ───────────────────────────────────────────────────
+    // 3B: New method — animates a static image with motion-only prompt
+    private async generateImageToVideo(options: GenerationOptions): Promise<GenerationResult> {
+        if (!options.imageUrl) {
+            throw new Error("imageUrl is required for image-to-video generation");
+        }
+
+        const token = this.generateToken();
+
+        const aspectRatio = options.aspectRatio ?? "16:9";
+        const duration = (options.duration ?? "5").replace("s", "");
+
+        const body: Record<string, unknown> = {
+            model_name: "kling-v2-1",
+            image: options.imageUrl,
+            prompt: options.prompt,    // Motion-only: what moves and how
+            negative_prompt: "",
+            duration,
+            mode: options.mode ?? "standard",
+            aspect_ratio: aspectRatio,
+        };
+        if (options.callBackUrl) body.callBackUrl = options.callBackUrl;
+
+        const submitResponse = await fetch("https://api-singapore.klingai.com/v1/videos/image2video", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!submitResponse.ok) {
+            const errorText = await submitResponse.text();
+            throw new Error(`Kling I2V submit failed: ${submitResponse.statusText} — ${errorText}`);
+        }
+
+        const submitResult = await submitResponse.json() as { code: number; message?: string; data?: { task_id: string } };
+
+        if (submitResult.code !== 0 || !submitResult.data?.task_id) {
+            throw new Error(`Kling I2V submit rejected: ${submitResult.message ?? "unknown error"}`);
+        }
+
+        return {
+            status: "pending",
+            externalId: submitResult.data.task_id,
         };
     }
 }
