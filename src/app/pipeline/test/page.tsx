@@ -78,6 +78,7 @@ export default function PipelineTestPage() {
   const [selectedConceptId, setSelectedConceptId] = useState("c1");
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string|null>(null);
   const [imageBuilding, setImageBuilding] = useState(false);
+  const [imageError, setImageError] = useState<string|null>(null);
   const [concepts, setConcepts] = useState<ConceptCard[]>(INITIAL_CONCEPTS);
   const [sampleTitle, setSampleTitle] = useState("How Online Care Works");
   const [sampleBody, setSampleBody] = useState("Simple intake, licensed review, trusted next steps.");
@@ -167,6 +168,7 @@ export default function PipelineTestPage() {
       : "Premium telehealth scene. Calm doctor. Minimal clinic. Dark premium background.";
     setImageBuilding(true);
     setGeneratedImageUrl(null);
+    setImageError(null);
     setRunStatus("Generating image...");
     appendLog("Submitting image to Kling...");
     try {
@@ -213,6 +215,7 @@ export default function PipelineTestPage() {
     } catch(e: any) {
       setRunStatus("Error: " + e.message);
       appendLog("✗ Image failed: " + e.message);
+      setImageError(e.message);
     }
     setImageBuilding(false);
   }
@@ -421,6 +424,9 @@ export default function PipelineTestPage() {
                           <div style={{ fontSize:18, fontWeight:800, lineHeight:1.15, marginBottom:10 }}>{sampleTitle}</div>
                           <div style={{ fontSize:14, lineHeight:1.55, color:"rgba(255,255,255,0.84)" }}>{sampleBody}</div>
                         </>
+                      )}
+                      {imageError && (
+                        <div style={{ background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:8, wordBreak:"break-all" }}>Error: {imageError}</div>
                       )}
                       <div style={{ marginTop:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
                         <button style={{ borderRadius:999, background: imageBuilding?"rgba(255,255,255,0.1)":"#22d3ee", color:"#03131b", border:"none", fontWeight:800, padding:"8px 12px", cursor: imageBuilding?"not-allowed":"pointer", opacity: imageBuilding?0.6:1 }} onClick={imageBuilding ? undefined : buildSelectedConcept}>
