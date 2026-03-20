@@ -96,6 +96,10 @@ export default function PipelineTestPage() {
 
   // Workspace
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("output");
+  const [editorState, setEditorState] = useState<{
+    brightness: number; contrast: number; saturation: number;
+    blur: number; rotation: number; flipH: boolean; flipV: boolean; textOverlay: string;
+  }>({ brightness: 100, contrast: 100, saturation: 100, blur: 0, rotation: 0, flipH: false, flipV: false, textOverlay: "" });
   const [viewMode, setViewMode] = useState<ViewMode>("16:9");
   const [deviceFrame, setDeviceFrame] = useState<DeviceFrame>("Desktop");
 
@@ -679,8 +683,152 @@ export default function PipelineTestPage() {
                     {logs.map((l, i) => <div key={i}>{l}</div>)}
                   </div>
                 )}
-                {workspaceTab !== "output" && workspaceTab !== "logs" && (
-                  <div style={{ color: "#334155", fontSize: 13 }}>{workspaceTab.charAt(0).toUpperCase() + workspaceTab.slice(1)} — coming soon</div>
+                {workspaceTab === "editor" && (() => {
+                  const src = approvedOutputs.image || Object.values(conceptOutputs).find(o => o.image)?.image || null;
+                  return (
+                    <div style={{ width: "100%", display: "flex", gap: 16, alignItems: "flex-start" }}>
+                      {/* Canvas preview */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                        {src ? (
+                          <div style={{ position: "relative", width: "100%", maxWidth: 420, aspectRatio: viewMode === "9:16" ? "9/16" : "16/9", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
+                            <img src={src} alt="Edit" style={{
+                              width: "100%", height: "100%", objectFit: "cover", display: "block",
+                              filter: `brightness(${editorState.brightness}%) contrast(${editorState.contrast}%) saturate(${editorState.saturation}%) blur(${editorState.blur}px)`,
+                              transform: `rotate(${editorState.rotation}deg) scaleX(${editorState.flipH ? -1 : 1}) scaleY(${editorState.flipV ? -1 : 1})`,
+                              transition: "filter 120ms, transform 120ms",
+                            }} />
+                            {editorState.textOverlay && (
+                              <div style={{ position: "absolute", bottom: 20, left: 0, right: 0, textAlign: "center", pointerEvents: "none" }}>
+                                <span style={{ background: "rgba(0,0,0,0.55)", color: "#fff", padding: "4px 12px", borderRadius: 6, fontSize: 14, fontWeight: 700, backdropFilter: "blur(4px)" }}>
+                                  {editorState.textOverlay}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ width: "100%", maxWidth: 420, aspectRatio: "16/9", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, color: "#334155" }}>
+                            <span style={{ fontSize: 24 }}>🖼</span>
+                            <span style={{ fontSize: 12 }}>Approve an image first to edit it</span>
+                          </div>
+                        )}
+                        {/* Action row */}
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                          {[
+                            { label: "↺ Reset", action: () => setEditorState({ brightness: 100, contrast: 100, saturation: 100, blur: 0, rotation: 0, flipH: false, flipV: false, textOverlay: "" }) },
+                            { label: "⟳ Rotate 90°", action: () => setEditorState(p => ({ ...p, rotation: (p.rotation + 90) % 360 })) },
+                            { label: "↔ Flip H", action: () => setEditorState(p => ({ ...p, flipH: !p.flipH })) },
+                            { label: "↕ Flip V", action: () => setEditorState(p => ({ ...p, flipV: !p.flipV })) },
+                          ].map(btn => (
+                            <button key={btn.label} onClick={btn.action}
+                              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#94a3b8", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Controls panel */}
+                      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+                        {/* Adjustments */}
+                        <div>
+                          <div style={{ fontSize: 10, letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: 10 }}>Adjustments</div>
+                          {([
+                            { label: "Brightness", key: "brightness", min: 0, max: 200, unit: "%" },
+                            { label: "Contrast",   key: "contrast",   min: 0, max: 200, unit: "%" },
+                            { label: "Saturation", key: "saturation", min: 0, max: 200, unit: "%" },
+                            { label: "Blur",       key: "blur",       min: 0, max: 10,  unit: "px" },
+                          ] as { label: string; key: keyof typeof editorState; min: number; max: number; unit: string }[]).map(ctrl => (
+                            <div key={ctrl.key} style={{ marginBottom: 10 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                <span style={{ fontSize: 11, color: "#64748b" }}>{ctrl.label}</span>
+                                <span style={{ fontSize: 11, color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
+                                  {editorState[ctrl.key] as number}{ctrl.unit}
+                                </span>
+                              </div>
+                              <input type="range" min={ctrl.min} max={ctrl.max} value={editorState[ctrl.key] as number}
+                                onChange={e => setEditorState(p => ({ ...p, [ctrl.key]: Number(e.target.value) }))}
+                                style={{ width: "100%", accentColor: "#67e8f9", cursor: "pointer" }} />
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Crop presets */}
+                        <div>
+                          <div style={{ fontSize: 10, letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: 8 }}>Crop / Aspect</div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {["16:9", "9:16", "1:1", "4:5"].map(ratio => (
+                              <button key={ratio} onClick={() => setViewMode(ratio === "16:9" ? "16:9" : ratio === "9:16" ? "9:16" : "16:9")}
+                                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#64748b", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>
+                                {ratio}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Text overlay */}
+                        <div>
+                          <div style={{ fontSize: 10, letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: 8 }}>Text Overlay</div>
+                          <input type="text" placeholder="Add overlay text…" value={editorState.textOverlay}
+                            onChange={e => setEditorState(p => ({ ...p, textOverlay: e.target.value }))}
+                            style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 12 }} />
+                        </div>
+
+                        {/* Export */}
+                        <div style={{ paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                          <button
+                            onClick={() => {
+                              if (!src) return;
+                              const a = document.createElement("a");
+                              a.href = src;
+                              a.download = `medazon-edited-${Date.now()}.png`;
+                              a.click();
+                              log("✓ Image downloaded");
+                            }}
+                            style={{ width: "100%", background: "rgba(110,231,183,0.12)", border: "1px solid rgba(110,231,183,0.25)", color: "#6ee7b7", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>
+                            ↓ Download Image
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!src) return;
+                              setApprovedOutputs(p => ({ ...p, image: src }));
+                              setWorkspaceTab("output");
+                              log("✓ Edits applied to workspace output");
+                            }}
+                            style={{ width: "100%", background: "rgba(103,232,249,0.10)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            ✓ Apply to Output
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {workspaceTab === "export" && (
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12, maxWidth: 480 }}>
+                    <div style={{ fontSize: 11, letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: 4 }}>Export Package</div>
+                    {[
+                      { label: "Download Image (PNG)", icon: "🖼", enabled: !!(approvedOutputs.image || Object.values(conceptOutputs).find(o => o.image)?.image), action: () => { const src = approvedOutputs.image || Object.values(conceptOutputs).find(o => o.image)?.image; if (!src) return; const a = document.createElement("a"); a.href = src; a.download = `medazon-image-${Date.now()}.png`; a.click(); log("✓ Image downloaded"); } },
+                      { label: "Download Video (MP4)", icon: "🎬", enabled: !!(approvedOutputs.video || Object.values(conceptOutputs).find(o => o.video)?.video), action: () => { const src = approvedOutputs.video || Object.values(conceptOutputs).find(o => o.video)?.video; if (!src) return; const a = document.createElement("a"); a.href = src; a.download = `medazon-video-${Date.now()}.mp4`; a.click(); log("✓ Video downloaded"); } },
+                      { label: "Copy Image URL", icon: "🔗", enabled: !!(approvedOutputs.image), action: () => { navigator.clipboard.writeText(approvedOutputs.image!); log("✓ Image URL copied"); } },
+                    ].map(item => (
+                      <button key={item.label} onClick={item.action} disabled={!item.enabled}
+                        style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: item.enabled ? "#94a3b8" : "#334155", borderRadius: 10, padding: "12px 16px", fontSize: 13, cursor: item.enabled ? "pointer" : "not-allowed", textAlign: "left" }}>
+                        <span style={{ fontSize: 18 }}>{item.icon}</span>
+                        <span>{item.label}</span>
+                        {!item.enabled && <span style={{ marginLeft: "auto", fontSize: 10, color: "#334155" }}>Approve output first</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {workspaceTab === "publish" && (
+                  <div style={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ fontSize: 11, letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: 4 }}>Publish</div>
+                    {["Meta Ads Manager", "Google Ads", "TikTok Ads", "Instagram"].map(platform => (
+                      <div key={platform} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "12px 16px" }}>
+                        <span style={{ fontSize: 13, color: "#64748b" }}>{platform}</span>
+                        <button style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 8, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>Connect</button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
