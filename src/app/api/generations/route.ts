@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // DALL-E + optional upload can take up to 30s
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
@@ -111,19 +113,24 @@ export async function POST(request: Request) {
       responseText = generationResult.responseText;
     }
 
-    // ── Upload image to Supabase Storage ───────────────────────────────
-    // If the generation is a completed image, upload it from the provider
-    // URL / base64 to our own Supabase bucket so the URL never expires.
+    // ── Upload image to Supabase Storage (non-blocking) ───────────────
+    // Fire-and-forget: upload runs after response is returned so the client
+    // gets status="completed" + provider URL immediately without waiting.
+    // The DB row is updated in the background once the upload finishes.
     if (type === "image" && generationResult.status === "completed" && outputUrl) {
-      try {
-        const workspaceId = selection.current.workspace.id;
-        const supabaseUrl = await uploadImageToSupabase(outputUrl, workspaceId);
-        outputUrl = supabaseUrl;
-        console.log("[Storage] Image uploaded to Supabase:", supabaseUrl);
-      } catch (uploadErr) {
-        // Non-fatal: keep provider URL if upload fails
-        console.error("[Storage] Failed to upload image to Supabase Storage:", uploadErr);
-      }
+      const providerUrl = outputUrl; // capture before async closure
+      const workspaceId = selection.current.workspace.id;
+      // Intentionally NOT awaited — background upload
+      void (async () => {
+        try {
+          const supabaseUrl = await uploadImageToSupabase(providerUrl, workspaceId);
+          // Update the DB row once upload completes (best-effort)
+          await admin.from("generations").update({ output_url: supabaseUrl }).eq("output_url", providerUrl);
+          console.log("[Storage] Image uploaded to Supabase:", supabaseUrl);
+        } catch (uploadErr) {
+          console.error("[Storage] Background upload failed — provider URL kept:", uploadErr);
+        }
+      })();
     }
 
   } catch (error) {

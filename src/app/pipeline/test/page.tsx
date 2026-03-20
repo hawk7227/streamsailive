@@ -237,9 +237,13 @@ export default function PipelineTestPage() {
       if (gen.status === "completed" && gen.output_url) {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: gen.output_url!, status: "completed" } }));
         log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
+      } else if (gen.status === "failed") {
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
+        log(`✗ Image failed (server): ${gen.id.slice(0, 8)}`);
       } else {
+        // pending — async provider (e.g. Kling), poll for completion
         queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
-        log(`Image pending: ${gen.id.slice(0, 8)} — polling...`);
+        log(`Image queued: ${gen.id.slice(0, 8)} — polling...`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -268,9 +272,13 @@ export default function PipelineTestPage() {
       if (gen.status === "completed" && gen.output_url) {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: gen.output_url!, status: "completed" } }));
         log(`✓ Video ready: ${gen.id.slice(0, 8)}`);
+      } else if (gen.status === "failed") {
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
+        log(`✗ Video failed (server): ${gen.id.slice(0, 8)}`);
       } else {
+        // pending — Kling async, poll for completion
         queueAdd({ id: gen.id, type: "video", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.20, error: null });
-        log(`✓ Video submitted: ${gen.id.slice(0, 8)}`);
+        log(`Video queued: ${gen.id.slice(0, 8)} — polling...`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
