@@ -181,6 +181,7 @@ export default function PipelineBuilder() {
     imagery: "queued", i2v: "queued", assets: "queued", qa: "queued",
   });
   const [stepOutputs, setStepOutputs] = useState<Record<string, unknown>>({});
+  const [rightTab, setRightTab] = useState<'pipeline' | 'node'>('pipeline');
 
   const [ideaCards, setIdeaCards] = useState([
     { id: "concept-1", title: "Preview direction 1", subtitle: "privacy-led", angle: "pain-based strategy 1" },
@@ -791,7 +792,7 @@ export default function PipelineBuilder() {
               onInit={setReactFlowInstance}
               onDrop={onDrop}
               onDragOver={onDragOver}
-              onNodeClick={(_, node) => setSelectedNode(node)}
+              onNodeClick={(_, node) => { setSelectedNode(node); setRightTab('node'); }}
               fitView
               className="bg-[#0a0a0f]"
             >
@@ -801,89 +802,342 @@ export default function PipelineBuilder() {
           </ReactFlowProvider>
         </div>
 
-        <div className="w-[380px] bg-[#12121a] border-l border-white/[0.08] p-4 flex flex-col overflow-y-auto">
-          {selectedNode ? (
-            <div className="space-y-4">
-              <div className="pb-4 border-b border-white/[0.08]">
-                <h3 className="font-semibold">{selectedNode.data.label}</h3>
-                <p className="text-xs text-gray-500">Type: {selectedNode.data.type}</p>
+        {/* ── Right Panel: Pipeline Status + Node Config ──────────────── */}
+        <div className="w-[400px] bg-[#12121a] border-l border-white/[0.08] flex flex-col overflow-hidden">
+
+          {/* Tab bar */}
+          <div className="flex border-b border-white/[0.08] shrink-0">
+            <button
+              onClick={() => setRightTab('pipeline')}
+              className={`flex-1 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightTab === 'pipeline' ? 'text-[#00C4A1] border-b-2 border-[#00C4A1]' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              PIPELINE
+            </button>
+            <button
+              onClick={() => { setRightTab('node'); }}
+              className={`flex-1 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightTab === 'node' ? 'text-white border-b-2 border-white/30' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              NODE CONFIG
+            </button>
+          </div>
+
+          {/* ── Pipeline Tab ──────────────────────────────────────────────── */}
+          {rightTab === 'pipeline' && (
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+
+              {/* Status header */}
+              <div className={`rounded-xl p-3 border ${
+                gateError         ? 'bg-red-900/20 border-red-500/30' :
+                running           ? 'bg-yellow-900/20 border-yellow-500/30 animate-pulse' :
+                intakeGateResult  ? 'bg-teal-900/20 border-teal-500/20' :
+                                    'bg-white/[0.03] border-white/[0.08]'
+              }`}>
+                {gateError ? (
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-base leading-none mt-0.5">⛔</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-red-300 text-xs font-semibold mb-0.5">Gate Blocked</p>
+                      <p className="text-red-400/80 text-[11px] leading-snug">{gateError}</p>
+                    </div>
+                    <button onClick={() => setGateError(null)} className="text-red-500 hover:text-red-300 text-xs shrink-0">✕</button>
+                  </div>
+                ) : running ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-yellow-400 animate-ping shrink-0" />
+                    <p className="text-yellow-300 text-xs font-semibold">Pipeline running…</p>
+                  </div>
+                ) : intakeGateResult ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-teal-400 text-sm">✓</span>
+                      <p className="text-teal-300 text-xs font-semibold">Ready — Intake locked</p>
+                    </div>
+                    <p className="text-white/30 text-[10px] font-mono pl-5">
+                      {intakeGateResult.rulesetVersionLocked} · run {intakeGateResult.intakeBriefId.slice(0,8)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/20 text-sm">○</span>
+                    <p className="text-gray-500 text-xs">Fill intake brief below, then click <span className="text-[#00C4A1] font-semibold">Run Governance</span></p>
+                  </div>
+                )}
               </div>
 
+              {/* 7-step progress rail */}
               <div>
-                <label className="block text-xs text-gray-500 mb-2">Label</label>
-                <input
-                  type="text"
-                  value={selectedNode.data.label}
-                  onChange={(e) => {
-                    const nodeId = selectedNode.id;
-                    setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, label: e.target.value } }));
-                    setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, label: e.target.value } } : n));
-                    setIsDirty(true);
-                  }}
-                  className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-indigo-500"
-                />
+                <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-3">Pipeline Steps</p>
+                <div className="space-y-1.5">
+                  {[
+                    { id: 'strategy', label: 'Creative Strategy',   icon: '◫' },
+                    { id: 'copy',     label: 'Copy Generation',      icon: '✦' },
+                    { id: 'validator',label: 'Validator',            icon: '◈' },
+                    { id: 'imagery',  label: 'Imagery Generation',   icon: '▣' },
+                    { id: 'i2v',      label: 'Image → Video',        icon: '▶' },
+                    { id: 'assets',   label: 'Asset Library',        icon: '▤' },
+                    { id: 'qa',       label: 'Quality Assurance',    icon: '✓' },
+                  ].map(({ id, label, icon }) => {
+                    const state = stepStates[id] ?? 'queued';
+                    const output = stepOutputs[id];
+                    return (
+                      <div key={id} className={`rounded-lg px-3 py-2 border transition-all ${
+                        state === 'running'  ? 'bg-yellow-500/10 border-yellow-500/30' :
+                        state === 'complete' ? 'bg-teal-500/10 border-teal-500/20' :
+                        state === 'blocked'  ? 'bg-red-500/10 border-red-500/30' :
+                        state === 'error'    ? 'bg-red-700/10 border-red-700/30' :
+                                              'bg-white/[0.02] border-white/[0.06]'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm w-4 text-center shrink-0 ${
+                            state === 'running'  ? 'text-yellow-400 animate-pulse' :
+                            state === 'complete' ? 'text-teal-400' :
+                            state === 'blocked'  ? 'text-red-400' :
+                            'text-white/20'
+                          }`}>{
+                            state === 'running'  ? '⟳' :
+                            state === 'complete' ? '✓' :
+                            state === 'blocked'  ? '✕' :
+                            icon
+                          }</span>
+                          <span className={`text-xs font-medium flex-1 ${
+                            state === 'queued' ? 'text-white/30' :
+                            state === 'complete' ? 'text-teal-300' :
+                            state === 'running'  ? 'text-yellow-300' :
+                            state === 'blocked'  ? 'text-red-300' : 'text-white/60'
+                          }`}>{label}</span>
+                          <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
+                            state === 'running'  ? 'bg-yellow-500/20 text-yellow-300' :
+                            state === 'complete' ? 'bg-teal-500/20 text-teal-300' :
+                            state === 'blocked'  ? 'bg-red-500/20 text-red-300' :
+                            state === 'error'    ? 'bg-red-700/20 text-red-400' :
+                                                   'bg-white/5 text-white/20'
+                          }`}>{state}</span>
+                        </div>
+                        {Boolean(output) && state === 'complete' && (
+                          <div className="mt-1.5 pl-6">
+                            <pre className="text-[10px] text-white/40 truncate font-mono">
+                              {(typeof output === 'string' ? output : JSON.stringify(output ?? '')).slice(0, 80)}…
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
+              {/* Intake brief form */}
               <div>
-                <label className="block text-xs text-gray-500 mb-2">Prompt / Content</label>
-                <textarea
-                  value={selectedNode.data.content?.replace(/<br>/g, "\n") || ""}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\n/g, "<br>");
-                    const nodeId = selectedNode.id;
-                    setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, content: value } }));
-                    setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, content: value } } : n));
-                    setIsDirty(true);
-                  }}
-                  className="w-full px-3 py-2 h-28 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-3">Intake Brief <span className="normal-case text-white/20">(required to run)</span></p>
+                <div className="space-y-3">
 
-              {selectedNode.data.type === "videoGenerator" && (
-                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-2">Motion Source</label>
-                    <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm" value={selectedNode.data.motionSource || "auto"}>
-                      <option value="auto">Auto (Use Motion Analyzer)</option>
-                      <option value="image_only">Image Only</option>
-                      <option value="manual">Manual Motion Prompt</option>
+                    <label className="block text-[11px] text-gray-500 mb-1">Target Platform</label>
+                    <select
+                      value={intakeBrief.targetPlatform ?? ''}
+                      onChange={e => setIntakeBrief(b => ({ ...b, targetPlatform: e.target.value as 'meta' | 'google' | 'tiktok' | 'instagram' | 'organic' }))}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
+                    >
+                      <option value="">Select platform…</option>
+                      <option value="meta">Meta (Facebook / Instagram)</option>
+                      <option value="google">Google Ads</option>
+                      <option value="tiktok">TikTok</option>
+                      <option value="instagram">Instagram Organic</option>
+                      <option value="organic">Organic / Other</option>
                     </select>
                   </div>
-                  {selectedNode.data.motionPlanPreview && (
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">Funnel Stage</label>
+                    <select
+                      value={intakeBrief.funnelStage ?? 'consideration'}
+                      onChange={e => setIntakeBrief(b => ({ ...b, funnelStage: e.target.value as 'awareness' | 'consideration' | 'conversion' }))}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
+                    >
+                      <option value="awareness">Awareness</option>
+                      <option value="consideration">Consideration</option>
+                      <option value="conversion">Conversion</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">Proof Type Allowed</label>
+                    <select
+                      value={intakeBrief.proofTypeAllowed ?? 'process-based'}
+                      onChange={e => setIntakeBrief(b => ({ ...b, proofTypeAllowed: e.target.value as 'process-based' | 'social-proof' | 'outcome-based' }))}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
+                    >
+                      <option value="process-based">Process-based only</option>
+                      <option value="social-proof">Social proof</option>
+                      <option value="outcome-based">Outcome-based</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">
+                      Audience Segment
+                      <span className="text-white/20 ml-1">(min 20 chars)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Adults 30–55 seeking private telehealth care"
+                      value={intakeBrief.audienceSegment ?? ''}
+                      onChange={e => setIntakeBrief(b => ({ ...b, audienceSegment: e.target.value }))}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">
+                      Campaign Objective
+                      <span className="text-white/20 ml-1">(min 10 chars)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Drive first-visit bookings"
+                      value={intakeBrief.campaignObjective ?? ''}
+                      onChange={e => setIntakeBrief(b => ({ ...b, campaignObjective: e.target.value }))}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">
+                      Brand Voice Statement
+                      <span className="text-white/20 ml-1">(min 30 chars)</span>
+                    </label>
+                    <textarea
+                      placeholder="e.g. Warm, direct, trustworthy. Not clinical or salesy."
+                      value={intakeBrief.brandVoiceStatement ?? ''}
+                      onChange={e => setIntakeBrief(b => ({ ...b, brandVoiceStatement: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1] resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">
+                      Approved Facts
+                      <span className="text-white/20 ml-1">(one per line, min 3)</span>
+                    </label>
+                    <textarea
+                      placeholder={"Secure online intake is available.\nA licensed provider may review submitted information.\nEligibility depends on provider review."}
+                      value={(intakeBrief.approvedFacts ?? []).join('\n')}
+                      onChange={e => setIntakeBrief(b => ({ ...b, approvedFacts: e.target.value.split('\n').filter((l: string) => l.trim()) }))}
+                      rows={4}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs font-mono focus:outline-none focus:border-[#00C4A1] resize-none"
+                    />
+                  </div>
+
+                  {/* Run button inside panel */}
+                  <button
+                    onClick={run7StepPipeline}
+                    disabled={running}
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                      running
+                        ? 'bg-[#00C4A1]/40 text-black/50 cursor-not-allowed'
+                        : 'bg-[#00C4A1] hover:bg-[#00b090] text-black'
+                    }`}
+                  >
+                    <Play className="w-4 h-4" />
+                    {running ? 'Pipeline Running…' : 'Run Governance Pipeline'}
+                  </button>
+
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Node Config Tab ───────────────────────────────────────────── */}
+          {rightTab === 'node' && (
+            <div className="flex-1 overflow-y-auto p-4">
+              {selectedNode ? (
+                <div className="space-y-4">
+                  <div className="pb-4 border-b border-white/[0.08]">
+                    <h3 className="font-semibold">{selectedNode.data.label}</h3>
+                    <p className="text-xs text-gray-500">Type: {selectedNode.data.type}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-2">Label</label>
+                    <input
+                      type="text"
+                      value={selectedNode.data.label}
+                      onChange={(e) => {
+                        const nodeId = selectedNode.id;
+                        setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, label: e.target.value } }));
+                        setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, label: e.target.value } } : n));
+                        setIsDirty(true);
+                      }}
+                      className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-2">Prompt / Content</label>
+                    <textarea
+                      value={selectedNode.data.content?.replace(/<br>/g, "\n") || ""}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\n/g, "<br>");
+                        const nodeId = selectedNode.id;
+                        setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, content: value } }));
+                        setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, content: value } } : n));
+                        setIsDirty(true);
+                      }}
+                      className="w-full px-3 py-2 h-28 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-indigo-500 resize-none"
+                    />
+                  </div>
+
+                  {selectedNode.data.type === "videoGenerator" && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-2">Motion Source</label>
+                        <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-sm" value={selectedNode.data.motionSource || "auto"}>
+                          <option value="auto">Auto (Use Motion Analyzer)</option>
+                          <option value="image_only">Image Only</option>
+                          <option value="manual">Manual Motion Prompt</option>
+                        </select>
+                      </div>
+                      {selectedNode.data.motionPlanPreview && (
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-2">Motion Plan Preview</label>
+                          <pre className="w-full px-3 py-2 h-40 overflow-auto bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs text-gray-300 whitespace-pre-wrap">
+                            {selectedNode.data.motionPlanPreview}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedNode.data.output && (
                     <div>
-                      <label className="block text-xs text-gray-500 mb-2">Motion Plan Preview</label>
-                      <pre className="w-full px-3 py-2 h-40 overflow-auto bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs text-gray-300 whitespace-pre-wrap">
-                        {selectedNode.data.motionPlanPreview}
+                      <label className="block text-xs text-gray-500 mb-2">Output</label>
+                      <pre className="w-full px-3 py-2 h-48 overflow-auto bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs text-gray-300 whitespace-pre-wrap">
+                        {selectedNode.data.output}
                       </pre>
                     </div>
                   )}
+
+                  <button
+                    onClick={() => {
+                      setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
+                      setSelectedNode(null);
+                      setIsDirty(true);
+                    }}
+                    className="w-full py-2 bg-red-500/10 text-red-500 rounded-lg text-sm font-medium hover:bg-red-500/20 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Step
+                  </button>
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center text-center text-gray-500">
+                  <div>
+                    <p className="text-sm mb-2">No node selected</p>
+                    <p className="text-xs text-gray-600">Click a node on the canvas to edit its configuration</p>
+                  </div>
                 </div>
               )}
-
-              {selectedNode.data.output && (
-                <div>
-                  <label className="block text-xs text-gray-500 mb-2">Output</label>
-                  <pre className="w-full px-3 py-2 h-48 overflow-auto bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs text-gray-300 whitespace-pre-wrap">
-                    {selectedNode.data.output}
-                  </pre>
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-                  setSelectedNode(null);
-                  setIsDirty(true);
-                }}
-                className="w-full py-2 bg-red-500/10 text-red-500 rounded-lg text-sm font-medium hover:bg-red-500/20 flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete Step
-              </button>
-            </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-center text-gray-500">
-              Select a node to edit its configuration.
             </div>
           )}
         </div>
