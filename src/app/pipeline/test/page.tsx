@@ -81,10 +81,10 @@ export default function PipelineTestPage() {
   const [approvedOutputs, setApprovedOutputs] = useState<{ image: string | null; video: string | null; script: string | null }>({ image: null, video: null, script: null });
 
   // Per-concept preview state
-  const [conceptOutputs, setConceptOutputs] = useState<Record<string, { image: string | null; video: string | null; script: string | null; status: QueueStatus | "idle" }>>({
-    c1: { image: null, video: null, script: null, status: "idle" },
-    c2: { image: null, video: null, script: null, status: "idle" },
-    c3: { image: null, video: null, script: null, status: "idle" },
+  const [conceptOutputs, setConceptOutputs] = useState<Record<string, { image: string | null; video: string | null; script: string | null; status: QueueStatus | "idle"; error: string | null }>>({
+    c1: { image: null, video: null, script: null, status: "idle", error: null },
+    c2: { image: null, video: null, script: null, status: "idle", error: null },
+    c3: { image: null, video: null, script: null, status: "idle", error: null },
   });
   const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image" });
 
@@ -221,7 +221,7 @@ export default function PipelineTestPage() {
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
     const prompt = stepPrompts.imagery + (concept ? ` Concept: ${concept.headline}. ${concept.body ?? ""}` : "");
-    setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing" } }));
+    setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
     log(`Generating image with DALL-E for ${conceptId}...`);
     try {
       // Force openai provider — bypasses AI_PROVIDER_IMAGE env var
@@ -238,8 +238,9 @@ export default function PipelineTestPage() {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: gen.output_url!, status: "completed" } }));
         log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
       } else if (gen.status === "failed") {
-        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
-        log(`✗ Image failed: ${data.error ?? "unknown error"}`);
+        const errMsg = data.error ?? "Generation failed — check Vercel logs";
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: errMsg } }));
+        log(`✗ Image failed: ${errMsg}`);
       } else {
         // pending — async provider (e.g. Kling), poll for completion
         queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
@@ -247,7 +248,7 @@ export default function PipelineTestPage() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
+      setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: msg } }));
       log(`✗ Image failed: ${msg}`);
     }
   }
@@ -457,10 +458,32 @@ export default function PipelineTestPage() {
           {/* ── ROW 1: Notifications | AI Assistant | Concept Cards ──────── */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 14, marginBottom: 14 }}>
 
-            {/* Col 1: Reserved / Notifications */}
-            <div style={P({ padding: 20, minHeight: 260 })}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#475569", textTransform: "uppercase", marginBottom: 12 }}>Notifications</div>
-              <div style={{ color: "#334155", fontSize: 13, fontStyle: "italic" }}>— Reserved —</div>
+            {/* Col 1: Getting Started Guide */}
+            <div style={P({ padding: 16, minHeight: 260 })}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#475569", textTransform: "uppercase", marginBottom: 14 }}>How to Start</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  { n: "1", label: "Select niche", detail: "Pick Telehealth or Google Ads from the top-left dropdown", done: !!nicheId },
+                  { n: "2", label: "Generate images", detail: "Click the Img button on any concept card below", done: Object.values(conceptOutputs).some(o => o.status === "completed" && o.image) },
+                  { n: "3", label: "Generate video", detail: "After image loads, click Vid to create a 5s motion clip", done: Object.values(conceptOutputs).some(o => o.video) },
+                  { n: "4", label: "Approve output", detail: "Click ✓ Approve on any completed concept to send to workspace", done: !!approvedOutputs.image || !!approvedOutputs.video },
+                  { n: "5", label: "Run full pipeline", detail: "Click ▶ Run in the top bar to generate all 3 concepts at once", done: false },
+                ].map(step => (
+                  <div key={step.n} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ width: 20, height: 20, borderRadius: "50%", background: step.done ? "rgba(110,231,183,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${step.done ? "#6ee7b7" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: step.done ? "#6ee7b7" : "#475569", flexShrink: 0, marginTop: 1 }}>
+                      {step.done ? "✓" : step.n}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: step.done ? "#6ee7b7" : "#94a3b8", marginBottom: 2 }}>{step.label}</div>
+                      <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>{step.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Quick run button */}
+              <button onClick={runPipeline} style={{ marginTop: 16, width: "100%", background: "linear-gradient(90deg,rgba(168,85,247,0.25),rgba(34,211,238,0.2))", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                ▶ Generate All 3 Concepts
+              </button>
             </div>
 
             {/* Col 2: AI Assistant */}
@@ -706,6 +729,13 @@ export default function PipelineTestPage() {
                           <Spinner size={20} />
                           <span style={{ fontSize: 11 }}>{qItem ? `${qItem.provider} · ${qItem.elapsedSeconds}s` : "Generating..."}</span>
                         </div>
+                      ) : out?.status === "failed" && out?.error ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 8px" }}>
+                          <span style={{ fontSize: 18 }}>⚠️</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171" }}>Generation Failed</span>
+                          <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", lineHeight: 1.5, wordBreak: "break-word", maxWidth: "100%" }}>{out.error}</span>
+                          <button onClick={() => generateImage(cid)} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
+                        </div>
                       ) : (
                         <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No image yet</div>
                       )
@@ -746,7 +776,7 @@ export default function PipelineTestPage() {
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
                       ▶ Vid
                     </button>
-                    <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle" } })); log(`Restarted concept ${i + 1}`); }}
+                    <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); log(`Restarted concept ${i + 1}`); }}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
                       ↺
                     </button>
