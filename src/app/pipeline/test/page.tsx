@@ -96,6 +96,8 @@ export default function PipelineTestPage() {
 
   // Workspace
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("output");
+  const [pipelineMode, setPipelineMode] = useState<"manual" | "auto">("manual");
+  const [outputMode, setOutputMode] = useState<"image+video" | "image" | "video">("image+video");
   const [editorState, setEditorState] = useState<{
     brightness: number; contrast: number; saturation: number;
     blur: number; rotation: number; flipH: boolean; flipV: boolean; textOverlay: string;
@@ -424,20 +426,37 @@ export default function PipelineTestPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
             {/* Niche selector */}
             <select value={nicheId} onChange={e => setNicheId(e.target.value)}
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
+              style={{ background: "#1e1b4b", border: "1px solid rgba(103,232,249,0.3)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
               <option value="telehealth">Telehealth Master</option>
               <option value="google_ads">Google Ads — Telehealth</option>
             </select>
-            <select style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
-              <option>Pipeline Mode</option>
-              <option>Manual</option>
-              <option>Full Auto</option>
+            <select value={pipelineMode} onChange={e => setPipelineMode(e.target.value as "manual" | "auto")}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
+              <option value="manual">Pipeline Mode: Manual</option>
+              <option value="auto">Pipeline Mode: Full Auto</option>
             </select>
-            <select style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
-              <option>Output: Image+Video</option>
-              <option>Image Only</option>
-              <option>Video Only</option>
+            <select value={outputMode} onChange={e => setOutputMode(e.target.value as "image+video" | "image" | "video")}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
+              <option value="image+video">Output: Image + Video</option>
+              <option value="image">Output: Image Only</option>
+              <option value="video">Output: Video Only</option>
             </select>
+            {/* Diagnostic button */}
+            <button onClick={async () => {
+              log("Running API diagnostic...");
+              try {
+                const res = await fetch("/api/debug-env");
+                const data = await res.json() as { envStatus?: Record<string,string>; dalleTest?: string; error?: string };
+                if (data.error) { log(`✗ Diagnostic error: ${data.error}`); return; }
+                const env = data.envStatus ?? {};
+                Object.entries(env).forEach(([k, v]) => log(`  ${k}: ${v}`));
+                log(`  DALL-E live test: ${data.dalleTest}`);
+              } catch(e) { log(`✗ Diagnostic failed: ${e instanceof Error ? e.message : String(e)}`); }
+              setWorkspaceTab("logs");
+            }}
+              style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24", borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+              🔍 Diagnose
+            </button>
             <div style={{ flex: 1 }} />
             {/* Queue pill */}
             {(activeCount > 0 || queueTrayOpen) && (
