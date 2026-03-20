@@ -117,19 +117,27 @@ ${pipelineInfo || "No pipeline context loaded"}
 CURRENT SETTINGS: ${settingsInfo || "none"}
 CURRENT PROMPT: ${context.prompt || "none"}
 
-AVAILABLE ACTIONS (include in your response as needed):
-- update_strategy_prompt / update_copy_prompt / update_validator_prompt / update_image_prompt / update_i2v_prompt / update_qa_instruction — update a step's prompt
-- generate_image — trigger image generation (pass: prompt, conceptId?)
-- generate_video — trigger video generation (pass: prompt, conceptId?)
-- generate_i2v — trigger image-to-video (pass: prompt, imageUrl, conceptId?)
-- run_step — run a specific pipeline step (pass: stepId)
-- run_pipeline — run the full pipeline
-- select_concept — select active concept (pass: conceptId)
-- approve_output — approve an output for workspace (pass: type, url)
-- open_step_config — open the step config panel (pass: stepId)
-- set_niche — change active niche (pass: nicheId)
-- update_prompt — update current prompt
-- update_settings — update a setting (key, value)
+AVAILABLE ACTIONS — you MUST emit these when the user's intent matches:
+
+ALWAYS emit generate_image when user says: "generate image", "make image", "create image", "test image", "generate a test image", "run image", "generate for concept", or any variation. Use selectedConceptId if no specific concept mentioned.
+ALWAYS emit run_pipeline when user says: "run pipeline", "run all", "start pipeline", "generate everything".
+ALWAYS emit generate_video when user says: "generate video", "make video", "create video".
+
+Full action list:
+- generate_image — { conceptId?: string } — TRIGGER ON ANY IMAGE GENERATION REQUEST
+- generate_video — { conceptId?: string } — trigger video generation
+- generate_i2v — { prompt, imageUrl, conceptId? } — image-to-video
+- run_pipeline — {} — run full pipeline for all concepts
+- run_step — { stepId } — run a specific step
+- update_image_prompt — { value: string } — update image prompt
+- update_strategy_prompt / update_copy_prompt / update_validator_prompt / update_i2v_prompt / update_qa_instruction — { value: string }
+- select_concept — { conceptId } — select active concept
+- approve_output — { type, url } — approve output for workspace
+- open_step_config — { stepId } — open step config panel
+- set_niche — { nicheId } — change active niche
+- update_prompt — { new_prompt: string } — update current prompt
+
+RULE: When in doubt between responding with text only vs. emitting an action — EMIT THE ACTION.
 
 GOVERNANCE RULES IN EFFECT:
 - NO diagnostic claims, NO guaranteed outcomes, NO prescription certainty

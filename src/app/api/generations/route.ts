@@ -134,10 +134,10 @@ export async function POST(request: Request) {
     }
 
   } catch (error) {
-    console.error("Error generating content:", error);
-    // Continue saving the generation as 'failed' or 'pending' depending on preference
-    // We will save it as 'failed' if an error occurred in generation.
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[Generations] Generation failed:", errorMsg);
     payload.status = "failed";
+    payload.generationError = errorMsg; // surfaced to client
   }
 
   const insertPayload = {
@@ -174,5 +174,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (data.status === "failed") {
+    return NextResponse.json({ data, error: payload.generationError ?? "Generation failed" });
+  }
   return NextResponse.json({ data });
 }

@@ -239,7 +239,7 @@ export default function PipelineTestPage() {
         log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
       } else if (gen.status === "failed") {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
-        log(`✗ Image failed (server): ${gen.id.slice(0, 8)}`);
+        log(`✗ Image failed: ${data.error ?? "unknown error"}`);
       } else {
         // pending — async provider (e.g. Kling), poll for completion
         queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
