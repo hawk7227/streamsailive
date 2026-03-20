@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ArrowLeft, Search, Save, Play, Trash2 } from "lucide-react";
 import { buildImageToVideoMotionPlan, type PipelineNiche, type AutomationMode, type OutputMode } from "@/lib/pipeline/imageToVideoGovernance";
+import { validateIntakeBrief, type IntakeBrief, type IntakeGateResult } from "@/lib/pipeline/qc/intakeGate";
 
 type Pipeline = {
   id: string;
@@ -166,6 +167,20 @@ export default function PipelineBuilder() {
   const [conceptType, setConceptType] = useState("Pain-Based");
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
   const [imageToVideoGovernance, setImageToVideoGovernance] = useState("");
+
+  // Intake brief — required before the 7-step governance pipeline can run
+  const [intakeBrief, setIntakeBrief] = useState<Partial<IntakeBrief>>({
+    governanceNicheId: "telehealth",
+    proofTypeAllowed: "process-based",
+    funnelStage: "consideration",
+  });
+  const [intakeGateResult, setIntakeGateResult] = useState<IntakeGateResult | null>(null);
+  const [gateError, setGateError] = useState<string | null>(null);
+  const [stepStates, setStepStates] = useState<Record<string, "queued"|"running"|"complete"|"blocked"|"error">>({
+    strategy: "queued", copy: "queued", validator: "queued",
+    imagery: "queued", i2v: "queued", assets: "queued", qa: "queued",
+  });
+  const [stepOutputs, setStepOutputs] = useState<Record<string, unknown>>({});
 
   const [ideaCards, setIdeaCards] = useState([
     { id: "concept-1", title: "Preview direction 1", subtitle: "privacy-led", angle: "pain-based strategy 1" },
@@ -423,6 +438,129 @@ export default function PipelineBuilder() {
     }
   };
 
+  // ── 7-Step Governance Pipeline Orchestrator ─────────────────────────────────
+  // Runs the telehealth governance pipeline sequentially with full gate enforcement.
+  // Each step receives the intake brief and previous step outputs in context.
+  // Gate failures surface as step state "blocked" — never silently continue.
+
+  const setStep = (step: string, state: "queued"|"running"|"complete"|"blocked"|"error") => {
+    setStepStates(prev => ({ ...prev, [step]: state }));
+  };
+
+  const run7StepPipeline = async () => {
+    setGateError(null);
+    setStepOutputs({});
+    setStepStates({ strategy: "queued", copy: "queued", validator: "queued", imagery: "queued", i2v: "queued", assets: "queued", qa: "queued" });
+
+    // ── Intake gate: must pass before anything runs ────────────────────────
+    const gateResult = validateIntakeBrief({
+      ...intakeBrief,
+      governanceNicheId: intakeBrief.governanceNicheId ?? niche,
+    });
+    setIntakeGateResult(gateResult);
+
+    if (!gateResult.passed) {
+      const errMsg = [
+        gateResult.missingFields.length > 0 ? `Missing: ${gateResult.missingFields.join(", ")}` : null,
+        gateResult.validationErrors.length > 0 ? gateResult.validationErrors[0] : null,
+      ].filter(Boolean).join(" | ");
+      setGateError(`Intake brief incomplete. ${errMsg}`);
+      return;
+    }
+
+    setRunning(true);
+    const context: Record<string, unknown> = {
+      intakeBrief,
+      intakeGateResult: gateResult,
+    };
+
+    const stepTypes = [
+      { step: "strategy",  type: "creativeStrategy" },
+      { step: "copy",      type: "copyGeneration" },
+      { step: "validator", type: "validator" },
+      { step: "imagery",   type: "imageryGeneration" },
+      { step: "i2v",       type: "imageToVideoStep" },
+      { step: "assets",    type: "assetLibrary" },
+      { step: "qa",        type: "qualityAssurance" },
+    ];
+
+    try {
+      for (const { step, type } of stepTypes) {
+        setStep(step, "running");
+
+        // Find the matching node in the canvas, or use a minimal synthetic node
+        const node = nodes.find((n: any) => n.data?.type === type) ?? {
+          id: `synthetic-${step}`,
+          type: "pipelineNode",
+          data: {
+            type,
+            governance: { pipelineType: niche },
+            aspectRatio: "16:9",
+          },
+        };
+
+        try {
+          const response = await fetch("/api/pipeline/run-node", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type, data: node.data ?? {}, context }),
+          });
+
+          const result = await response.json() as { success: boolean; output?: unknown; error?: string };
+
+          if (!result.success) {
+            setStep(step, "blocked");
+            setGateError(`Step "${step}" failed: ${result.error ?? "Unknown error"}`);
+            return; // Hard stop — do not proceed
+          }
+
+          // Store output and propagate to context for next steps
+          const output = result.output;
+          setStepOutputs(prev => ({ ...prev, [step]: output }));
+
+          // Propagate output to context using step name as key
+          context[step] = output;
+
+          // Also propagate using the step type name for cross-step resolution
+          context[type] = output;
+
+          // Special propagation for validator gate
+          if (step === "validator") {
+            const validatorOut = output as Record<string, unknown> | null;
+            const status = validatorOut?.validatorStatus ?? "unknown";
+            context.validator = { ...(validatorOut ?? {}), validatorStatus: status };
+            if (status !== "pass") {
+              setStep(step, "blocked");
+              setGateError(`Validator blocked: ${status}. Fix copy issues before imagery can run.`);
+              return;
+            }
+          }
+
+          // Special propagation for imagery OCR gate
+          if (step === "imagery") {
+            const imageryOut = output as Record<string, unknown> | null;
+            context.imageryGeneration = imageryOut;
+            if (imageryOut?.imageGenerationFailed) {
+              setStep(step, "blocked");
+              setGateError("Image generation failed after 3 attempts. Check prompt and try again.");
+              return;
+            }
+          }
+
+          setStep(step, "complete");
+
+        } catch (stepErr) {
+          const msg = stepErr instanceof Error ? stepErr.message : String(stepErr);
+          setStep(step, "blocked");
+          setGateError(`Step "${step}" error: ${msg}`);
+          return;
+        }
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
   const runPipeline = async () => {
     if (isDirty) await internalSave(nodes);
     setRunning(true);
@@ -490,9 +628,18 @@ export default function PipelineBuilder() {
     }
   };
 
+  // Detect whether the canvas has 7-step governance nodes
+  const has7StepNodes = nodes.some((n: any) =>
+    ["creativeStrategy","copyGeneration","validator","imageryGeneration","imageToVideoStep","assetLibrary","qualityAssurance"].includes(n.data?.type)
+  );
+
   const handleRunStep = async (step: string) => {
     if (step === "Run Full Pipeline") {
-      await runPipeline();
+      if (has7StepNodes) {
+        await run7StepPipeline();
+      } else {
+        await runPipeline();
+      }
       return;
     }
 
@@ -546,8 +693,48 @@ export default function PipelineBuilder() {
             <Play className="w-4 h-4" />
             {running ? "Running..." : "Run"}
           </button>
+          <button
+            onClick={run7StepPipeline}
+            disabled={running}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${running ? 'opacity-50 cursor-not-allowed bg-teal-700 text-white' : 'bg-[#00C4A1] hover:bg-[#00b090] text-black'}`}
+            title="Run the 7-step governance pipeline with intake gate and QC enforcement"
+          >
+            <Play className="w-4 h-4" />
+            {running ? "Running..." : "Run Governance"}
+          </button>
         </div>
       </header>
+
+      {gateError && (
+        <div className="px-6 py-2 bg-red-900/40 border-b border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+          <span className="font-semibold">⛔ Gate Error:</span>
+          <span>{gateError}</span>
+          <button onClick={() => setGateError(null)} className="ml-auto text-red-400 hover:text-red-200">✕</button>
+        </div>
+      )}
+
+      {intakeGateResult && !gateError && (
+        <div className="px-6 py-1.5 bg-teal-900/20 border-b border-teal-500/20 text-teal-400 text-[11px] flex items-center gap-3">
+          <span>✓ Intake locked</span>
+          <span className="text-white/30">|</span>
+          <span>Ruleset: {intakeGateResult.rulesetVersionLocked}</span>
+          <span className="text-white/30">|</span>
+          <span>Run ID: {intakeGateResult.intakeBriefId.slice(0, 8)}…</span>
+          <div className="ml-auto flex items-center gap-2">
+            {Object.entries(stepStates).map(([step, state]) => (
+              <span key={step} className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                state === 'complete' ? 'bg-teal-500/20 text-teal-300' :
+                state === 'running'  ? 'bg-yellow-500/20 text-yellow-300 animate-pulse' :
+                state === 'blocked'  ? 'bg-red-500/20 text-red-300' :
+                state === 'error'    ? 'bg-red-700/20 text-red-400' :
+                'bg-white/5 text-white/30'
+              }`}>
+                {step}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-b border-white/[0.08] bg-[#0a0a0f]">
         <PipelineTopControlPanel
