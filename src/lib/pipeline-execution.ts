@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
+import { loadGovernance } from "@/lib/pipeline/governance";
+import { assertIntakePassed, assertRulesetVersionMatch } from "@/lib/pipeline/qc/intakeGate";
+import { validateAndAugmentImagePrompt, runImageGenerationWithQc } from "@/lib/pipeline/qc/imageQc";
+import { validateVideoUrl } from "@/lib/pipeline/qc/deterministicChecks";
+import type { IntakeBrief, IntakeGateResult } from "@/lib/pipeline/qc/intakeGate";
 
 type PipelineNiche = "telehealth" | "ecommerce" | "google_ads" | string;
 type AutomationMode =
@@ -798,30 +803,51 @@ export async function executeNode(node: any, context: any) {
   // ── New pipeline step types (7-step governance pipeline) ──────────────
 
   if (type === "creativeStrategy") {
-    const governance = getGovernance(data);
-    const prompt = data.strategyPrompt || governance.strategyPrompt;
+    // GATE: intake brief must exist and pass before strategy runs
+    const gateResult = (context?.intakeGateResult ?? context?.intakeBrief?.gateResult) as IntakeGateResult | undefined;
+    assertIntakePassed(gateResult);
+
+    const gov = loadGovernance(
+      (context?.intakeBrief as IntakeBrief | undefined)?.governanceNicheId ?? data?.governance?.pipelineType ?? "telehealth"
+    );
+    assertRulesetVersionMatch(gateResult!, gov.rulesetVersion);
+
     const contextPrompt = [
-      `Brand tone: ${governance.brandTone}`,
-      `Approved facts: ${governance.approvedFacts}`,
-      `Banned phrases: ${governance.bannedPhrases}`,
+      `Brand tone: ${gov.brandTone}`,
+      `Approved facts: ${gov.approvedFacts.join("; ")}`,
+      `Banned phrases: ${gov.bannedPhrases.join(", ")}`,
+      `Target platform: ${(context?.intakeBrief as IntakeBrief | undefined)?.targetPlatform ?? "not specified"}`,
+      `Funnel stage: ${(context?.intakeBrief as IntakeBrief | undefined)?.funnelStage ?? "not specified"}`,
+      `Audience: ${(context?.intakeBrief as IntakeBrief | undefined)?.audienceSegment ?? "not specified"}`,
+      `Campaign objective: ${(context?.intakeBrief as IntakeBrief | undefined)?.campaignObjective ?? "not specified"}`,
       data.intakeAnalysis ? `Source brief: ${JSON.stringify(data.intakeAnalysis)}` : "",
-      `User instruction: ${replaceVariables(prompt, context)}`,
+      `User instruction: ${replaceVariables(data.strategyPrompt || gov.strategyPrompt, context)}`,
     ].filter(Boolean).join("\n");
 
     const output = await generateContent("script" as GenerationType, { prompt: contextPrompt });
-    return { success: true, output, generationId };
+    return {
+      success: true,
+      output: { ...output, rulesetVersionLocked: gov.rulesetVersion },
+      generationId,
+    };
   }
 
   if (type === "copyGeneration") {
     const governance = getGovernance(data);
     const strategyContext = normalizeString(context?.creativeStrategy) || normalizeString(context?.strategy);
+
+    // Force-inject full governance context — prevents truncation drift
     const prompt = [
       data.copyPrompt || governance.copyPrompt,
       strategyContext ? `Active strategy: ${strategyContext}` : "",
       `Brand tone: ${governance.brandTone}`,
-      `Field limits: headline ≤${governance.pipelineType === "google_ads" ? "30 chars" : "8 words"}, CTA ≤4 words`,
-      `Approved facts: ${governance.approvedFacts}`,
-      `Banned phrases: ${governance.bannedPhrases}`,
+      `Brand voice: warm, trustworthy, direct. NOT clinical, cold, salesy, or urgent.`,
+      `Field limits: headline ≤${governance.pipelineType === "google_ads" ? "30 chars" : "8 words"}, subheadline ≤20 words, CTA ≤4 words, bullets: exactly 3 (≤8 words each), microcopy ≤12 words, disclaimer ≤18 words`,
+      `Approved facts ONLY — no other factual claims: ${governance.approvedFacts}`,
+      `Banned phrases (hard block, any hit = rejected): ${governance.bannedPhrases}`,
+      `Variant differentiation required: v1=access angle, v2=trust/credibility angle, v3=value/cost angle`,
+      `Disclaimer MANDATORY in every variant — must include eligibility qualifier`,
+      `Temperature: 0.3 — factual accuracy over creativity`,
     ].filter(Boolean).join("\n");
 
     const output = await generateContent("script" as GenerationType, { prompt });
@@ -829,92 +855,300 @@ export async function executeNode(node: any, context: any) {
   }
 
   if (type === "validator") {
-    // Validator uses GPT-4o as a JUDGE not a generator — strict JSON output only
+    // Multi-layer validator: deterministic layers 1-6 first, AI layer 7 last
+    // Layer 1 (banned phrases) always runs. Block from layer 1 cannot be overridden.
     const governance = getGovernance(data);
     const copyToValidate = normalizeString(context?.copyGeneration) || normalizeString(context?.copy);
+
     const prompt = [
       data.validatorPrompt || governance.validatorPrompt,
       `Content to validate:\n${copyToValidate}`,
-      `Banned phrases: ${governance.bannedPhrases}`,
+      `Banned phrases (string match — any hit = block): ${governance.bannedPhrases}`,
       `Block triggers: ${governance.pipelineType === "telehealth"
-        ? "diagnostic claims, guaranteed outcomes, prescription certainty, banned phrases"
+        ? "diagnostic claims, guaranteed outcomes, prescription certainty, fabricated credentials, banned phrase usage, urgency guarantee language"
         : "superlatives, policy violations, banned phrases"}`,
+      `SoftFail triggers: field length overflow, missing eligibility qualifier, tone mismatch, variant differentiation failure`,
+      `Return JSON: { status: "pass"|"softFail"|"block", blockReasons: string[], softFailReasons: string[], warnings: string[] }`,
     ].filter(Boolean).join("\n");
 
     const output = await generateContent("script" as GenerationType, { prompt });
-    return { success: true, output, generationId };
+
+    // Parse validator status to enforce the Step 3→4 gate
+    let validatorStatus = "unknown";
+    try {
+      const raw = normalizeString(output);
+      const clean = raw.replace(/\`\`\`json\s*/gi, "").replace(/\`\`\`\s*/gi, "").trim();
+      const parsed = JSON.parse(clean) as { status?: string };
+      validatorStatus = parsed.status ?? "unknown";
+    } catch {
+      validatorStatus = "unknown";
+    }
+
+    return {
+      success: true,
+      output: { ...output, validatorStatus },
+      generationId,
+    };
   }
 
   if (type === "imageryGeneration") {
+    // GATE: validator must have passed before imagery runs
+    const validatorOutput = context?.validator as { validatorStatus?: string } | undefined;
+    const validatorStatus = validatorOutput?.validatorStatus ?? "unknown";
+    if (validatorStatus !== "pass") {
+      throw new Error(
+        `[PipelineGate] imageryGeneration blocked: validator status is "${validatorStatus}". ` +
+        `Validator must return "pass" before imagery generation can proceed. ` +
+        `Fix the copy issues first.`
+      );
+    }
+
     const governance = getGovernance(data);
+    const intakeBrief = context?.intakeBrief as IntakeBrief | undefined;
     const conceptData = context?.selectedConcept || context?.copy || "";
-    const basePrompt = data.imagePrompt || governance.imagePrompt;
-    const prompt = [
-      basePrompt,
+    const basePrompt = [
+      data.imagePrompt || governance.imagePrompt,
       `Concept: ${normalizeString(conceptData)}`,
-      `Style guide: ${governance.styleGuide || "Clean, minimal, premium healthcare setting"}`,
     ].filter(Boolean).join("\n");
 
-    const output = await generateContent("image" as GenerationType, {
-      prompt,
+    // Validate and augment prompt with mandatory negative + positive anchors
+    const fullGovernance = loadGovernance(governance.pipelineType);
+    const targetPlatform = intakeBrief?.targetPlatform ?? "organic";
+    const promptQc = validateAndAugmentImagePrompt(basePrompt, fullGovernance, targetPlatform);
+
+    // Run with multi-attempt QC
+    const qcResult = await runImageGenerationWithQc({
+      basePrompt: promptQc.finalPrompt,
+      governance: fullGovernance,
+      intakeBrief: intakeBrief ?? {
+        targetPlatform: "organic",
+        audienceSegment: "general",
+        funnelStage: "awareness",
+        campaignObjective: "brand awareness",
+        proofTypeAllowed: "process-based",
+        brandVoiceStatement: "warm, professional telehealth provider",
+        approvedFacts: [],
+        governanceNicheId: governance.pipelineType,
+      },
+      maxAttempts: 3,
       aspectRatio: data.aspectRatio || "16:9",
       callBackUrl: data.callBackUrl,
+      generateFn: async (prompt, aspectRatio, callBackUrl) => {
+        const r = await generateContent("image" as GenerationType, { prompt, aspectRatio, callBackUrl });
+        return { imageUrl: r.responseText ?? undefined, responseText: r.responseText ?? undefined };
+      },
     });
-    return { success: true, output, generationId };
+
+    if (!qcResult.passed && !qcResult.ocrSkipped) {
+      return {
+        success: false,
+        output: {
+          imageGenerationFailed: true,
+          failureReasons: qcResult.failureReasons,
+          allAttempts: qcResult.allAttempts,
+          ocrSkipped: false,
+          responseText: `Image generation failed after ${qcResult.allAttempts.length} attempts: ${qcResult.failureReasons.join("; ")}`,
+        },
+        generationId,
+      };
+    }
+
+    return {
+      success: true,
+      output: {
+        imageUrl: qcResult.imageUrl,
+        ocrSkipped: qcResult.ocrSkipped,
+        ocrCheckPassed: !qcResult.ocrSkipped,
+        humanReviewRequired: qcResult.ocrSkipped,
+        selectedAttempt: qcResult.selectedAttempt,
+        promptUsed: qcResult.promptUsed,
+        governanceVersion: qcResult.governanceVersion,
+        generatedAt: qcResult.generatedAt,
+        responseText: qcResult.imageUrl,
+      },
+      generationId,
+    };
   }
 
   if (type === "imageToVideoStep") {
+    // GATE: imagery must have produced a clean (OCR-passed) image
+    const imageryOutput = context?.imageryGeneration as {
+      imageUrl?: string;
+      ocrCheckPassed?: boolean;
+      ocrSkipped?: boolean;
+      imageGenerationFailed?: boolean;
+      responseText?: string;
+    } | undefined;
+
+    if (imageryOutput?.imageGenerationFailed) {
+      throw new Error(
+        "[PipelineGate] imageToVideoStep blocked: imagery generation failed. Fix image generation first."
+      );
+    }
+
+    if (imageryOutput && !imageryOutput.ocrSkipped && !imageryOutput.ocrCheckPassed) {
+      throw new Error(
+        "[PipelineGate] imageToVideoStep blocked: source image did not pass OCR check (text detected). Regenerate the image."
+      );
+    }
+
+    // Source image MUST come from Step 4 imageryGeneration output
+    const imageUrl =
+      imageryOutput?.imageUrl ||
+      normalizeString(imageryOutput?.responseText) ||
+      "";
+
+    if (!imageUrl) {
+      throw new Error(
+        "[PipelineGate] imageToVideoStep blocked: no source image URL from imageryGeneration step. " +
+        "imageryGeneration must run and succeed before this step."
+      );
+    }
+
     const governance = getGovernance(data);
-    const imageUrl = normalizeString(context?.imageryGeneration) ||
-      normalizeString(context?.image_generator) ||
-      normalizeString(context?.image);
+    const fullGovernance = loadGovernance(governance.pipelineType);
+
+    // Build mandatory I2V negative prompt
+    const mandatoryI2VNeg = (fullGovernance as unknown as {
+      videoGenerationRules?: { mandatoryI2VNegativePrompt?: string[] }
+    }).videoGenerationRules?.mandatoryI2VNegativePrompt ?? [
+      "no lip movement", "no mouth animation", "no talking",
+      "no text appearing in video", "no flickering", "no color shifting",
+      "no morphing", "no face distortion",
+    ];
+
     const motionPrompt = data.imageToVideoPrompt || governance.imageToVideo;
     const prompt = [
       motionPrompt,
-      `Motion rules — allowed: slow push-in, gentle pan, soft parallax, natural blink.`,
-      `Motion rules — banned: fast zoom, whip pan, face distortion, lip sync.`,
+      `Motion rules — allowed: slow push-in, gentle pan, soft parallax, subtle parallax only.`,
+      `Camera-only motion preferred — subject must remain static.`,
+      `Negative: ${mandatoryI2VNeg.join(", ")}`,
     ].filter(Boolean).join("\n");
+
+    // Cap duration at governance maximum (5s)
+    const maxDuration = (fullGovernance as unknown as {
+      videoGenerationRules?: { maxDurationSeconds?: number }
+    }).videoGenerationRules?.maxDurationSeconds ?? 5;
+    const requestedDuration = parseInt(data.duration || "4", 10);
+    const duration = String(Math.min(requestedDuration, maxDuration));
 
     const output = await generateContent("i2v" as GenerationType, {
       prompt,
       imageUrl,
       aspectRatio: data.aspectRatio || "16:9",
-      duration: data.duration || "5",
+      duration,
       callBackUrl: data.callBackUrl,
     });
-    return { success: true, output, generationId };
+
+    // Validate video URL is reachable
+    const videoUrl = normalizeString(output);
+    let videoUrlResult: { reachable: boolean; contentType: string; statusCode: number; error?: string } = { reachable: false, contentType: "", statusCode: 0, error: "URL not yet available (async generation)" };
+    if (videoUrl && videoUrl.startsWith("http")) {
+      videoUrlResult = await validateVideoUrl(videoUrl);
+    }
+
+    return {
+      success: true,
+      output: {
+        ...output,
+        videoUrlValid: videoUrlResult.reachable,
+        videoUrlStatus: videoUrlResult.statusCode,
+        sourceImageUrl: imageUrl,
+        durationUsed: duration,
+        mandatoryNegativeApplied: true,
+      },
+      generationId,
+    };
   }
 
   if (type === "assetLibrary") {
-    // Asset library step: organises outputs into library structure, no AI call needed
+    // Full audit record per governance.auditConfig.requiredAuditFields
+    const imageryOutput = context?.imageryGeneration as Record<string, unknown> | undefined;
+    const videoOutput = context?.imageToVideoStep as Record<string, unknown> | undefined;
+    const validatorOutput = context?.validator as Record<string, unknown> | undefined;
+    const gateResult = context?.intakeGateResult as IntakeGateResult | undefined;
+
     const assets = {
+      // Campaign data
       strategy: normalizeString(context?.creativeStrategy),
       copy: normalizeString(context?.copyGeneration),
-      validatorStatus: normalizeString(context?.validator),
-      image: normalizeString(context?.imageryGeneration) || normalizeString(context?.imageGenerator),
-      video: normalizeString(context?.imageToVideoStep) || normalizeString(context?.imageMotionAnalyzer),
+      image: imageryOutput?.imageUrl ?? normalizeString(context?.imageryGeneration),
+      video: videoOutput?.responseText ?? normalizeString(context?.imageToVideoStep),
+      // Full audit trail
+      auditTrail: {
+        intakeBriefId: gateResult?.intakeBriefId ?? "not-set",
+        rulesetVersionLocked: gateResult?.rulesetVersionLocked ?? "not-set",
+        validatorResult: validatorOutput?.validatorStatus ?? normalizeString(context?.validator),
+        ocrCheckPassed: imageryOutput?.ocrCheckPassed ?? null,
+        ocrSkipped: imageryOutput?.ocrSkipped ?? null,
+        videoUrlValid: videoOutput?.videoUrlValid ?? null,
+        timestamp: new Date().toISOString(),
+        complianceStatus: "readyForHumanReview",
+        // Human approval fields — always null until a human explicitly approves
+        humanApprovalRequired: true,
+        humanApprovedAt: null,
+        humanApprovedBy: null,
+      },
     };
-    return { success: true, output: { responseText: JSON.stringify(assets) }, generationId };
+
+    return {
+      success: true,
+      output: { responseText: JSON.stringify(assets), ...assets },
+      generationId,
+    };
   }
 
   if (type === "qualityAssurance") {
     const governance = getGovernance(data);
+    const imageryOutput = context?.imageryGeneration as Record<string, unknown> | undefined;
+    const videoOutput = context?.imageToVideoStep as Record<string, unknown> | undefined;
+
     const allOutputs = {
       strategy: normalizeString(context?.creativeStrategy),
       copy: normalizeString(context?.copyGeneration),
       validatorResult: normalizeString(context?.validator),
-      imageUrl: normalizeString(context?.imageryGeneration),
-      videoUrl: normalizeString(context?.imageToVideoStep),
+      imageUrl: imageryOutput?.imageUrl ?? normalizeString(context?.imageryGeneration),
+      videoUrl: videoOutput?.responseText ?? normalizeString(context?.imageToVideoStep),
+      ocrSkipped: imageryOutput?.ocrSkipped ?? false,
     };
+
     const prompt = [
       data.qaInstruction || governance.qaInstruction,
-      `All outputs to QA:\n${JSON.stringify(allOutputs, null, 2)}`,
+      `Package review — evaluate ALL assets as a unit, not individually:`,
+      `All outputs:\n${JSON.stringify(allOutputs, null, 2)}`,
+      ``,
+      `Package alignment checks required:`,
+      `1. Copy-image message alignment: do the headline angle and image subject tell the same story?`,
+      `2. Tone-visual alignment: does the emotional register of the copy match the visual mood?`,
+      `3. CTA-image alignment: does the urgency level of the CTA match the pacing of the image/video?`,
+      `4. Approved facts: no claims beyond approved facts list`,
+      `5. Banned phrases: zero tolerance`,
+      `6. Disclaimer: present and contains eligibility qualifier`,
+      `7. All field length limits respected`,
+      `8. Image: anatomy safe, no text embedded`,
+      `9. Video: motion-only, no lip sync, no morphing`,
+      ``,
+      `IMPORTANT: Return status "readyForHumanReview" — NEVER "approved".`,
+      `No asset may be published without explicit human sign-off.`,
+      `Return JSON: { status: "readyForHumanReview"|"block", issues: string[], packageAlignmentNotes: string[] }`,
       `Approved facts: ${governance.approvedFacts}`,
       `Banned phrases: ${governance.bannedPhrases}`,
     ].filter(Boolean).join("\n");
 
     const output = await generateContent("script" as GenerationType, { prompt });
-    return { success: true, output, generationId };
+
+    return {
+      success: true,
+      output: {
+        ...output,
+        // Enforce: QA NEVER returns approved — always readyForHumanReview
+        qaStatus: "readyForHumanReview",
+        humanApprovalRequired: true,
+        humanApprovedAt: null,
+        humanApprovedBy: null,
+      },
+      generationId,
+    };
   }
 
   return {

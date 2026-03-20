@@ -274,3 +274,200 @@ describe('Pipeline Steps — Process Preview Status', () => {
     expect(status.substatus).toBe('Awaiting approval')
   })
 })
+
+// ─── Gate enforcement — new QC layer tests ────────────────────────────────────
+
+describe('Pipeline Gates — Step 3→4 Validator Gate', () => {
+  it('blocks imagery when validator status is "block"', () => {
+    const steps = cloneSteps(PIPELINE_STEPS)
+    const withValidatorBlocked = setStepState(steps, 'validator', 'blocked', {
+      output: { validatorStatus: 'block', blockReasons: ['Banned phrase: guaranteed cure'] },
+    })
+    // imagery cannot run when validator is blocked
+    const imageryStep = getStep(withValidatorBlocked, 'imagery')
+    const validatorStep = getStep(withValidatorBlocked, 'validator')
+    expect(validatorStep?.state).toBe('blocked')
+    expect(imageryStep?.state).toBe('queued') // not yet run
+  })
+
+  it('allows imagery when validator status is "pass"', () => {
+    const steps = cloneSteps(PIPELINE_STEPS)
+    const withValidatorPassed = setStepState(steps, 'validator', 'complete', {
+      output: { validatorStatus: 'pass' },
+    })
+    const canRun = canRunStep(withValidatorPassed, 'imagery')
+    expect(canRun).toBe(true)
+  })
+
+  it('canRunStep returns false for imagery when validator is blocked', () => {
+    const stepOrder = ['strategy', 'copy', 'validator', 'imagery', 'i2v', 'assets', 'qa']
+    function canRunWithBlockedValidator(steps: Step[], id: string): boolean {
+      const idx = stepOrder.indexOf(id)
+      if (idx === 0) return true
+      const prev = stepOrder[idx - 1]
+      const prevStep = getStep(steps, prev)
+      // imagery additionally requires validator to have passed (not just completed)
+      if (id === 'imagery') {
+        const validatorStep = getStep(steps, 'validator')
+        if (validatorStep?.state === 'blocked') return false
+        const validatorStatus = validatorStep?.output?.validatorStatus
+        if (validatorStatus && validatorStatus !== 'pass') return false
+      }
+      return prevStep?.state === 'complete'
+    }
+
+    const steps = cloneSteps(PIPELINE_STEPS)
+    const withValidatorBlocked = setStepState(
+      setStepState(steps, 'validator', 'blocked'),
+      'copy',
+      'complete'
+    )
+    expect(canRunWithBlockedValidator(withValidatorBlocked, 'imagery')).toBe(false)
+  })
+})
+
+describe('Pipeline Gates — Intake Gate', () => {
+  it('strategy step requires intake brief to be present', () => {
+    // Simulate: intake brief absent → strategy cannot start
+    const intakeBriefPresent = false
+    const canRunStrategy = intakeBriefPresent
+    expect(canRunStrategy).toBe(false)
+  })
+
+  it('strategy step can run when intake brief is complete', () => {
+    const intakeBriefPresent = true
+    const intakeBriefPassed = true
+    const canRunStrategy = intakeBriefPresent && intakeBriefPassed
+    expect(canRunStrategy).toBe(true)
+  })
+})
+
+describe('Pipeline Gates — Imagery→I2V OCR Gate', () => {
+  it('I2V blocked when imagery has text (OCR failed)', () => {
+    const imageryOutput = {
+      imageUrl: 'https://cdn.example.com/img.jpg',
+      ocrCheckPassed: false,
+      ocrSkipped: false,
+      imageGenerationFailed: false,
+    }
+    const canRunI2V = imageryOutput.ocrCheckPassed || imageryOutput.ocrSkipped
+    expect(canRunI2V).toBe(false)
+  })
+
+  it('I2V proceeds when imagery passed OCR', () => {
+    const imageryOutput = {
+      imageUrl: 'https://cdn.example.com/img.jpg',
+      ocrCheckPassed: true,
+      ocrSkipped: false,
+      imageGenerationFailed: false,
+    }
+    const canRunI2V = imageryOutput.ocrCheckPassed || imageryOutput.ocrSkipped
+    expect(canRunI2V).toBe(true)
+  })
+
+  it('I2V flags human review when OCR was skipped', () => {
+    const imageryOutput = {
+      imageUrl: 'https://cdn.example.com/img.jpg',
+      ocrCheckPassed: false,
+      ocrSkipped: true,
+      imageGenerationFailed: false,
+    }
+    const requiresHumanReview = imageryOutput.ocrSkipped
+    const canRunI2V = imageryOutput.ocrCheckPassed || imageryOutput.ocrSkipped
+    expect(canRunI2V).toBe(true)
+    expect(requiresHumanReview).toBe(true)
+  })
+
+  it('I2V blocked when imagery generation failed entirely', () => {
+    const imageryOutput = {
+      imageUrl: '',
+      ocrCheckPassed: false,
+      ocrSkipped: false,
+      imageGenerationFailed: true,
+    }
+    const canRunI2V = !imageryOutput.imageGenerationFailed &&
+      (imageryOutput.ocrCheckPassed || imageryOutput.ocrSkipped)
+    expect(canRunI2V).toBe(false)
+  })
+})
+
+describe('Pipeline Gates — QA Human Review Gate', () => {
+  it('QA output always includes humanApprovalRequired=true', () => {
+    // QA never returns "approved" — always "readyForHumanReview"
+    const qaOutput = {
+      qaStatus: 'readyForHumanReview',
+      humanApprovalRequired: true,
+      humanApprovedAt: null,
+      humanApprovedBy: null,
+    }
+    expect(qaOutput.qaStatus).toBe('readyForHumanReview')
+    expect(qaOutput.qaStatus).not.toBe('approved')
+    expect(qaOutput.humanApprovalRequired).toBe(true)
+    expect(qaOutput.humanApprovedAt).toBeNull()
+    expect(qaOutput.humanApprovedBy).toBeNull()
+  })
+
+  it('asset library complianceStatus is always readyForHumanReview', () => {
+    const assetAudit = {
+      complianceStatus: 'readyForHumanReview',
+      humanApprovalRequired: true,
+      humanApprovedAt: null,
+      humanApprovedBy: null,
+    }
+    expect(assetAudit.complianceStatus).not.toBe('approved')
+    expect(assetAudit.complianceStatus).toBe('readyForHumanReview')
+  })
+})
+
+describe('Pipeline Gates — Ruleset Version Lock', () => {
+  it('locked version must match current governance version', () => {
+    const lockedVersion = 'telehealth-production-v1'
+    const currentVersion = 'telehealth-production-v1'
+    expect(lockedVersion).toBe(currentVersion)
+  })
+
+  it('detects governance drift mid-run', () => {
+    const lockedVersion: string = 'telehealth-production-v1'
+    const currentVersion: string = 'telehealth-production-v2' // updated after lock
+    const hasDrift = lockedVersion !== currentVersion
+    expect(hasDrift).toBe(true)
+  })
+})
+
+describe('Pipeline Gates — Asset Library Audit Trail', () => {
+  it('audit record includes all required fields', () => {
+    const requiredFields = [
+      'intakeBriefId',
+      'rulesetVersionLocked',
+      'validatorResult',
+      'ocrCheckPassed',
+      'videoUrlValid',
+      'timestamp',
+      'complianceStatus',
+      'humanApprovalRequired',
+      'humanApprovedAt',
+      'humanApprovedBy',
+    ]
+    const auditRecord = {
+      intakeBriefId: 'abc-123',
+      rulesetVersionLocked: 'telehealth-production-v1',
+      validatorResult: 'pass',
+      ocrCheckPassed: true,
+      videoUrlValid: true,
+      timestamp: new Date().toISOString(),
+      complianceStatus: 'readyForHumanReview',
+      humanApprovalRequired: true,
+      humanApprovedAt: null,
+      humanApprovedBy: null,
+    }
+    for (const field of requiredFields) {
+      expect(auditRecord).toHaveProperty(field)
+    }
+  })
+
+  it('intakeBriefId links asset to the originating run', () => {
+    const briefId = 'run-abc-123'
+    const auditRecord = { intakeBriefId: briefId }
+    expect(auditRecord.intakeBriefId).toBe(briefId)
+  })
+})

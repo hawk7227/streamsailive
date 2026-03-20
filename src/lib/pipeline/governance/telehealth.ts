@@ -207,6 +207,126 @@ Allowed: slow push-in, gentle pan, soft parallax, natural blink, subtle fabric m
 Banned: fast zoom, whip pan, face distortion, lip sync simulation, mouth talking.
 Max 40 words. Return the motion prompt as a plain string.`,
 
+  // ─── Brand voice document ─────────────────────────────────────────────────
+  brandVoiceDocument: {
+    personality: ["warm", "direct", "trustworthy", "discreet", "premium"] as string[],
+    notPersonality: ["clinical", "cold", "salesy", "urgent", "aggressive", "overly casual"] as string[],
+    approvedVocabulary: [
+      "provider", "care", "visit", "intake", "eligible", "review",
+      "private", "secure", "start", "connect", "easy",
+    ] as string[],
+    forbiddenVocabulary: [
+      "cure", "fix", "guaranteed", "instant", "rush", "emergency",
+      "skip", "quick fix", "no wait", "right now guaranteed",
+    ] as string[],
+    toneScoringRubric: {
+      warmth: "Does copy feel human and supportive, not transactional?",
+      clarity: "Is the process described simply without jargon?",
+      credibility: "Does copy establish provider competence without overclaiming?",
+      frictionless: "Does the CTA feel low-commitment and easy?",
+    },
+  },
+
+  // ─── Image generation rules ───────────────────────────────────────────────
+  imageGenerationRules: {
+    // Every image prompt MUST include these in the negative prompt — no exceptions
+    mandatoryNegativeElements: [
+      "no text", "no words", "no letters", "no signs", "no labels",
+      "no captions", "no watermarks",
+      "no distorted hands", "no extra fingers", "no fused fingers",
+      "no floating limbs", "no extra limbs", "no missing limbs",
+      "no asymmetric face", "no dead eyes", "no plastic skin",
+      "no uncanny valley", "no stock photography look",
+      "no before/after framing", "no clinical equipment prominently shown",
+      "no stethoscope on patient", "no diagnostic imagery",
+    ] as string[],
+    // Every image prompt MUST include these positive anchors
+    mandatoryPositiveAnchors: [
+      "natural expression", "symmetric features", "photorealistic",
+      "warm lighting", "soft natural light", "genuine warm smile",
+      "relaxed professional pose",
+    ] as string[],
+    // Hand strategy — prefer hands not visible; if visible, explicit safe position required
+    handlingRule: "hands-not-visible-preferred" as const,
+    // Minimum generation attempts before accepting output
+    generationAttempts: 3 as number,
+    // OCR scan required after every generation — must be text-free
+    ocrCheckRequired: true as boolean,
+    // Platform-specific composition rules
+    platformCompositionRule: {
+      meta: "subject in left third — right two-thirds clear for text overlay",
+      google: "centered subject with clear background",
+      tiktok: "centered vertical subject, clear space above and below",
+      instagram: "centered subject, square-safe composition",
+      organic: "centered subject with breathing room",
+    } as Record<string, string>,
+  },
+
+  // ─── Typography layer (Step 4.5) ──────────────────────────────────────────
+  typographyLayer: {
+    // Text MUST NOT be generated inside AI images — ever
+    textMustNotBeInImage: true as boolean,
+    // Compositing is mandatory — image + copy must be merged into one asset
+    compositingRequired: true as boolean,
+    // Order of text layers applied to image (bottom to top render order)
+    compositionOrder: ["disclaimer", "subheadline", "headline", "cta"] as string[],
+    // disclaimer always rendered first (lowest z-index, smallest, least prominent)
+    // headline rendered over everything else (highest z-index, most prominent)
+    spellCheckBeforeOverlay: true as boolean,
+  },
+
+  // ─── Video generation rules ───────────────────────────────────────────────
+  videoGenerationRules: {
+    // Below temporal coherence degradation threshold
+    maxDurationSeconds: 5 as number,
+    minDurationSeconds: 3 as number,
+    // Source image for I2V must come from the Step 4 output — not an arbitrary URL
+    sourceImageMustBeFromStep4: true as boolean,
+    // Mandatory I2V negative prompt — appended to every I2V call
+    mandatoryI2VNegativePrompt: [
+      "no lip movement", "no mouth animation", "no talking",
+      "no text appearing in video", "no flickering", "no color shifting",
+      "no morphing", "no face distortion", "no body morphing",
+      "no rapid movement", "no shaking",
+    ] as string[],
+    // Camera-only motion preference — subject static, camera moves only
+    // Eliminates: blink pattern risk, lip sync risk, appearance drift risk
+    preferredMotion: "camera-only" as const,
+    // Video URL must be validated as reachable after generation
+    videoUrlValidationRequired: true as boolean,
+  },
+
+  // ─── Pipeline step gates ──────────────────────────────────────────────────
+  pipelineGates: {
+    // Intake brief required before strategy step can run
+    intakeRequiredBeforeStrategy: true as boolean,
+    // Validator must return 'pass' before imagery generation can run
+    validatorMustPassBeforeImagery: true as boolean,
+    // Image OCR must pass before I2V can run
+    imageryMustPassOcrBeforeI2V: true as boolean,
+    // QA never returns 'approved' — always 'readyForHumanReview'
+    qaReturnsHumanReviewOnly: true as boolean,
+  },
+
+  // ─── Audit config ─────────────────────────────────────────────────────────
+  auditConfig: {
+    // Every asset in the asset library must carry all of these fields
+    requiredAuditFields: [
+      "intakeBriefId",
+      "rulesetVersionLocked",
+      "provider",
+      "promptUsed",
+      "generationAttemptN",
+      "validatorResult",
+      "ocrCheckPassed",
+      "videoUrlValid",
+      "timestamp",
+      "complianceStatus",
+    ] as string[],
+    // complianceStatus is always this value — never 'approved'
+    defaultComplianceStatus: "readyForHumanReview" as const,
+  },
+
   qaInstruction: `You are the final quality assurance gatekeeper for telehealth advertising assets.
 
 Perform a complete checklist review:
