@@ -824,7 +824,7 @@ export async function executeNode(node: any, context: any) {
       `User instruction: ${replaceVariables(data.strategyPrompt || gov.strategyPrompt, context)}`,
     ].filter(Boolean).join("\n");
 
-    const output = await generateContent("script" as GenerationType, { prompt: contextPrompt });
+    const output = await generateContent("script" as GenerationType, { prompt: contextPrompt, model: "gpt-4o", temperature: 0.5 });
     return {
       success: true,
       output: { ...output, rulesetVersionLocked: gov.rulesetVersion },
@@ -850,7 +850,7 @@ export async function executeNode(node: any, context: any) {
       `Temperature: 0.3 — factual accuracy over creativity`,
     ].filter(Boolean).join("\n");
 
-    const output = await generateContent("script" as GenerationType, { prompt });
+    const output = await generateContent("script" as GenerationType, { prompt, model: "gpt-4o", temperature: 0.3 });
     return { success: true, output, generationId };
   }
 
@@ -858,7 +858,11 @@ export async function executeNode(node: any, context: any) {
     // Multi-layer validator: deterministic layers 1-6 first, AI layer 7 last
     // Layer 1 (banned phrases) always runs. Block from layer 1 cannot be overridden.
     const governance = getGovernance(data);
-    const copyToValidate = normalizeString(context?.copyGeneration) || normalizeString(context?.copy);
+    // Extract responseText from copy step output — context stores GenerationResult objects
+    const copyOutput = context?.copyGeneration as { responseText?: string | null } | string | null | undefined;
+    const copyToValidate = (typeof copyOutput === "object" && copyOutput?.responseText)
+      ? copyOutput.responseText
+      : normalizeString(context?.copyGeneration) || normalizeString(context?.copy);
 
     const prompt = [
       data.validatorPrompt || governance.validatorPrompt,
@@ -871,22 +875,37 @@ export async function executeNode(node: any, context: any) {
       `Return JSON: { status: "pass"|"softFail"|"block", blockReasons: string[], softFailReasons: string[], warnings: string[] }`,
     ].filter(Boolean).join("\n");
 
-    const output = await generateContent("script" as GenerationType, { prompt });
+    const output = await generateContent("script" as GenerationType, { prompt, model: "gpt-4o", temperature: 0.1 });
 
-    // Parse validator status to enforce the Step 3→4 gate
+    // Parse compliance status from responseText — NOT from the GenerationResult wrapper.
+    // output.status = provider status ("completed"/"failed").
+    // Compliance status ("pass"/"softFail"/"block") lives inside output.responseText as JSON.
     let validatorStatus = "unknown";
+    let blockReasons: string[] = [];
+    let softFailReasons: string[] = [];
+    let validatorWarnings: string[] = [];
     try {
-      const raw = normalizeString(output);
-      const clean = raw.replace(/\`\`\`json\s*/gi, "").replace(/\`\`\`\s*/gi, "").trim();
-      const parsed = JSON.parse(clean) as { status?: string };
+      const raw = output.responseText ?? "";
+      const clean = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+      const parsed = JSON.parse(clean) as {
+        status?: string;
+        blockReasons?: string[];
+        softFailReasons?: string[];
+        warnings?: string[];
+      };
       validatorStatus = parsed.status ?? "unknown";
+      blockReasons = parsed.blockReasons ?? [];
+      softFailReasons = parsed.softFailReasons ?? [];
+      validatorWarnings = parsed.warnings ?? [];
     } catch {
-      validatorStatus = "unknown";
+      // GPT-4o returned non-JSON — default to softFail so copy can be reviewed
+      validatorStatus = "softFail";
+      softFailReasons = ["Validator response could not be parsed — manual review required"];
     }
 
     return {
       success: true,
-      output: { ...output, validatorStatus },
+      output: { ...output, validatorStatus, blockReasons, softFailReasons, warnings: validatorWarnings },
       generationId,
     };
   }
@@ -905,7 +924,14 @@ export async function executeNode(node: any, context: any) {
 
     const governance = getGovernance(data);
     const intakeBrief = context?.intakeBrief as IntakeBrief | undefined;
-    const conceptData = context?.selectedConcept || context?.copy || "";
+    // Extract text content from context — steps pass GenerationResult objects
+    const copyResult = context?.copyGeneration as { responseText?: string | null } | null | undefined;
+    const strategyResult = context?.creativeStrategy as { responseText?: string | null } | null | undefined;
+    const conceptData = context?.selectedConcept
+      || (copyResult?.responseText ?? null)
+      || (strategyResult?.responseText ?? null)
+      || context?.copy
+      || "";
     const basePrompt = [
       data.imagePrompt || governance.imagePrompt,
       `Concept: ${normalizeString(conceptData)}`,
@@ -935,7 +961,7 @@ export async function executeNode(node: any, context: any) {
       callBackUrl: data.callBackUrl,
       generateFn: async (prompt, aspectRatio, callBackUrl) => {
         const r = await generateContent("image" as GenerationType, { prompt, aspectRatio, callBackUrl });
-        return { imageUrl: r.responseText ?? undefined, responseText: r.responseText ?? undefined };
+        return { imageUrl: r.outputUrl ?? r.responseText ?? undefined, responseText: r.outputUrl ?? r.responseText ?? undefined };
       },
     });
 
@@ -1103,10 +1129,18 @@ export async function executeNode(node: any, context: any) {
     const imageryOutput = context?.imageryGeneration as Record<string, unknown> | undefined;
     const videoOutput = context?.imageToVideoStep as Record<string, unknown> | undefined;
 
+    // Extract text content from GenerationResult objects stored in context
+    const extractText = (v: unknown): string => {
+      if (!v) return "";
+      if (typeof v === "string") return v;
+      const r = v as Record<string, unknown>;
+      if (typeof r.responseText === "string") return r.responseText;
+      return JSON.stringify(v);
+    };
     const allOutputs = {
-      strategy: normalizeString(context?.creativeStrategy),
-      copy: normalizeString(context?.copyGeneration),
-      validatorResult: normalizeString(context?.validator),
+      strategy: extractText(context?.creativeStrategy),
+      copy: extractText(context?.copyGeneration),
+      validatorResult: extractText(context?.validator),
       imageUrl: imageryOutput?.imageUrl ?? normalizeString(context?.imageryGeneration),
       videoUrl: videoOutput?.responseText ?? normalizeString(context?.imageToVideoStep),
       ocrSkipped: imageryOutput?.ocrSkipped ?? false,
@@ -1135,7 +1169,7 @@ export async function executeNode(node: any, context: any) {
       `Banned phrases: ${governance.bannedPhrases}`,
     ].filter(Boolean).join("\n");
 
-    const output = await generateContent("script" as GenerationType, { prompt });
+    const output = await generateContent("script" as GenerationType, { prompt, model: "gpt-4o", temperature: 0.1 });
 
     return {
       success: true,

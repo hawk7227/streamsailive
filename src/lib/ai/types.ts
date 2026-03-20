@@ -9,6 +9,8 @@ export interface GenerationOptions {
     imageUrl?: string;       // For image-to-video (I2V)
     callBackUrl?: string;    // Webhook URL for async completion
     mode?: "standard" | "pro";
+    temperature?: number;    // 0.0–2.0 — governance steps use 0.3
+    model?: string;          // Override model e.g. "gpt-4o" for compliance steps
 }
 
 export interface GenerationResult {

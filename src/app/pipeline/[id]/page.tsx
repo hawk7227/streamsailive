@@ -171,8 +171,17 @@ export default function PipelineBuilder() {
   // Intake brief — required before the 7-step governance pipeline can run
   const [intakeBrief, setIntakeBrief] = useState<Partial<IntakeBrief>>({
     governanceNicheId: "telehealth",
-    proofTypeAllowed: "process-based",
+    targetPlatform: "meta",
     funnelStage: "consideration",
+    proofTypeAllowed: "process-based",
+    audienceSegment: "",
+    campaignObjective: "",
+    brandVoiceStatement: "",
+    approvedFacts: [
+      "Secure online intake is available.",
+      "A licensed provider may review submitted information.",
+      "Eligibility may depend on provider review and applicable requirements.",
+    ],
   });
   const [intakeGateResult, setIntakeGateResult] = useState<IntakeGateResult | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
@@ -528,11 +537,25 @@ export default function PipelineBuilder() {
           // Special propagation for validator gate
           if (step === "validator") {
             const validatorOut = output as Record<string, unknown> | null;
-            const status = validatorOut?.validatorStatus ?? "unknown";
+            const status = (validatorOut?.validatorStatus as string) ?? "unknown";
             context.validator = { ...(validatorOut ?? {}), validatorStatus: status };
+            if (status === "block") {
+              setStep(step, "blocked");
+              const reasons = (validatorOut?.blockReasons as string[] | undefined) ?? [];
+              const detail = reasons.length > 0 ? ` — ${reasons[0]}` : "";
+              setGateError(`Validator blocked (hard stop)${detail}. Banned phrase or diagnostic claim detected. Edit copy and re-run.`);
+              return;
+            }
+            if (status === "softFail") {
+              setStep(step, "blocked");
+              const reasons = (validatorOut?.softFailReasons as string[] | undefined) ?? [];
+              const detail = reasons.length > 0 ? ` — ${reasons[0]}` : "";
+              setGateError(`Validator soft-fail${detail}. Fix copy issues and re-run.`);
+              return;
+            }
             if (status !== "pass") {
               setStep(step, "blocked");
-              setGateError(`Validator blocked: ${status}. Fix copy issues before imagery can run.`);
+              setGateError(`Validator returned unexpected status "${status}". Check copy and re-run.`);
               return;
             }
           }
@@ -916,7 +939,12 @@ export default function PipelineBuilder() {
                         {Boolean(output) && state === 'complete' && (
                           <div className="mt-1.5 pl-6">
                             <pre className="text-[10px] text-white/40 truncate font-mono">
-                              {(typeof output === 'string' ? output : JSON.stringify(output ?? '')).slice(0, 80)}…
+                              {(() => {
+                                if (typeof output === 'string') return output.slice(0, 80);
+                                const o = output as Record<string, unknown> | null;
+                                const text = o?.responseText ?? o?.imageUrl ?? JSON.stringify(o ?? '');
+                                return String(text).slice(0, 80);
+                              })()}…
                             </pre>
                           </div>
                         )}

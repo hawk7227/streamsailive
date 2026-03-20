@@ -30,8 +30,9 @@ export class OpenAIProvider implements AIProvider {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
+                model: options.model || "gpt-4o",
                 messages: [{ role: "user", content: options.prompt }],
+                temperature: options.temperature ?? 0.7,
             }),
         });
 
