@@ -236,6 +236,7 @@ export default function PipelineTestPage() {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId, provider: "openai" }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
@@ -272,6 +273,7 @@ export default function PipelineTestPage() {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ type: imageUrl ? "i2v" : "video", prompt, duration: "5", aspectRatio: "16:9", conceptId, imageUrl }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
@@ -463,6 +465,7 @@ export default function PipelineTestPage() {
                 const genRes = await fetch("/api/generations", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "include",
                   body: JSON.stringify({
                     type: "image",
                     prompt: "Photorealistic healthcare professional in a clean modern clinic, soft natural lighting, warm professional atmosphere, no text, no words, no letters, no watermarks, high quality",
