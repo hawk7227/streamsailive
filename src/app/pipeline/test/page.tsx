@@ -59,13 +59,116 @@ export default function PipelineTestPage() {
 
   // Step prompts — keyed by step id
   const [stepPrompts, setStepPrompts] = useState<Record<string, string>>({
-    strategy:  "You are a senior healthcare brand strategist. Build a compliant telehealth creative strategy.",
-    copy:      "Write 3 compliant telehealth copy variants. Headline ≤8 words. CTA ≤4 words.",
-    validator: "Validate copy against telehealth governance. Block banned phrases and diagnostic claims.",
-    imagery:   "Photorealistic real woman in her 30s sitting on a couch looking at her smartphone with a relaxed confident smile. Warm living room. Soft natural window light. Casual but put-together clothing. She is clearly comfortable and at ease. Shot on Canon EOS R5, 85mm f/1.4, shallow depth of field. Cinematic color grade, warm tones. No text, no words, no letters, no labels, no watermarks, no stethoscopes, no clinical equipment, no distorted hands, no extra fingers, photorealistic, not stock photography.",
-    i2v:       "Slow push-in toward provider. Soft parallax on background. Natural blink. 5 seconds.",
-    assets:    "Organise all outputs into a structured asset library.",
-    qa:        "Final compliance QA. Check all outputs against governance ruleset.",
+    strategy: `You are generating a premium telehealth marketing image.
+
+Goal:
+Create a HIGH-CONVERSION, PHOTO-REALISTIC telehealth scenario image that feels like a real moment — NOT stock, NOT staged, NOT generic.
+
+This image must:
+- Look like a real patient using telehealth naturally
+- Include emotional clarity (relief, confidence, ease)
+- Show outcome or progress (NOT just a person holding a phone)
+- Feel premium, modern, and mobile-first
+- Be believable enough for a healthcare landing page
+
+Scene requirements:
+- Real human subject (diverse, natural, not model-like posing)
+- Clear context (home, couch, bedroom, clean environment)
+- Device interaction (phone in hand, looking at screen)
+- Subtle medical relevance (medication, UI overlay, confirmation state)
+
+Visual style:
+- Soft natural lighting
+- Shallow depth of field
+- Clean composition
+- No harsh shadows
+- Premium lifestyle photography
+
+DO NOT:
+- Use flat backgrounds
+- Use cartoon UI
+- Use generic smiling-with-phone stock poses
+- Use overly staged clinical scenes`,
+
+    copy: `Generate minimal overlay UI content that feels real, not designed.
+
+Overlay must include:
+- Small status badge (top left): "FAST" or "APPROVED"
+- Confirmation state (ex: "Refill Approved")
+- 1–2 realistic medication or outcome indicators
+- Subtle UI card (not heavy panel)
+
+Tone:
+- Calm
+- Clinical but human
+- Simple, not marketing-heavy
+
+Example structure:
+Badge: FAST
+Title: Refill Approved
+Items:
+✓ Lisinopril
+✓ Ready for Pickup
+
+DO NOT:
+- Add paragraphs
+- Add marketing slogans
+- Over-design UI`,
+
+    validator: `Reject image if:
+- It looks like stock photography cliché
+- The subject is overly posed or unrealistic
+- UI overlay looks fake or cartoonish
+- Lighting is artificial or harsh
+- Scene lacks clear context (just a person + phone)
+
+Accept only if:
+- Feels like a real moment captured
+- Emotion is subtle but clear (relief, satisfaction)
+- UI feels naturally embedded
+- Would fit a premium healthcare landing page`,
+
+    imagery: `Ultra-realistic lifestyle photo of a woman sitting on a couch at home, holding a smartphone and smiling slightly while looking at the screen.
+
+Scene:
+- Warm, natural indoor lighting
+- Clean, modern living room
+- Soft background blur (depth of field)
+- Casual clothing (neutral tones)
+
+Action:
+- She is reviewing a telehealth result on her phone
+- Expression shows relief and confidence, not exaggerated
+
+Add subtle UI overlay on the image:
+Top left badge: "FAST" (green pill style)
+
+Floating UI card (light, minimal, semi-transparent):
+Title: "Refill Approved"
+Checklist:
+✓ Lisinopril
+✓ Ready for Pickup
+
+Style:
+- Apple-quality product photography
+- No heavy panels
+- No cartoon UI
+- No fake dashboards
+- Everything must feel real and embedded
+
+Camera:
+- 50mm lens feel
+- Slight cinematic tone
+- Natural skin texture (not over-smoothed)
+
+Output:
+- 4:3 aspect ratio
+- High resolution
+- Clean composition for landing page hero usage`,
+
+    i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
+    assets: "Organise all outputs into a structured asset library.",
+    qa:     "Final compliance QA. Check all outputs against governance ruleset.",
   });
 
   // Pipeline config
@@ -239,13 +342,13 @@ export default function PipelineTestPage() {
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
-    // Build scene variation per concept — headline drives mood/angle, never literal text in image
+    // Each concept gets a distinct subject variation — same scene quality, different person/moment
     const conceptAngles: Record<string, string> = {
-      c1: "Woman relaxing at home on couch, private moment, checking phone with calm smile.",
-      c2: "Woman in bright modern living room, natural confident pose, holding smartphone.",
-      c3: "Woman in casual home office setting, relaxed and focused, looking at phone screen.",
+      c1: "Subject: Black woman, early 30s, natural hair, warm expression.",
+      c2: "Subject: Latina woman, mid 30s, casual top, relaxed confident energy.",
+      c3: "Subject: White woman, late 20s, minimal makeup, genuine calm smile.",
     };
-    const prompt = stepPrompts.imagery + " " + (conceptAngles[conceptId] ?? "");
+    const prompt = stepPrompts.imagery + "\n\n" + (conceptAngles[conceptId] ?? "");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
     log(`Generating image with DALL-E for ${conceptId}...`);
     try {
