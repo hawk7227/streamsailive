@@ -93,8 +93,8 @@ export async function POST(request: Request) {
     // Allow caller to override provider (e.g. force openai for instant DALL-E)
     const providerOverride = typeof payload?.provider === "string" ? payload.provider : null;
 
-    // For image type: run through realism sanitizer — strips beauty/polish language,
-    // injects human realism rules, bans UI overlays. Policy enforced before generation.
+    // For image type: run through realism sanitizer then call gpt-image-1 directly.
+    // Spec: model gpt-image-1, quality standard, n:3, pick least polished.
     let finalPrompt = prompt;
     if (type === "image") {
       const sanitized = sanitizeRealismPrompt({
@@ -110,11 +110,12 @@ export async function POST(request: Request) {
         banUiPanels: true,
       });
       finalPrompt = sanitized.sanitizedPrompt;
-      console.log("[Realism] Sanitized prompt. Rejected words:", sanitized.rejectedWords);
+      console.log("[Realism] model:", sanitized.apiRecommendation.model, "| rejected words:", sanitized.rejectedWords.join(", ") || "none");
     }
 
     const generationResult = await generateContent(type as GenerationType, {
       prompt: finalPrompt,
+      model: type === "image" ? "gpt-image-1" : undefined,
       aspectRatio: payload?.aspectRatio,
       duration: payload?.duration,
       quality: payload?.quality,

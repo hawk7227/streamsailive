@@ -23,8 +23,8 @@ export interface SanitizeOutput {
   rejectedWords: string[];
   injectedRules: string[];
   apiRecommendation: {
-    model: "dall-e-3";
-    size: "1024x1024" | "1792x1024" | "1024x1792";
+    model: "gpt-image-1";
+    size: "1024x1024";
     quality: "standard";
     n: number;
   };
@@ -143,7 +143,7 @@ export function sanitizeRealismPrompt(input: SanitizeInput): SanitizeOutput {
     rejectedWords,
     injectedRules,
     apiRecommendation: {
-      model: "dall-e-3",
+      model: "gpt-image-1",
       size: "1024x1024",
       quality: "standard",
       n: Math.min(input.outputCount ?? 3, 4),
