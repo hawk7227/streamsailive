@@ -73,7 +73,9 @@ export class OpenAIProvider implements AIProvider {
         });
 
         if (!response.ok) {
-            throw new Error(`OpenAI Image generation failed: ${response.statusText}`);
+            const errBody = await response.json().catch(() => ({})) as { error?: { message?: string; code?: string } };
+            const detail = errBody?.error?.message ?? response.statusText;
+            throw new Error(`OpenAI Image generation failed (${response.status}): ${detail}`);
         }
 
         const result = await response.json();
