@@ -7,6 +7,7 @@ import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
+import { sanitizeRealismPrompt } from "@/lib/pipeline/realism/realism-sanitizer";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -91,8 +92,29 @@ export async function POST(request: Request) {
   try {
     // Allow caller to override provider (e.g. force openai for instant DALL-E)
     const providerOverride = typeof payload?.provider === "string" ? payload.provider : null;
+
+    // For image type: run through realism sanitizer — strips beauty/polish language,
+    // injects human realism rules, bans UI overlays. Policy enforced before generation.
+    let finalPrompt = prompt;
+    if (type === "image") {
+      const sanitized = sanitizeRealismPrompt({
+        rawPrompt: prompt,
+        subjectAction: typeof payload?.subjectAction === "string" ? payload.subjectAction : undefined,
+        mode: "casual_phone_photo",
+        subjectType: "human",
+        severity: "strict",
+        requireHumanRealism: true,
+        requireEnvironmentRealism: true,
+        requirePhoneCameraLook: true,
+        banTextOverlays: true,
+        banUiPanels: true,
+      });
+      finalPrompt = sanitized.sanitizedPrompt;
+      console.log("[Realism] Sanitized prompt. Rejected words:", sanitized.rejectedWords);
+    }
+
     const generationResult = await generateContent(type as GenerationType, {
-      prompt,
+      prompt: finalPrompt,
       aspectRatio: payload?.aspectRatio,
       duration: payload?.duration,
       quality: payload?.quality,

@@ -128,29 +128,7 @@ Accept only if:
 - UI feels naturally embedded
 - Would fit a premium healthcare landing page`,
 
-    imagery: `Candid iPhone snapshot taken from behind and slightly to the side of a person sitting on a couch at home. The subject's face is NOT visible — we see only the back of their head, their shoulder, and their hands holding a phone. The phone screen is slightly visible from the angle.
-
-Environment:
-- real lived-in living room
-- objects on the coffee table, pillows slightly askew
-- uneven window light casting soft shadow across the couch
-- slightly cluttered background, normal home
-
-Camera:
-- shot from over the shoulder, slightly above
-- handheld, not steady, slightly off-center
-- minor grain, not sharp
-- no filters, no editing
-
-RULES:
-- face completely out of frame or showing only hair/back of head
-- no text in image
-- no UI elements
-- no floating cards
-- no overlays
-- not posed
-- not centered
-- not professional photography`,
+    imagery: `a woman in her early 30s sitting on a couch in her living room, casually holding her smartphone and reading something on the screen`,
 
     i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
     assets: "Organise all outputs into a structured asset library.",
@@ -330,13 +308,15 @@ RULES:
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
-    // 3 scene variations — face always out of frame, UI overlay carries conversion
-    const conceptAngles: Record<string, string> = {
-      c1: "Over-shoulder view from behind, dark natural hair visible, couch with throw blanket, warm window light.",
-      c2: "Looking down at phone on lap, only top of head visible, sitting on bed, morning side light.",
-      c3: "From across room, subject small in frame, kitchen/living area, looking down, back to camera.",
+    // 3 scene variations — subjectAction only, sanitizer builds full locked prompt
+    const subjectActions: Record<string, string> = {
+      c1: "a Black woman in her early 30s with natural hair, sitting on a couch at home, casually holding her phone and reading something on the screen",
+      c2: "a Latina woman in her mid 30s sitting on her bed near a window, looking down at her phone, morning light from the side",
+      c3: "a woman in her late 20s sitting at a kitchen table, holding her phone with both hands and looking at the screen, relaxed everyday moment",
     };
-    const prompt = stepPrompts.imagery + "\n\n" + (conceptAngles[conceptId] ?? "");
+    const subjectAction = subjectActions[conceptId] ?? stepPrompts.imagery;
+    // Pass subjectAction in body — server sanitizer builds full locked realism prompt
+    const prompt = subjectAction;
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
     log(`Generating image with DALL-E for ${conceptId}...`);
     try {
@@ -345,7 +325,7 @@ RULES:
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId, provider: imageProvider }),
+        body: JSON.stringify({ type: "image", prompt, subjectAction, aspectRatio: "16:9", conceptId, provider: imageProvider }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
