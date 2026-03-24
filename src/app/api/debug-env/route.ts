@@ -9,6 +9,7 @@ export async function GET() {
   const keys = [
     "OPENAI_API_KEY","OPENAI_API_KEY_IMAGES","OPENAI_API_KEY_VOICE",
     "KLING_API_KEY","SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL","NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "AI_PROVIDER_IMAGE","AI_PROVIDER_VIDEO","AI_PROVIDER_I2V",
   ];
 
@@ -46,5 +47,14 @@ export async function GET() {
     dalleTest = "NO KEY";
   }
 
-  return NextResponse.json({ envStatus, dalleTest });
+  // Check actual auth session
+  let authStatus = "unknown";
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    authStatus = user ? `LOGGED IN as ${user.email}` : "NOT LOGGED IN — session missing";
+  } catch(e) {
+    authStatus = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+  }
+
+  return NextResponse.json({ envStatus, dalleTest, authStatus });
 }

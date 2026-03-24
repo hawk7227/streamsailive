@@ -455,10 +455,15 @@ export default function PipelineTestPage() {
                 const res = await fetch("/api/debug-env");
                 if (res.status === 401) { setDiagResult("❌ Not logged in — /api/debug-env requires auth"); setDiagRunning(false); return; }
                 if (!res.ok) { setDiagResult(`❌ HTTP ${res.status} — deployment may be outdated`); setDiagRunning(false); return; }
-                const data = await res.json() as { envStatus?: Record<string,string>; dalleTest?: string; error?: string };
+                const data = await res.json() as { envStatus?: Record<string,string>; dalleTest?: string; authStatus?: string; error?: string };
                 const env = data.envStatus ?? {};
-                out = "ENV VARS:\n" + Object.entries(env).map(([k, v]) => `  ${k}: ${v}`).join("\n");
+                out = `AUTH: ${data.authStatus ?? "unknown"}\n\n`;
+                out += "ENV VARS:\n" + Object.entries(env).map(([k, v]) => `  ${k}: ${v}`).join("\n");
                 out += `\n\nDALL-E API test: ${data.dalleTest ?? "not run"}`;
+                if (data.authStatus?.includes("NOT LOGGED IN")) {
+                  out += "\n\n\u274c NOT LOGGED IN — go to /login first, then return here.";
+                  setDiagResult(out); setDiagRunning(false); return;
+                }
 
                 // Step 2: Generate a real governance-compliant test image via /api/generations
                 setDiagResult(out + "\n\nStep 2/3: Generating governance test image via /api/generations…");
