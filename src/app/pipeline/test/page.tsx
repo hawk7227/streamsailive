@@ -98,6 +98,8 @@ export default function PipelineTestPage() {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("output");
   const [pipelineMode, setPipelineMode] = useState<"manual" | "auto">("manual");
   const [outputMode, setOutputMode] = useState<"image+video" | "image" | "video">("image+video");
+  const [diagResult, setDiagResult] = useState<string | null>(null);
+  const [diagRunning, setDiagRunning] = useState(false);
   const [editorState, setEditorState] = useState<{
     brightness: number; contrast: number; saturation: number;
     blur: number; rotation: number; flipH: boolean; flipV: boolean; textOverlay: string;
@@ -443,19 +445,27 @@ export default function PipelineTestPage() {
             </select>
             {/* Diagnostic button */}
             <button onClick={async () => {
-              log("Running API diagnostic...");
+              setDiagRunning(true);
+              setDiagResult("Running diagnostics…");
+              let out = "";
               try {
                 const res = await fetch("/api/debug-env");
+                if (res.status === 401) { setDiagResult("❌ Not logged in — /api/debug-env requires auth"); setDiagRunning(false); return; }
+                if (!res.ok) { setDiagResult(`❌ HTTP ${res.status} — route may not be deployed yet`); setDiagRunning(false); return; }
                 const data = await res.json() as { envStatus?: Record<string,string>; dalleTest?: string; error?: string };
-                if (data.error) { log(`✗ Diagnostic error: ${data.error}`); return; }
+                if (data.error) { setDiagResult(`❌ ${data.error}`); setDiagRunning(false); return; }
                 const env = data.envStatus ?? {};
-                Object.entries(env).forEach(([k, v]) => log(`  ${k}: ${v}`));
-                log(`  DALL-E live test: ${data.dalleTest}`);
-              } catch(e) { log(`✗ Diagnostic failed: ${e instanceof Error ? e.message : String(e)}`); }
-              setWorkspaceTab("logs");
+                out = Object.entries(env).map(([k, v]) => `${k}: ${v}`).join("\n");
+                out += `\n\nDALL-E live test: ${data.dalleTest ?? "not run"}`;
+              } catch(e) {
+                out = `❌ Fetch failed: ${e instanceof Error ? e.message : String(e)}\n\nThis usually means the deployment does not have the latest code.`;
+              }
+              setDiagResult(out);
+              setDiagRunning(false);
             }}
-              style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24", borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-              🔍 Diagnose
+              disabled={diagRunning}
+              style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24", borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, opacity: diagRunning ? 0.6 : 1 }}>
+              {diagRunning ? "⏳ Running…" : "🔍 Diagnose"}
             </button>
             <div style={{ flex: 1 }} />
             {/* Queue pill */}
@@ -1015,6 +1025,25 @@ export default function PipelineTestPage() {
 
         </div>
       </div>
+      {/* ── Diagnostic Modal ─────────────────────────────────────────── */}
+      {diagResult && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => setDiagResult(null)}>
+          <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 28, maxWidth: 640, width: "100%", maxHeight: "80vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>🔍 Diagnostic Results</span>
+              <button onClick={() => setDiagResult(null)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+            </div>
+            <pre style={{ fontFamily: "monospace", fontSize: 11, color: "#94a3b8", lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0 }}>
+              {diagResult}
+            </pre>
+            <div style={{ marginTop: 16, fontSize: 11, color: "#475569" }}>
+              Click outside or ✕ to close
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
