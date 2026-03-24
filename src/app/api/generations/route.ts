@@ -115,7 +115,6 @@ export async function POST(request: Request) {
 
     const generationResult = await generateContent(type as GenerationType, {
       prompt: finalPrompt,
-      model: type === "image" ? "gpt-image-1" : undefined,
       aspectRatio: payload?.aspectRatio,
       duration: payload?.duration,
       quality: payload?.quality,

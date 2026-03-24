@@ -588,6 +588,15 @@ Accept only if:
             selectedConceptId,
             stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
             intakeAnalysis: intakeAnalysis ?? undefined,
+            // Live error state — assistant uses this to diagnose and guide fixes
+            conceptErrors: Object.fromEntries(
+              Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
+            ),
+            conceptStatuses: Object.fromEntries(
+              Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
+            ),
+            hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
+            imageProvider,
           },
         }),
       });

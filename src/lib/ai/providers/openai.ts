@@ -65,11 +65,10 @@ export class OpenAIProvider implements AIProvider {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: options.model ?? "dall-e-3",
+                model: "dall-e-3",
                 prompt: options.prompt,
                 n: 1,
                 size: options.aspectRatio === "9:16" ? "1024x1792" : "1792x1024",
-                quality: options.model === "gpt-image-1" ? "standard" : undefined,
             }),
         });
 

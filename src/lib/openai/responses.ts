@@ -77,20 +77,29 @@ const buildSystemPrompt = (context: PipelineContext): string => {
     .map(([k, v]) => `${k}: ${v}`)
     .join(", ");
 
+  const ctx = context as unknown as Record<string, unknown>;
+  const conceptErrors = ctx.conceptErrors as Record<string, string | null> | undefined;
+  const conceptStatuses = ctx.conceptStatuses as Record<string, string> | undefined;
+  const hasFailedConcepts = ctx.hasFailedConcepts as boolean | undefined;
+  const imageProvider = ctx.imageProvider as string | undefined;
+
+  const errorSummary = conceptErrors
+    ? Object.entries(conceptErrors)
+        .filter(([, e]) => e)
+        .map(([id, e]) => `${id}: ${e}`)
+        .join("; ")
+    : "";
+
   const pipelineInfo = [
     context.nicheId ? `Active niche: ${context.nicheId}` : "",
-    context.pipelineType ? `Pipeline type: ${context.pipelineType}` : "",
-    context.rulesetVersion ? `Ruleset: ${context.rulesetVersion}` : "",
-    context.brandTone ? `Brand tone: ${context.brandTone}` : "",
-    context.approvedFacts?.length ? `Approved facts: ${context.approvedFacts.join("; ")}` : "",
-    context.bannedPhrases?.length ? `Banned phrases: ${context.bannedPhrases.slice(0, 8).join(", ")}` : "",
     context.currentStepId ? `Current step: ${context.currentStepId}` : "",
     context.selectedConceptId ? `Selected concept: ${context.selectedConceptId}` : "",
     context.stepStates ? `Step states: ${JSON.stringify(context.stepStates)}` : "",
+    conceptStatuses ? `Concept statuses: ${JSON.stringify(conceptStatuses)}` : "",
+    hasFailedConcepts ? `⚠️ FAILED CONCEPTS DETECTED` : "",
+    errorSummary ? `Errors: ${errorSummary}` : "",
+    imageProvider ? `Image provider: ${imageProvider}` : "",
     context.intakeAnalysis ? `Intake analysis: ${context.intakeAnalysis}` : "",
-    context.strategyOutput ? `Strategy output available: yes` : "",
-    context.copyOutput ? `Copy output available: yes` : "",
-    context.validatorStatus ? `Validator status: ${context.validatorStatus}` : "",
     context.imageUrl ? `Image available: ${context.imageUrl}` : "",
     context.videoUrl ? `Video available: ${context.videoUrl}` : "",
   ].filter(Boolean).join("\n");
@@ -98,6 +107,19 @@ const buildSystemPrompt = (context: PipelineContext): string => {
   return `You are STREAMS — an expert AI pipeline director for telehealth content production.
 
 You help users build compliant, premium telehealth ad campaigns through a 7-step pipeline.
+
+CRITICAL: When you see failed concepts or errors in the pipeline state, your FIRST response must:
+1. State clearly what failed and exactly why
+2. Give the specific fix in plain language
+3. Tell the user exactly what to do next
+
+Common errors and their fixes:
+- "Unauthorized" from OpenAI → API key is wrong, expired, or the model requested is not available on this account. Fix: check DigitalOcean env vars, ensure OPENAI_API_KEY is valid.
+- "gpt-image-1" model error → This model requires special org access. The pipeline has been reverted to dall-e-3 which works.
+- "Generation failed" → Check the Logs tab for the specific OpenAI error message.
+- Images look too polished/AI → The realism sanitizer is active. Try regenerating — dall-e-3 varies between runs.
+
+Never say "Done." when there are errors. Always diagnose.
 
 PIPELINE STEPS (in order):
 1. creativeStrategy — brand and audience strategy
