@@ -12,10 +12,16 @@ export async function GET() {
     "AI_PROVIDER_IMAGE","AI_PROVIDER_VIDEO","AI_PROVIDER_I2V",
   ];
 
+  const defaults: Record<string, string> = {
+    AI_PROVIDER_IMAGE: "openai (default)",
+    AI_PROVIDER_VIDEO: "kling (default)",
+    AI_PROVIDER_I2V: "kling (default)",
+  };
+
   const envStatus: Record<string, string> = {};
   for (const key of keys) {
     const val = process.env[key];
-    if (!val) envStatus[key] = "MISSING";
+    if (!val) envStatus[key] = defaults[key] ? `MISSING — using ${defaults[key]}` : "MISSING";
     else envStatus[key] = `SET (${val.slice(0,4)}...${val.slice(-4)}, len=${val.length})`;
   }
 
