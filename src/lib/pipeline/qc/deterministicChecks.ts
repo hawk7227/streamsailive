@@ -503,8 +503,8 @@ const MANDATORY_IMAGE_NEGATIVE_ELEMENTS = [
 
 const MANDATORY_IMAGE_POSITIVE_ANCHORS = [
   'natural expression',
-  'photorealistic',
-  'warm lighting',
+  'natural lighting',
+  'real person',
 ]
 
 /**

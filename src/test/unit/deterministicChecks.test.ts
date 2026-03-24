@@ -520,7 +520,7 @@ describe('buildImageNegativePrompt', () => {
 describe('checkImageNegativePromptPresent', () => {
   it('passes a prompt containing all mandatory elements', () => {
     const negPrompt = buildImageNegativePrompt()
-    const fullPrompt = `A telehealth provider in a clean environment. Natural expression, symmetric features, photorealistic, warm lighting. Negative prompt: ${negPrompt}`
+    const fullPrompt = `A telehealth provider in an ordinary environment. Natural expression, natural lighting, real person. Negative prompt: ${negPrompt}`
     const result = checkImageNegativePromptPresent(fullPrompt)
     expect(result.passed).toBe(true)
     expect(result.missingElements).toHaveLength(0)
@@ -534,7 +534,7 @@ describe('checkImageNegativePromptPresent', () => {
   })
 
   it('returns the specific missing element names', () => {
-    const prompt = 'A generic healthcare scene with warm lighting'
+    const prompt = 'A generic healthcare scene with natural expression'
     const result = checkImageNegativePromptPresent(prompt)
     expect(result.passed).toBe(false)
     expect(result.missingElements.length).toBeGreaterThan(5)
@@ -552,17 +552,17 @@ describe('checkImageNegativePromptPresent', () => {
 
 describe('checkImagePositiveAnchorsPresent', () => {
   it('passes when all anchors are present', () => {
-    const prompt = 'natural expression, symmetric features, photorealistic, warm lighting, soft natural light, genuine warm smile, relaxed professional pose. No text.'
+    const prompt = 'natural expression, natural lighting, real person, ordinary setting. No text.'
     const result = checkImagePositiveAnchorsPresent(prompt)
     expect(result.passed).toBe(true)
     expect(result.missingAnchors).toHaveLength(0)
   })
 
-  it('fails when photorealistic is absent', () => {
-    const prompt = 'natural expression, warm lighting'
+  it('fails when natural lighting is absent', () => {
+    const prompt = 'natural expression, real person'
     const result = checkImagePositiveAnchorsPresent(prompt)
     expect(result.passed).toBe(false)
-    expect(result.missingAnchors).toContain('photorealistic')
+    expect(result.missingAnchors).toContain('natural lighting')
   })
 
   it('returns all missing anchors', () => {

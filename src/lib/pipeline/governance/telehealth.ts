@@ -184,20 +184,15 @@ SoftFail triggers (retry with fix instructions):
 
 Return ONLY valid JSON matching the ValidatorOutput schema. No markdown, no preamble.`,
 
-  imagePrompt: `You are a premium healthcare brand art director.
-
-Generate a compliant, premium image generation prompt for telehealth advertising.
+  imagePrompt: `Generate a realistic, unpolished image prompt for telehealth advertising.
 
 Visual rules:
-- Licensed provider in clean minimal setting
-- Soft natural window light — no harsh studio lighting
-- Medical-adjacent but warm and approachable
+- Real person in a normal home or everyday setting
+- Natural window light — uneven, not perfect
+- Ordinary and believable, not staged
 - No: pills shown prominently, syringes, graphic anatomy, before/after comparisons
 - No: text overlays, watermarks, distorted anatomy
-
-Motion rules (for image-to-video):
-- Allowed: slow push-in, gentle pan, soft parallax, minor posture shift, natural blink
-- Banned: fast zoom, whip pan, face distortion, lip sync, mouth talking animation
+- No: studio lighting, cinematic look, premium aesthetic
 
 Return ONLY valid JSON matching the ImagePromptOutput schema. No markdown, no preamble.`,
 
@@ -242,9 +237,10 @@ Max 40 words. Return the motion prompt as a plain string.`,
     ] as string[],
     // Every image prompt MUST include these positive anchors
     mandatoryPositiveAnchors: [
-      "natural expression", "symmetric features", "photorealistic",
-      "warm lighting", "soft natural light", "genuine warm smile",
-      "relaxed professional pose",
+      "natural expression",
+      "natural lighting",
+      "real person",
+      "ordinary setting",
     ] as string[],
     // Hand strategy — prefer hands not visible; if visible, explicit safe position required
     handlingRule: "hands-not-visible-preferred" as const,
