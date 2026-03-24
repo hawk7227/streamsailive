@@ -6,6 +6,7 @@ import { KlingProvider } from "./providers/kling";
 import { Veo3Provider } from "./providers/veo3";
 import { ElevenlabsProvider } from "./providers/elevenlabs";
 import { RunwayProvider } from "./providers/runway";
+import { FalProvider } from "./providers/fal";
 
 // Instantiate providers once
 const providers: Record<string, AIProvider> = {
@@ -15,6 +16,7 @@ const providers: Record<string, AIProvider> = {
     veo3: new Veo3Provider(),
     elevenlabs: new ElevenlabsProvider(),
     runway: new RunwayProvider(),
+    fal: new FalProvider(),
 };
 
 /**

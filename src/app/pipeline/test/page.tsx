@@ -128,48 +128,29 @@ Accept only if:
 - UI feels naturally embedded
 - Would fit a premium healthcare landing page`,
 
-    imagery: `A casual iPhone photo of a person sitting on a couch at home, viewed slightly from the side, not facing the camera.
-
-The person is using their phone naturally, not posing, with a relaxed posture.
-
-Lighting:
-- uneven natural window light
-- slight shadows on face
-- not studio lighting
-- not even, not perfect
+    imagery: `Candid iPhone snapshot taken from behind and slightly to the side of a person sitting on a couch at home. The subject's face is NOT visible — we see only the back of their head, their shoulder, and their hands holding a phone. The phone screen is slightly visible from the angle.
 
 Environment:
-- real living room
-- slightly messy or lived-in, pillows not perfectly arranged, objects on table
-- not staged, not curated
+- real lived-in living room
+- objects on the coffee table, pillows slightly askew
+- uneven window light casting soft shadow across the couch
+- slightly cluttered background, normal home
 
-Camera style:
-- handheld iPhone photo
-- slightly off-center framing
-- minor noise or grain
-- not perfectly sharp
-- no depth of field effect
-- no cinematic effects
-
-Subject:
-- natural skin texture
-- visible pores, slight imperfections in face
-- not symmetrical, not model-like
-- not overly attractive or styled
-- side angle, not facing camera
-- not aware of camera
+Camera:
+- shot from over the shoulder, slightly above
+- handheld, not steady, slightly off-center
+- minor grain, not sharp
+- no filters, no editing
 
 RULES:
-- no text
-- no UI
+- face completely out of frame or showing only hair/back of head
+- no text in image
+- no UI elements
+- no floating cards
 - no overlays
-- no floating elements
-- no perfect composition
-- no smooth skin
-- no even lighting
-- no stock pose
-- no beauty filter
-- must look like a real photo someone casually took`,
+- not posed
+- not centered
+- not professional photography`,
 
     i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
     assets: "Organise all outputs into a structured asset library.",
@@ -196,6 +177,7 @@ RULES:
   });
   const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image" });
   const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({ c1: true, c2: true, c3: true });
+  const [imageProvider, setImageProvider] = useState<"openai" | "fal">("openai");
 
   // Generation queue — replaces all busy.* flags
   const [generationQueue, setGenerationQueue] = useState<Map<string, QueueItem>>(new Map());
@@ -348,11 +330,11 @@ RULES:
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
-    // 3 scene variations — break camera angle, break symmetry, break beauty defaults
+    // 3 scene variations — face always out of frame, UI overlay carries conversion
     const conceptAngles: Record<string, string> = {
-      c1: "Over-the-shoulder view, Black woman, couch, slightly slouched, phone slightly out of focus, imperfect framing.",
-      c2: "Side angle, Latina woman, sitting on bed, morning light from window, face not fully visible, casual clothes.",
-      c3: "From across the room slightly, White woman, kitchen table, looking down at phone, not centered in frame.",
+      c1: "Over-shoulder view from behind, dark natural hair visible, couch with throw blanket, warm window light.",
+      c2: "Looking down at phone on lap, only top of head visible, sitting on bed, morning side light.",
+      c3: "From across room, subject small in frame, kitchen/living area, looking down, back to camera.",
     };
     const prompt = stepPrompts.imagery + "\n\n" + (conceptAngles[conceptId] ?? "");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
@@ -363,7 +345,7 @@ RULES:
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId, provider: "openai" }),
+        body: JSON.stringify({ type: "image", prompt, aspectRatio: "16:9", conceptId, provider: imageProvider }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -718,6 +700,15 @@ RULES:
               <option value="image">Output: Image Only</option>
               <option value="video">Output: Video Only</option>
             </select>
+            {/* Image provider toggle */}
+            <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
+              {(["openai", "fal"] as const).map(p => (
+                <button key={p} onClick={() => setImageProvider(p)}
+                  style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: imageProvider === p ? "rgba(103,232,249,0.15)" : "transparent", color: imageProvider === p ? "#67e8f9" : "#475569", borderRight: p === "openai" ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+                  {p === "openai" ? "DALL-E 3" : "Flux (fal.ai)"}
+                </button>
+              ))}
+            </div>
             {/* Diagnostic button */}
             <button onClick={async () => {
               setDiagRunning(true);
