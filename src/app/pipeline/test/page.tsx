@@ -128,43 +128,42 @@ Accept only if:
 - UI feels naturally embedded
 - Would fit a premium healthcare landing page`,
 
-    imagery: `Ultra-realistic lifestyle photo of a woman sitting on a couch at home, holding a smartphone and smiling slightly while looking at the screen.
+    imagery: `Realistic smartphone-style photo of a woman sitting casually on a couch at home, holding a phone and looking at the screen.
 
 Scene:
-- Warm, natural indoor lighting
-- Clean, modern living room
-- Soft background blur (depth of field)
-- Casual clothing (neutral tones)
+- natural indoor lighting from a window
+- slightly imperfect shadows
+- real living room, not staged, slightly lived-in
+- neutral tones, beige, soft green, wood
+
+Subject:
+- natural skin texture, visible pores, no smoothing
+- subtle expression, calm, focused, slight natural smile
+- not posing for camera, candid moment
+- casual posture, slightly slouched or relaxed
 
 Action:
-- She is reviewing a telehealth result on her phone
-- Expression shows relief and confidence, not exaggerated
-
-Add subtle UI overlay on the image:
-Top left badge: "FAST" (green pill style)
-
-Floating UI card (light, minimal, semi-transparent):
-Title: "Refill Approved"
-Checklist:
-✓ Lisinopril
-✓ Ready for Pickup
-
-Style:
-- Apple-quality product photography
-- No heavy panels
-- No cartoon UI
-- No fake dashboards
-- Everything must feel real and embedded
+- looking at phone screen naturally
+- hand holding phone in realistic position
+- no exaggerated gestures
 
 Camera:
-- 50mm lens feel
-- Slight cinematic tone
-- Natural skin texture (not over-smoothed)
+- handheld feel, not perfectly centered
+- slight imperfection in framing
+- 35mm or 50mm lens look
+- shallow depth of field, background slightly blurred
 
-Output:
-- 4:3 aspect ratio
-- High resolution
-- Clean composition for landing page hero usage`,
+RULES:
+- no text inside image
+- no UI overlays
+- no floating elements
+- no holograms
+- no overly perfect lighting
+- no studio look
+- no stock-photo posing
+- no interface elements
+- no dashboard
+- no glass panels`,
 
     i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
     assets: "Organise all outputs into a structured asset library.",
@@ -190,6 +189,7 @@ Output:
     c3: { image: null, video: null, script: null, status: "idle", error: null },
   });
   const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image" });
+  const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({ c1: true, c2: true, c3: true });
 
   // Generation queue — replaces all busy.* flags
   const [generationQueue, setGenerationQueue] = useState<Map<string, QueueItem>>(new Map());
@@ -342,11 +342,11 @@ Output:
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
-    // Each concept gets a distinct subject variation — same scene quality, different person/moment
+    // 3 scene variations — realism only, no UI/design language
     const conceptAngles: Record<string, string> = {
-      c1: "Subject: Black woman, early 30s, natural hair, warm expression.",
-      c2: "Subject: Latina woman, mid 30s, casual top, relaxed confident energy.",
-      c3: "Subject: White woman, late 20s, minimal makeup, genuine calm smile.",
+      c1: "Setting: living room couch. Subject: Black woman early 30s, natural hair, casual clothes. Home comfort moment.",
+      c2: "Setting: bedside, morning light. Subject: Latina woman mid 30s, oversized shirt. Private, discreet moment.",
+      c3: "Setting: kitchen counter or living space. Subject: White woman late 20s, minimal makeup. Casual daily use.",
     };
     const prompt = stepPrompts.imagery + "\n\n" + (conceptAngles[conceptId] ?? "");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
@@ -1272,7 +1272,37 @@ Output:
                   <div style={{ padding: 14, minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     {tab === "Image" && (
                       out?.image ? (
-                        <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", borderRadius: 10, objectFit: "cover", maxHeight: 140 }} />
+                        <div style={{ position: "relative", width: "100%", borderRadius: 10, overflow: "hidden", maxHeight: 140 }}>
+                          <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", objectFit: "cover", maxHeight: 140, display: "block" }} />
+                          {/* UI Overlay — separate layer, never inside AI image */}
+                          {showOverlay[cid] && (
+                            <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                              {/* FAST badge — top left */}
+                              <div style={{ position: "absolute", top: 8, left: 8, background: "#16a34a", color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 7px", borderRadius: 99, letterSpacing: "0.08em" }}>
+                                FAST
+                              </div>
+                              {/* Refill Approved card */}
+                              <div style={{ position: "absolute", top: 24, left: 8, background: "rgba(255,255,255,0.92)", borderRadius: 7, padding: "6px 8px", minWidth: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <span style={{ color: "#fff", fontSize: 7, lineHeight: 1 }}>✓</span>
+                                  </div>
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: "#111" }}>Refill Approved</span>
+                                </div>
+                                <div style={{ fontSize: 8, color: "#374151", lineHeight: 1.6, paddingLeft: 2 }}>
+                                  <div>✓ Lisinopril</div>
+                                  <div>✓ Ready for Pickup</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Overlay toggle */}
+                          <button
+                            onClick={() => setShowOverlay(p => ({ ...p, [cid]: !p[cid] }))}
+                            style={{ position: "absolute", bottom: 4, right: 4, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 8, borderRadius: 4, padding: "2px 5px", cursor: "pointer", pointerEvents: "all" }}>
+                            {showOverlay[cid] ? "Hide UI" : "Show UI"}
+                          </button>
+                        </div>
                       ) : isActive ? (
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
                           <Spinner size={20} />
