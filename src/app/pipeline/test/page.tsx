@@ -128,42 +128,48 @@ Accept only if:
 - UI feels naturally embedded
 - Would fit a premium healthcare landing page`,
 
-    imagery: `Realistic smartphone-style photo of a woman sitting casually on a couch at home, holding a phone and looking at the screen.
+    imagery: `A casual iPhone photo of a person sitting on a couch at home, viewed slightly from the side, not facing the camera.
 
-Scene:
-- natural indoor lighting from a window
-- slightly imperfect shadows
-- real living room, not staged, slightly lived-in
-- neutral tones, beige, soft green, wood
+The person is using their phone naturally, not posing, with a relaxed posture.
+
+Lighting:
+- uneven natural window light
+- slight shadows on face
+- not studio lighting
+- not even, not perfect
+
+Environment:
+- real living room
+- slightly messy or lived-in, pillows not perfectly arranged, objects on table
+- not staged, not curated
+
+Camera style:
+- handheld iPhone photo
+- slightly off-center framing
+- minor noise or grain
+- not perfectly sharp
+- no depth of field effect
+- no cinematic effects
 
 Subject:
-- natural skin texture, visible pores, no smoothing
-- subtle expression, calm, focused, slight natural smile
-- not posing for camera, candid moment
-- casual posture, slightly slouched or relaxed
-
-Action:
-- looking at phone screen naturally
-- hand holding phone in realistic position
-- no exaggerated gestures
-
-Camera:
-- handheld feel, not perfectly centered
-- slight imperfection in framing
-- 35mm or 50mm lens look
-- shallow depth of field, background slightly blurred
+- natural skin texture
+- visible pores, slight imperfections in face
+- not symmetrical, not model-like
+- not overly attractive or styled
+- side angle, not facing camera
+- not aware of camera
 
 RULES:
-- no text inside image
-- no UI overlays
+- no text
+- no UI
+- no overlays
 - no floating elements
-- no holograms
-- no overly perfect lighting
-- no studio look
-- no stock-photo posing
-- no interface elements
-- no dashboard
-- no glass panels`,
+- no perfect composition
+- no smooth skin
+- no even lighting
+- no stock pose
+- no beauty filter
+- must look like a real photo someone casually took`,
 
     i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
     assets: "Organise all outputs into a structured asset library.",
@@ -342,11 +348,11 @@ RULES:
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
     const concept = concepts.find(c => c.variantId === conceptId);
-    // 3 scene variations — realism only, no UI/design language
+    // 3 scene variations — break camera angle, break symmetry, break beauty defaults
     const conceptAngles: Record<string, string> = {
-      c1: "Setting: living room couch. Subject: Black woman early 30s, natural hair, casual clothes. Home comfort moment.",
-      c2: "Setting: bedside, morning light. Subject: Latina woman mid 30s, oversized shirt. Private, discreet moment.",
-      c3: "Setting: kitchen counter or living space. Subject: White woman late 20s, minimal makeup. Casual daily use.",
+      c1: "Over-the-shoulder view, Black woman, couch, slightly slouched, phone slightly out of focus, imperfect framing.",
+      c2: "Side angle, Latina woman, sitting on bed, morning light from window, face not fully visible, casual clothes.",
+      c3: "From across the room slightly, White woman, kitchen table, looking down at phone, not centered in frame.",
     };
     const prompt = stepPrompts.imagery + "\n\n" + (conceptAngles[conceptId] ?? "");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
