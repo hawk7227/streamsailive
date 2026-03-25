@@ -66,6 +66,29 @@ export async function POST(request: Request) {
   if (!type) return NextResponse.json({ error: "type is required" }, { status: 400 });
   if (type === "url" && !url) return NextResponse.json({ error: "url is required for type=url" }, { status: 400 });
 
+  // Auto-detect YouTube URLs and route to the dedicated handler
+  if (type === "url" && url && /youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts/i.test(url)) {
+    const ytRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/intake/youtube`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: request.headers.get("cookie") ?? "" },
+      body: JSON.stringify({ url }),
+    });
+    const ytData = await ytRes.json();
+    if (!ytRes.ok) return NextResponse.json(ytData, { status: ytRes.status });
+    // Normalize to expected shape
+    return NextResponse.json({
+      data: {
+        analysisResult: ytData.analysisResult ?? "",
+        suggestedStrategy: ytData.keyMessages?.join(". ") ?? "",
+        suggestedImagePrompt: ytData.suggestedImagePrompt ?? "",
+        suggestedVideoDirection: ytData.suggestedVideoDirection ?? "",
+        detectedStyle: ytData.detectedStyle ?? "educational",
+        sourceType: "youtube",
+        youtube: { videoId: ytData.videoId, thumbnailUrl: ytData.thumbnailUrl, title: ytData.title, channelName: ytData.channelName, transcriptSnippet: ytData.transcriptSnippet },
+      }
+    });
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "OpenAI not configured" }, { status: 500 });
 

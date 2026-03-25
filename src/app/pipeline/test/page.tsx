@@ -14,6 +14,12 @@ type WorkspaceTab = "output" | "editor" | "export" | "publish" | "logs";
 type ViewMode = "16:9" | "9:16";
 type DeviceFrame = "Desktop" | "iPhone" | "Custom";
 type PreviewTab = "Image" | "Video" | "Script";
+type MediaTab = "Image" | "Video";
+type ImageApiMode = "responses" | "images";
+type ReferencePriority = "low" | "medium" | "high";
+type VideoGenMode = "scratch_t2v" | "i2v";
+type RefClassification = "usable" | "risky" | "reject";
+interface UploadedRef { id: string; url: string; name: string; kind: "image" | "video"; classification: RefClassification; }
 
 // ── Initial step config ────────────────────────────────────────────────────
 const STEPS_INITIAL: Step[] = [
@@ -191,9 +197,48 @@ Accept only if:
   const [urlInput, setUrlInput] = useState("");
   const [intakeAnalysis, setIntakeAnalysis] = useState<string | null>(null);
   const [intakeBusy, setIntakeBusy] = useState(false);
+  const [intakeExpanded, setIntakeExpanded] = useState(false);
+  const [intakeResult, setIntakeResult] = useState<{
+    type: string; title?: string; thumbnailUrl?: string; channelName?: string;
+    transcriptSnippet?: string; brandName?: string; colorPalette?: Record<string,string>;
+    layoutPattern?: string; duplicateLayoutSuggestion?: string; suggestedCopy?: Record<string,string>;
+    keyMessages?: string[]; targetAudience?: string; toneOfVoice?: string;
+    designTokens?: Record<string, unknown>; url?: string;
+  } | null>(null);
 
   // Logs
   const [logs, setLogs] = useState<string[]>(["Pipeline ready."]);
+
+  // ── Dual-surface panel state ───────────────────────────────────────────
+  const [mediaTab, setMediaTab] = useState<MediaTab>("Image");
+  // Image tab
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageApiMode, setImageApiMode] = useState<ImageApiMode>("images");
+  const [imageRefs, setImageRefs] = useState<UploadedRef[]>([]);
+  const [imageIdeas, setImageIdeas] = useState<string[]>([]);
+  const [imageIdeasLoading, setImageIdeasLoading] = useState(false);
+  const [imageSanitizing, setImageSanitizing] = useState(false);
+  const [imageGenerating, setImageGenerating] = useState(false);
+  const [imageResult, setImageResult] = useState<string | null>(null);
+  const [imageReferencePriority, setImageReferencePriority] = useState<ReferencePriority>("medium");
+  const [selectedImageTemplate, setSelectedImageTemplate] = useState("");
+  // Video tab
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoMode, setVideoMode] = useState<VideoGenMode>("scratch_t2v");
+  const [videoImageRefs, setVideoImageRefs] = useState<UploadedRef[]>([]);
+  const [videoVideoRef, setVideoVideoRef] = useState<UploadedRef | null>(null);
+  const [videoIdeas, setVideoIdeas] = useState<string[]>([]);
+  const [videoIdeasLoading, setVideoIdeasLoading] = useState(false);
+  const [videoGenerating, setVideoGenerating] = useState(false);
+  const [videoResult, setVideoResult] = useState<string | null>(null);
+  const [videoReferencePriority, setVideoReferencePriority] = useState<ReferencePriority>("medium");
+  const [selectedVideoTemplate, setSelectedVideoTemplate] = useState("");
+  const [videoProvider, setVideoProvider] = useState<"kling" | "runway">("kling");
+  // AI assistant float
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const imageRefInputRef = useRef<HTMLInputElement>(null);
+  const videoImageRefInputRef = useRef<HTMLInputElement>(null);
+  const videoVideoRefInputRef = useRef<HTMLInputElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const assistantEndRef = useRef<HTMLDivElement>(null);
@@ -535,23 +580,64 @@ Accept only if:
 
   // ── Intake URL analyze ────────────────────────────────────────────────────
   async function analyzeUrl() {
-    if (!urlInput.trim()) return;
+    const url = urlInput.trim();
+    if (!url) return;
     setIntakeBusy(true);
-    log(`Analyzing: ${urlInput.slice(0, 60)}...`);
+    setIntakeResult(null);
+    const isYouTube = /youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts/i.test(url);
+    const label = isYouTube ? "YouTube video" : "website";
+    log("Analyzing " + label + ": " + url.slice(0, 60) + "...");
     try {
-      const res = await fetch("/api/intake/analyze", {
+      // Route YouTube to dedicated handler, websites to general or deep analyzer
+      const endpoint = isYouTube ? "/api/intake/youtube" : "/api/intake/website";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "url", url: urlInput }),
+        body: JSON.stringify({ url }),
       });
-      const data = await res.json() as { data?: { analysisResult: string; suggestedImagePrompt: string; suggestedStrategy: string } };
-      if (!res.ok) throw new Error("Analyze failed");
-      const d = data.data!;
-      setIntakeAnalysis(d.analysisResult);
-      setStepPrompts(p => ({ ...p, imagery: d.suggestedImagePrompt || p.imagery, strategy: d.suggestedStrategy || p.strategy }));
-      log(`✓ Analysis complete`);
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok) throw new Error((data.error as string) ?? "Analyze failed");
+
+      // Set intake analysis text
+      const analysis = (data.analysisResult as string) ?? "";
+      setIntakeAnalysis(analysis);
+      setIntakeExpanded(true);
+
+      // Feed into dual-surface panel prompts
+      const imgPrompt = data.suggestedImagePrompt as string | undefined;
+      const vidPrompt = data.suggestedVideoDirection as string | undefined;
+      if (imgPrompt) setImagePrompt(imgPrompt);
+      if (vidPrompt) setVideoPrompt(vidPrompt);
+
+      // Also feed into pipeline step prompts
+      setStepPrompts(p => ({
+        ...p,
+        imagery: imgPrompt || p.imagery,
+        strategy: (data.suggestedStrategy as string) || (data.keyMessages as string[] | undefined)?.join(". ") || p.strategy,
+      }));
+
+      // Store full result for display
+      setIntakeResult({
+        type: isYouTube ? "youtube" : "website",
+        title: data.title as string | undefined,
+        thumbnailUrl: data.thumbnailUrl as string | undefined,
+        channelName: data.channelName as string | undefined,
+        transcriptSnippet: data.transcriptSnippet as string | undefined,
+        brandName: data.brandName as string | undefined,
+        colorPalette: data.colorPalette as Record<string,string> | undefined,
+        layoutPattern: data.layoutPattern as string | undefined,
+        duplicateLayoutSuggestion: data.duplicateLayoutSuggestion as string | undefined,
+        suggestedCopy: data.suggestedCopy as Record<string,string> | undefined,
+        keyMessages: data.keyMessages as string[] | undefined,
+        targetAudience: data.targetAudience as string | undefined,
+        toneOfVoice: data.toneOfVoice as string | undefined,
+        designTokens: data.designTokens as Record<string,unknown> | undefined,
+        url: data.url as string | undefined,
+      });
+
+      log("✓ " + label + " analyzed" + (imgPrompt ? " — image prompt populated" : ""));
     } catch (e) {
-      log(`✗ Analysis failed: ${e instanceof Error ? e.message : String(e)}`);
+      log("✗ Analysis failed: " + (e instanceof Error ? e.message : String(e)));
     }
     setIntakeBusy(false);
     setActiveIntake(null);
@@ -640,6 +726,183 @@ Accept only if:
     setApprovedOutputs(p => ({ ...p, [type]: url }));
     setWorkspaceTab("output");
     log(`✓ ${type} approved to workspace`);
+  }
+
+  // ── Template definitions ──────────────────────────────────────────────
+  const IMAGE_TEMPLATES: Record<string, { label: string; prompt: string; aspectRatio?: string }> = {
+    everyday_realism:     { label: "Everyday Realism",       prompt: "A real person in their 30s sitting at a kitchen table with a coffee mug, casually looking at their phone. Ordinary morning light from a window. No staging." },
+    home_realism:         { label: "Home Realism",           prompt: "A person relaxing on a couch at home in the evening, soft lamp light, lived-in room with everyday objects visible." },
+    office_realism:       { label: "Office Realism",         prompt: "A person at a desk in a regular office, working on a laptop. Ordinary fluorescent or window light. Real office clutter visible." },
+    clinical_realism:     { label: "Clinical Realism",       prompt: "A healthcare provider reviewing notes at a desk in a small clinic office. Ordinary clinical setting, no dramatic lighting." },
+    product_realism:      { label: "Product In Use",         prompt: "A person holding and using a product naturally in a real home setting. Natural ambient light. No staged product photography." },
+    vertical_ad:          { label: "Vertical Ad (9:16)",     prompt: "A real person looking directly at camera, natural expression, ordinary home background. Vertical framing for mobile.", aspectRatio: "9:16" },
+    horizontal_lifestyle: { label: "Horizontal Lifestyle",   prompt: "A lifestyle moment — real person, real place, real activity. Wide framing, natural light, nothing staged.", aspectRatio: "16:9" },
+  };
+
+  const VIDEO_TEMPLATES: Record<string, { label: string; prompt: string }> = {
+    subtle_i2v:    { label: "Subtle I2V Motion",    prompt: "Slow gentle push-in. Natural blink. Soft background parallax. No face movement. 5 seconds." },
+    everyday_t2v:  { label: "Everyday T2V",         prompt: "A person doing an ordinary task at home. Natural movement. No dramatic motion. Real-world setting." },
+    product_t2v:   { label: "Product In Use T2V",   prompt: "A person naturally picking up and using a product. Slow, deliberate, real movement. Ordinary setting." },
+    lifestyle_t2v: { label: "Lifestyle Horizontal", prompt: "Wide lifestyle shot of a real person in a real environment. Subtle natural motion. No cinematic camera moves." },
+  };
+
+  // ── Reference classifier ──────────────────────────────────────────────
+  function classifyRef(name: string, _url: string): RefClassification {
+    const lower = name.toLowerCase();
+    if (/text=|overlay=|caption=|ui=/i.test(lower)) return "reject";
+    if (/cinematic|studio|glossy|polished|luxury|premium|hdr/i.test(lower)) return "risky";
+    return "usable";
+  }
+
+  // ── Upload reference ──────────────────────────────────────────────────
+  function handleRefUpload(
+    file: File,
+    kind: "image" | "video",
+    setter: React.Dispatch<React.SetStateAction<UploadedRef[]>>,
+    maxCount: number,
+  ) {
+    setter(prev => {
+      if (prev.length >= maxCount) {
+        log("Max " + maxCount + " " + kind + " references allowed — remove one first");
+        return prev;
+      }
+      const url = URL.createObjectURL(file);
+      const classification = classifyRef(file.name, url);
+      if (classification === "reject") {
+        log("Reference rejected: " + file.name + " — baked-in text/UI or conflicting style");
+        return prev;
+      }
+      const ref: UploadedRef = { id: "ref-" + Date.now(), url, name: file.name, kind, classification };
+      if (classification === "risky") log("Reference risky: " + file.name + " — may conflict with realism rules");
+      return [...prev, ref];
+    });
+  }
+
+  function handleVideoRefUpload(file: File) {
+    const url = URL.createObjectURL(file);
+    const classification = classifyRef(file.name, url);
+    if (classification === "reject") {
+      log("Video reference rejected: " + file.name);
+      return;
+    }
+    setVideoVideoRef({ id: "ref-" + Date.now(), url, name: file.name, kind: "video", classification });
+  }
+
+  // ── Get image ideas ───────────────────────────────────────────────────
+  async function getImageIdeas() {
+    setImageIdeasLoading(true);
+    setImageIdeas([]);
+    try {
+      const res = await fetch("/api/ideas/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: imagePrompt, template: selectedImageTemplate, niche: nicheId }),
+      });
+      const data = await res.json() as { ideas?: string[] };
+      setImageIdeas(data.ideas ?? []);
+      log("✓ " + (data.ideas?.length ?? 0) + " image ideas generated");
+    } catch (e) { log("Ideas failed: " + (e instanceof Error ? e.message : String(e))); }
+    setImageIdeasLoading(false);
+  }
+
+  // ── Get video ideas ───────────────────────────────────────────────────
+  async function getVideoIdeas() {
+    setVideoIdeasLoading(true);
+    setVideoIdeas([]);
+    try {
+      const res = await fetch("/api/ideas/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: videoPrompt, template: selectedVideoTemplate, mode: videoMode }),
+      });
+      const data = await res.json() as { ideas?: string[] };
+      setVideoIdeas(data.ideas ?? []);
+      log("✓ " + (data.ideas?.length ?? 0) + " video ideas generated");
+    } catch (e) { log("Ideas failed: " + (e instanceof Error ? e.message : String(e))); }
+    setVideoIdeasLoading(false);
+  }
+
+  // ── Sanitize image prompt ─────────────────────────────────────────────
+  async function sanitizeImagePromptUI() {
+    if (!imagePrompt.trim()) return;
+    setImageSanitizing(true);
+    try {
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: imagePrompt, mode: imageApiMode, aspectRatio: "16:9", dryRun: true }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { rewrittenPrompt?: string; strippedTerms?: string[] };
+        if (data.rewrittenPrompt) {
+          setImagePrompt(data.rewrittenPrompt);
+          log("✓ Prompt sanitized" + (data.strippedTerms?.length ? " — stripped: " + data.strippedTerms.join(", ") : ""));
+        }
+      }
+    } catch (e) { log("Sanitize failed: " + (e instanceof Error ? e.message : String(e))); }
+    setImageSanitizing(false);
+  }
+
+  // ── Generate image ────────────────────────────────────────────────────
+  async function generateDualImage() {
+    if (!imagePrompt.trim()) return;
+    setImageGenerating(true);
+    setImageResult(null);
+    try {
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          mode: imageApiMode,
+          references: imageRefs.map(r => ({ kind: "image", fileId: r.url, url: r.url })),
+          realismMode: "strict",
+          aspectRatio: viewMode === "9:16" ? "9:16" : "16:9",
+          referencePriority: imageReferencePriority,
+        }),
+      });
+      const data = await res.json() as { outputUrl?: string; error?: string; strippedTerms?: string[] };
+      if (data.outputUrl) {
+        setImageResult(data.outputUrl);
+        setConceptOutputs(p => ({ ...p, c1: { ...p.c1, image: data.outputUrl!, status: "completed", error: null } }));
+        log("✓ Image generated via " + imageApiMode + " API" + (data.strippedTerms?.length ? " (stripped: " + data.strippedTerms.join(", ") + ")" : ""));
+      } else {
+        log("✗ Image failed: " + (data.error ?? "unknown"));
+      }
+    } catch (e) { log("Generate failed: " + (e instanceof Error ? e.message : String(e))); }
+    setImageGenerating(false);
+  }
+
+  // ── Generate video ────────────────────────────────────────────────────
+  async function generateDualVideo() {
+    if (!videoPrompt.trim()) return;
+    setVideoGenerating(true);
+    setVideoResult(null);
+    try {
+      const payload: Record<string, unknown> = {
+        type: videoMode === "i2v" ? "i2v" : "video",
+        prompt: videoPrompt,
+        provider: videoProvider,
+        aspectRatio: viewMode,
+        duration: "5s",
+        mode: videoMode,
+      };
+      if (videoMode === "i2v" && imageResult) payload.imageUrl = imageResult;
+      const res = await fetch("/api/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json() as { data?: { id: string; status: string; output_url?: string }; error?: string };
+      if (data.data?.id) {
+        log("✓ Video job submitted (" + videoProvider + "): " + data.data.id.slice(0, 8));
+        queueAdd({ id: data.data.id, type: "video", status: (data.data.status as QueueStatus) ?? "pending", provider: videoProvider, prompt: videoPrompt, conceptId: "c1", completedAt: null, outputUrl: data.data.output_url ?? null, externalId: null, mode: videoMode, costEstimate: 0.05, error: null });
+        if (data.data.output_url) setVideoResult(data.data.output_url);
+      } else {
+        log("✗ Video failed: " + (data.error ?? "unknown"));
+      }
+    } catch (e) { log("Video generate failed: " + (e instanceof Error ? e.message : String(e))); }
+    setVideoGenerating(false);
   }
 
   const s = { minHeight: "100vh", background: "#050816", color: "#fff", padding: 20, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
@@ -781,95 +1044,315 @@ Accept only if:
             </button>
           </div>
 
-          {/* ── ROW 1: Notifications | AI Assistant | Concept Cards ──────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 14, marginBottom: 14 }}>
+          {/* ── ROW 1: Dual-Surface Media Generator | Concepts ─────────────── */}
+          {/* Hidden file inputs for reference uploads */}
+          <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={e => { Array.from(e.target.files ?? []).forEach(f => handleRefUpload(f, "image", setImageRefs, 3)); e.target.value = ""; }} />
+          <input ref={videoImageRefInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={e => { Array.from(e.target.files ?? []).forEach(f => handleRefUpload(f, "image", setVideoImageRefs, 2)); e.target.value = ""; }} />
+          <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoRefUpload(f); e.target.value = ""; }} />
 
-            {/* Col 1: Getting Started Guide */}
-            <div style={P({ padding: 16, minHeight: 260 })}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#475569", textTransform: "uppercase", marginBottom: 14 }}>How to Start</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[
-                  { n: "1", label: "Select niche", detail: "Pick Telehealth or Google Ads from the top-left dropdown", done: !!nicheId },
-                  { n: "2", label: "Generate images", detail: "Click the Img button on any concept card below", done: Object.values(conceptOutputs).some(o => o.status === "completed" && o.image) },
-                  { n: "3", label: "Generate video", detail: "After image loads, click Vid to create a 5s motion clip", done: Object.values(conceptOutputs).some(o => o.video) },
-                  { n: "4", label: "Approve output", detail: "Click ✓ Approve on any completed concept to send to workspace", done: !!approvedOutputs.image || !!approvedOutputs.video },
-                  { n: "5", label: "Run full pipeline", detail: "Click ▶ Run in the top bar to generate all 3 concepts at once", done: false },
-                ].map(step => (
-                  <div key={step.n} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <div style={{ width: 20, height: 20, borderRadius: "50%", background: step.done ? "rgba(110,231,183,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${step.done ? "#6ee7b7" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: step.done ? "#6ee7b7" : "#475569", flexShrink: 0, marginTop: 1 }}>
-                      {step.done ? "✓" : step.n}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: step.done ? "#6ee7b7" : "#94a3b8", marginBottom: 2 }}>{step.label}</div>
-                      <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>{step.detail}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {/* Quick run button */}
-              <button onClick={runPipeline} style={{ marginTop: 16, width: "100%", background: "linear-gradient(90deg,rgba(168,85,247,0.25),rgba(34,211,238,0.2))", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                ▶ Generate All 3 Concepts
-              </button>
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 14, marginBottom: 14 }}>
 
-            {/* Col 2: AI Assistant */}
-            <div style={P({ padding: 0, minHeight: 260, display: "flex", flexDirection: "column" })}>
-              <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#67e8f9", textTransform: "uppercase" }}>AI Assistant</div>
-                {/* Source intake bar */}
-                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                  {(["url", "image", "video", "doc", "audio"] as IntakeType[]).map(t => (
-                    <button key={t!} onClick={() => { setActiveIntake(a => a === t ? null : t); if (t !== "url") fileInputRef.current?.click(); }}
-                      style={{ background: activeIntake === t ? "rgba(34,211,238,0.15)" : "rgba(255,255,255,0.05)", border: `1px solid ${activeIntake === t ? "rgba(34,211,238,0.5)" : "rgba(255,255,255,0.1)"}`, color: activeIntake === t ? "#67e8f9" : "#94a3b8", borderRadius: 8, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {t}
+            {/* ── DUAL-SURFACE PANEL ──────────────────────────────────────────── */}
+            <div style={P({ padding: 0, display: "flex", flexDirection: "column", minHeight: 360 })}>
+
+              {/* Tab header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <div style={{ display: "flex" }}>
+                  {(["Image", "Video"] as MediaTab[]).map(tab => (
+                    <button key={tab} onClick={() => setMediaTab(tab)}
+                      style={{ padding: "11px 18px", fontSize: 13, fontWeight: 700, background: "none", border: "none",
+                        color: mediaTab === tab ? "#67e8f9" : "#475569",
+                        borderBottom: mediaTab === tab ? "2px solid #67e8f9" : "2px solid transparent",
+                        cursor: "pointer", letterSpacing: "-0.01em" }}>
+                      {tab === "Image" ? "🖼 Image" : "🎬 Video"}
                     </button>
                   ))}
                 </div>
-                {activeIntake === "url" && (
-                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                    <input value={urlInput} onChange={e => setUrlInput(e.target.value)} onKeyDown={e => e.key === "Enter" && analyzeUrl()}
-                      placeholder="https://..." style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 8, padding: "6px 10px", fontSize: 12 }} />
-                    <button onClick={analyzeUrl} disabled={intakeBusy}
-                      style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.4)", color: "#67e8f9", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                      {intakeBusy ? <Spinner size={10} /> : "Analyze"}
-                    </button>
-                  </div>
-                )}
-                {intakeAnalysis && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: "#6ee7b7", background: "rgba(16,185,129,0.08)", borderRadius: 6, padding: "6px 8px" }}>
-                    ✓ {intakeAnalysis.slice(0, 120)}...
-                  </div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* Image API mode toggle — only on Image tab */}
+                  {mediaTab === "Image" && (
+                    <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
+                      {(["images", "responses"] as ImageApiMode[]).map(m => (
+                        <button key={m} onClick={() => setImageApiMode(m)}
+                          style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
+                            background: imageApiMode === m ? "rgba(103,232,249,0.15)" : "transparent",
+                            color: imageApiMode === m ? "#67e8f9" : "#475569",
+                            borderRight: m === "images" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                          {m === "images" ? "Images API" : "Responses API"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* Video provider + mode toggle — only on Video tab */}
+                  {mediaTab === "Video" && (
+                    <>
+                      <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
+                        {(["scratch_t2v", "i2v"] as VideoGenMode[]).map(m => (
+                          <button key={m} onClick={() => setVideoMode(m)}
+                            style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
+                              background: videoMode === m ? "rgba(168,85,247,0.15)" : "transparent",
+                              color: videoMode === m ? "#a78bfa" : "#475569",
+                              borderRight: m === "scratch_t2v" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                            {m === "scratch_t2v" ? "T2V" : "I2V"}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
+                        {(["kling", "runway"] as const).map(p => (
+                          <button key={p} onClick={() => setVideoProvider(p)}
+                            style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
+                              background: videoProvider === p ? "rgba(110,231,183,0.12)" : "transparent",
+                              color: videoProvider === p ? "#6ee7b7" : "#475569",
+                              borderRight: p === "kling" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                            {p === "kling" ? "Kling" : "Runway"}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-              {/* Chat history */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 180 }}>
-                {assistantMessages.map((m, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                    <div style={{ maxWidth: "80%", background: m.role === "user" ? "rgba(168,85,247,0.18)" : "rgba(255,255,255,0.06)", border: `1px solid ${m.role === "user" ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.08)"}`, borderRadius: 10, padding: "7px 11px", fontSize: 12, color: m.role === "user" ? "#e9d5ff" : "#cbd5e1", lineHeight: 1.45 }}>
-                      {m.content}
+
+              {/* ── IMAGE TAB ──────────────────────────────────────────────────── */}
+              {mediaTab === "Image" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", flex: 1 }}>
+                  {/* Left: prompt + controls */}
+                  <div style={{ padding: "14px 16px", borderRight: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Prompt box */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>Image Prompt</label>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <select value={selectedImageTemplate} onChange={e => { setSelectedImageTemplate(e.target.value); if (e.target.value && IMAGE_TEMPLATES[e.target.value]) { const t = IMAGE_TEMPLATES[e.target.value]; setImagePrompt(t.prompt); } }}
+                            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#94a3b8", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
+                            <option value="">Templates…</option>
+                            {Object.entries(IMAGE_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} rows={4}
+                        placeholder="Describe a real, ordinary scene. E.g. A person in their 30s sitting at a kitchen table checking their phone, natural morning light, no staging."
+                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.55 }} />
+                    </div>
+
+                    {/* AI Ideas chips */}
+                    {imageIdeas.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {imageIdeas.map((idea, i) => (
+                          <button key={i} onClick={() => { setImagePrompt(idea); setImageIdeas([]); }}
+                            style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 20, padding: "4px 10px", fontSize: 11, cursor: "pointer", textAlign: "left", maxWidth: 260 }}>
+                            {idea.slice(0, 80)}{idea.length > 80 ? "…" : ""}
+                          </button>
+                        ))}
+                        <button onClick={() => setImageIdeas([])}
+                          style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer" }}>✕ clear</button>
+                      </div>
+                    )}
+
+                    {/* Reference priority */}
+                    {imageRefs.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, color: "#64748b" }}>Ref Priority:</span>
+                        {(["low", "medium", "high"] as ReferencePriority[]).map(p => (
+                          <button key={p} onClick={() => setImageReferencePriority(p)}
+                            style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, borderRadius: 6, border: "1px solid", cursor: "pointer",
+                              background: imageReferencePriority === p ? "rgba(167,139,250,0.15)" : "transparent",
+                              borderColor: imageReferencePriority === p ? "rgba(167,139,250,0.4)" : "rgba(255,255,255,0.1)",
+                              color: imageReferencePriority === p ? "#a78bfa" : "#475569" }}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button onClick={getImageIdeas} disabled={imageIdeasLoading}
+                        style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: imageIdeasLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: imageIdeasLoading ? 0.6 : 1 }}>
+                        {imageIdeasLoading ? <Spinner size={11} /> : "💡"} AI Ideas
+                      </button>
+                      <button onClick={sanitizeImagePromptUI} disabled={imageSanitizing || !imagePrompt.trim()}
+                        style={{ background: "rgba(110,231,183,0.08)", border: "1px solid rgba(110,231,183,0.2)", color: "#6ee7b7", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: imageSanitizing ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: imageSanitizing ? 0.6 : 1 }}>
+                        {imageSanitizing ? <Spinner size={11} /> : "✦"} Make Realistic
+                      </button>
+                      <div style={{ flex: 1 }} />
+                      <button onClick={generateDualImage} disabled={imageGenerating || !imagePrompt.trim()}
+                        style={{ background: imageGenerating || !imagePrompt.trim() ? "rgba(255,255,255,0.06)" : "linear-gradient(90deg,rgba(103,232,249,0.8),rgba(167,139,250,0.7))", border: "none", color: imageGenerating || !imagePrompt.trim() ? "#475569" : "#0f172a", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: imageGenerating || !imagePrompt.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                        {imageGenerating ? <><Spinner size={12} /> Generating…</> : "▶ Generate Image"}
+                      </button>
+                    </div>
+
+                    {/* Result preview */}
+                    {imageResult && (
+                      <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(110,231,183,0.3)" }}>
+                        <img src={imageResult} alt="Generated" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
+                          <button onClick={() => { setApprovedOutputs(p => ({ ...p, image: imageResult })); setWorkspaceTab("output"); log("✓ Image approved to workspace"); }}
+                            style={{ background: "rgba(110,231,183,0.9)", border: "none", color: "#000", borderRadius: 6, padding: "4px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>✓ Approve</button>
+                          <button onClick={() => window.open(imageResult, "_blank")}
+                            style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 6, padding: "4px 9px", fontSize: 10, cursor: "pointer" }}>↗ View</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: references */}
+                  <div style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      Image References <span style={{ color: "#334155", fontWeight: 400 }}>({imageRefs.length}/3)</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>
+                      Guide composition, lighting, and wardrobe only. Realism rules always win.
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {imageRefs.map(ref => (
+                        <div key={ref.id} style={{ position: "relative", width: 72, height: 72, borderRadius: 8, overflow: "hidden", border: "1px solid " + (ref.classification === "risky" ? "rgba(251,191,36,0.5)" : "rgba(255,255,255,0.1)") }}>
+                          <img src={ref.url} alt={ref.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          {ref.classification === "risky" && <div style={{ position: "absolute", top: 2, left: 2, background: "rgba(251,191,36,0.8)", borderRadius: 3, padding: "1px 4px", fontSize: 8, fontWeight: 700, color: "#000" }}>RISKY</div>}
+                          <button onClick={() => setImageRefs(p => p.filter(r => r.id !== ref.id))}
+                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                        </div>
+                      ))}
+                      {imageRefs.length < 3 && (
+                        <button onClick={() => imageRefInputRef.current?.click()}
+                          style={{ width: 72, height: 72, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#334155", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      )}
+                    </div>
+                    <div style={{ marginTop: "auto", padding: "8px 0", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: 10, color: "#334155" }}>
+                      <div style={{ marginBottom: 3 }}>API mode: <span style={{ color: imageApiMode === "responses" ? "#67e8f9" : "#a78bfa" }}>{imageApiMode === "responses" ? "Responses (supports inputs)" : "Images (direct render)"}</span></div>
+                      <div>References only sent in Responses mode</div>
                     </div>
                   </div>
-                ))}
-                <div ref={assistantEndRef} />
-              </div>
-              {/* Input */}
-              <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
-                <input value={assistantInput} onChange={e => setAssistantInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && sendAssistantMessage()}
-                  placeholder="Ask STREAMS..." disabled={assistantBusy}
-                  style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13 }} />
-                <button onClick={sendAssistantMessage} disabled={assistantBusy || !assistantInput.trim()}
-                  style={{ background: assistantInput.trim() ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.04)", border: `1px solid ${assistantInput.trim() ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.08)"}`, color: assistantInput.trim() ? "#67e8f9" : "#475569", borderRadius: 10, padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600 }}>
-                  {assistantBusy ? <Spinner size={12} /> : "Send"}
-                </button>
-              </div>
+                </div>
+              )}
+
+              {/* ── VIDEO TAB ──────────────────────────────────────────────────── */}
+              {mediaTab === "Video" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", flex: 1 }}>
+                  {/* Left: prompt + controls */}
+                  <div style={{ padding: "14px 16px", borderRight: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {videoMode === "i2v" && !imageResult && (
+                      <div style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#fbbf24" }}>
+                        ⚠ I2V requires an approved image. Generate an image first, then approve it.
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                          {videoMode === "i2v" ? "Motion Prompt" : "Video Prompt"}
+                        </label>
+                        <select value={selectedVideoTemplate} onChange={e => { setSelectedVideoTemplate(e.target.value); if (e.target.value && VIDEO_TEMPLATES[e.target.value]) setVideoPrompt(VIDEO_TEMPLATES[e.target.value].prompt); }}
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#94a3b8", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
+                          <option value="">Templates…</option>
+                          {Object.entries(VIDEO_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                      </div>
+                      <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} rows={4}
+                        placeholder={videoMode === "i2v" ? "Describe motion only: slow push-in, natural blink, soft parallax. No dramatic camera moves." : "Describe a real scene with natural motion. No cinematic language."}
+                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.55 }} />
+                    </div>
+
+                    {/* AI Ideas chips */}
+                    {videoIdeas.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {videoIdeas.map((idea, i) => (
+                          <button key={i} onClick={() => { setVideoPrompt(idea); setVideoIdeas([]); }}
+                            style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 20, padding: "4px 10px", fontSize: 11, cursor: "pointer", textAlign: "left", maxWidth: 260 }}>
+                            {idea.slice(0, 80)}{idea.length > 80 ? "…" : ""}
+                          </button>
+                        ))}
+                        <button onClick={() => setVideoIdeas([])}
+                          style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer" }}>✕ clear</button>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button onClick={getVideoIdeas} disabled={videoIdeasLoading}
+                        style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: videoIdeasLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: videoIdeasLoading ? 0.6 : 1 }}>
+                        {videoIdeasLoading ? <Spinner size={11} /> : "💡"} AI Ideas
+                      </button>
+                      <div style={{ flex: 1 }} />
+                      <button onClick={generateDualVideo} disabled={videoGenerating || !videoPrompt.trim() || (videoMode === "i2v" && !imageResult)}
+                        style={{ background: videoGenerating || !videoPrompt.trim() ? "rgba(255,255,255,0.06)" : "linear-gradient(90deg,rgba(168,85,247,0.8),rgba(34,211,238,0.6))", border: "none", color: videoGenerating || !videoPrompt.trim() ? "#475569" : "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                        {videoGenerating ? <><Spinner size={12} /> Generating…</> : "▶ Generate Video"}
+                      </button>
+                    </div>
+
+                    {/* Video result */}
+                    {videoResult && (
+                      <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(167,139,250,0.3)" }}>
+                        <video src={videoResult} controls autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
+                          <button onClick={() => { setApprovedOutputs(p => ({ ...p, video: videoResult })); setWorkspaceTab("output"); log("✓ Video approved to workspace"); }}
+                            style={{ background: "rgba(167,139,250,0.9)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>✓ Approve</button>
+                        </div>
+                      </div>
+                    )}
+                    {!videoResult && activeCount > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "rgba(103,232,249,0.06)", border: "1px solid rgba(103,232,249,0.15)", borderRadius: 8 }}>
+                        <Spinner size={12} />
+                        <span style={{ fontSize: 11, color: "#67e8f9" }}>{activeCount} video job{activeCount > 1 ? "s" : ""} processing — updating via Realtime…</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: references */}
+                  <div style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      Image Refs <span style={{ color: "#334155" }}>({videoImageRefs.length}/2)</span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                      {videoImageRefs.map(ref => (
+                        <div key={ref.id} style={{ position: "relative", width: 64, height: 64, borderRadius: 7, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+                          <img src={ref.url} alt={ref.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <button onClick={() => setVideoImageRefs(p => p.filter(r => r.id !== ref.id))}
+                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 14, height: 14, fontSize: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                        </div>
+                      ))}
+                      {videoImageRefs.length < 2 && (
+                        <button onClick={() => videoImageRefInputRef.current?.click()}
+                          style={{ width: 64, height: 64, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 7, color: "#334155", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>
+                      Video Ref <span style={{ color: "#334155" }}>({videoVideoRef ? 1 : 0}/1)</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      {videoVideoRef ? (
+                        <div style={{ position: "relative", width: 64, height: 64, borderRadius: 7, overflow: "hidden", background: "#0f172a", border: "1px solid rgba(167,139,250,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 22 }}>🎬</span>
+                          <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.7)", borderRadius: 3, padding: "1px 3px", fontSize: 8, color: "#94a3b8", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{videoVideoRef.name}</div>
+                          <button onClick={() => setVideoVideoRef(null)}
+                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 14, height: 14, fontSize: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => videoVideoRefInputRef.current?.click()}
+                          style={{ width: 64, height: 64, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 7, color: "#334155", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#334155", lineHeight: 1.4, marginTop: "auto" }}>
+                      Image refs guide composition. Video ref guides motion feel only. Realism rules always win.
+                    </div>
+                    {imageResult && videoMode === "i2v" && (
+                      <div style={{ background: "rgba(110,231,183,0.06)", border: "1px solid rgba(110,231,183,0.2)", borderRadius: 8, padding: "7px 10px" }}>
+                        <div style={{ fontSize: 10, color: "#6ee7b7", marginBottom: 4 }}>Source image (approved):</div>
+                        <img src={imageResult} alt="Source" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", borderRadius: 6 }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Col 3: Concept Cards */}
-            <div style={P({ padding: 16, minHeight: 260, display: "flex", flexDirection: "column", gap: 10 })}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#a78bfa", textTransform: "uppercase", marginBottom: 4 }}>Concepts</div>
+            {/* ── CONCEPT CARDS (right column) ────────────────────────────────── */}
+            <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#a78bfa", textTransform: "uppercase", marginBottom: 2 }}>Concepts</div>
               {concepts.map((c, i) => (
-                <div key={c.variantId} style={{ background: selectedConceptId === c.variantId ? "rgba(168,85,247,0.10)" : "rgba(255,255,255,0.03)", border: `1px solid ${selectedConceptId === c.variantId ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "10px 12px" }}>
+                <div key={c.variantId} style={{ background: selectedConceptId === c.variantId ? "rgba(168,85,247,0.10)" : "rgba(255,255,255,0.03)", border: "1px solid " + (selectedConceptId === c.variantId ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"), borderRadius: 12, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                     <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Concept {i + 1}</span>
                     <span style={{ fontSize: 10, background: "rgba(168,85,247,0.15)", color: "#a78bfa", borderRadius: 6, padding: "2px 7px" }}>{i === 0 ? "Recommended" : "Preview"}</span>
@@ -881,13 +1364,17 @@ Accept only if:
                       style={{ flex: 1, background: selectedConceptId === c.variantId ? "rgba(168,85,247,0.25)" : "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: selectedConceptId === c.variantId ? "#e9d5ff" : "#94a3b8", borderRadius: 7, padding: "5px 0", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
                       {selectedConceptId === c.variantId ? "✓ Selected" : "Select"}
                     </button>
-                    <button onClick={() => { document.getElementById(`preview-${c.variantId}`)?.scrollIntoView({ behavior: "smooth" }); }}
+                    <button onClick={() => document.getElementById("preview-" + c.variantId)?.scrollIntoView({ behavior: "smooth" })}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 7, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>
                       Preview
                     </button>
                   </div>
                 </div>
               ))}
+              {/* Quick run */}
+              <button onClick={runPipeline} style={{ marginTop: 4, width: "100%", background: "linear-gradient(90deg,rgba(168,85,247,0.25),rgba(34,211,238,0.2))", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                ▶ Generate All 3
+              </button>
             </div>
           </div>
 
@@ -986,7 +1473,38 @@ Accept only if:
               </div>
               {/* Canvas */}
               <div style={{ flex: 1, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
-                {workspaceTab === "output" && (
+                {workspaceTab === "output" && (() => {
+                  // Collect all available outputs for 3-panel preview
+                  const panels = [
+                    { label: "Concept 1", image: conceptOutputs.c1.image, video: conceptOutputs.c1.video },
+                    { label: "Concept 2", image: conceptOutputs.c2.image, video: conceptOutputs.c2.video },
+                    { label: "Concept 3", image: conceptOutputs.c3.image, video: conceptOutputs.c3.video },
+                  ].filter(p => p.image || p.video);
+                  const hasMultiple = panels.length > 1;
+                  const showAll = hasMultiple && deviceFrame === "Custom";
+                  return showAll ? (
+                    // 3-panel preview
+                    <div style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 12 }}>
+                      {[...panels, { label: "Workspace", image: approvedOutputs.image, video: approvedOutputs.video }].map((p, i) => (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div style={{ fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>{p.label}</div>
+                          <div style={{ position: "relative", aspectRatio: viewMode === "9:16" ? "9/16" : "16/9", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
+                            {p.video ? <video src={p.video} autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              : p.image ? <img src={p.image} alt={p.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#1e293b", fontSize: 11 }}>Approve an output</div>}
+                            {(p.image || p.video) && (
+                              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", gap: 3, padding: "4px 6px", background: "rgba(0,0,0,0.6)" }}>
+                                {p.image && <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: p.image })); log("✓ " + p.label + " image sent to workspace"); }}
+                                  style={{ flex: 1, background: "rgba(110,231,183,0.8)", border: "none", color: "#000", borderRadius: 4, padding: "3px 0", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>✓ Use</button>}
+                                {p.image && <button onClick={() => window.open(p.image!, "_blank")}
+                                  style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 4, padding: "3px 6px", fontSize: 9, cursor: "pointer" }}>↗</button>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <div style={{ position: "relative", width: "100%", maxWidth: viewMode === "9:16" ? 200 : 560, aspectRatio: viewMode === "16:9" ? "16/9" : "9/16", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: deviceFrame === "iPhone" ? 28 : 12, overflow: "hidden", boxShadow: deviceFrame === "iPhone" ? "0 0 0 8px rgba(255,255,255,0.06), 0 0 0 9px rgba(255,255,255,0.03)" : "none" }}>
                     {approvedOutputs.video ? (
                       <video src={approvedOutputs.video} controls autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -995,11 +1513,13 @@ Accept only if:
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#334155", gap: 8 }}>
                         <div style={{ fontSize: 28 }}>◻</div>
-                        <div style={{ fontSize: 12 }}>Approve an output from Preview Screens</div>
+                        <div style={{ fontSize: 12 }}>Approve an output from the generator above</div>
+                        {panels.length > 0 && <div style={{ fontSize: 10, color: "#1e293b" }}>Switch to Custom view to see all 3 panels</div>}
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
                 {workspaceTab === "logs" && (
                   <div style={{ width: "100%", height: 300, overflowY: "auto", fontFamily: "monospace", fontSize: 11, color: "#64748b", lineHeight: 1.8 }}>
                     {logs.map((l, i) => <div key={i}>{l}</div>)}
@@ -1405,6 +1925,151 @@ Accept only if:
 
         </div>
       </div>
+      {/* ── Floating AI Assistant ────────────────────────────────────── */}
+      <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+        {assistantOpen && (
+          <div style={{ width: 360, background: "rgba(8,12,33,0.97)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 16, boxShadow: "0 18px 60px rgba(0,0,0,0.4)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {/* Header */}
+            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#67e8f9", letterSpacing: "0.1em" }}>AI ASSISTANT</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {(["url", "image", "video", "doc", "audio"] as IntakeType[]).map(t => (
+                  <button key={t!} onClick={() => { setActiveIntake(a => a === t ? null : t); if (t !== "url") fileInputRef.current?.click(); }}
+                    style={{ background: activeIntake === t ? "rgba(34,211,238,0.15)" : "rgba(255,255,255,0.05)", border: "1px solid " + (activeIntake === t ? "rgba(34,211,238,0.5)" : "rgba(255,255,255,0.1)"), color: activeIntake === t ? "#67e8f9" : "#475569", borderRadius: 5, padding: "2px 7px", fontSize: 9, cursor: "pointer", fontWeight: 600, textTransform: "uppercase" }}>
+                    {t}
+                  </button>
+                ))}
+                <button onClick={() => setAssistantOpen(false)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>✕</button>
+              </div>
+            </div>
+            {activeIntake === "url" && (
+              <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 6 }}>
+                <input value={urlInput} onChange={e => setUrlInput(e.target.value)} onKeyDown={e => e.key === "Enter" && analyzeUrl()}
+                  placeholder="https://..." style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11 }} />
+                <button onClick={analyzeUrl} disabled={intakeBusy}
+                  style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.4)", color: "#67e8f9", borderRadius: 7, padding: "5px 11px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                  {intakeBusy ? <Spinner size={9} /> : "Analyze"}
+                </button>
+              </div>
+            )}
+            {intakeAnalysis && !intakeResult && (
+              <div style={{ margin: "6px 14px", fontSize: 10, color: "#6ee7b7", background: "rgba(16,185,129,0.08)", borderRadius: 6, padding: "5px 8px" }}>
+                ✓ {intakeAnalysis.slice(0, 100)}...
+              </div>
+            )}
+            {/* ── Intake result card ── */}
+            {intakeResult && (
+              <div style={{ margin: "6px 14px", background: "rgba(8,12,33,0.95)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 10, overflow: "hidden" }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(103,232,249,0.05)" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#67e8f9", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    {intakeResult.type === "youtube" ? "🎬 YouTube" : "🌐 Website"}
+                  </span>
+                  <button onClick={() => { setIntakeResult(null); setIntakeAnalysis(null); }}
+                    style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 12 }}>✕</button>
+                </div>
+                {/* YouTube card */}
+                {intakeResult.type === "youtube" && (
+                  <div style={{ padding: "8px 10px", display: "flex", gap: 8 }}>
+                    {intakeResult.thumbnailUrl && (
+                      <img src={intakeResult.thumbnailUrl} alt="thumbnail"
+                        style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 5, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {intakeResult.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4 }}>{intakeResult.channelName}</div>
+                      {intakeResult.transcriptSnippet && (
+                        <div style={{ fontSize: 9, color: "#475569", lineHeight: 1.4, maxHeight: 36, overflow: "hidden" }}>
+                          {intakeResult.transcriptSnippet.slice(0, 120)}…
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Website card */}
+                {intakeResult.type === "website" && (
+                  <div style={{ padding: "8px 10px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#f1f5f9", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {intakeResult.brandName || intakeResult.title}
+                    </div>
+                    {intakeResult.colorPalette && (
+                      <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
+                        {Object.entries(intakeResult.colorPalette).slice(0, 5).map(([k, v]) => (
+                          <div key={k} title={k + ": " + v}
+                            style={{ width: 16, height: 16, borderRadius: 3, background: v.startsWith("#") ? v : "#334155", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }} />
+                        ))}
+                        <span style={{ fontSize: 9, color: "#475569", alignSelf: "center", marginLeft: 3 }}>palette</span>
+                      </div>
+                    )}
+                    {intakeResult.layoutPattern && (
+                      <div style={{ fontSize: 9, color: "#64748b", marginBottom: 3 }}>Layout: {intakeResult.layoutPattern}</div>
+                    )}
+                    {intakeResult.toneOfVoice && (
+                      <div style={{ fontSize: 9, color: "#64748b", marginBottom: 3 }}>Tone: {intakeResult.toneOfVoice}</div>
+                    )}
+                  </div>
+                )}
+                {/* Shared bottom: analysis + actions */}
+                <div style={{ padding: "6px 10px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.4, marginBottom: 6 }}>
+                    {intakeAnalysis?.slice(0, 120)}…
+                  </div>
+                  {intakeResult.keyMessages && intakeResult.keyMessages.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
+                      {intakeResult.keyMessages.slice(0, 3).map((m, i) => (
+                        <span key={i} style={{ fontSize: 9, background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.15)", color: "#67e8f9", borderRadius: 4, padding: "2px 6px" }}>{m.slice(0, 40)}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => { if (imagePrompt.length > 0) { setImagePrompt(imagePrompt); } log("✓ Prompts applied from intake"); setIntakeExpanded(false); }}
+                      style={{ flex: 1, background: "rgba(103,232,249,0.12)", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 6, padding: "4px 0", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                      ✓ Prompts Applied
+                    </button>
+                    {intakeResult.type === "website" && intakeResult.duplicateLayoutSuggestion && (
+                      <button onClick={() => { setAssistantMessages(p => [...p, { role: "assistant", content: "Layout duplication guide:\n" + intakeResult.duplicateLayoutSuggestion }]); }}
+                        style={{ flex: 1, background: "rgba(167,139,250,0.10)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 6, padding: "4px 0", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                        Layout Guide →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Chat */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 7, maxHeight: 260 }}>
+              {assistantMessages.map((m, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: "85%", background: m.role === "user" ? "rgba(168,85,247,0.18)" : "rgba(255,255,255,0.06)", border: "1px solid " + (m.role === "user" ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.08)"), borderRadius: 10, padding: "6px 10px", fontSize: 11, color: m.role === "user" ? "#e9d5ff" : "#cbd5e1", lineHeight: 1.45 }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              <div ref={assistantEndRef} />
+            </div>
+            {/* Input */}
+            <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 7 }}>
+              <input value={assistantInput} onChange={e => setAssistantInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendAssistantMessage()}
+                placeholder="Ask STREAMS..." disabled={assistantBusy}
+                style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 12 }} />
+              <button onClick={sendAssistantMessage} disabled={assistantBusy || !assistantInput.trim()}
+                style={{ background: assistantInput.trim() ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.04)", border: "1px solid " + (assistantInput.trim() ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.08)"), color: assistantInput.trim() ? "#67e8f9" : "#475569", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                {assistantBusy ? <Spinner size={11} /> : "Send"}
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Float toggle button */}
+        <button onClick={() => setAssistantOpen(o => !o)}
+          style={{ width: 48, height: 48, borderRadius: "50%", background: assistantOpen ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,rgba(103,232,249,0.6),rgba(167,139,250,0.5))", border: "1px solid rgba(103,232,249,0.4)", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(0,0,0,0.3)", position: "relative" }}>
+          {assistantBusy ? <Spinner size={16} /> : "✦"}
+          {activeCount > 0 && <span style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#67e8f9", border: "2px solid #050816", fontSize: 8, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>{activeCount}</span>}
+        </button>
+      </div>
+
       {/* ── Diagnostic Modal ─────────────────────────────────────────── */}
       {diagResult && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
