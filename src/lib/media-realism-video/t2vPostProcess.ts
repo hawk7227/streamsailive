@@ -2,100 +2,111 @@
  * t2vPostProcess.ts
  *
  * Per spec: re-encode via ffmpeg, inject noise, normalize compression.
- * ffmpeg is environment-dependent — wired correctly so real execution
- * can be plugged in. Returns skip with reason when ffmpeg unavailable.
+ * When ffmpeg is unavailable (serverless), skips gracefully and returns
+ * the input URL unchanged with skip reason.
+ *
+ * When ffmpeg is available:
+ *   1. Download video to tmp
+ *   2. Re-encode H.264 with crf=23 (compression normalization)
+ *   3. Inject subtle film grain (alls=3 — very light, reduces AI sheen)
+ *   4. Upload processed video to Supabase Storage
+ *   5. Return permanent Supabase URL
  */
 
-import type { PostProcessResult } from "./types";
 import { execFile } from "child_process";
+import { writeFileSync, readFileSync, unlinkSync } from "fs";
 import { promisify } from "util";
-import { existsSync } from "fs";
 import path from "path";
 import os from "os";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { PostProcessResult } from "./types";
 
 const execFileAsync = promisify(execFile);
 
 async function ffmpegAvailable(): Promise<boolean> {
   try {
-    await execFileAsync("ffmpeg", ["-version"]);
+    await execFileAsync("ffmpeg", ["-version"], { timeout: 5000 });
     return true;
   } catch {
     return false;
   }
 }
 
-/**
- * Re-encode video to reduce AI-generation compression artifacts,
- * inject subtle film grain noise, and normalize output compression.
- * Per spec: makes output feel less like "AI video".
- */
+async function downloadToTmp(url: string, tmpPath: string): Promise<void> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+  if (!res.ok) throw new Error(`Video download failed: ${res.status} ${res.statusText}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  writeFileSync(tmpPath, buf);
+}
+
+async function uploadProcessedVideo(tmpPath: string, workspaceId: string): Promise<string> {
+  const buf = readFileSync(tmpPath);
+  const admin = createAdminClient();
+  const storagePath = `${workspaceId}/t2v_pp_${crypto.randomUUID()}.mp4`;
+  const { error } = await admin.storage
+    .from("generations")
+    .upload(storagePath, buf, { contentType: "video/mp4", upsert: false });
+  if (error) throw new Error(`Post-process upload failed: ${error.message}`);
+  const { data } = admin.storage.from("generations").getPublicUrl(storagePath);
+  return data.publicUrl;
+}
+
+function safeTmpCleanup(...paths: string[]): void {
+  for (const p of paths) {
+    try { unlinkSync(p); } catch { /* ignore — tmp cleanup is best-effort */ }
+  }
+}
+
 export async function postProcessT2V(
   inputUrl: string,
   workspaceId: string,
 ): Promise<PostProcessResult> {
-  const processesApplied: string[] = [];
-
-  // Check if ffmpeg is available
   if (!(await ffmpegAvailable())) {
     return {
       inputUrl,
-      outputUrl: inputUrl,   // pass through unchanged
+      outputUrl: inputUrl,
       processesApplied: [],
       skipped: true,
       skipReason: "ffmpeg not available in this environment",
     };
   }
 
+  const tmpDir = os.tmpdir();
+  const runId = crypto.randomUUID().slice(0, 8);
+  const inputFile  = path.join(tmpDir, `t2v_in_${runId}.mp4`);
+  const outputFile = path.join(tmpDir, `t2v_out_${runId}.mp4`);
+  const processesApplied: string[] = [];
+
   try {
-    const tmpDir = os.tmpdir();
-    const inputFile = path.join(tmpDir, `t2v_in_${Date.now()}.mp4`);
-    const outputFile = path.join(tmpDir, `t2v_out_${workspaceId}_${Date.now()}.mp4`);
+    await downloadToTmp(inputUrl, inputFile);
 
-    // Download input video to tmp
-    const res = await fetch(inputUrl, { signal: AbortSignal.timeout(60000) });
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    require("fs").writeFileSync(inputFile, buf);
-
-    // ffmpeg: re-encode H.264, inject grain noise, normalize
-    // -vf "noise=alls=3:allf=t+u" — subtle grain (alls=3 is very light)
-    // -crf 23 — quality-based compression normalization
-    // -preset medium — balanced encode speed
+    // Re-encode H.264 + inject subtle grain noise + normalize compression
     await execFileAsync("ffmpeg", [
       "-i", inputFile,
-      "-vf", "noise=alls=3:allf=t+u",
+      "-vf", "noise=alls=3:allf=t+u",   // alls=3: very light grain
       "-c:v", "libx264",
-      "-crf", "23",
+      "-crf", "23",                        // quality-based normalization
       "-preset", "medium",
       "-c:a", "copy",
       "-y",
       outputFile,
-    ]);
+    ], { timeout: 120000 });
 
-    processesApplied.push("reencode_h264", "noise_injection", "compression_normalize");
+    processesApplied.push("reencode_h264", "grain_noise_injection", "compression_normalize");
 
-    // Upload result — return data URI for now since we're in a tmp context
-    const outBuf = require("fs").readFileSync(outputFile);
-    const b64 = outBuf.toString("base64");
-    const dataUrl = `data:video/mp4;base64,${b64.slice(0, 100)}...`; // placeholder
+    const outputUrl = await uploadProcessedVideo(outputFile, workspaceId);
 
-    // Clean up
-    try { require("fs").unlinkSync(inputFile); } catch { /* ignore */ }
-    try { require("fs").unlinkSync(outputFile); } catch { /* ignore */ }
+    safeTmpCleanup(inputFile, outputFile);
 
-    return {
-      inputUrl,
-      outputUrl: dataUrl,    // in production: upload to Supabase and return URL
-      processesApplied,
-      skipped: false,
-    };
+    return { inputUrl, outputUrl, processesApplied, skipped: false };
   } catch (err) {
+    safeTmpCleanup(inputFile, outputFile);
     return {
       inputUrl,
-      outputUrl: inputUrl,   // pass through on error
+      outputUrl: inputUrl,   // fall back to unprocessed URL
       processesApplied,
       skipped: true,
-      skipReason: `Post-processing failed: ${err instanceof Error ? err.message : "unknown"}`,
+      skipReason: `Post-processing failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

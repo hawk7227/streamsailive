@@ -2,60 +2,74 @@
  * t2vQc.ts
  *
  * Per spec: QC scoring for T2V (scratch video) candidates.
- * Dimensions: face stability, flicker, warp, temporal consistency, anti-cinematic.
- * Reject if totalScore < T2V_QC_PASS_THRESHOLD (0.9).
+ * Five dimensions: face stability, motion naturalness, artifact score,
+ * temporal consistency, anti-cinematic score.
+ * Reject if any dimension < 0.85 OR totalScore < T2V_QC_PASS_THRESHOLD.
  *
- * Detection functions are hooks — currently return baseline scores.
- * Real CV (frame extraction, landmark detection) can be plugged in
- * without changing the scoring contract.
+ * Detection functions are CV hooks — return baseline scores until
+ * real frame analysis is wired. Contracts are stable.
  */
 
 import type { FrameAnalysis, T2VQcScore } from "./types";
 import { T2V_QC_PASS_THRESHOLD } from "./types";
 
-// ── Score weights ──────────────────────────────────────────────────────────
+// ── Weights — must sum to 1.0 ─────────────────────────────────────────────
+// face stability weighted highest per spec (identity preservation is critical)
 
 const WEIGHTS = {
-  faceStability: 0.28,        // most important — identity preservation
-  motionNaturalness: 0.22,    // no jitter or stuttering
-  artifactScore: 0.20,        // no warp or distortion
-  temporalConsistency: 0.18,  // no lighting flicker
-  antiCinematicScore: 0.12,   // reject stylized/polished output
+  faceStability:      0.28,
+  motionNaturalness:  0.22,
+  artifactScore:      0.20,
+  temporalConsistency:0.18,
+  antiCinematicScore: 0.12,
 } as const;
 
+// Safety assertion — weights must sum to 1.0
+const WEIGHT_SUM = Object.values(WEIGHTS).reduce((a, b) => a + b, 0);
+if (Math.abs(WEIGHT_SUM - 1.0) > 0.001) {
+  throw new Error(`T2V QC weight sum is ${WEIGHT_SUM}, must be 1.0`);
+}
+
+// Per-dimension rejection threshold (separate from totalScore threshold)
+const DIM_THRESHOLD = 0.85;
+
 // ── Detection hooks ────────────────────────────────────────────────────────
-// These are the integration points for real CV.
-// Each takes frame data and returns a 0-1 score (1 = clean, 0 = fail).
+// Return 0-1 score. 1 = clean/passing. 0 = fail.
+// Each is independently rejection-capable below DIM_THRESHOLD.
 
 function detectFaceDrift(frames: FrameAnalysis): number {
-  // Hook: landmark tracking across frames
-  // Returns 1.0 until real CV is wired
-  if (!frames.facesDetected) return 1.0; // no face = not applicable
+  // Hook: facial landmark tracking across frames
+  // No face in scene → not applicable → full score
+  if (!frames.facesDetected) return 1.0;
+  if (frames.faceFrames === 0) return 1.0;
+  // Future: compute landmark delta across faceFrames
   return 1.0;
 }
 
 function detectFlicker(frames: FrameAnalysis): number {
   // Hook: per-frame luminance variance detection
   if (frames.consistencyScores.length === 0) return 1.0;
-  const avgConsistency = frames.consistencyScores.reduce((a, b) => a + b, 0) / frames.consistencyScores.length;
-  return Math.max(0, Math.min(1, avgConsistency));
+  const avg = frames.consistencyScores.reduce((a, b) => a + b, 0) / frames.consistencyScores.length;
+  return Math.max(0, Math.min(1, avg));
 }
 
 function detectWarp(frames: FrameAnalysis): number {
-  // Hook: optical flow / background distortion detection
+  // Hook: optical flow background distortion detection
+  // Future: compute flow field irregularity across frames
   return 1.0;
 }
 
 function detectTemporalConsistency(frames: FrameAnalysis): number {
-  // Hook: scene-level consistency (lighting, color space, background)
+  // Hook: scene-level consistency (lighting, color space, background stability)
   if (frames.consistencyScores.length < 2) return 1.0;
-  const min = Math.min(...frames.consistencyScores);
+  // Use min score — worst frame drives temporal consistency score
+  const min = frames.consistencyScores.reduce((a, b) => Math.min(a, b), 1);
   return Math.max(0, min);
 }
 
 function detectCinematicLook(_frames: FrameAnalysis): number {
-  // Hook: style classifier (contrast, saturation, color grading detection)
-  // Returns 1.0 (ordinary) until real classifier is wired
+  // Hook: style classifier (contrast curve, saturation, color grading fingerprint)
+  // Future: ML classifier or histogram-based detector
   return 1.0;
 }
 
@@ -63,8 +77,8 @@ function detectCinematicLook(_frames: FrameAnalysis): number {
 
 /**
  * Placeholder frame extraction.
- * In production: extract frames from videoUrl, run CV, return analysis.
- * Currently returns a neutral analysis for the scoring hook to consume.
+ * Production: download video → extract N frames → run CV → return analysis.
+ * Returns neutral baseline so scoring hooks have valid input.
  */
 export function extractFrameAnalysis(_videoUrl: string): FrameAnalysis {
   return {
@@ -82,31 +96,30 @@ export function scoreT2VCandidate(
   frameAnalysis?: FrameAnalysis,
 ): T2VQcScore {
   const frames = frameAnalysis ?? extractFrameAnalysis(videoUrl);
-  const rejectionReasons: string[] = [];
 
-  const faceStability = detectFaceDrift(frames);
-  const motionNaturalness = detectFlicker(frames);
-  const artifactScore = detectWarp(frames);
-  const temporalConsistency = detectTemporalConsistency(frames);
+  const faceStability      = detectFaceDrift(frames);
+  const motionNaturalness  = detectFlicker(frames);
+  const artifactScore      = detectWarp(frames);
+  const temporalConsistency= detectTemporalConsistency(frames);
   const antiCinematicScore = detectCinematicLook(frames);
 
-  // Collect individual failures
-  if (faceStability < 0.85) rejectionReasons.push("face_drift");
-  if (motionNaturalness < 0.85) rejectionReasons.push("motion_jitter");
-  if (artifactScore < 0.85) rejectionReasons.push("background_warp");
-  if (temporalConsistency < 0.85) rejectionReasons.push("lighting_flicker");
-  if (antiCinematicScore < 0.85) rejectionReasons.push("looks_cinematic_or_stylized");
+  const rejectionReasons: string[] = [];
+  if (faceStability       < DIM_THRESHOLD) rejectionReasons.push("face_drift");
+  if (motionNaturalness   < DIM_THRESHOLD) rejectionReasons.push("motion_jitter");
+  if (artifactScore       < DIM_THRESHOLD) rejectionReasons.push("background_warp");
+  if (temporalConsistency < DIM_THRESHOLD) rejectionReasons.push("lighting_flicker");
+  if (antiCinematicScore  < DIM_THRESHOLD) rejectionReasons.push("looks_cinematic_or_stylized");
 
-  const totalScore =
-    Math.round(
-      (faceStability * WEIGHTS.faceStability +
-        motionNaturalness * WEIGHTS.motionNaturalness +
-        artifactScore * WEIGHTS.artifactScore +
-        temporalConsistency * WEIGHTS.temporalConsistency +
-        antiCinematicScore * WEIGHTS.antiCinematicScore) *
-        100,
-    ) / 100;
+  // Round to 2dp to avoid floating-point drift (e.g. 0.9000000001)
+  const totalScore = Math.round(
+    (faceStability      * WEIGHTS.faceStability      +
+     motionNaturalness  * WEIGHTS.motionNaturalness  +
+     artifactScore      * WEIGHTS.artifactScore      +
+     temporalConsistency* WEIGHTS.temporalConsistency+
+     antiCinematicScore * WEIGHTS.antiCinematicScore) * 100
+  ) / 100;
 
+  // Fail if ANY dimension is below threshold OR totalScore is below pass threshold
   const passed = rejectionReasons.length === 0 && totalScore >= T2V_QC_PASS_THRESHOLD;
 
   return {

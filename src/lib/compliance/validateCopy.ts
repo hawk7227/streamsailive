@@ -16,9 +16,9 @@ export function validateCopyWithPolicy(
   const issues: ValidationIssue[] = [];
 
   for (const variant of copy.variants) {
-    const headlineWords = variant.headline.trim().split(/\s+/).length;
-    const ctaWords = variant.cta.trim().split(/\s+/).length;
-    const subheadlineWords = variant.subheadline.trim().split(/\s+/).length;
+    const headlineWords = variant.headline.trim().split(/\s+/).filter(Boolean).length;
+    const ctaWords = variant.cta.trim().split(/\s+/).filter(Boolean).length;
+    const subheadlineWords = variant.subheadline.trim().split(/\s+/).filter(Boolean).length;
 
     if (headlineWords > policy.maxHeadlineWords) {
       issues.push({ code: "headline_too_long", message: `Headline too long (${headlineWords} words) for ${variant.conceptId}`, severity: "softFail" });

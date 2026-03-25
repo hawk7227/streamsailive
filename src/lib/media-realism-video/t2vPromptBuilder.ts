@@ -2,45 +2,96 @@
  * t2vPromptBuilder.ts
  *
  * Per spec:
- *   sanitizePrompt() — remove cinematic/artistic/dramatic terms
- *   expandPromptWithRealism() — inject realism anchors
+ *   sanitizePrompt()          — remove cinematic/artistic/dramatic terms
+ *   expandPromptWithRealism() — inject realism anchors per mode
  *
  * No niche assumptions. No business logic.
- * The prompt that enters this module may be anything.
- * The prompt that exits is always realism-anchored.
+ * The prompt that enters may be anything.
+ * The prompt that exits is always realism-anchored and clean.
  */
 
 import type { ExpandedPrompt, SanitizeResult, T2VInput, T2VRealismMode } from "./types";
 
-// ── Banned terms (cinematic/stylized/artistic) ─────────────────────────────
+// ── Banned terms — sorted longest-first so multi-word phrases
+//    match before their component words are stripped independently ──────────
 
-const BANNED_TERMS: string[] = [
-  "cinematic", "cinematic quality", "cinema",
-  "dramatic lighting", "dramatic", "dramatic shadows",
-  "film grain", "film look", "filmic",
-  "movie still", "movie quality", "movie-like",
-  "editorial", "fashion photography", "vogue",
-  "studio lighting", "studio light", "studio quality",
-  "professional photography", "professional lighting",
-  "shallow depth of field", "bokeh", "depth of field",
-  "masterpiece", "award-winning", "award winning",
-  "8k", "4k ultra hd", "ultra hd", "ultra high definition",
-  "hyper detailed", "hyper-detailed", "hyperrealistic",
-  "cgi", "cg", "rendered", "render", "3d render",
-  "concept art", "art style", "artistic",
-  "luxury aesthetic", "luxury", "premium look", "premium quality",
-  "glossy", "glossy finish", "polished",
-  "soft focus", "dreamy", "ethereal", "surreal",
-  "color graded", "color grade", "lut applied",
-  "slow motion", "slo-mo",            // unless explicitly requested
-  "epic", "stunning", "breathtaking", "mesmerizing",
-  "vivid colors", "vibrant colors", "saturated",
-  "beautiful", "gorgeous", "perfect", "flawless",
+const BANNED_TERMS: readonly string[] = [
+  // Multi-word first
+  "shallow depth of field",
+  "cinematic quality",
+  "dramatic lighting",
+  "dramatic shadows",
+  "4k ultra hd",
+  "ultra high definition",
+  "ultra hd",
+  "hyper-detailed",
+  "hyper detailed",
+  "film grain",
+  "film look",
+  "movie still",
+  "movie quality",
+  "movie-like",
+  "fashion photography",
+  "studio lighting",
+  "studio light",
+  "studio quality",
+  "professional photography",
+  "professional lighting",
+  "depth of field",
+  "award-winning",
+  "award winning",
+  "luxury aesthetic",
+  "premium look",
+  "premium quality",
+  "glossy finish",
+  "soft focus",
+  "color graded",
+  "color grade",
+  "lut applied",
+  "slow motion",
+  "vivid colors",
+  "vibrant colors",
+  "concept art",
+  "art style",
+  "3d render",
+  // Single-word after multi-word
+  "cinematic",
+  "cinema",
+  "dramatic",
+  "filmic",
+  "editorial",
+  "vogue",
+  "bokeh",
+  "masterpiece",
+  "hyperrealistic",
+  "cgi",
+  "rendered",
+  "render",
+  "artistic",
+  "luxury",
+  "glossy",
+  "polished",
+  "dreamy",
+  "ethereal",
+  "surreal",
+  "slo-mo",
+  "epic",
+  "stunning",
+  "breathtaking",
+  "mesmerizing",
+  "saturated",
+  "beautiful",
+  "gorgeous",
+  "perfect",
+  "flawless",
+  "8k",
+  // "cg" kept last — short term, verify no false positives
+  "cg",
 ];
 
-// ── Required realism anchors per mode ─────────────────────────────────────
+// ── Realism anchors per mode ───────────────────────────────────────────────
 
-const REALISM_ANCHORS: Record<T2VRealismMode, string[]> = {
+const REALISM_ANCHORS: Record<T2VRealismMode, readonly string[]> = {
   human_lifestyle: [
     "ordinary real-world setting",
     "natural ambient lighting",
@@ -72,49 +123,60 @@ const REALISM_ANCHORS: Record<T2VRealismMode, string[]> = {
   ],
 };
 
-// ── Negative prompt applied to every T2V request ──────────────────────────
+// ── Negative prompt sent on every Kling request ────────────────────────────
 
-const UNIVERSAL_NEGATIVE =
+export const UNIVERSAL_NEGATIVE =
   "cinematic, dramatic lighting, studio lighting, film look, color grade, " +
-  "hyperrealistic render, CGI, concept art, luxury, premium aesthetic, " +
+  "hyperrealistic render, CGI, concept art, luxury aesthetic, premium aesthetic, " +
   "bokeh, shallow depth of field, perfect symmetry, polished, glossy, " +
   "AI-generated look, stylized, slow motion, slo-mo, title cards, text overlays, " +
-  "watermarks, subtitles, captions, UI elements, interface elements";
+  "watermarks, subtitles, captions, UI elements, interface elements, " +
+  "surreal, ethereal, dreamy, editorial, fashion photography";
 
 // ── sanitizePrompt ─────────────────────────────────────────────────────────
 
 export function sanitizePrompt(rawPrompt: string): SanitizeResult {
+  if (!rawPrompt || !rawPrompt.trim()) {
+    return { originalPrompt: rawPrompt, sanitizedPrompt: "", strippedTerms: [], warnings: ["Empty prompt"] };
+  }
+
   const strippedTerms: string[] = [];
   const warnings: string[] = [];
   let result = rawPrompt;
 
   for (const term of BANNED_TERMS) {
-    const regex = new RegExp(`\\b${term.replace(/[-/]/g, "[-/]?")}\\b`, "gi");
+    // Escape special regex chars in the term, then replace spaces with \s+
+    // so "dramatic lighting" matches "dramatic  lighting" too
+    const escapedTerm = term
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // escape regex special chars
+      .replace(/\s+/g, "\\s+");               // flexible whitespace
+    const regex = new RegExp(`(?:^|\\b|\\s)${escapedTerm}(?:\\b|\\s|$)`, "gi");
     if (regex.test(result)) {
       strippedTerms.push(term);
-      result = result.replace(regex, "").trim();
+      // Use a fresh regex for replace (avoid lastIndex state from test())
+      const replaceRegex = new RegExp(`(?:^|\\b|\\s)${escapedTerm}(?:\\b|\\s|$)`, "gi");
+      result = result.replace(replaceRegex, " ").trim();
     }
   }
 
-  // Collapse multiple spaces/commas left behind by removal
-  result = result.replace(/,\s*,/g, ",").replace(/\s{2,}/g, " ").trim();
-  result = result.replace(/^[,\s]+|[,\s]+$/g, "").trim();
+  // Normalise residual punctuation/whitespace after removals
+  result = result
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
 
   if (result.length < 10) {
-    warnings.push("Prompt was heavily stripped — using original intent with realism overrides only");
-    result = rawPrompt.slice(0, 200); // keep original, realism expansion will override
+    // Prompt was entirely cinematic keywords — keep a minimal fallback
+    warnings.push("Prompt was heavily stripped — content was almost entirely cinematic/stylized terms");
+    result = "a real scene with natural lighting";
   }
 
   if (strippedTerms.length > 3) {
-    warnings.push(`Stripped ${strippedTerms.length} cinematic/stylized terms from prompt`);
+    warnings.push(`Stripped ${strippedTerms.length} cinematic/stylized terms`);
   }
 
-  return {
-    originalPrompt: rawPrompt,
-    sanitizedPrompt: result,
-    strippedTerms,
-    warnings,
-  };
+  return { originalPrompt: rawPrompt, sanitizedPrompt: result, strippedTerms, warnings };
 }
 
 // ── expandPromptWithRealism ────────────────────────────────────────────────
@@ -125,24 +187,24 @@ export function expandPromptWithRealism(
 ): ExpandedPrompt {
   const anchors = REALISM_ANCHORS[mode];
 
-  const finalPrompt = [
+  const parts = [
     sanitized.sanitizedPrompt,
     anchors.join(", "),
-    "If the output looks cinematic, polished, or stylized it is wrong.",
-    "If the output looks ordinary, natural, and real it is correct.",
-  ]
-    .filter(Boolean)
-    .join(". ");
+    "If the output looks cinematic, polished, or stylized — it is wrong.",
+    "If the output looks ordinary, natural, and real — it is correct.",
+  ].filter(s => s.trim().length > 0);
+
+  const finalPrompt = parts.join(". ");
 
   return {
     sanitized,
     finalPrompt,
     negativePrompt: UNIVERSAL_NEGATIVE,
-    injectedAnchors: anchors,
+    injectedAnchors: [...anchors],
   };
 }
 
-// ── Entry point ────────────────────────────────────────────────────────────
+// ── buildT2VPrompt — single entry point ───────────────────────────────────
 
 export function buildT2VPrompt(input: T2VInput): ExpandedPrompt {
   const sanitized = sanitizePrompt(input.prompt);
