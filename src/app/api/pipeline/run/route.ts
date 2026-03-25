@@ -1,9 +1,13 @@
 /**
  * /api/pipeline/run — Production pipeline route.
  *
- * Separate from /api/pipeline/run-node (the spec route).
- * Calls runPipelineProduction which wires real Kling I2V
- * and real Satori+Sharp compositor instead of spec stubs.
+ * Uses runPipelineProduction from pipeline-orchestrator:
+ * - AI-generated concepts (no hardcoded telehealth angles)
+ * - AI-generated copy (no mechanical extraction)
+ * - Config-driven validator (no niche lock)
+ * - All 3 concepts generate images in parallel
+ * - Real Kling I2V
+ * - Real Satori compositor + Supabase upload
  */
 
 import { NextRequest, NextResponse } from "next/server";
