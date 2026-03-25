@@ -493,7 +493,6 @@ const MANDATORY_IMAGE_NEGATIVE_ELEMENTS = [
   'no floating limbs',
   'no extra limbs',
   'no missing limbs',
-  'no asymmetric face',
   'no dead eyes',
   'no plastic skin',
   'no uncanny valley',

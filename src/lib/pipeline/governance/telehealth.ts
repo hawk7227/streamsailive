@@ -136,7 +136,7 @@ export const TELEHEALTH_GOVERNANCE = {
 
   strategyPrompt: `You are a senior healthcare brand strategist.
 
-Build a creative strategy for telehealth advertising that is compliant, premium, and conversion-focused.
+Build a creative strategy for telehealth advertising that is compliant, believable, and conversion-focused. Prioritise realism over polish. Images must look real, not produced.
 
 Governance rules in effect:
 - NO diagnostic claims
@@ -204,7 +204,7 @@ Max 40 words. Return the motion prompt as a plain string.`,
 
   // ─── Brand voice document ─────────────────────────────────────────────────
   brandVoiceDocument: {
-    personality: ["warm", "direct", "trustworthy", "discreet", "premium"] as string[],
+    personality: ["warm", "direct", "trustworthy", "discreet", "human"] as string[],
     notPersonality: ["clinical", "cold", "salesy", "urgent", "aggressive", "overly casual"] as string[],
     approvedVocabulary: [
       "provider", "care", "visit", "intake", "eligible", "review",
@@ -330,7 +330,7 @@ Perform a complete checklist review:
 2. Zero banned phrases in any field
 3. No medical claims or diagnostic language
 4. All eligibility qualifiers present
-5. Tone matches brand guide (premium, calm, trustworthy)
+5. Tone matches brand guide (warm, calm, trustworthy, human)
 6. All field length limits respected
 7. CTA is low-friction (no commitment language)
 8. Image prompt anatomically safe (no distorted hands/faces)

@@ -97,7 +97,7 @@ Analyse the provided source content and return ONLY a valid JSON object (no mark
 {
   "analysisResult": "2-3 sentence summary of the brand, tone, and key messaging found",
   "suggestedStrategy": "1-2 sentence strategic direction for ad creation",
-  "suggestedImagePrompt": "A complete image generation prompt for a premium brand scene (under 50 words)",
+  "suggestedImagePrompt": "A realistic, unpolished description of a real person using telehealth at home (under 50 words). No premium, cinematic, or lifestyle language.",
   "suggestedVideoDirection": "Motion direction for image-to-video (under 40 words, motion only)",
   "detectedStyle": "one of: premium-healthcare, clinical, warm-modern, minimal, bold, generic",
   "sourceType": "${type}"
@@ -109,7 +109,7 @@ All output must be safe for telehealth advertising: no medical claims, no guaran
 
   const userMessage = sourceContent
     ? `Analyse this source content:\n\n${sourceContent}`
-    : `Analyse this ${type} intake. No extractable content was available — provide generic premium healthcare direction.`;
+    : `Analyse this ${type} intake. No extractable content was available — provide realistic, ordinary healthcare direction. Avoid premium or cinematic language.`;
 
   const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

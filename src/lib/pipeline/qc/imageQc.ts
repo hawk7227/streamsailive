@@ -80,7 +80,7 @@ function buildPositiveAnchors(governance: ActiveGovernance): string {
   }).imageGenerationRules?.mandatoryPositiveAnchors
 
   if (!anchors || anchors.length === 0) {
-    return 'natural expression, symmetric features, photorealistic, warm lighting'
+    return 'natural expression, natural lighting, real person, ordinary setting'
   }
   return anchors.join(', ')
 }

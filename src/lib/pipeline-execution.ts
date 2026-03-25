@@ -4,6 +4,7 @@ import { GenerationType } from "@/lib/ai/types";
 import { loadGovernance } from "@/lib/pipeline/governance";
 import { assertIntakePassed, assertRulesetVersionMatch } from "@/lib/pipeline/qc/intakeGate";
 import { validateAndAugmentImagePrompt, runImageGenerationWithQc } from "@/lib/pipeline/qc/imageQc";
+import { sanitizeRealismPrompt } from "@/lib/pipeline/realism/realism-sanitizer";
 import { validateVideoUrl } from "@/lib/pipeline/qc/deterministicChecks";
 import type { IntakeBrief, IntakeGateResult } from "@/lib/pipeline/qc/intakeGate";
 
@@ -932,15 +933,27 @@ export async function executeNode(node: any, context: any) {
       || (strategyResult?.responseText ?? null)
       || context?.copy
       || "";
-    const basePrompt = [
-      data.imagePrompt || governance.imagePrompt,
-      `Concept: ${normalizeString(conceptData)}`,
-    ].filter(Boolean).join("\n");
+    // Run through realism sanitizer — strips all beauty/polish language,
+    // injects full locked realism prompt. Same path as /api/generations.
+    const subjectAction = normalizeString(conceptData) ||
+      "a person in their 30s at home, casually holding a smartphone and looking at the screen";
+    const sanitized = sanitizeRealismPrompt({
+      rawPrompt: data.imagePrompt || governance.imagePrompt || subjectAction,
+      subjectAction,
+      mode: "casual_phone_photo",
+      subjectType: "human",
+      severity: "strict",
+      requireHumanRealism: true,
+      requireEnvironmentRealism: true,
+      requirePhoneCameraLook: true,
+      banTextOverlays: true,
+      banUiPanels: true,
+    });
 
-    // Validate and augment prompt with mandatory negative + positive anchors
+    // Still run QC validation (OCR check etc) but use sanitized prompt
     const fullGovernance = loadGovernance(governance.pipelineType);
     const targetPlatform = intakeBrief?.targetPlatform ?? "organic";
-    const promptQc = validateAndAugmentImagePrompt(basePrompt, fullGovernance, targetPlatform);
+    const promptQc = validateAndAugmentImagePrompt(sanitized.sanitizedPrompt, fullGovernance, targetPlatform);
 
     // Run with multi-attempt QC
     const qcResult = await runImageGenerationWithQc({

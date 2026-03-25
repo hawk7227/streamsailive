@@ -502,7 +502,7 @@ describe('buildImageNegativePrompt', () => {
 
   it('includes face quality blocks', () => {
     const prompt = buildImageNegativePrompt()
-    expect(prompt).toContain('no asymmetric face')
+    expect(prompt).toContain('no dead eyes')
     expect(prompt).toContain('no dead eyes')
     expect(prompt).toContain('no plastic skin')
     expect(prompt).toContain('no uncanny valley')
@@ -527,7 +527,7 @@ describe('checkImageNegativePromptPresent', () => {
   })
 
   it('fails when "no text" is absent', () => {
-    const prompt = 'A clean telehealth scene. Negative prompt: no distorted hands, no extra fingers, no fused fingers, no floating limbs, no extra limbs, no missing limbs, no asymmetric face, no dead eyes, no plastic skin, no uncanny valley, no stock photography, no before/after, no signs, no labels, no captions, no watermarks, no words, no letters'
+    const prompt = 'A clean telehealth scene. Negative prompt: no distorted hands, no extra fingers, no fused fingers, no floating limbs, no extra limbs, no missing limbs, no dead eyes, no plastic skin, no uncanny valley, no stock photography, no before/after, no signs, no labels, no captions, no watermarks, no words, no letters'
     const result = checkImageNegativePromptPresent(prompt)
     expect(result.passed).toBe(false)
     expect(result.missingElements).toContain('no text')

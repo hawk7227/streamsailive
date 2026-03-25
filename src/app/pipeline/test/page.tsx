@@ -59,36 +59,28 @@ export default function PipelineTestPage() {
 
   // Step prompts — keyed by step id
   const [stepPrompts, setStepPrompts] = useState<Record<string, string>>({
-    strategy: `You are generating a premium telehealth marketing image.
+    strategy: `You are building a creative strategy for a telehealth content campaign.
 
 Goal:
-Create a HIGH-CONVERSION, PHOTO-REALISTIC telehealth scenario image that feels like a real moment — NOT stock, NOT staged, NOT generic.
+Create a strategy for generating a believable, realistic image of a real person using telehealth at home.
 
-This image must:
-- Look like a real patient using telehealth naturally
-- Include emotional clarity (relief, confidence, ease)
-- Show outcome or progress (NOT just a person holding a phone)
-- Feel premium, modern, and mobile-first
-- Be believable enough for a healthcare landing page
+The image must:
+- Look like a real moment, not a production shoot
+- Show a real person in a real home environment
+- Be believable and ordinary — not impressive or polished
+- Work as a healthcare landing page image
 
-Scene requirements:
-- Real human subject (diverse, natural, not model-like posing)
-- Clear context (home, couch, bedroom, clean environment)
-- Device interaction (phone in hand, looking at screen)
-- Subtle medical relevance (medication, UI overlay, confirmation state)
-
-Visual style:
-- Soft natural lighting
-- Shallow depth of field
-- Clean composition
-- No harsh shadows
-- Premium lifestyle photography
+Scene:
+- Real human subject, natural and unposed
+- Home environment — couch, kitchen, or bedroom
+- Person holding a phone and looking at the screen
+- No staged clinical props
 
 DO NOT:
-- Use flat backgrounds
-- Use cartoon UI
-- Use generic smiling-with-phone stock poses
-- Use overly staged clinical scenes`,
+- Use premium, cinematic, or lifestyle photography language
+- Request shallow depth of field or soft lighting effects
+- Use clean composition or professional portrait framing
+- Request anything that makes the image look polished or produced`,
 
     copy: `Generate minimal overlay UI content that feels real, not designed.
 
