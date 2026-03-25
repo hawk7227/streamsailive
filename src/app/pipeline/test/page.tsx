@@ -250,6 +250,20 @@ Accept only if:
     try { return JSON.parse(window.localStorage.getItem("streamsai:pipeline:presets") ?? "[]"); } catch { return []; }
   });
 
+  // ── Creative Setup state ──────────────────────────────────────────────────
+  const [csFields, setCsFields] = React.useState<Record<string,string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(window.localStorage.getItem("streamsai:cs:fields") ?? "{}"); } catch { return {}; }
+  });
+  const [csRealism, setCsRealism] = React.useState({
+    mode: "STRICT" as "STANDARD"|"SOFT"|"STRICT"|"RAW",
+    imperfections: { skinTexture: true, asymmetry: true, naturalHands: true, slightClutter: true },
+    strictNegatives: { noCinematic: true, noDramatic: true, noBeautyLook: true, noPerfectSkin: true },
+    strictBlocks: { noCinematic: true, noUnplanned: false },
+  });
+  const [csGuidanceFile, setCsGuidanceFile] = React.useState<string|null>(null);
+  const guidanceInputRef = React.useRef<HTMLInputElement>(null);
+
   function saveNamedPreset() {
     const name = pipelineName.trim();
     if (!name) return;
@@ -785,6 +799,7 @@ Accept only if:
         window.localStorage.setItem("streamsai:pipeline:imagePrompt", imagePrompt);
         window.localStorage.setItem("streamsai:pipeline:videoPrompt", videoPrompt);
         window.localStorage.setItem("streamsai:pipeline:stepPrompts", JSON.stringify(stepPrompts));
+        window.localStorage.setItem("streamsai:cs:fields", JSON.stringify(csFields));
       } catch { /* storage full */ }
     }, 3000);
     return () => clearTimeout(timer);
@@ -1139,54 +1154,208 @@ Accept only if:
           <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{display:"none"}}
             onChange={e=>{const f=e.target.files?.[0];if(f)handleVideoRefUpload(f);e.target.value="";}}/>
 
-          <div style={{display:"grid",gridTemplateColumns:"200px 1fr 320px",gap:14,marginBottom:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"320px 1fr 320px",gap:14,marginBottom:14}}>
 
-            {/* ── LEFT NAV ────────────────────────────────────────────────── */}
-            <div style={P({padding:0,display:"flex",flexDirection:"column",minHeight:520})}>
-              {/* Logo */}
-              <div style={{padding:"14px 16px 12px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366f1,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",flexShrink:0}}>S</div>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9",lineHeight:1.2}}>StreamsAI</div>
-                  <div style={{fontSize:10,color:"#475569"}}>Media Generator</div>
-                </div>
-              </div>
-              {/* Image / Video pill toggle */}
-              <div style={{padding:"8px 12px 6px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-                <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:8,padding:3,gap:2}}>
-                  {(["Image","Video"] as MediaTab[]).map(m=>(
-                    <button key={m} onClick={()=>setMediaTab(m)} style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:mediaTab===m?700:400,cursor:"pointer",background:mediaTab===m?"rgba(103,232,249,0.15)":"transparent",color:mediaTab===m?"#67e8f9":"#64748b",transition:"all 160ms ease"}}>
-                      {m}
+            {/* ── LEFT NAV: Creative Setup ──────────────────────────────── */}
+            <div style={P({padding:0,display:"flex",flexDirection:"column",overflowY:"auto",maxHeight:"90vh"})}>
+
+              {/* Header */}
+              <div style={{padding:"12px 16px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>Creative Setup <span style={{fontSize:10,color:"#475569",fontWeight:400}}>(Required Before Run)</span></div>
+                {/* Studio tabs */}
+                <div style={{display:"flex",gap:4,marginTop:10}}>
+                  {(["Video Studio","Image Studio"] as const).map(t=>(
+                    <button key={t} onClick={()=>setMediaTab(t==="Image Studio"?"Image":"Video")}
+                      style={{padding:"5px 12px",borderRadius:7,border:"1px solid "+(((t==="Image Studio"&&mediaTab==="Image")||(t==="Video Studio"&&mediaTab==="Video"))?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.1)"),background:((t==="Image Studio"&&mediaTab==="Image")||(t==="Video Studio"&&mediaTab==="Video"))?"rgba(103,232,249,0.1)":"transparent",color:((t==="Image Studio"&&mediaTab==="Image")||(t==="Video Studio"&&mediaTab==="Video"))?"#67e8f9":"#64748b",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                      {t}
                     </button>
                   ))}
                 </div>
               </div>
-              {/* More tools menu */}
-              <div style={{margin:"8px 14px 0",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,position:"relative"}}>
-                <button onClick={()=>setNavMenuOpen(o=>!o)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer",outline:"none"}}>
-                  <span>More tools…</span>
-                  <span style={{fontSize:10,transform:navMenuOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 150ms"}}>▼</span>
-                </button>
-                {navMenuOpen && (
-                  <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#0d1117",border:"1px solid rgba(255,255,255,0.12)",borderRadius:9,overflow:"hidden",zIndex:200,boxShadow:"0 10px 30px rgba(0,0,0,0.4)"}}>
+
+              <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:14,flex:1}}>
+
+                {/* 1. Intent */}
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>1. Intent</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {[
-                      {label:"Templates",  action:()=>{ setNavMenuOpen(false); }},
-                      {label:"AI Ideas",   action:()=>{ mediaTab==="Image"?getImageIdeas():getVideoIdeas(); setNavMenuOpen(false); }},
-                      {label:"Library",    action:()=>{ setWorkspaceTab("output"); setNavMenuOpen(false); }},
-                      {label:"History",    action:()=>{ setWorkspaceTab("logs"); setNavMenuOpen(false); }},
-                    ].map(item=>(
-                      <button key={item.label} onClick={item.action}
-                        style={{display:"block",width:"100%",padding:"10px 14px",background:"transparent",border:"none",borderBottom:"1px solid rgba(255,255,255,0.06)",color:"#94a3b8",fontSize:12,cursor:"pointer",textAlign:"left",transition:"background 120ms"}}
-                        onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="rgba(103,232,249,0.07)";(e.currentTarget as HTMLButtonElement).style.color="#67e8f9";}}
-                        onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent";(e.currentTarget as HTMLButtonElement).style.color="#94a3b8";}}>
-                        {item.label}
-                      </button>
+                      {label:"Objective", key:"csObjective", placeholder:"e.g. product awareness"},
+                      {label:"Audience",  key:"csAudience",  placeholder:"e.g. women 25–40"},
+                    ].map(f=>(
+                      <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>{f.label}</span>
+                        <input value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",outline:"none"}}/>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>Platform</span>
+                      <select value={csFields.csPlatform??"Website"} onChange={e=>setCsFields(p=>({...p,csPlatform:e.target.value}))}
+                        style={{flex:1,background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                        {["Website","Instagram","TikTok","YouTube","Facebook","LinkedIn"].map(o=><option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>Output Type</span>
+                      <select value={csFields.csOutputType??"Image"} onChange={e=>setCsFields(p=>({...p,csOutputType:e.target.value}))}
+                        style={{flex:1,background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                        {["Image","Video","Both"].map(o=><option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Scene */}
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>2. Scene</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    {[
+                      {label:"Subject",     key:"csSubject",     placeholder:"woman in her 30s, casual"},
+                      {label:"Action",      key:"csAction",      placeholder:"texting on couch"},
+                    ].map(f=>(
+                      <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>{f.label}</span>
+                        <input value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",outline:"none"}}/>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>Environment</span>
+                      <select value={csFields.csEnvironment??"slightly messy living room"} onChange={e=>setCsFields(p=>({...p,csEnvironment:e.target.value}))}
+                        style={{flex:1,background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                        {["slightly messy living room","clean modern kitchen","outdoor park","coffee shop","office","bedroom","gym"].map(o=><option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                      <div>
+                        <div style={{fontSize:9,color:"#475569",marginBottom:3}}>Time of Day</div>
+                        <select value={csFields.csTimeOfDay??"afternoon"} onChange={e=>setCsFields(p=>({...p,csTimeOfDay:e.target.value}))}
+                          style={{width:"100%",background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                          {["morning","afternoon","evening","night","golden hour"].map(o=><option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9,color:"#475569",marginBottom:3}}>Camera Type</div>
+                        <select value={csFields.csCameraType??"smartphone"} onChange={e=>setCsFields(p=>({...p,csCameraType:e.target.value}))}
+                          style={{width:"100%",background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                          {["smartphone","dslr","cinema","drone","35mm film"].map(o=><option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Final Generation Prompt */}
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>4. Final Generation Prompt</div>
+                  <textarea value={csFields.csFinalPrompt??""} onChange={e=>setCsFields(p=>({...p,csFinalPrompt:e.target.value}))}
+                    placeholder="Assembled prompt — or type manually…" rows={3}
+                    style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,color:"#e2e8f0",fontSize:11,padding:"8px 10px",outline:"none",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"}}/>
+                  <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                    <button style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:"#94a3b8",fontSize:10,cursor:"pointer"}}>Generate Ideas</button>
+                    <button style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:"#94a3b8",fontSize:10,cursor:"pointer"}}>Apply Template</button>
+                    <button style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(103,232,249,0.3)",background:"rgba(103,232,249,0.08)",color:"#67e8f9",fontSize:10,cursor:"pointer"}}>Make More Real</button>
+                  </div>
+                </div>
+
+                {/* 3. Realism Control */}
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>3. Realism Control</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <span style={{fontSize:11,color:"#64748b",minWidth:80,flexShrink:0}}>Realism Mode</span>
+                    <select value={csRealism.mode} onChange={e=>setCsRealism(p=>({...p,mode:e.target.value as "STANDARD"|"SOFT"|"STRICT"|"RAW"}))}
+                      style={{flex:1,background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                      {["STANDARD","SOFT","STRICT","RAW"].map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  {/* Imperfections */}
+                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Imperfections</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3,marginBottom:8}}>
+                    {(["skinTexture","asymmetry","naturalHands","slightClutter"] as const).map(k=>(
+                      <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                        <input type="checkbox" checked={csRealism.imperfections[k]} onChange={e=>setCsRealism(p=>({...p,imperfections:{...p.imperfections,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
+                        <span style={{fontSize:10,color:csRealism.imperfections[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
+                      </label>
                     ))}
                   </div>
-                )}
-              </div>
+                  {/* Strict negatives */}
+                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Strict Negatives</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3,marginBottom:8}}>
+                    {(["noCinematic","noDramatic","noBeautyLook","noPerfectSkin"] as const).map(k=>(
+                      <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                        <input type="checkbox" checked={csRealism.strictNegatives[k]} onChange={e=>setCsRealism(p=>({...p,strictNegatives:{...p.strictNegatives,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
+                        <span style={{fontSize:10,color:csRealism.strictNegatives[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").replace("no ","no ").toLowerCase()}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {/* Strict blocks */}
+                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Strict Blocks</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3}}>
+                    {(["noCinematic","noUnplanned"] as const).map(k=>(
+                      <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                        <input type="checkbox" checked={csRealism.strictBlocks[k]} onChange={e=>setCsRealism(p=>({...p,strictBlocks:{...p.strictBlocks,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
+                        <span style={{fontSize:10,color:csRealism.strictBlocks[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
+                {/* Run Controls + Upload */}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                  <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
+                    style={{padding:"8px 14px",borderRadius:8,border:"none",background:pipelineRunning?"rgba(255,255,255,0.08)":"rgba(103,232,249,0.9)",color:pipelineRunning?"#475569":"#000",fontSize:12,fontWeight:700,cursor:pipelineRunning?"not-allowed":"pointer"}}>
+                    Run Pipeline
+                  </button>
+                  <button onClick={()=>guidanceInputRef.current?.click()}
+                    style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+(csGuidanceFile?"rgba(168,85,247,0.4)":"rgba(255,255,255,0.15)"),background:csGuidanceFile?"rgba(168,85,247,0.12)":"transparent",color:csGuidanceFile?"#c4b5fd":"#94a3b8",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                    <span>↑</span>{csGuidanceFile?csGuidanceFile:"upload rule/guidance"}
+                  </button>
+                  {csGuidanceFile&&<button onClick={()=>setCsGuidanceFile(null)} style={{background:"none",border:"none",color:"#475569",fontSize:16,cursor:"pointer",lineHeight:1}}>×</button>}
+                  <input ref={guidanceInputRef} type="file" accept=".txt,.md,.json,.pdf" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f)setCsGuidanceFile(f.name);}}/>
+                </div>
+
+                {/* Pipeline Prompt */}
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>Pipeline Prompt</div>
+                  <textarea value={csFields.csPipelinePrompt??""} onChange={e=>setCsFields(p=>({...p,csPipelinePrompt:e.target.value}))}
+                    placeholder="Describe what you want the pipeline to generate…" rows={3}
+                    style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid "+(csFields.csPipelinePrompt?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,color:"#e2e8f0",fontSize:11,padding:"8px 10px",outline:"none",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"}}/>
+                  {csFields.csPipelinePrompt?.trim()&&(
+                    <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
+                      style={{marginTop:6,width:"100%",padding:"7px 0",borderRadius:8,border:"none",background:"rgba(103,232,249,0.15)",color:"#67e8f9",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Queue Pipeline Job →
+                    </button>
+                  )}
+                </div>
+
+                {/* More tools */}
+                <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:10,position:"relative"}}>
+                  <button onClick={()=>setNavMenuOpen(o=>!o)}
+                    style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer",outline:"none"}}>
+                    <span>More tools…</span>
+                    <span style={{fontSize:10,transform:navMenuOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 150ms"}}>▼</span>
+                  </button>
+                  {navMenuOpen&&(
+                    <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:0,right:0,background:"#0d1117",border:"1px solid rgba(255,255,255,0.12)",borderRadius:9,overflow:"hidden",zIndex:200,boxShadow:"0 10px 30px rgba(0,0,0,0.4)"}}>
+                      {[
+                        {label:"Templates",action:()=>{setNavMenuOpen(false);}},
+                        {label:"AI Ideas",action:()=>{mediaTab==="Image"?getImageIdeas():getVideoIdeas();setNavMenuOpen(false);}},
+                        {label:"Library",action:()=>{setWorkspaceTab("output");setNavMenuOpen(false);}},
+                        {label:"History",action:()=>{setWorkspaceTab("logs");setNavMenuOpen(false);}},
+                      ].map(item=>(
+                        <button key={item.label} onClick={item.action}
+                          style={{display:"block",width:"100%",padding:"10px 14px",background:"transparent",border:"none",borderBottom:"1px solid rgba(255,255,255,0.06)",color:"#94a3b8",fontSize:12,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="rgba(103,232,249,0.07)";(e.currentTarget as HTMLButtonElement).style.color="#67e8f9";}}
+                          onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent";(e.currentTarget as HTMLButtonElement).style.color="#94a3b8";}}>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
             </div>
 
             {/* ── CENTER: PROMPT PANEL ────────────────────────────────────── */}
