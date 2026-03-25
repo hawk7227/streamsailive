@@ -21,6 +21,31 @@ type VideoGenMode = "scratch_t2v" | "i2v";
 type RefClassification = "usable" | "risky" | "reject";
 interface UploadedRef { id: string; url: string; name: string; kind: "image" | "video"; classification: RefClassification; }
 
+// ── Guidance + Conflict types ─────────────────────────────────────────────
+interface GuidanceRule {
+  id: string;
+  field: string;
+  instruction: string;
+  value?: string;
+  severity: "hard" | "soft";
+}
+interface ParsedGuidance {
+  fileName: string;
+  rawContent: string;
+  rules: GuidanceRule[];
+  summary: string;
+}
+interface Conflict {
+  id: string;
+  field: string;
+  label: string;
+  frontendValue: string;
+  guidanceValue: string;
+  severity: "hard" | "soft";
+  status: "unresolved" | "resolved_frontend" | "resolved_guidance";
+  description: string;
+}
+
 // ── Initial step config ────────────────────────────────────────────────────
 const STEPS_INITIAL: Step[] = [
   { id: "strategy",  name: "Creative Strategy",   state: "queued", icon: "◫", output: null, error: null, startedAt: null, completedAt: null },
@@ -262,7 +287,138 @@ Accept only if:
     strictBlocks: { noCinematic: true, noUnplanned: false },
   });
   const [csGuidanceFile, setCsGuidanceFile] = React.useState<string|null>(null);
+  const [parsedGuidance, setParsedGuidance] = React.useState<ParsedGuidance|null>(null);
+  const [guidanceParsing, setGuidanceParsing] = React.useState(false);
+  const [conflicts, setConflicts] = React.useState<Conflict[]>([]);
+  const [showConflictModal, setShowConflictModal] = React.useState(false);
+  const [pendingGeneration, setPendingGeneration] = React.useState<(()=>void)|null>(null);
   const guidanceInputRef = React.useRef<HTMLInputElement>(null);
+
+  // ── Parse guidance file ──────────────────────────────────────────────────
+  async function handleGuidanceUpload(file: File) {
+    setGuidanceParsing(true);
+    setCsGuidanceFile(file.name);
+    setConflicts([]);
+    try {
+      const text = await file.text();
+      const rules = extractGuidanceRules(text);
+      const summary = rules.length > 0
+        ? `${rules.length} rules detected (${rules.filter(r=>r.severity==="hard").length} hard, ${rules.filter(r=>r.severity==="soft").length} soft)`
+        : `Document loaded (${text.split(/\s+/).length} words) — passed as raw context`;
+      setParsedGuidance({ fileName: file.name, rawContent: text, rules, summary });
+      log(`✓ Guidance loaded: ${file.name} — ${summary}`);
+    } catch(e) {
+      log("✗ Guidance parse failed: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setGuidanceParsing(false);
+  }
+
+  function extractGuidanceRules(text: string): GuidanceRule[] {
+    const FIELD_PATTERNS: {field:string;keywords:string[]}[] = [
+      {field:"realism.mode",        keywords:["realism mode","realism:","realism level"]},
+      {field:"realism.noCinematic", keywords:["no cinematic","cinematic"]},
+      {field:"realism.noBeauty",    keywords:["no beauty","beauty look","airbrushed","perfect skin"]},
+      {field:"scene.subject",       keywords:["subject:","subject must","subject should"]},
+      {field:"scene.environment",   keywords:["environment:","setting:","background:","location:"]},
+      {field:"intent.platform",     keywords:["platform:","for platform","channel:"]},
+      {field:"intent.audience",     keywords:["audience:","target audience","demographic:"]},
+      {field:"prompt.forbidden",    keywords:["do not include","never include","forbidden:","avoid:","prohibited:"]},
+      {field:"prompt.required",     keywords:["must include","always include","required:","mandatory:"]},
+    ];
+    const HARD = ["must","never","always","required","mandatory","forbidden","prohibited","do not","cannot"];
+    const lines = text.split("\n").map(l=>l.trim()).filter(l=>l.length>8&&l[0]!=="#");
+    const rules: GuidanceRule[] = [];
+    let id = 0;
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      let field: string|null = null;
+      for (const {field:f,keywords} of FIELD_PATTERNS) {
+        if (keywords.some(k=>lower.includes(k))) { field=f; break; }
+      }
+      if (!field) continue;
+      const severity = HARD.some(k=>lower.includes(k)) ? "hard" : "soft";
+      const colonIdx = line.indexOf(":");
+      const value = colonIdx!==-1 ? line.slice(colonIdx+1).trim() : undefined;
+      rules.push({id:`r${++id}`,field,instruction:line,value:value&&value.length<120?value:undefined,severity});
+    }
+    return rules;
+  }
+
+  function runConflictCheck(
+    guidance: ParsedGuidance,
+    fields: Record<string,string>,
+    realism: typeof csRealism,
+    promptText: string
+  ): Conflict[] {
+    const found: Conflict[] = [];
+    const seen = new Set<string>();
+    for (const rule of guidance.rules) {
+      const lower = rule.instruction.toLowerCase();
+      let frontendValue = "";
+      let guidanceValue = rule.value ?? rule.instruction;
+      let conflict = false;
+      let label = rule.field;
+      let description = "";
+
+      if (rule.field==="realism.mode") {
+        const modes = ["standard","soft","strict","raw"];
+        const gMode = modes.find(m=>lower.includes(m));
+        frontendValue = realism.mode;
+        if (gMode && !frontendValue.toLowerCase().includes(gMode)) {
+          conflict=true; label="Realism Mode";
+          description=`Frontend is ${frontendValue} but guidance requires ${gMode.toUpperCase()}`;
+        }
+      } else if (rule.field==="realism.noCinematic") {
+        frontendValue = realism.strictNegatives.noCinematic?"no cinematic enforced":"cinematic allowed";
+        if (lower.includes("no cinematic")&&frontendValue==="cinematic allowed") {
+          conflict=true; label="Cinematic";
+          description="Guidance prohibits cinematic but frontend allows it";
+        }
+      } else if (rule.field==="realism.noBeauty") {
+        frontendValue = realism.strictNegatives.noBeautyLook?"no beauty enforced":"beauty look allowed";
+        if ((lower.includes("no beauty")||lower.includes("no airbrushed"))&&frontendValue==="beauty look allowed") {
+          conflict=true; label="Beauty Look";
+          description="Guidance prohibits beauty look but frontend allows it";
+        }
+      } else if (rule.field==="intent.platform"&&rule.value) {
+        frontendValue = fields.csPlatform??"Website";
+        if (!frontendValue.toLowerCase().includes(rule.value.toLowerCase())&&!rule.value.toLowerCase().includes(frontendValue.toLowerCase())) {
+          conflict=true; label="Platform";
+          description=`Frontend targets "${frontendValue}" but guidance specifies "${rule.value}"`;
+        }
+      } else if (rule.field==="prompt.forbidden"&&rule.value) {
+        frontendValue = promptText.slice(0,60)+"…";
+        if (promptText.toLowerCase().includes(rule.value.toLowerCase())) {
+          conflict=true; label="Forbidden Content";
+          description=`Prompt contains "${rule.value}" which guidance forbids`;
+        }
+      } else if (rule.field==="prompt.required"&&rule.value) {
+        frontendValue = promptText.slice(0,60)+"…";
+        if (!promptText.toLowerCase().includes(rule.value.toLowerCase())) {
+          conflict=true; label="Required Content";
+          description=`Guidance requires "${rule.value}" in prompt but it is missing`;
+        }
+      }
+
+      if (!conflict) continue;
+      const cid = `c-${rule.field}`;
+      if (seen.has(cid)) continue;
+      seen.add(cid);
+      found.push({id:cid,field:rule.field,label,frontendValue,guidanceValue,severity:rule.severity,status:"unresolved",description});
+    }
+    return found;
+  }
+
+  // ── Gate all generation behind conflict check ─────────────────────────────
+  function gatedGeneration(fn: ()=>void) {
+    if (!parsedGuidance) { fn(); return; }
+    const promptText = (csFields.csPipelinePrompt??"")+" "+(csFields.csFinalPrompt??"");
+    const detected = runConflictCheck(parsedGuidance, csFields, csRealism, promptText);
+    if (detected.length===0) { fn(); return; }
+    setConflicts(detected);
+    setPendingGeneration(()=>fn);
+    setShowConflictModal(true);
+  }
 
   function saveNamedPreset() {
     const name = pipelineName.trim();
@@ -993,8 +1149,103 @@ Accept only if:
 
   const s = { minHeight: "100vh", background: "#050816", color: "#fff", padding: 20, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
 
+  const hardConflicts = conflicts.filter(c=>c.status==="unresolved"&&c.severity==="hard");
+  const unresolvedConflicts = conflicts.filter(c=>c.status==="unresolved");
+  const canRun = hardConflicts.length===0;
+
+  function resolveConflict(id: string, side: "frontend"|"guidance") {
+    setConflicts(prev => prev.map(c => {
+      if (c.id!==id) return c;
+      return {...c, status: side==="frontend"?"resolved_frontend":"resolved_guidance"};
+    }));
+  }
+
+  function resolveAll(side: "frontend"|"guidance") {
+    setConflicts(prev => prev.map(c => ({...c, status: side==="frontend"?"resolved_frontend":"resolved_guidance"})));
+  }
+
+  function proceedAfterResolve() {
+    setShowConflictModal(false);
+    if (pendingGeneration) { pendingGeneration(); setPendingGeneration(null); }
+  }
+
   return (
     <>
+      {/* ── Conflict Modal ─────────────────────────────────────────────── */}
+      {showConflictModal && (
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+          onClick={e=>{if(e.target===e.currentTarget){setShowConflictModal(false);setPendingGeneration(null);}}}>
+          <div style={{width:"100%",maxWidth:620,maxHeight:"85vh",background:"#080d18",border:`1px solid ${hardConflicts.length>0?"rgba(239,68,68,0.4)":"rgba(245,158,11,0.4)"}`,borderRadius:16,display:"flex",flexDirection:"column",boxShadow:"0 18px 60px rgba(0,0,0,0.6)",overflow:"hidden"}}>
+            {/* Header */}
+            <div style={{padding:"18px 22px 14px",background:hardConflicts.length>0?"rgba(239,68,68,0.08)":"rgba(245,158,11,0.08)",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:18}}>{hardConflicts.length>0?"⛔":"⚠️"}</span>
+                  <span style={{fontSize:15,fontWeight:700,color:hardConflicts.length>0?"#ef4444":"#f59e0b"}}>
+                    {hardConflicts.length>0?`${hardConflicts.length} Hard Conflict${hardConflicts.length>1?"s":""} — Run Blocked`:`${unresolvedConflicts.length} Conflict${unresolvedConflicts.length!==1?"s":""} Detected`}
+                  </span>
+                </div>
+                <button onClick={()=>{setShowConflictModal(false);setPendingGeneration(null);}} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:20,cursor:"pointer",lineHeight:1}}>×</button>
+              </div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",lineHeight:1.5}}>
+                Your settings conflict with <strong style={{color:"#c4b5fd"}}>{parsedGuidance?.fileName}</strong>.
+                {hardConflicts.length>0?" Resolve all hard conflicts before running.":" Soft conflicts are warnings — review then run."}
+              </div>
+              {parsedGuidance&&<div style={{marginTop:8,fontSize:10,color:"rgba(255,255,255,0.35)",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:6,padding:"5px 10px"}}>{parsedGuidance.summary}</div>}
+            </div>
+            {/* Bulk resolve */}
+            <div style={{padding:"8px 22px",background:"rgba(255,255,255,0.02)",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginRight:4}}>Resolve all:</span>
+              <button onClick={()=>resolveAll("frontend")} style={{padding:"4px 12px",borderRadius:7,border:"1px solid rgba(103,232,249,0.3)",background:"rgba(103,232,249,0.1)",color:"#67e8f9",fontSize:11,fontWeight:600,cursor:"pointer"}}>Keep All Mine</button>
+              <button onClick={()=>resolveAll("guidance")} style={{padding:"4px 12px",borderRadius:7,border:"1px solid rgba(168,85,247,0.3)",background:"rgba(168,85,247,0.1)",color:"#c4b5fd",fontSize:11,fontWeight:600,cursor:"pointer"}}>Use All Guidance</button>
+            </div>
+            {/* Conflict list */}
+            <div style={{flex:1,overflowY:"auto",padding:"10px 22px 8px"}}>
+              {conflicts.map(c=>{
+                const resolved = c.status!=="unresolved";
+                const fWon = c.status==="resolved_frontend";
+                return (
+                  <div key={c.id} style={{marginBottom:10,border:`1px solid ${resolved?(fWon?"rgba(103,232,249,0.2)":"rgba(168,85,247,0.2)"):(c.severity==="hard"?"rgba(239,68,68,0.3)":"rgba(245,158,11,0.3)")}`,borderRadius:10,overflow:"hidden",opacity:resolved?0.7:1,transition:"opacity 200ms"}}>
+                    <div style={{padding:"8px 12px",background:resolved?(fWon?"rgba(103,232,249,0.06)":"rgba(168,85,247,0.06)"):(c.severity==="hard"?"rgba(239,68,68,0.08)":"rgba(245,158,11,0.08)"),display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.06em",padding:"2px 6px",borderRadius:4,background:c.severity==="hard"?"rgba(239,68,68,0.15)":"rgba(245,158,11,0.15)",color:c.severity==="hard"?"#ef4444":"#f59e0b",flexShrink:0}}>{c.severity.toUpperCase()}</span>
+                      <span style={{fontSize:12,fontWeight:600,color:"#f1f5f9"}}>{c.label}</span>
+                      {resolved&&<span style={{marginLeft:"auto",fontSize:9,fontWeight:700,color:fWon?"#67e8f9":"#c4b5fd"}}>{fWon?"✓ FRONTEND WINS":"✓ GUIDANCE WINS"}</span>}
+                    </div>
+                    <div style={{padding:"8px 12px 10px",background:"rgba(255,255,255,0.015)"}}>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:8,lineHeight:1.5}}>{c.description}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                        {[{l:"Frontend",v:c.frontendValue,active:!resolved||fWon,color:"#67e8f9",bg:"rgba(103,232,249,0.08)",bd:"rgba(103,232,249,0.2)"},{l:"Guidance",v:c.guidanceValue,active:!resolved||!fWon,color:"#c4b5fd",bg:"rgba(168,85,247,0.08)",bd:"rgba(168,85,247,0.2)"}].map(({l,v,active,color,bg,bd})=>(
+                          <div key={l} style={{padding:"7px 10px",borderRadius:7,border:`1px solid ${active?bd:"rgba(255,255,255,0.06)"}`,background:active?bg:"transparent",transition:"all 200ms"}}>
+                            <div style={{fontSize:9,fontWeight:700,color:active?color:"rgba(255,255,255,0.25)",marginBottom:3,letterSpacing:"0.06em"}}>{l.toUpperCase()}</div>
+                            <div style={{fontSize:11,color:active?"#f1f5f9":"rgba(255,255,255,0.4)",wordBreak:"break-word",lineHeight:1.4}}>{v||"(not set)"}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {!resolved
+                        ? <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>resolveConflict(c.id,"frontend")} style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid rgba(103,232,249,0.3)",background:"rgba(103,232,249,0.1)",color:"#67e8f9",fontSize:11,fontWeight:600,cursor:"pointer"}}>Keep Mine</button>
+                            <button onClick={()=>resolveConflict(c.id,"guidance")} style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid rgba(168,85,247,0.3)",background:"rgba(168,85,247,0.1)",color:"#c4b5fd",fontSize:11,fontWeight:600,cursor:"pointer"}}>Use Guidance</button>
+                          </div>
+                        : <button onClick={()=>resolveConflict(c.id,fWon?"guidance":"frontend")} style={{padding:"4px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.3)",fontSize:10,cursor:"pointer"}}>Change</button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer */}
+            <div style={{padding:"12px 22px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>
+                {unresolvedConflicts.length>0?`${unresolvedConflicts.length} unresolved · ${hardConflicts.length} blocking`:<span style={{color:"#6ee7b7"}}>✓ All resolved</span>}
+              </span>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setShowConflictModal(false);setPendingGeneration(null);}} style={{padding:"7px 16px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:12,cursor:"pointer"}}>Cancel</button>
+                {canRun&&<button onClick={proceedAfterResolve} style={{padding:"7px 18px",borderRadius:8,border:"none",background:"linear-gradient(90deg,rgba(168,85,247,0.9),rgba(34,211,238,0.7))",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>▶ Run Pipeline</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
@@ -1136,11 +1387,11 @@ Accept only if:
             </button>
             <button style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Save</button>
             <button style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Pause</button>
-            <button onClick={runPipeline} disabled={pipelineRunning}
+            <button onClick={()=>gatedGeneration(()=>runPipeline())} disabled={pipelineRunning}
               style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#94a3b8", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               ▶ Run Image Pipeline
             </button>
-            <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
+            <button onClick={()=>gatedGeneration(()=>runFullGovernancePipeline())} disabled={pipelineRunning}
               style={{ background: pipelineRunning ? "rgba(168,85,247,0.3)" : "linear-gradient(90deg,rgba(168,85,247,0.9),rgba(34,211,238,0.7))", border: "none", color: "#fff", borderRadius: 10, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: pipelineRunning ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               {pipelineRunning ? "⏳ Running Pipeline…" : "▶ Run Full Governance Pipeline"}
             </button>
@@ -1303,16 +1554,31 @@ Accept only if:
 
                 {/* Run Controls + Upload */}
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                  <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
+                  <button onClick={()=>gatedGeneration(()=>runFullGovernancePipeline())} disabled={pipelineRunning}
                     style={{padding:"8px 14px",borderRadius:8,border:"none",background:pipelineRunning?"rgba(255,255,255,0.08)":"rgba(103,232,249,0.9)",color:pipelineRunning?"#475569":"#000",fontSize:12,fontWeight:700,cursor:pipelineRunning?"not-allowed":"pointer"}}>
                     Run Pipeline
                   </button>
-                  <button onClick={()=>guidanceInputRef.current?.click()}
-                    style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+(csGuidanceFile?"rgba(168,85,247,0.4)":"rgba(255,255,255,0.15)"),background:csGuidanceFile?"rgba(168,85,247,0.12)":"transparent",color:csGuidanceFile?"#c4b5fd":"#94a3b8",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                    <span>↑</span>{csGuidanceFile?csGuidanceFile:"upload rule/guidance"}
+                  <button onClick={()=>guidanceInputRef.current?.click()} disabled={guidanceParsing}
+                    style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+(parsedGuidance?"rgba(168,85,247,0.4)":"rgba(255,255,255,0.15)"),background:parsedGuidance?"rgba(168,85,247,0.12)":"transparent",color:parsedGuidance?"#c4b5fd":"#94a3b8",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                    <span>{guidanceParsing?"⏳":"↑"}</span>{guidanceParsing?"Parsing…":parsedGuidance?parsedGuidance.fileName:"upload rule/guidance"}
                   </button>
-                  {csGuidanceFile&&<button onClick={()=>setCsGuidanceFile(null)} style={{background:"none",border:"none",color:"#475569",fontSize:16,cursor:"pointer",lineHeight:1}}>×</button>}
-                  <input ref={guidanceInputRef} type="file" accept=".txt,.md,.json,.pdf" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f)setCsGuidanceFile(f.name);}}/>
+                  {parsedGuidance&&<button onClick={()=>{setParsedGuidance(null);setCsGuidanceFile(null);setConflicts([]);}} style={{background:"none",border:"none",color:"#475569",fontSize:16,cursor:"pointer",lineHeight:1}}>×</button>}
+                  <input ref={guidanceInputRef} type="file" accept=".txt,.md,.json,.pdf" style={{display:"none"}} onChange={async e=>{const f=e.target.files?.[0];if(f){await handleGuidanceUpload(f);}e.target.value="";}}/>
+                  {/* Guidance loaded summary */}
+                  {parsedGuidance&&(
+                    <div style={{width:"100%",marginTop:6,padding:"8px 10px",borderRadius:8,background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.2)"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:10,fontWeight:700,color:"#c4b5fd",letterSpacing:"0.04em"}}>GUIDANCE LOADED</span>
+                        {conflicts.length>0&&(
+                          <button onClick={()=>setShowConflictModal(true)} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:999,border:`1px solid ${hardConflicts.length>0?"rgba(239,68,68,0.4)":"rgba(245,158,11,0.4)"}`,background:hardConflicts.length>0?"rgba(239,68,68,0.1)":"rgba(245,158,11,0.1)",color:hardConflicts.length>0?"#ef4444":"#f59e0b",cursor:"pointer"}}>
+                            {unresolvedConflicts.length>0?`${unresolvedConflicts.length} Conflicts — Review`:"✓ All Resolved"}
+                          </button>
+                        )}
+                        {conflicts.length===0&&parsedGuidance.rules.length>0&&<span style={{fontSize:10,color:"#6ee7b7"}}>✓ No conflicts</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",lineHeight:1.4}}>{parsedGuidance.summary}</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Pipeline Prompt */}
@@ -1322,7 +1588,7 @@ Accept only if:
                     placeholder="Describe what you want the pipeline to generate…" rows={3}
                     style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid "+(csFields.csPipelinePrompt?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,color:"#e2e8f0",fontSize:11,padding:"8px 10px",outline:"none",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"}}/>
                   {csFields.csPipelinePrompt?.trim()&&(
-                    <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
+                    <button onClick={()=>gatedGeneration(()=>runFullGovernancePipeline())} disabled={pipelineRunning}
                       style={{marginTop:6,width:"100%",padding:"7px 0",borderRadius:8,border:"none",background:"rgba(103,232,249,0.15)",color:"#67e8f9",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Queue Pipeline Job →
                     </button>
@@ -1572,7 +1838,7 @@ Accept only if:
 
                   {/* Bottom action bar */}
                   <div style={{padding:"10px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                    <button onClick={generateDualImage} disabled={imageGenerating||!imagePrompt.trim()}
+                    <button onClick={()=>gatedGeneration(()=>generateDualImage())} disabled={imageGenerating||!imagePrompt.trim()}
                       style={{background:imageGenerating||!imagePrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)",border:"1px solid rgba(255,255,255,0.15)",color:imageGenerating||!imagePrompt.trim()?"#475569":"#0f172a",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:imageGenerating||!imagePrompt.trim()?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,minWidth:130}}>
                       {imageGenerating?<><Spinner size={12}/>Generating…</>:"Generate Image"}
                     </button>
@@ -1736,7 +2002,7 @@ Accept only if:
 
                   {/* Bottom bar */}
                   <div style={{padding:"10px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,flexWrap:"wrap"}}>
-                    <button onClick={generateDualVideo} disabled={videoGenerating||!videoPrompt.trim()||(videoMode==="i2v"&&!imageResult)}
+                    <button onClick={()=>gatedGeneration(()=>generateDualVideo())} disabled={videoGenerating||!videoPrompt.trim()||(videoMode==="i2v"&&!imageResult)}
                       style={{background:videoGenerating||!videoPrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)",border:"1px solid rgba(255,255,255,0.15)",color:videoGenerating||!videoPrompt.trim()?"#475569":"#0f172a",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,minWidth:130}}>
                       {videoGenerating?<><Spinner size={12}/>Generating…</>:"Generate Video"}
                     </button>
@@ -2298,7 +2564,7 @@ Accept only if:
                           <span style={{ fontSize: 18 }}>⚠️</span>
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171" }}>Generation Failed</span>
                           <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", lineHeight: 1.5, wordBreak: "break-word", maxWidth: "100%" }}>{out.error}</span>
-                          <button onClick={() => generateImage(cid)} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
+                          <button onClick={() => gatedGeneration(()=>generateImage(cid))} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
                         </div>
                       ) : (
                         <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No image yet</div>
@@ -2330,12 +2596,12 @@ Accept only if:
                       style={{ flex: 1, background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)", color: "#6ee7b7", borderRadius: 8, padding: "6px 0", fontSize: 11, cursor: "pointer", fontWeight: 600, opacity: (tab === "Video" ? out?.video : out?.image) ? 1 : 0.3 }}>
                       ✓ Approve
                     </button>
-                    <button onClick={() => generateImage(cid)}
+                    <button onClick={() => gatedGeneration(()=>generateImage(cid))}
                       disabled={isActive}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
                       Run Concept Image
                     </button>
-                    <button onClick={() => generateVideo(cid)}
+                    <button onClick={() => gatedGeneration(()=>generateVideo(cid))}
                       disabled={isActive}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
                       Run Concept Video
