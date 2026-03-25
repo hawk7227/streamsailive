@@ -1412,7 +1412,7 @@ Accept only if:
 
               {/* Header */}
               <div style={{padding:"12px 16px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>Creative Setup <span style={{fontSize:10,color:"#475569",fontWeight:400}}>(Required Before Run)</span></div>
+                <div style={{fontSize:16,fontWeight:700,color:"#f1f5f9"}}>Creative Setup <span style={{fontSize:12,color:"#64748b",fontWeight:400}}>(Required Before Run)</span></div>
                 {/* Studio tabs */}
                 <div style={{display:"flex",gap:4,marginTop:10}}>
                   {(["Video Studio","Image Studio"] as const).map(t=>(
@@ -1428,16 +1428,16 @@ Accept only if:
 
                 {/* 1. Intent */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>1. Intent</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>1. Intent</div>
                   <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {[
                       {label:"Objective", key:"csObjective", placeholder:"e.g. product awareness"},
                       {label:"Audience",  key:"csAudience",  placeholder:"e.g. women 25–40"},
                     ].map(f=>(
                       <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:11,color:"#64748b",minWidth:64,flexShrink:0}}>{f.label}</span>
+                        <span style={{fontSize:13,color:"#94a3b8",minWidth:80,flexShrink:0}}>{f.label}</span>
                         <input value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
-                          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",outline:"none"}}/>
+                          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:13,padding:"7px 10px",outline:"none"}}/>
                       </div>
                     ))}
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1459,7 +1459,7 @@ Accept only if:
 
                 {/* 2. Scene */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>2. Scene</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>2. Scene</div>
                   <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {[
                       {label:"Subject",     key:"csSubject",     placeholder:"woman in her 30s, casual"},
@@ -1499,7 +1499,7 @@ Accept only if:
 
                 {/* 3. Final Generation Prompt */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>4. Final Generation Prompt</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>4. Final Generation Prompt</div>
                   <textarea value={csFields.csFinalPrompt??""} onChange={e=>setCsFields(p=>({...p,csFinalPrompt:e.target.value}))}
                     placeholder="Assembled prompt — or type manually…" rows={3}
                     style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,color:"#e2e8f0",fontSize:11,padding:"8px 10px",outline:"none",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"}}/>
@@ -1512,41 +1512,41 @@ Accept only if:
 
                 {/* 3. Realism Control */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>3. Realism Control</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>3. Realism Control</div>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                    <span style={{fontSize:11,color:"#64748b",minWidth:80,flexShrink:0}}>Realism Mode</span>
+                    <span style={{fontSize:13,color:"#94a3b8",minWidth:80,flexShrink:0}}>Realism Mode</span>
                     <select value={csRealism.mode} onChange={e=>setCsRealism(p=>({...p,mode:e.target.value as "STANDARD"|"SOFT"|"STRICT"|"RAW"}))}
                       style={{flex:1,background:"#0a1020",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,color:"#e2e8f0",fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
                       {["STANDARD","SOFT","STRICT","RAW"].map(o=><option key={o}>{o}</option>)}
                     </select>
                   </div>
                   {/* Imperfections */}
-                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Imperfections</div>
+                  <div style={{fontSize:11,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Imperfections</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3,marginBottom:8}}>
                     {(["skinTexture","asymmetry","naturalHands","slightClutter"] as const).map(k=>(
                       <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
                         <input type="checkbox" checked={csRealism.imperfections[k]} onChange={e=>setCsRealism(p=>({...p,imperfections:{...p.imperfections,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
-                        <span style={{fontSize:10,color:csRealism.imperfections[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
+                        <span style={{fontSize:13,color:csRealism.imperfections[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
                       </label>
                     ))}
                   </div>
                   {/* Strict negatives */}
-                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Strict Negatives</div>
+                  <div style={{fontSize:11,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Strict Negatives</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3,marginBottom:8}}>
                     {(["noCinematic","noDramatic","noBeautyLook","noPerfectSkin"] as const).map(k=>(
                       <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
                         <input type="checkbox" checked={csRealism.strictNegatives[k]} onChange={e=>setCsRealism(p=>({...p,strictNegatives:{...p.strictNegatives,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
-                        <span style={{fontSize:10,color:csRealism.strictNegatives[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").replace("no ","no ").toLowerCase()}</span>
+                        <span style={{fontSize:13,color:csRealism.strictNegatives[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").replace("no ","no ").toLowerCase()}</span>
                       </label>
                     ))}
                   </div>
                   {/* Strict blocks */}
-                  <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Strict Blocks</div>
+                  <div style={{fontSize:11,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Strict Blocks</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3}}>
                     {(["noCinematic","noUnplanned"] as const).map(k=>(
                       <label key={k} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
                         <input type="checkbox" checked={csRealism.strictBlocks[k]} onChange={e=>setCsRealism(p=>({...p,strictBlocks:{...p.strictBlocks,[k]:e.target.checked}}))} style={{accentColor:"#67e8f9",width:11,height:11}}/>
-                        <span style={{fontSize:10,color:csRealism.strictBlocks[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
+                        <span style={{fontSize:13,color:csRealism.strictBlocks[k]?"#e2e8f0":"#64748b"}}>{k.replace(/([A-Z])/g," $1").toLowerCase()}</span>
                       </label>
                     ))}
                   </div>
@@ -1583,7 +1583,7 @@ Accept only if:
 
                 {/* Pipeline Prompt */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>Pipeline Prompt</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Pipeline Prompt</div>
                   <textarea value={csFields.csPipelinePrompt??""} onChange={e=>setCsFields(p=>({...p,csPipelinePrompt:e.target.value}))}
                     placeholder="Describe what you want the pipeline to generate…" rows={3}
                     style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid "+(csFields.csPipelinePrompt?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,color:"#e2e8f0",fontSize:11,padding:"8px 10px",outline:"none",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"}}/>
@@ -2112,21 +2112,21 @@ Accept only if:
           </div>
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: `220px ${stepConfigOpen ? "280px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease" }}>
+          <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease" }}>
 
             {/* Step Builder */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 6 })}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Pipeline Steps</div>
+              <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.05em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 10 }}>Pipeline Steps</div>
               {steps.map(step => (
                 <div key={step.id} onClick={() => selectStep(step.id)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, background: selectedStepId === step.id ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)", border: `1px solid ${selectedStepId === step.id ? "rgba(168,85,247,0.35)" : "rgba(255,255,255,0.07)"}`, cursor: "pointer", transition: "all 150ms" }}>
-                  <span style={{ fontSize: 14, color: stateColor(step.state), flexShrink: 0 }}>{step.icon}</span>
-                  <span style={{ flex: 1, fontSize: 12, color: "#cbd5e1", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{step.name}</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: stateColor(step.state), flexShrink: 0 }}>{step.state.toUpperCase().slice(0, 4)}</span>
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 12, background: selectedStepId === step.id ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)", border: `1px solid ${selectedStepId === step.id ? "rgba(168,85,247,0.35)" : "rgba(255,255,255,0.07)"}`, cursor: "pointer", transition: "all 150ms" }}>
+                  <span style={{ fontSize: 20, color: stateColor(step.state), flexShrink: 0 }}>{step.icon}</span>
+                  <span style={{ flex: 1, fontSize: 15, color: "#cbd5e1", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{step.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", color: stateColor(step.state), flexShrink: 0 }}>{step.state.toUpperCase().slice(0, 4)}</span>
                 </div>
               ))}
               <button onClick={() => setSteps(p => [...p, { id: `custom-${Date.now()}`, name: "Custom Step", state: "queued", icon: "+", output: null, error: null, startedAt: null, completedAt: null }])}
-                style={{ marginTop: 6, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", color: "#475569", borderRadius: 10, padding: "7px 0", fontSize: 12, cursor: "pointer" }}>
+                style={{ marginTop: 8, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", color: "#475569", borderRadius: 10, padding: "10px 0", fontSize: 14, cursor: "pointer" }}>
                 + Add Step
               </button>
             </div>
