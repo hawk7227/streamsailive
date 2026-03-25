@@ -236,6 +236,7 @@ Accept only if:
   const [videoProvider, setVideoProvider] = useState<"kling" | "runway">("kling");
   // AI assistant float
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
   const imageRefInputRef = useRef<HTMLInputElement>(null);
   const videoImageRefInputRef = useRef<HTMLInputElement>(null);
   const videoVideoRefInputRef = useRef<HTMLInputElement>(null);
@@ -1075,24 +1076,30 @@ Accept only if:
                   <span style={{width:6,height:6,borderRadius:"50%",background:item.active?"#67e8f9":"rgba(255,255,255,0.1)",flexShrink:0}}/>
                 </button>
               ))}
-              {/* Compact dropdown: Templates, AI Ideas, Library, History */}
-              <div style={{margin:"8px 14px 0",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8}}>
-                <select
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (v === "ideas") { mediaTab==="Image"?getImageIdeas():getVideoIdeas(); }
-                    else if (v === "library") { setWorkspaceTab("output"); }
-                    else if (v === "history") { setWorkspaceTab("logs"); }
-                    e.target.value = "";
-                  }}
-                  defaultValue=""
-                  style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",borderRadius:8,padding:"8px 10px",fontSize:12,cursor:"pointer",outline:"none",appearance:"auto"}}>
-                  <option value="" disabled style={{background:"#0f172a"}}>More tools…</option>
-                  <option value="templates" style={{background:"#0f172a"}}>Templates</option>
-                  <option value="ideas" style={{background:"#0f172a"}}>AI Ideas</option>
-                  <option value="library" style={{background:"#0f172a"}}>Library</option>
-                  <option value="history" style={{background:"#0f172a"}}>History</option>
-                </select>
+              {/* More tools menu */}
+              <div style={{margin:"8px 14px 0",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,position:"relative"}}>
+                <button onClick={()=>setNavMenuOpen(o=>!o)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer",outline:"none"}}>
+                  <span>More tools…</span>
+                  <span style={{fontSize:10,transform:navMenuOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 150ms"}}>▼</span>
+                </button>
+                {navMenuOpen && (
+                  <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#0d1117",border:"1px solid rgba(255,255,255,0.12)",borderRadius:9,overflow:"hidden",zIndex:200,boxShadow:"0 10px 30px rgba(0,0,0,0.4)"}}>
+                    {[
+                      {label:"Templates",  action:()=>{ setNavMenuOpen(false); }},
+                      {label:"AI Ideas",   action:()=>{ mediaTab==="Image"?getImageIdeas():getVideoIdeas(); setNavMenuOpen(false); }},
+                      {label:"Library",    action:()=>{ setWorkspaceTab("output"); setNavMenuOpen(false); }},
+                      {label:"History",    action:()=>{ setWorkspaceTab("logs"); setNavMenuOpen(false); }},
+                    ].map(item=>(
+                      <button key={item.label} onClick={item.action}
+                        style={{display:"block",width:"100%",padding:"10px 14px",background:"transparent",border:"none",borderBottom:"1px solid rgba(255,255,255,0.06)",color:"#94a3b8",fontSize:12,cursor:"pointer",textAlign:"left",transition:"background 120ms"}}
+                        onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="rgba(103,232,249,0.07)";(e.currentTarget as HTMLButtonElement).style.color="#67e8f9";}}
+                        onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent";(e.currentTarget as HTMLButtonElement).style.color="#94a3b8";}}>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {/* What this panel does */}
               <div style={{margin:"12px 14px",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,marginTop:"auto"}}>
