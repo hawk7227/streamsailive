@@ -7,7 +7,10 @@ import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
-import { sanitizeRealismPrompt } from "@/lib/pipeline/realism/realism-sanitizer";
+import { compileRealismPrompt } from "@/lib/media-realism/promptCompiler";
+import { buildScenePlan } from "@/lib/media-realism/scenePlanner";
+import { buildLayoutPlan } from "@/lib/media-realism/layoutPlanner";
+import type { ConceptDirection, OverlayIntent, ValidatorImagePolicy } from "@/lib/media-realism/types";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -93,24 +96,42 @@ export async function POST(request: Request) {
     // Allow caller to override provider (e.g. force openai for instant DALL-E)
     const providerOverride = typeof payload?.provider === "string" ? payload.provider : null;
 
-    // For image type: run through realism sanitizer then call gpt-image-1 directly.
-    // Spec: model gpt-image-1, quality standard, n:3, pick least polished.
+    // For image type: run through the universal realism engine.
+    // scenePlanner → layoutPlanner → promptCompiler — no realism logic in this route.
     let finalPrompt = prompt;
     if (type === "image") {
-      const sanitized = sanitizeRealismPrompt({
-        rawPrompt: prompt,
-        subjectAction: typeof payload?.subjectAction === "string" ? payload.subjectAction : undefined,
-        mode: "casual_phone_photo",
-        subjectType: "human",
-        severity: "strict",
-        requireHumanRealism: true,
-        requireEnvironmentRealism: true,
-        requirePhoneCameraLook: true,
-        banTextOverlays: true,
-        banUiPanels: true,
-      });
-      finalPrompt = sanitized.sanitizedPrompt;
-      console.log("[Realism] model:", sanitized.apiRecommendation.model, "| rejected words:", sanitized.rejectedWords.join(", ") || "none");
+      const subjectAction = typeof payload?.subjectAction === "string" ? payload.subjectAction : prompt;
+
+      const concept: ConceptDirection = {
+        id: typeof payload?.conceptId === "string" ? payload.conceptId : "direct",
+        angle: "direct generation",
+        hook: subjectAction,
+        subjectType: "person",
+        action: subjectAction,
+        environment: "real home environment",
+        realismMode: "home_real",
+        desiredMood: "calm, natural, ordinary",
+        overlayIntent: {
+          headline: "",
+          cta: "",
+          textDensityHint: "low",
+          titleLengthClass: "short",
+          ctaLengthClass: "short",
+        } satisfies OverlayIntent,
+      };
+
+      const validatorPolicy: ValidatorImagePolicy = {
+        allowedVisualClaims: [],
+        forbiddenVisualClaims: [],
+        forbiddenProps: [],
+        forbiddenScenes: [],
+        noTextInImage: true,
+      };
+
+      const scenePlan = buildScenePlan(concept, { status: "pass", issues: [], imagePolicy: validatorPolicy });
+      const layoutPlan = buildLayoutPlan(scenePlan, concept.overlayIntent, "1:1");
+      finalPrompt = compileRealismPrompt({ scenePlan, layoutPlan, validatorPolicy, overlayIntent: concept.overlayIntent });
+      console.log("[MediaRealism] prompt compiled for direct generation | conceptId:", concept.id);
     }
 
     const generationResult = await generateContent(type as GenerationType, {
