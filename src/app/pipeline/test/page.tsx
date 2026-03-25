@@ -291,19 +291,23 @@ Accept only if:
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations" }, (payload) => {
         const row = payload.new as { id: string; status: string; output_url?: string; type?: string; concept_id?: string };
         if (row.status === "completed" || row.status === "failed") {
-          queueUpdate(row.id, {
-            status: row.status as QueueStatus,
-            outputUrl: row.output_url ?? null,
-          });
+          queueUpdate(row.id, { status: row.status as QueueStatus, outputUrl: row.output_url ?? null });
           if (row.status === "completed" && row.output_url) {
             const conceptId = row.concept_id ?? null;
             if (conceptId && row.type === "image") {
               setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: row.output_url!, status: "completed" } }));
+              // Also update dual-surface image result if this was the active generation
+              setImageResult(prev => prev ?? row.output_url!);
             }
-            if (conceptId && row.type === "video") {
+            if (conceptId && (row.type === "video" || row.type === "i2v")) {
               setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: row.output_url!, status: "completed" } }));
+              // Update dual-surface video result so the Video tab shows it
+              setVideoResult(row.output_url!);
             }
-            log(`✓ ${row.type} completed: ${row.id.slice(0, 8)}`);
+            log("✓ " + row.type + " completed: " + row.id.slice(0, 8) + (row.output_url ? " — output ready" : ""));
+          }
+          if (row.status === "failed") {
+            log("✗ generation failed: " + row.id.slice(0, 8));
           }
         }
       })
@@ -312,20 +316,37 @@ Accept only if:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Polling fallback for items without Realtime (5s interval) ─────────────
+  // ── Polling fallback — 5s interval for items not caught by Realtime ───────
   useEffect(() => {
     const interval = setInterval(async () => {
       const pending = [...generationQueue.values()].filter(i => i.status === "pending" || i.status === "processing");
       for (const item of pending) {
         try {
-          const res = await fetch(`/api/generations/${item.id}`);
+          const res = await fetch("/api/generations/" + item.id);
           if (!res.ok) continue;
-          const data = await res.json() as { status: string; output_url?: string; elapsed_seconds?: number };
+          const data = await res.json() as { status: string; output_url?: string; elapsed_seconds?: number; type?: string };
           queueUpdate(item.id, {
             status: data.status as QueueStatus,
             outputUrl: data.output_url ?? null,
             elapsedSeconds: data.elapsed_seconds ?? 0,
           });
+          // Surface completed output to the dual-surface panel
+          if (data.status === "completed" && data.output_url) {
+            if (data.type === "video" || data.type === "i2v" || item.type === "video") {
+              setVideoResult(data.output_url);
+              if (item.conceptId) {
+                setConceptOutputs(p => ({ ...p, [item.conceptId!]: { ...p[item.conceptId!], video: data.output_url!, status: "completed" } }));
+              }
+              log("✓ Video ready (poll): " + item.id.slice(0, 8));
+            }
+            if (data.type === "image" || item.type === "image") {
+              setImageResult(prev => prev ?? data.output_url!);
+              if (item.conceptId) {
+                setConceptOutputs(p => ({ ...p, [item.conceptId!]: { ...p[item.conceptId!], image: data.output_url!, status: "completed" } }));
+              }
+              log("✓ Image ready (poll): " + item.id.slice(0, 8));
+            }
+          }
         } catch { /* non-fatal */ }
       }
     }, 5000);
@@ -1470,17 +1491,29 @@ Accept only if:
                   </div>
 
                   {/* Video result strip */}
+                  {/* Video result — shows actual video player when ready */}
                   {videoResult&&(
-                    <div style={{padding:"8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,alignItems:"center",background:"rgba(167,139,250,0.03)"}}>
-                      <span style={{fontSize:16}}>🎬</span>
-                      <span style={{flex:1,fontSize:10,color:"#a78bfa",fontWeight:600}}>Video processing ✓</span>
-                      <button onClick={()=>{setApprovedOutputs(p=>({...p,video:videoResult}));setWorkspaceTab("output");log("✓ Video approved");}}
-                        style={{background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.3)",color:"#a78bfa",borderRadius:7,padding:"5px 11px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✓ Approve</button>
+                    <div style={{padding:"10px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:8,background:"rgba(167,139,250,0.03)"}}>
+                      <div style={{position:"relative",width:"100%",aspectRatio:"16/9",borderRadius:10,overflow:"hidden",border:"1px solid rgba(167,139,250,0.3)"}}>
+                        <video src={videoResult} controls autoPlay muted loop style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        <div style={{position:"absolute",top:6,right:6,display:"flex",gap:4}}>
+                          <button onClick={()=>{setApprovedOutputs(p=>({...p,video:videoResult}));setWorkspaceTab("output");log("✓ Video approved to workspace");}}
+                            style={{background:"rgba(167,139,250,0.9)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✓ Approve</button>
+                          <button onClick={()=>window.open(videoResult,"_blank")}
+                            style={{background:"rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",borderRadius:6,padding:"4px 8px",fontSize:10,cursor:"pointer"}}>↗</button>
+                        </div>
+                      </div>
+                      <div style={{fontSize:10,color:"#a78bfa",fontWeight:600}}>🎬 Video ready — {videoProvider} / {videoMode}</div>
                     </div>
                   )}
+                  {/* Processing indicator while job is pending */}
                   {!videoResult&&activeCount>0&&(
-                    <div style={{padding:"8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:8}}>
-                      <Spinner size={11}/><span style={{fontSize:11,color:"#67e8f9"}}>{activeCount} video job{activeCount>1?"s":""} processing…</span>
+                    <div style={{padding:"10px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:8,background:"rgba(103,232,249,0.03)"}}>
+                      <Spinner size={12}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,color:"#67e8f9",fontWeight:600}}>{activeCount} video job{activeCount>1?"s":""} processing…</div>
+                        <div style={{fontSize:9,color:"#334155",marginTop:2}}>Kling takes 2–4 minutes. Page updates automatically when done.</div>
+                      </div>
                     </div>
                   )}
 

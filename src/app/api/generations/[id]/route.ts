@@ -26,7 +26,7 @@ export async function GET(
 
   const { data, error } = await admin
     .from("generations")
-    .select("id, status, output_url, progress, provider, external_id, created_at")
+    .select("id, type, status, output_url, progress, provider, external_id, created_at")
     .eq("id", id)
     .eq("workspace_id", selection.current.workspace.id)
     .single();
