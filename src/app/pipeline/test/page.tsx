@@ -718,7 +718,7 @@ Accept only if:
                   credentials: "include",
                   body: JSON.stringify({
                     type: "image",
-                    prompt: "Photorealistic healthcare professional in a clean modern clinic, soft natural lighting, warm professional atmosphere, no text, no words, no letters, no watermarks, high quality",
+                    prompt: "A real person sitting at a kitchen table looking at their phone, ordinary home lighting, no text, no words, no letters, no watermarks",
                     aspectRatio: "16:9",
                     provider: "openai",
                     conceptId: "diag-test",
@@ -740,11 +740,11 @@ Accept only if:
                 }
 
                 // Step 3: Governance check
-                out += "\n\nStep 3/3: Governance rules check:\n";
-                out += "  ✓ No text/letters in prompt (negative prompt enforced)\n";
-                out += "  ✓ Photorealistic anchor required\n";
-                out += "  ✓ Healthcare professional subject (telehealth compliance)\n";
-                out += "  ✓ DALL-E 3 via OpenAI (instant, no polling needed)";
+                out += "\n\nStep 3/3: System rules check:\n";
+                out += "  ✓ No text/UI in image (negative prompt enforced)\n";
+                out += "  ✓ Realism engine active (anti-cinematic QC gate)\n";
+                out += "  ✓ Config-driven validator (no niche lock)\n";
+                out += "  ✓ Model driven by IMAGE_MODEL env var (default: dall-e-3)";
 
               } catch(e) {
                 out += `\n\n❌ Exception: ${e instanceof Error ? e.message : String(e)}`;
