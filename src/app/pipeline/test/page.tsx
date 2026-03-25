@@ -1671,7 +1671,7 @@ Accept only if:
           <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{display:"none"}}
             onChange={e=>{const f=e.target.files?.[0];if(f)handleVideoRefUpload(f);e.target.value="";}}/>
 
-          <div style={{display:"grid",gridTemplateColumns:"320px 1fr 320px",gap:14,marginBottom:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:14,marginBottom:14}}>
 
             {/* ── LEFT NAV: Creative Setup ──────────────────────────────── */}
             <div style={P({padding:0,display:"flex",flexDirection:"column",overflowY:"auto",maxHeight:"90vh"})}>
@@ -1899,10 +1899,7 @@ Accept only if:
                   <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",letterSpacing:"-0.01em",marginBottom:2}}>Image + Video Prompt Panel</div>
                   <div style={{fontSize:11,color:"#475569",lineHeight:1.4}}>Separate prompt boxes, references, templates, AI ideas, and realism controls.</div>
                 </div>
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <button style={{background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.3)",color:"#67e8f9",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Preview Demo</button>
-                  <button style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:8,padding:"5px 12px",fontSize:11,cursor:"pointer"}}>Split View</button>
-                </div>
+
               </div>
 
               {/* Image/Video tabs + API toggles */}
@@ -1916,20 +1913,7 @@ Accept only if:
                   </button>
                 ))}
                 <div style={{flex:1}}/>
-                {/* API mode toggle */}
-                {mediaTab==="Image"&&(
-                  <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:7,border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                    {(["images","responses"] as ImageApiMode[]).map(m=>(
-                      <button key={m} onClick={()=>setImageApiMode(m)}
-                        style={{padding:"4px 11px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",
-                          background:imageApiMode===m?"rgba(103,232,249,0.15)":"transparent",
-                          color:imageApiMode===m?"#67e8f9":"#475569",
-                          borderRight:m==="images"?"1px solid rgba(255,255,255,0.08)":"none",transition:"all 150ms"}}>
-                        {m==="images"?"Images API":"Responses API"}
-                      </button>
-                    ))}
-                  </div>
-                )}
+
                 {mediaTab==="Video"&&(
                   <div style={{display:"flex",gap:5}}>
                     <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:7,border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
@@ -1968,55 +1952,14 @@ Accept only if:
                         <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:"0.02em"}}>Image Prompt</div>
                         <div style={{fontSize:10,color:"#475569"}}>This box is where the user types the base idea.</div>
                       </div>
-                      <button onClick={sanitizeImagePromptUI} disabled={imageSanitizing||!imagePrompt.trim()}
-                        style={{background:"rgba(103,232,249,0.08)",border:"1px solid rgba(103,232,249,0.2)",color:"#67e8f9",borderRadius:7,padding:"5px 11px",fontSize:10,fontWeight:600,cursor:imageSanitizing?"wait":"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0,opacity:imageSanitizing||!imagePrompt.trim()?0.5:1}}>
-                        {imageSanitizing?<Spinner size={9}/>:null}Responses API helper rewrite
-                      </button>
+
                     </div>
                     <textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} rows={4}
                       placeholder="Generate a real everyday photograph of a person sitting at home using a phone in flat natural light. No cinematic look. No text or UI in image."
                       style={{width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#cbd5e1",borderRadius:10,padding:"10px 12px",fontSize:12,resize:"vertical",lineHeight:1.6,outline:"none"}}/>
                   </div>
 
-                  {/* 3 control boxes: Aspect Ratio | Realism Mode | Reference Priority */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"0 20px 12px"}}>
-                    {/* Aspect Ratio */}
-                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
-                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Aspect Ratio</div>
-                      <div style={{display:"flex",gap:4}}>
-                        {(["16:9","9:16","1:1"] as ViewMode[]).map(v=>(
-                          <button key={v} onClick={()=>setViewMode(v==="9:16"?"9:16":"16:9")}
-                            style={{flex:1,background:viewMode===v?"rgba(103,232,249,0.15)":"rgba(255,255,255,0.04)",border:"1px solid "+(viewMode===v?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.08)"),color:viewMode===v?"#67e8f9":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
-                            {v}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Realism Mode */}
-                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
-                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Realism Mode</div>
-                      <div style={{display:"flex",gap:4}}>
-                        {["Strict","Balanced"].map(m=>(
-                          <button key={m} onClick={()=>{}}
-                            style={{flex:1,background:m==="Strict"?"rgba(110,231,183,0.12)":"rgba(255,255,255,0.04)",border:"1px solid "+(m==="Strict"?"rgba(110,231,183,0.3)":"rgba(255,255,255,0.08)"),color:m==="Strict"?"#6ee7b7":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
-                            {m}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Reference Priority */}
-                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
-                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Reference Priority</div>
-                      <div style={{display:"flex",gap:4}}>
-                        {(["low","medium","high"] as ReferencePriority[]).map(p=>(
-                          <button key={p} onClick={()=>setImageReferencePriority(p)}
-                            style={{flex:1,background:imageReferencePriority===p?"rgba(167,139,250,0.15)":"rgba(255,255,255,0.04)",border:"1px solid "+(imageReferencePriority===p?"rgba(167,139,250,0.4)":"rgba(255,255,255,0.08)"),color:imageReferencePriority===p?"#a78bfa":"#475569",borderRadius:5,padding:"4px 0",fontSize:8,fontWeight:600,cursor:"pointer",textTransform:"capitalize"}}>
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+
 
                   {/* Split bottom: Ref Uploader | Templates+Ideas */}
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderTop:"1px solid rgba(255,255,255,0.07)",flex:1,minHeight:0}}>
@@ -2057,35 +2000,7 @@ Accept only if:
                       )}
                     </div>
 
-                    {/* Right: Templates + AI Ideas */}
-                    <div style={{padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",maxHeight:240}}>
-                      <div>
-                        <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:3}}>Templates + AI Ideas</div>
-                        <div style={{fontSize:10,color:"#475569",lineHeight:1.45}}>Open a template or click AI to fill the prompt box with strong realism-first ideas.</div>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {/* Template chips */}
-                        {Object.entries(IMAGE_TEMPLATES).map(([k,v])=>(
-                          <button key={k} onClick={()=>{setSelectedImageTemplate(k);setImagePrompt(v.prompt);}}
-                            style={{background:selectedImageTemplate===k?"rgba(103,232,249,0.10)":"rgba(255,255,255,0.03)",border:"1px solid "+(selectedImageTemplate===k?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,padding:"6px 10px",fontSize:11,color:selectedImageTemplate===k?"#67e8f9":"#94a3b8",cursor:"pointer",textAlign:"left",fontWeight:selectedImageTemplate===k?600:400,transition:"all 150ms"}}>
-                            {v.label}
-                          </button>
-                        ))}
-                        {/* AI idea chips — appear after clicking AI Ideas */}
-                        {imageIdeas.length>0&&(
-                          <div style={{marginTop:4,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:6}}>
-                            <div style={{fontSize:9,color:"#64748b",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.1em"}}>AI Generated Ideas</div>
-                            {imageIdeas.map((idea,i)=>(
-                              <button key={"idea"+i} onClick={()=>{setImagePrompt(idea);setImageIdeas([]);}}
-                                style={{display:"block",width:"100%",background:"rgba(167,139,250,0.07)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:8,padding:"6px 10px",fontSize:10,color:"#c4b5fd",cursor:"pointer",textAlign:"left",lineHeight:1.45,marginBottom:5}}>
-                                {idea.slice(0,100)}{idea.length>100?"…":""}
-                              </button>
-                            ))}
-                            <button onClick={()=>setImageIdeas([])} style={{background:"none",border:"none",color:"#334155",fontSize:9,cursor:"pointer"}}>✕ clear</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+
                   </div>
 
                   {/* Generated image strip */}
@@ -2283,97 +2198,7 @@ Accept only if:
               )}
             </div>
 
-            {/* ── RIGHT: LIVE PREVIEW ────────────────────────────────────── */}
-            <div style={P({padding:0,display:"flex",flexDirection:"column"})}>
-              {/* Header */}
-              <div style={{padding:"12px 16px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>Live Preview</div>
-                  <div style={{fontSize:10,color:"#475569",marginTop:1}}>What the selected flow looks like after user actions.</div>
-                </div>
-                <button onClick={()=>setDeviceFrame(f=>f==="Desktop"?"iPhone":"Desktop")}
-                  style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:7,padding:"5px 10px",fontSize:10,cursor:"pointer",fontWeight:600}}>Split View</button>
-              </div>
 
-              {/* Preview area */}
-              <div style={{flex:1,padding:"16px",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-                {/* Aspect ratio toggle */}
-                <div style={{display:"flex",gap:6,width:"100%",justifyContent:"center"}}>
-                  {(["16:9","9:16"] as ViewMode[]).map(v=>(
-                    <button key={v} onClick={()=>setViewMode(v==="9:16"?"9:16":"16:9")}
-                      style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:viewMode===v?"rgba(103,232,249,0.1)":"transparent",border:"1px solid "+(viewMode===v?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),color:viewMode===v?"#67e8f9":"#475569",borderRadius:5,cursor:"pointer"}}>
-                      {v}
-                    </button>
-                  ))}
-                  <span style={{fontSize:10,color:"#334155",alignSelf:"center",marginLeft:2}}>Preview</span>
-                </div>
-
-                {/* Content: actual result or phone mockup */}
-                {imageResult||videoResult?(
-                  <div style={{width:"100%",position:"relative",borderRadius:deviceFrame==="iPhone"?18:10,overflow:"hidden",border:"1px solid rgba(255,255,255,0.1)",aspectRatio:viewMode==="9:16"?"9/16":"16/9",background:"rgba(255,255,255,0.03)",boxShadow:deviceFrame==="iPhone"?"0 0 0 5px rgba(255,255,255,0.05)":"none"}}>
-                    {videoResult?<video src={videoResult} autoPlay muted loop style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                      :imageResult?<img src={imageResult} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                      :null}
-                    {imageResult&&(
-                      <div style={{position:"absolute",bottom:6,left:6,display:"flex",gap:4}}>
-                        <span style={{background:"rgba(0,0,0,0.65)",color:"#6ee7b7",borderRadius:4,padding:"2px 7px",fontSize:8,fontWeight:700,backdropFilter:"blur(4px)"}}>No text in image</span>
-                        <span style={{background:"rgba(0,0,0,0.65)",color:"#67e8f9",borderRadius:4,padding:"2px 7px",fontSize:8,fontWeight:700,backdropFilter:"blur(4px)"}}>Flat light</span>
-                      </div>
-                    )}
-                  </div>
-                ):(
-                  /* Phone mockup empty state — matches screenshot */
-                  <div style={{width:148,position:"relative"}}>
-                    {/* Phone shell */}
-                    <div style={{width:148,height:256,borderRadius:24,border:"2px solid rgba(255,255,255,0.12)",background:"rgba(13,17,38,0.95)",display:"flex",flexDirection:"column",padding:"10px 8px 8px",gap:6,boxShadow:"0 0 0 5px rgba(255,255,255,0.04), 0 10px 30px rgba(0,0,0,0.3)"}}>
-                      {/* Status bar */}
-                      <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px"}}>
-                        <span style={{fontSize:8,color:"#475569",fontWeight:600}}>9:41</span>
-                        <span style={{fontSize:8,color:"#475569"}}>Preview</span>
-                      </div>
-                      {/* Everyday Realism badge */}
-                      <div style={{alignSelf:"center",background:"rgba(103,232,249,0.1)",border:"1px solid rgba(103,232,249,0.2)",borderRadius:6,padding:"3px 12px"}}>
-                        <span style={{fontSize:9,color:"#67e8f9",fontWeight:600}}>Everyday Realism</span>
-                      </div>
-                      {/* Placeholder image area with abstract shape */}
-                      <div style={{flex:1,background:"rgba(255,255,255,0.04)",borderRadius:12,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                        {/* Abstract pill/capsule shape like screenshot */}
-                        <div style={{width:48,height:64,background:"rgba(255,255,255,0.07)",borderRadius:"50%/30%",transform:"rotate(15deg)"}}/>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Prompt result card */}
-                <div style={{width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>Prompt result</div>
-                  <div style={{fontSize:10,color:"#475569",lineHeight:1.45,marginBottom:8}}>
-                    {imageResult?"Image generated from your prompt with references applied. Approve to send to workspace.":"Real image generated from your prompt with references applied. Any badges or text stay outside the AI image."}
-                  </div>
-                  <div style={{display:"flex",gap:5}}>
-                    <span style={{background:"rgba(255,255,255,0.06)",color:"#475569",borderRadius:5,padding:"3px 8px",fontSize:9}}>No text in image</span>
-                    <span style={{background:"rgba(255,255,255,0.06)",color:"#475569",borderRadius:5,padding:"3px 8px",fontSize:9}}>Flat light</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Demo: how it works */}
-              <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:8,letterSpacing:"0.02em"}}>Demo: how it works</div>
-                {[
-                  "User types a prompt in Image or Video.",
-                  "User optionally uploads references.",
-                  "User can open templates or click AI Generate Ideas.",
-                  "System rewrites prompt for realism, then generates.",
-                  "Result appears in preview and can be regenerated.",
-                ].map((s,i)=>(
-                  <div key={i} style={{display:"flex",gap:6,marginBottom:5}}>
-                    <span style={{fontSize:10,color:"#334155",fontWeight:600,flexShrink:0}}>{i+1}.</span>
-                    <span style={{fontSize:10,color:"#475569",lineHeight:1.4}}>{s}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
 
           </div>
 
