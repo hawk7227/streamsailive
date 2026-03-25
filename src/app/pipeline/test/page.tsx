@@ -2686,63 +2686,6 @@ Accept only if:
             </div>
           </div>
 
-          {/* ── Pipeline Results Panel ────────────────────────────────────── */}
-          {(pipelineRunning || pipelineLog.length > 0) && (
-            <div style={{ marginBottom: 14, background: "rgba(0,0,0,0.4)", border: "1px solid rgba(103,232,249,0.15)", borderRadius: 16, padding: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#67e8f9", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                  {pipelineRunning ? "⏳ Pipeline Running…" : "✅ Pipeline Complete"}
-                </span>
-                {!pipelineRunning && (
-                  <button onClick={() => { setPipelineLog([]); setPipelineResults(null); }}
-                    style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 12 }}>Clear</button>
-                )}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: pipelineResults?.imageUrl ? "1fr 340px" : "1fr", gap: 16 }}>
-                {/* Step log */}
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b", lineHeight: 2, maxHeight: 280, overflowY: "auto" }}>
-                  {pipelineLog.map((l, i) => (
-                    <div key={i} style={{ color: l.startsWith("✅") || l.startsWith("✓") ? "#6ee7b7" : l.startsWith("✗") || l.startsWith("BLOCKED") ? "#f87171" : l.startsWith("━") ? "#67e8f9" : l.startsWith("⚠") ? "#fbbf24" : "#64748b" }}>
-                      {l}
-                    </div>
-                  ))}
-                  {pipelineRunning && <div style={{ color: "#67e8f9", animation: "pulse 1s infinite" }}>▋</div>}
-                </div>
-                {/* Image preview with text overlay */}
-                {pipelineResults?.imageUrl && (
-                  <div style={{ flexShrink: 0 }}>
-                    <div style={{ fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Output — Text Composite Preview</div>
-                    <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                      <img src={pipelineResults.imageUrl} alt="Pipeline output" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      {/* Text overlay — governance: text composited, never in image */}
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: 12, background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)" }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 4, textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
-                          {pipelineResults.headline ?? "Private Care, From Home"}
-                        </div>
-                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", marginBottom: 6 }}>
-                          Subject to provider review. Eligibility may vary.
-                        </div>
-                        <div style={{ display: "inline-flex", alignSelf: "flex-start" }}>
-                          <span style={{ background: "#00C4A1", color: "#000", fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 6 }}>
-                            {pipelineResults.cta ?? "Start Your Visit"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-                      <span style={{ fontSize: 9, color: "#475569", background: "rgba(110,231,183,0.08)", border: "1px solid rgba(110,231,183,0.2)", borderRadius: 4, padding: "2px 6px" }}>
-                        Validator: {pipelineResults.validatorStatus ?? "—"}
-                      </span>
-                      <span style={{ fontSize: 9, color: "#475569", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.15)", borderRadius: 4, padding: "2px 6px" }}>
-                        readyForHumanReview
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* ── ROW 3: 3 Preview Screens ─────────────────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             {concepts.map((concept, i) => {
