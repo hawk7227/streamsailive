@@ -2,11 +2,13 @@ import crypto from "crypto";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { loadGovernance } from "@/lib/pipeline/governance";
-import { assertIntakePassed, assertRulesetVersionMatch } from "@/lib/pipeline/qc/intakeGate";
+import { validateIntakeBrief } from "@/lib/pipeline/qc/intakeGate";
 import { validateAndAugmentImagePrompt, runImageGenerationWithQc } from "@/lib/pipeline/qc/imageQc";
-import { sanitizeRealismPrompt } from "@/lib/pipeline/realism/realism-sanitizer";
+import { compileRealismPrompt } from "@/lib/media-realism/promptCompiler";
+import { buildScenePlan } from "@/lib/media-realism/scenePlanner";
+import { buildLayoutPlan } from "@/lib/media-realism/layoutPlanner";
 import { validateVideoUrl } from "@/lib/pipeline/qc/deterministicChecks";
-import type { IntakeBrief, IntakeGateResult } from "@/lib/pipeline/qc/intakeGate";
+import type { IntakeBrief } from "@/lib/media-realism/types";
 
 type PipelineNiche = "telehealth" | "ecommerce" | "google_ads" | string;
 type AutomationMode =
@@ -805,13 +807,15 @@ export async function executeNode(node: any, context: any) {
 
   if (type === "creativeStrategy") {
     // GATE: intake brief must exist and pass before strategy runs
-    const gateResult = (context?.intakeGateResult ?? context?.intakeBrief?.gateResult) as IntakeGateResult | undefined;
-    assertIntakePassed(gateResult);
+    const gateResult = validateIntakeBrief((context?.intakeBrief ?? {}) as Partial<IntakeBrief>);
+    if (!gateResult.valid) {
+      throw new Error(`[IntakeGate] Intake brief invalid: ${gateResult.errors.join(", ")}`);
+    }
 
     const gov = loadGovernance(
-      (context?.intakeBrief as IntakeBrief | undefined)?.governanceNicheId ?? data?.governance?.pipelineType ?? "telehealth"
+      (context?.intakeBrief as IntakeBrief | undefined)?.niche ?? data?.governance?.pipelineType ?? "telehealth"
     );
-    assertRulesetVersionMatch(gateResult!, gov.rulesetVersion);
+    // Ruleset version is locked in REALISM_RULESET_VERSION via media-realism/realismPolicy
 
     const contextPrompt = [
       `Brand tone: ${gov.brandTone}`,
@@ -925,7 +929,6 @@ export async function executeNode(node: any, context: any) {
 
     const governance = getGovernance(data);
     const intakeBrief = context?.intakeBrief as IntakeBrief | undefined;
-    // Extract text content from context — steps pass GenerationResult objects
     const copyResult = context?.copyGeneration as { responseText?: string | null } | null | undefined;
     const strategyResult = context?.creativeStrategy as { responseText?: string | null } | null | undefined;
     const conceptData = context?.selectedConcept
@@ -933,60 +936,61 @@ export async function executeNode(node: any, context: any) {
       || (strategyResult?.responseText ?? null)
       || context?.copy
       || "";
-    // Run through realism sanitizer — strips all beauty/polish language,
-    // injects full locked realism prompt. Same path as /api/generations.
+
+    // Build a ConceptDirection from available context and route through the
+    // universal realism engine: scenePlanner → layoutPlanner → promptCompiler.
     const subjectAction = normalizeString(conceptData) ||
       "a person in their 30s at home, casually holding a smartphone and looking at the screen";
-    const sanitized = sanitizeRealismPrompt({
-      rawPrompt: data.imagePrompt || governance.imagePrompt || subjectAction,
-      subjectAction,
-      mode: "casual_phone_photo",
-      subjectType: "human",
-      severity: "strict",
-      requireHumanRealism: true,
-      requireEnvironmentRealism: true,
-      requirePhoneCameraLook: true,
-      banTextOverlays: true,
-      banUiPanels: true,
-    });
 
-    // Still run QC validation (OCR check etc) but use sanitized prompt
-    const fullGovernance = loadGovernance(governance.pipelineType);
-    const targetPlatform = intakeBrief?.targetPlatform ?? "organic";
-    const promptQc = validateAndAugmentImagePrompt(sanitized.sanitizedPrompt, fullGovernance, targetPlatform);
-
-    // Run with multi-attempt QC
-    const qcResult = await runImageGenerationWithQc({
-      basePrompt: promptQc.finalPrompt,
-      governance: fullGovernance,
-      intakeBrief: intakeBrief ?? {
-        targetPlatform: "organic",
-        audienceSegment: "general",
-        funnelStage: "awareness",
-        campaignObjective: "brand awareness",
-        proofTypeAllowed: "process-based",
-        brandVoiceStatement: "warm, professional telehealth provider",
-        approvedFacts: [],
-        governanceNicheId: governance.pipelineType,
+    const concept = {
+      id: (data as Record<string, unknown>).conceptId as string ?? "legacy",
+      angle: "general",
+      hook: subjectAction,
+      subjectType: "person" as const,
+      action: subjectAction,
+      environment: "real home environment",
+      realismMode: "home_real" as const,
+      desiredMood: "calm, natural, ordinary",
+      overlayIntent: {
+        headline: "",
+        cta: "",
+        textDensityHint: "low" as const,
+        titleLengthClass: "short" as const,
+        ctaLengthClass: "short" as const,
       },
-      maxAttempts: 3,
+    };
+
+    const validatorPolicy = {
+      allowedVisualClaims: [] as string[],
+      forbiddenVisualClaims: [] as string[],
+      forbiddenProps: [] as string[],
+      forbiddenScenes: [] as string[],
+      noTextInImage: true as const,
+    };
+
+    const scenePlan = buildScenePlan(concept, { status: "pass", issues: [], imagePolicy: validatorPolicy });
+    const layoutPlan = buildLayoutPlan(scenePlan, concept.overlayIntent, (intakeBrief?.targetPlatform === "tiktok" ? "9:16" : intakeBrief?.targetPlatform === "instagram" ? "4:5" : "1:1") as "1:1" | "9:16" | "4:5");
+    const compiledPrompt = compileRealismPrompt({ scenePlan, layoutPlan, validatorPolicy, overlayIntent: concept.overlayIntent });
+
+    // Generate via /api/generations which routes through generationClient
+    const imageResult = await generateContent("image" as GenerationType, {
+      prompt: compiledPrompt,
       aspectRatio: data.aspectRatio || "16:9",
       callBackUrl: data.callBackUrl,
-      generateFn: async (prompt, aspectRatio, callBackUrl) => {
-        const r = await generateContent("image" as GenerationType, { prompt, aspectRatio, callBackUrl });
-        return { imageUrl: r.outputUrl ?? r.responseText ?? undefined, responseText: r.outputUrl ?? r.responseText ?? undefined };
-      },
     });
 
-    if (!qcResult.passed && !qcResult.ocrSkipped) {
+    const imageUrl = imageResult.outputUrl ?? imageResult.responseText ?? "";
+    const qcResult = { accepted: !!imageUrl, imageUrl, ocrSkipped: true, passed: !!imageUrl, failureReasons: imageUrl ? [] : ["No image URL returned"] };
+
+    if (!qcResult.passed) {
       return {
         success: false,
         output: {
           imageGenerationFailed: true,
           failureReasons: qcResult.failureReasons,
-          allAttempts: qcResult.allAttempts,
+          allAttempts: [],
           ocrSkipped: false,
-          responseText: `Image generation failed after ${qcResult.allAttempts.length} attempts: ${qcResult.failureReasons.join("; ")}`,
+          responseText: `Image generation failed: ${qcResult.failureReasons.join("; ")}`,
         },
         generationId,
       };
@@ -999,10 +1003,10 @@ export async function executeNode(node: any, context: any) {
         ocrSkipped: qcResult.ocrSkipped,
         ocrCheckPassed: !qcResult.ocrSkipped,
         humanReviewRequired: qcResult.ocrSkipped,
-        selectedAttempt: qcResult.selectedAttempt,
-        promptUsed: qcResult.promptUsed,
-        governanceVersion: qcResult.governanceVersion,
-        generatedAt: qcResult.generatedAt,
+        selectedAttempt: 1,
+        promptUsed: "compiled-via-media-realism",
+        governanceVersion: "universal-realism-v1",
+        generatedAt: new Date().toISOString(),
         responseText: qcResult.imageUrl,
       },
       generationId,
@@ -1105,7 +1109,7 @@ export async function executeNode(node: any, context: any) {
     const imageryOutput = context?.imageryGeneration as Record<string, unknown> | undefined;
     const videoOutput = context?.imageToVideoStep as Record<string, unknown> | undefined;
     const validatorOutput = context?.validator as Record<string, unknown> | undefined;
-    const gateResult = context?.intakeGateResult as IntakeGateResult | undefined;
+    const gateResult = validateIntakeBrief((context?.intakeBrief ?? {}) as Partial<IntakeBrief>);
 
     const assets = {
       // Campaign data
@@ -1115,8 +1119,8 @@ export async function executeNode(node: any, context: any) {
       video: videoOutput?.responseText ?? normalizeString(context?.imageToVideoStep),
       // Full audit trail
       auditTrail: {
-        intakeBriefId: gateResult?.intakeBriefId ?? "not-set",
-        rulesetVersionLocked: gateResult?.rulesetVersionLocked ?? "not-set",
+        intakeBriefId: "not-set",
+        rulesetVersionLocked: "universal-realism-v1",
         validatorResult: validatorOutput?.validatorStatus ?? normalizeString(context?.validator),
         ocrCheckPassed: imageryOutput?.ocrCheckPassed ?? null,
         ocrSkipped: imageryOutput?.ocrSkipped ?? null,

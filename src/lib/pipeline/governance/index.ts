@@ -1,8 +1,24 @@
-import { TELEHEALTH_GOVERNANCE, TelehealthGovernance } from "./telehealth";
-import { GOOGLE_ADS_GOVERNANCE, GoogleAdsGovernance } from "./googleAds";
+/**
+ * governance/index.ts
+ *
+ * Compatibility layer. The spec's telehealth.ts no longer exports
+ * TELEHEALTH_GOVERNANCE. This file reconstructs the ActiveGovernance
+ * shape from what the spec does export, so callers in pipeline-execution.ts
+ * and compositeAsset.ts continue to work without modification.
+ *
+ * Spec files are NOT modified.
+ */
 
-export { TELEHEALTH_GOVERNANCE, GOOGLE_ADS_GOVERNANCE };
-export type { TelehealthGovernance, GoogleAdsGovernance };
+import { GOOGLE_ADS_GOVERNANCE, type GoogleAdsGovernance } from "./googleAds";
+export { GOOGLE_ADS_GOVERNANCE, type GoogleAdsGovernance };
+
+// Re-export spec functions
+export {
+  createStrategyFromIntake,
+  createValidatorImagePolicy,
+  createTelehealthValidationResult,
+  TELEHEALTH_APPROVED_FACTS,
+} from "./telehealth";
 
 // Custom niche row from workspace_niches table
 export type CustomNiche = {
@@ -48,54 +64,105 @@ export type ActiveGovernance = {
   qaInstruction: string;
 };
 
-/**
- * loadGovernance(nicheId, customNiches?)
- *
- * Returns the full governance object for a given niche.
- * Built-in niches: "telehealth", "google_ads"
- * Custom niches: matched by id from customNiches array.
- * Custom niches inherit telehealth base and override only supplied fields.
- */
+// Telehealth base governance — reconstructed from spec constants
+// since TELEHEALTH_GOVERNANCE is no longer exported by the spec's telehealth.ts
+const TELEHEALTH_BASE: ActiveGovernance = {
+  pipelineType: "telehealth",
+  rulesetVersion: "universal-realism-v1",
+  brandTone: "Warm, direct, trustworthy. Not clinical, not salesy.",
+  approvedFacts: [
+    "Licensed clinicians review patient information.",
+    "Secure intake may be completed online.",
+    "Treatment decisions depend on clinician review.",
+    "Some cases may require follow-up before treatment.",
+  ],
+  bannedPhrases: [
+    "guaranteed cure", "instant prescription", "diagnosis in minutes",
+    "miracle", "cure fast", "guaranteed", "no questions asked",
+    "skip the doctor", "emergency treatment",
+  ],
+  complianceLayer: {
+    noDiagnosticClaims: true,
+    noGuarantees: true,
+    noOutcomePromises: true,
+    noPrescriptionCertainty: true,
+    noEmergencyCareImplication: true,
+    privacySafe: true,
+  },
+  enforcementConfig: {
+    fieldLengthEnforcement: {
+      headlineMaxWords: 8,
+      subheadlineMaxWords: 20,
+      bulletMaxCount: 3,
+      bulletMaxWords: 8,
+      ctaMaxWords: 4,
+      microcopyMaxWords: 12,
+      disclaimerMaxWords: 18,
+    },
+    blockTriggers: [
+      "medical diagnosis claim", "guaranteed outcome",
+      "banned phrase usage", "prescription certainty claim",
+    ],
+    autoFix: {
+      enabled: true,
+      maxAttempts: 2,
+      allowedFor: ["capitalization", "minor trim"],
+      disallowedFor: ["medical claim change", "outcome implication"],
+    },
+  },
+  motionPlanRules: {
+    allowedMotions: ["slow push-in", "gentle parallax", "natural blink"],
+    bannedMotions: ["face warping", "mouth chatter", "subject drift", "camera whip"],
+    durationDefaults: { minSeconds: 3, maxSeconds: 5 },
+  },
+  variantRules: {
+    count: 3,
+    variantIds: ["v1", "v2", "v3"],
+    eachMustHave: ["headline", "subheadline", "cta", "disclaimer"],
+    differentiation: "Each concept targets a different audience angle.",
+  },
+  strategyPrompt: "Build a creative strategy for telehealth advertising that is compliant, believable, and conversion-focused.",
+  copyPrompt: "Generate compliant telehealth copy variants. Avoid diagnostic claims, guarantees, or prescription certainty language.",
+  validatorPrompt: "Validate copy for telehealth compliance. Block diagnostic claims, guarantees, and banned phrases.",
+  imagePrompt: "Generate a realistic, unpolished image for telehealth advertising. Real person, ordinary setting, natural lighting.",
+  imageToVideo: "Describe motion only. Slow push-in. Natural blink. Soft parallax. No face distortion. Max 5 seconds.",
+  qaInstruction: "Final QA: verify all outputs are compliant, realism-first, and ready for human review.",
+};
+
 export function loadGovernance(
   nicheId: string,
-  customNiches: CustomNiche[] = []
+  customNiches: CustomNiche[] = [],
 ): ActiveGovernance {
-  // Built-in niches
-  if (nicheId === "telehealth") {
-    return governanceToActive(TELEHEALTH_GOVERNANCE);
+  if (nicheId === "telehealth" || nicheId === "telehealth-master") {
+    return { ...TELEHEALTH_BASE };
   }
   if (nicheId === "google_ads") {
     return governanceToActive(GOOGLE_ADS_GOVERNANCE);
   }
 
-  // Custom niche — find by id or pipeline_type
   const custom = customNiches.find(n => n.id === nicheId || n.pipeline_type === nicheId);
   if (!custom) {
-    // Fallback to telehealth if niche not found
     console.warn(`[Governance] Niche "${nicheId}" not found — falling back to telehealth`);
-    return governanceToActive(TELEHEALTH_GOVERNANCE);
+    return { ...TELEHEALTH_BASE };
   }
 
-  // Build custom governance by inheriting telehealth base + overriding with custom values
-  const base = governanceToActive(TELEHEALTH_GOVERNANCE);
   return {
-    ...base,
+    ...TELEHEALTH_BASE,
     pipelineType: custom.pipeline_type,
     rulesetVersion: custom.ruleset_version,
-    brandTone: custom.brand_tone ?? base.brandTone,
-    approvedFacts: custom.approved_facts.length > 0 ? custom.approved_facts : base.approvedFacts,
-    bannedPhrases: custom.banned_phrases.length > 0 ? custom.banned_phrases : base.bannedPhrases,
-    strategyPrompt: custom.strategy_prompt ?? base.strategyPrompt,
-    copyPrompt: custom.copy_prompt ?? base.copyPrompt,
-    validatorPrompt: custom.validator_prompt ?? base.validatorPrompt,
-    imagePrompt: custom.image_prompt ?? base.imagePrompt,
-    imageToVideo: custom.image_to_video ?? base.imageToVideo,
-    qaInstruction: custom.qa_instruction ?? base.qaInstruction,
+    brandTone: custom.brand_tone ?? TELEHEALTH_BASE.brandTone,
+    approvedFacts: custom.approved_facts.length > 0 ? custom.approved_facts : TELEHEALTH_BASE.approvedFacts,
+    bannedPhrases: custom.banned_phrases.length > 0 ? custom.banned_phrases : TELEHEALTH_BASE.bannedPhrases,
+    strategyPrompt: custom.strategy_prompt ?? TELEHEALTH_BASE.strategyPrompt,
+    copyPrompt: custom.copy_prompt ?? TELEHEALTH_BASE.copyPrompt,
+    validatorPrompt: custom.validator_prompt ?? TELEHEALTH_BASE.validatorPrompt,
+    imagePrompt: custom.image_prompt ?? TELEHEALTH_BASE.imagePrompt,
+    imageToVideo: custom.image_to_video ?? TELEHEALTH_BASE.imageToVideo,
+    qaInstruction: custom.qa_instruction ?? TELEHEALTH_BASE.qaInstruction,
   };
 }
 
-// Normalise a built-in const governance object to ActiveGovernance shape
-function governanceToActive(g: typeof TELEHEALTH_GOVERNANCE | typeof GOOGLE_ADS_GOVERNANCE): ActiveGovernance {
+function governanceToActive(g: typeof GOOGLE_ADS_GOVERNANCE): ActiveGovernance {
   return {
     pipelineType: g.pipelineType,
     rulesetVersion: g.rulesetVersion,
@@ -120,10 +187,10 @@ function governanceToActive(g: typeof TELEHEALTH_GOVERNANCE | typeof GOOGLE_ADS_
     },
     variantRules: "variantRules" in g
       ? {
-          count: g.variantRules.count,
-          variantIds: [...g.variantRules.variantIds] as string[],
-          eachMustHave: [...g.variantRules.eachMustHave] as string[],
-          differentiation: g.variantRules.differentiation,
+          count: (g as typeof GOOGLE_ADS_GOVERNANCE & { variantRules: { count: number; variantIds: string[]; eachMustHave: string[]; differentiation: string } }).variantRules.count,
+          variantIds: [...(g as typeof GOOGLE_ADS_GOVERNANCE & { variantRules: { count: number; variantIds: string[]; eachMustHave: string[]; differentiation: string } }).variantRules.variantIds],
+          eachMustHave: [...(g as typeof GOOGLE_ADS_GOVERNANCE & { variantRules: { count: number; variantIds: string[]; eachMustHave: string[]; differentiation: string } }).variantRules.eachMustHave],
+          differentiation: (g as typeof GOOGLE_ADS_GOVERNANCE & { variantRules: { count: number; variantIds: string[]; eachMustHave: string[]; differentiation: string } }).variantRules.differentiation,
         }
       : { count: 3, variantIds: ["v1", "v2", "v3"], eachMustHave: [], differentiation: "" },
     strategyPrompt: g.strategyPrompt,

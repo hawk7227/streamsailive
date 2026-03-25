@@ -17,7 +17,7 @@
 import sharp from 'sharp'
 import satori from 'satori'
 import type { ActiveGovernance } from '@/lib/pipeline/governance'
-import type { IntakeBrief, TargetPlatform } from '@/lib/pipeline/qc/intakeGate'
+import type { IntakeBrief, TargetPlatform } from '@/lib/media-realism/types'
 import type { CopyVariant } from '@/lib/pipeline/qc/deterministicChecks'
 
 // ─── Types ───────────────────────────────────────────────────────────────────

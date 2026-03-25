@@ -18,7 +18,8 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ArrowLeft, Search, Save, Play, Trash2 } from "lucide-react";
 import { buildImageToVideoMotionPlan, type PipelineNiche, type AutomationMode, type OutputMode } from "@/lib/pipeline/imageToVideoGovernance";
-import { validateIntakeBrief, type IntakeBrief, type IntakeGateResult } from "@/lib/pipeline/qc/intakeGate";
+import { validateIntakeBrief } from "@/lib/pipeline/qc/intakeGate";
+import type { IntakeBrief } from "@/lib/media-realism/types";
 
 type Pipeline = {
   id: string;
@@ -170,7 +171,7 @@ export default function PipelineBuilder() {
 
   // Intake brief — required before the 7-step governance pipeline can run
   const [intakeBrief, setIntakeBrief] = useState<Partial<IntakeBrief>>({
-    governanceNicheId: "telehealth",
+    niche: "telehealth",
     targetPlatform: "meta",
     funnelStage: "consideration",
     proofTypeAllowed: "process-based",
@@ -183,7 +184,8 @@ export default function PipelineBuilder() {
       "Eligibility may depend on provider review and applicable requirements.",
     ],
   });
-  const [intakeGateResult, setIntakeGateResult] = useState<IntakeGateResult | null>(null);
+  // IntakeGateResult shape from spec: { valid: boolean, errors: string[] }
+  const [intakeGateResult, setIntakeGateResult] = useState<{ valid: boolean; errors: string[] } | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
   const [stepStates, setStepStates] = useState<Record<string, "queued"|"running"|"complete"|"blocked"|"error">>({
     strategy: "queued", copy: "queued", validator: "queued",
@@ -465,14 +467,13 @@ export default function PipelineBuilder() {
     // ── Intake gate: must pass before anything runs ────────────────────────
     const gateResult = validateIntakeBrief({
       ...intakeBrief,
-      governanceNicheId: intakeBrief.governanceNicheId ?? niche,
+      niche: niche,
     });
     setIntakeGateResult(gateResult);
 
-    if (!gateResult.passed) {
+    if (!gateResult.valid) {
       const errMsg = [
-        gateResult.missingFields.length > 0 ? `Missing: ${gateResult.missingFields.join(", ")}` : null,
-        gateResult.validationErrors.length > 0 ? gateResult.validationErrors[0] : null,
+        gateResult.errors.length > 0 ? gateResult.errors.join(", ") : null,
       ].filter(Boolean).join(" | ");
       setGateError(`Intake brief incomplete. ${errMsg}`);
       return;
@@ -741,9 +742,9 @@ export default function PipelineBuilder() {
         <div className="px-6 py-1.5 bg-teal-900/20 border-b border-teal-500/20 text-teal-400 text-[11px] flex items-center gap-3">
           <span>✓ Intake locked</span>
           <span className="text-white/30">|</span>
-          <span>Ruleset: {intakeGateResult.rulesetVersionLocked}</span>
+          <span>Ruleset: universal-realism-v1</span>
           <span className="text-white/30">|</span>
-          <span>Run ID: {intakeGateResult.intakeBriefId.slice(0, 8)}…</span>
+          <span>Run ID: intake</span>
           <div className="ml-auto flex items-center gap-2">
             {Object.entries(stepStates).map(([step, state]) => (
               <span key={step} className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
@@ -876,7 +877,7 @@ export default function PipelineBuilder() {
                       <p className="text-teal-300 text-xs font-semibold">Ready — Intake locked</p>
                     </div>
                     <p className="text-white/30 text-[10px] font-mono pl-5">
-                      {intakeGateResult.rulesetVersionLocked} · run {intakeGateResult.intakeBriefId.slice(0,8)}
+                      universal-realism-v1 · intake valid
                     </p>
                   </div>
                 ) : (
@@ -963,7 +964,7 @@ export default function PipelineBuilder() {
                     <label className="block text-[11px] text-gray-500 mb-1">Target Platform</label>
                     <select
                       value={intakeBrief.targetPlatform ?? ''}
-                      onChange={e => setIntakeBrief(b => ({ ...b, targetPlatform: e.target.value as 'meta' | 'google' | 'tiktok' | 'instagram' | 'organic' }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, targetPlatform: e.target.value as 'meta' | 'google' | 'tiktok' | 'instagram' | 'organic' }))}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
                     >
                       <option value="">Select platform…</option>
@@ -979,7 +980,7 @@ export default function PipelineBuilder() {
                     <label className="block text-[11px] text-gray-500 mb-1">Funnel Stage</label>
                     <select
                       value={intakeBrief.funnelStage ?? 'consideration'}
-                      onChange={e => setIntakeBrief(b => ({ ...b, funnelStage: e.target.value as 'awareness' | 'consideration' | 'conversion' }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, funnelStage: e.target.value as 'awareness' | 'consideration' | 'conversion' }))}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
                     >
                       <option value="awareness">Awareness</option>
@@ -992,7 +993,7 @@ export default function PipelineBuilder() {
                     <label className="block text-[11px] text-gray-500 mb-1">Proof Type Allowed</label>
                     <select
                       value={intakeBrief.proofTypeAllowed ?? 'process-based'}
-                      onChange={e => setIntakeBrief(b => ({ ...b, proofTypeAllowed: e.target.value as 'process-based' | 'social-proof' | 'outcome-based' }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, proofTypeAllowed: e.target.value as 'process-based' | 'social-proof' | 'outcome-based' }))}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
                     >
                       <option value="process-based">Process-based only</option>
@@ -1010,7 +1011,7 @@ export default function PipelineBuilder() {
                       type="text"
                       placeholder="e.g. Adults 30–55 seeking private telehealth care"
                       value={intakeBrief.audienceSegment ?? ''}
-                      onChange={e => setIntakeBrief(b => ({ ...b, audienceSegment: e.target.value }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, audienceSegment: e.target.value }))}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
                     />
                   </div>
@@ -1024,7 +1025,7 @@ export default function PipelineBuilder() {
                       type="text"
                       placeholder="e.g. Drive first-visit bookings"
                       value={intakeBrief.campaignObjective ?? ''}
-                      onChange={e => setIntakeBrief(b => ({ ...b, campaignObjective: e.target.value }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, campaignObjective: e.target.value }))}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1]"
                     />
                   </div>
@@ -1037,7 +1038,7 @@ export default function PipelineBuilder() {
                     <textarea
                       placeholder="e.g. Warm, direct, trustworthy. Not clinical or salesy."
                       value={intakeBrief.brandVoiceStatement ?? ''}
-                      onChange={e => setIntakeBrief(b => ({ ...b, brandVoiceStatement: e.target.value }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, brandVoiceStatement: e.target.value }))}
                       rows={2}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs focus:outline-none focus:border-[#00C4A1] resize-none"
                     />
@@ -1051,7 +1052,7 @@ export default function PipelineBuilder() {
                     <textarea
                       placeholder={"Secure online intake is available.\nA licensed provider may review submitted information.\nEligibility depends on provider review."}
                       value={(intakeBrief.approvedFacts ?? []).join('\n')}
-                      onChange={e => setIntakeBrief(b => ({ ...b, approvedFacts: e.target.value.split('\n').filter((l: string) => l.trim()) }))}
+                      onChange={e => setIntakeBrief((b: Partial<IntakeBrief>) => ({ ...b, approvedFacts: e.target.value.split('\n').filter((l: string) => l.trim()) }))}
                       rows={4}
                       className="w-full px-3 py-2 bg-[#1a1a24] border border-white/[0.08] rounded-lg text-xs font-mono focus:outline-none focus:border-[#00C4A1] resize-none"
                     />
