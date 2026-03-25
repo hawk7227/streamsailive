@@ -212,7 +212,7 @@ Accept only if:
   // ── Dual-surface panel state ───────────────────────────────────────────
   const [mediaTab, setMediaTab] = useState<MediaTab>("Image");
   // Image tab
-  const [imagePrompt, setImagePrompt] = useState("");
+  const [imagePrompt, setImagePrompt] = useState(() => typeof window !== "undefined" ? (window.localStorage.getItem("streamsai:pipeline:imagePrompt") ?? "") : "");
   const [imageApiMode, setImageApiMode] = useState<ImageApiMode>("images");
   const [imageRefs, setImageRefs] = useState<UploadedRef[]>([]);
   const [imageIdeas, setImageIdeas] = useState<string[]>([]);
@@ -223,7 +223,7 @@ Accept only if:
   const [imageReferencePriority, setImageReferencePriority] = useState<ReferencePriority>("medium");
   const [selectedImageTemplate, setSelectedImageTemplate] = useState("");
   // Video tab
-  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoPrompt, setVideoPrompt] = useState(() => typeof window !== "undefined" ? (window.localStorage.getItem("streamsai:pipeline:videoPrompt") ?? "") : "");
   const [videoMode, setVideoMode] = useState<VideoGenMode>("scratch_t2v");
   const [videoImageRefs, setVideoImageRefs] = useState<UploadedRef[]>([]);
   const [videoVideoRef, setVideoVideoRef] = useState<UploadedRef | null>(null);
@@ -237,6 +237,37 @@ Accept only if:
   // AI assistant float
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [navMenuOpen, setNavMenuOpen] = useState(false);
+
+  // ── Name tag + preset state ───────────────────────────────────────────────
+  const [pipelineName, setPipelineName] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("streamsai:pipeline:name") ?? "";
+  });
+  const [presetDropOpen, setPresetDropOpen] = useState(false);
+  type NamedPreset = { id: string; name: string; savedAt: number; nicheId: string; pipelineMode: string; outputMode: string; };
+  const [namedPresets, setNamedPresets] = useState<NamedPreset[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(window.localStorage.getItem("streamsai:pipeline:presets") ?? "[]"); } catch { return []; }
+  });
+
+  function saveNamedPreset() {
+    const name = pipelineName.trim();
+    if (!name) return;
+    const preset: NamedPreset = { id: "p-" + Date.now(), name, savedAt: Date.now(), nicheId, pipelineMode, outputMode };
+    const updated = [preset, ...namedPresets.filter(p => p.name !== name)].slice(0, 20);
+    setNamedPresets(updated);
+    window.localStorage.setItem("streamsai:pipeline:name", name);
+    window.localStorage.setItem("streamsai:pipeline:presets", JSON.stringify(updated));
+    setPresetDropOpen(false);
+  }
+
+  function loadNamedPreset(preset: NamedPreset) {
+    setPipelineName(preset.name);
+    setNicheId(preset.nicheId);
+    setPipelineMode(preset.pipelineMode as "manual" | "auto");
+    setOutputMode(preset.outputMode as "image+video" | "image" | "video");
+    setPresetDropOpen(false);
+  }
   const imageRefInputRef = useRef<HTMLInputElement>(null);
   const videoImageRefInputRef = useRef<HTMLInputElement>(null);
   const videoVideoRefInputRef = useRef<HTMLInputElement>(null);
@@ -743,6 +774,22 @@ Accept only if:
     assistantEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [assistantMessages]);
 
+  // ── Auto-save pipeline state (3s debounce) ────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        window.localStorage.setItem("streamsai:pipeline:name", pipelineName);
+        window.localStorage.setItem("streamsai:pipeline:nicheId", nicheId);
+        window.localStorage.setItem("streamsai:pipeline:mode", pipelineMode);
+        window.localStorage.setItem("streamsai:pipeline:outputMode", outputMode);
+        window.localStorage.setItem("streamsai:pipeline:imagePrompt", imagePrompt);
+        window.localStorage.setItem("streamsai:pipeline:videoPrompt", videoPrompt);
+        window.localStorage.setItem("streamsai:pipeline:stepPrompts", JSON.stringify(stepPrompts));
+      } catch { /* storage full */ }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [pipelineName, nicheId, pipelineMode, outputMode, imagePrompt, videoPrompt, stepPrompts]);
+
   // ── Approve output to workspace ───────────────────────────────────────────
   function approveOutput(type: "image" | "video" | "script", url: string) {
     setApprovedOutputs(p => ({ ...p, [type]: url }));
@@ -951,12 +998,28 @@ Accept only if:
 
           {/* ── TOP BAR ──────────────────────────────────────────────────── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-            {/* Niche selector */}
-            <select value={nicheId} onChange={e => setNicheId(e.target.value)}
-              style={{ background: "#1e1b4b", border: "1px solid rgba(103,232,249,0.3)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
-              <option value="telehealth">Telehealth Master</option>
-              <option value="google_ads">Google Ads — Telehealth</option>
-            </select>
+            {/* Custom name tag — replaces Telehealth Master */}
+            <div style={{ display: "flex", alignItems: "center", gap: 0, position: "relative" }}>
+              <input
+                value={pipelineName}
+                onChange={e => setPipelineName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && saveNamedPreset()}
+                placeholder="Name this pipeline…"
+                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(103,232,249,0.25)", borderRight: "none", borderRadius: "10px 0 0 10px", color: "#fff", fontSize: 13, padding: "8px 12px", outline: "none", width: 180 }}
+              />
+              <button onClick={saveNamedPreset} style={{ background: "rgba(103,232,249,0.12)", border: "1px solid rgba(103,232,249,0.25)", borderRight: "none", color: "#67e8f9", fontSize: 12, fontWeight: 700, padding: "8px 10px", cursor: "pointer" }}>Save</button>
+              <button onClick={() => setPresetDropOpen(o => !o)} style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.25)", borderRadius: "0 10px 10px 0", color: "#67e8f9", fontSize: 10, padding: "8px 9px", cursor: "pointer" }}>▼</button>
+              {presetDropOpen && namedPresets.length > 0 && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 200, background: "#0d1117", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 10, minWidth: 220, boxShadow: "0 10px 30px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+                  {namedPresets.map(p => (
+                    <button key={p.id} onClick={() => loadNamedPreset(p)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "9px 14px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.06)", color: "#f1f5f9", fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                      <span>{p.name}</span>
+                      <span style={{ fontSize: 10, color: "#475569" }}>{new Date(p.savedAt).toLocaleDateString()}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <select value={pipelineMode} onChange={e => setPipelineMode(e.target.value as "manual" | "auto")}
               style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
               <option value="manual">Pipeline Mode: Manual</option>
@@ -1060,7 +1123,7 @@ Accept only if:
             <button style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Pause</button>
             <button onClick={runPipeline} disabled={pipelineRunning}
               style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#94a3b8", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              ▶ Images Only
+              ▶ Run Image Pipeline
             </button>
             <button onClick={runFullGovernancePipeline} disabled={pipelineRunning}
               style={{ background: pipelineRunning ? "rgba(168,85,247,0.3)" : "linear-gradient(90deg,rgba(168,85,247,0.9),rgba(34,211,238,0.7))", border: "none", color: "#fff", borderRadius: 10, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: pipelineRunning ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
@@ -1088,17 +1151,16 @@ Accept only if:
                   <div style={{fontSize:10,color:"#475569"}}>Media Generator</div>
                 </div>
               </div>
-              {/* Primary tabs: Image Studio + Video Studio */}
-              {([
-                {label:"Image Studio", key:"img", active:mediaTab==="Image", action:()=>setMediaTab("Image")},
-                {label:"Video Studio", key:"vid", active:mediaTab==="Video", action:()=>setMediaTab("Video")},
-              ] as {label:string;key:string;active:boolean;action:()=>void}[]).map(item=>(
-                <button key={item.key} onClick={item.action}
-                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"11px 18px",background:item.active?"rgba(103,232,249,0.07)":"transparent",border:"none",borderLeft:item.active?"2px solid #67e8f9":"2px solid transparent",color:item.active?"#67e8f9":"#64748b",fontSize:12,fontWeight:item.active?600:400,cursor:"pointer",textAlign:"left",transition:"all 150ms"}}>
-                  {item.label}
-                  <span style={{width:6,height:6,borderRadius:"50%",background:item.active?"#67e8f9":"rgba(255,255,255,0.1)",flexShrink:0}}/>
-                </button>
-              ))}
+              {/* Image / Video pill toggle */}
+              <div style={{padding:"8px 12px 6px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+                <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:8,padding:3,gap:2}}>
+                  {(["Image","Video"] as MediaTab[]).map(m=>(
+                    <button key={m} onClick={()=>setMediaTab(m)} style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:mediaTab===m?700:400,cursor:"pointer",background:mediaTab===m?"rgba(103,232,249,0.15)":"transparent",color:mediaTab===m?"#67e8f9":"#64748b",transition:"all 160ms ease"}}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {/* More tools menu */}
               <div style={{margin:"8px 14px 0",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,position:"relative"}}>
                 <button onClick={()=>setNavMenuOpen(o=>!o)}
@@ -1124,21 +1186,7 @@ Accept only if:
                   </div>
                 )}
               </div>
-              {/* What this panel does */}
-              <div style={{margin:"12px 14px",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,marginTop:"auto"}}>
-                <div style={{fontSize:9,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>What this panel does</div>
-                {[
-                  "Type a raw image or video idea.",
-                  "Open templates or generate AI ideas.",
-                  "Upload image/video references.",
-                  "System rewrites for realism before generation.",
-                ].map((t,i)=>(
-                  <div key={i} style={{display:"flex",gap:7,marginBottom:5}}>
-                    <span style={{fontSize:10,color:"#334155",flexShrink:0,fontWeight:600}}>{i+1}.</span>
-                    <span style={{fontSize:10,color:"#475569",lineHeight:1.45}}>{t}</span>
-                  </div>
-                ))}
-              </div>
+
             </div>
 
             {/* ── CENTER: PROMPT PANEL ────────────────────────────────────── */}
@@ -2116,12 +2164,12 @@ Accept only if:
                     <button onClick={() => generateImage(cid)}
                       disabled={isActive}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      🖼 Img
+                      Run Concept Image
                     </button>
                     <button onClick={() => generateVideo(cid)}
                       disabled={isActive}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      ▶ Vid
+                      Run Concept Video
                     </button>
                     <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); log(`Restarted concept ${i + 1}`); }}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
