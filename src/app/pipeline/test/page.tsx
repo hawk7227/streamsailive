@@ -514,34 +514,43 @@ Accept only if:
   const activeCount = [...generationQueue.values()].filter(i => i.status === "pending" || i.status === "processing").length;
 
   // ── Supabase Realtime — completions push to queue ─────────────────────────
+  // Wrapped in try/catch — polling fallback handles all completions if realtime unavailable
   useEffect(() => {
-    const channel = supabase
-      .channel("generations-updates")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations" }, (payload) => {
-        const row = payload.new as { id: string; status: string; output_url?: string; type?: string; concept_id?: string };
-        if (row.status === "completed" || row.status === "failed") {
-          queueUpdate(row.id, { status: row.status as QueueStatus, outputUrl: row.output_url ?? null });
-          if (row.status === "completed" && row.output_url) {
-            const conceptId = row.concept_id ?? null;
-            if (conceptId && row.type === "image") {
-              setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: row.output_url!, status: "completed" } }));
-              // Also update dual-surface image result if this was the active generation
-              setImageResult(prev => prev ?? row.output_url!);
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("generations-updates")
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations" }, (payload) => {
+          const row = payload.new as { id: string; status: string; output_url?: string; type?: string; concept_id?: string };
+          if (row.status === "completed" || row.status === "failed") {
+            queueUpdate(row.id, { status: row.status as QueueStatus, outputUrl: row.output_url ?? null });
+            if (row.status === "completed" && row.output_url) {
+              const conceptId = row.concept_id ?? null;
+              if (conceptId && row.type === "image") {
+                setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: row.output_url!, status: "completed" } }));
+                setImageResult(prev => prev ?? row.output_url!);
+              }
+              if (conceptId && (row.type === "video" || row.type === "i2v")) {
+                setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: row.output_url!, status: "completed" } }));
+                setVideoResult(row.output_url!);
+              }
+              log("✓ " + row.type + " completed: " + row.id.slice(0, 8));
             }
-            if (conceptId && (row.type === "video" || row.type === "i2v")) {
-              setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: row.output_url!, status: "completed" } }));
-              // Update dual-surface video result so the Video tab shows it
-              setVideoResult(row.output_url!);
+            if (row.status === "failed") {
+              log("✗ generation failed: " + row.id.slice(0, 8));
             }
-            log("✓ " + row.type + " completed: " + row.id.slice(0, 8) + (row.output_url ? " — output ready" : ""));
           }
-          if (row.status === "failed") {
-            log("✗ generation failed: " + row.id.slice(0, 8));
+        })
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            // Realtime unavailable — polling fallback is active
+            console.warn("[Realtime] channel error — using polling fallback");
           }
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+        });
+    } catch {
+      // Realtime not available — polling fallback handles completions
+    }
+    return () => { if (channel) supabase.removeChannel(channel).catch(() => {}); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
