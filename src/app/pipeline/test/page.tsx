@@ -1064,21 +1064,36 @@ Accept only if:
                   <div style={{fontSize:10,color:"#475569"}}>Media Generator</div>
                 </div>
               </div>
-              {/* Nav items */}
+              {/* Primary tabs: Image Studio + Video Studio */}
               {([
                 {label:"Image Studio", key:"img", active:mediaTab==="Image", action:()=>setMediaTab("Image")},
                 {label:"Video Studio", key:"vid", active:mediaTab==="Video", action:()=>setMediaTab("Video")},
-                {label:"Templates",    key:"tpl", active:false, action:()=>{}},
-                {label:"AI Ideas",     key:"ide", active:false, action:()=>{mediaTab==="Image"?getImageIdeas():getVideoIdeas();}},
-                {label:"Library",      key:"lib", active:false, action:()=>setWorkspaceTab("output")},
-                {label:"History",      key:"his", active:false, action:()=>setWorkspaceTab("logs")},
               ] as {label:string;key:string;active:boolean;action:()=>void}[]).map(item=>(
                 <button key={item.key} onClick={item.action}
                   style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"11px 18px",background:item.active?"rgba(103,232,249,0.07)":"transparent",border:"none",borderLeft:item.active?"2px solid #67e8f9":"2px solid transparent",color:item.active?"#67e8f9":"#64748b",fontSize:12,fontWeight:item.active?600:400,cursor:"pointer",textAlign:"left",transition:"all 150ms"}}>
                   {item.label}
-                  {(item.key==="img"||item.key==="vid")&&<span style={{width:6,height:6,borderRadius:"50%",background:item.active?"#67e8f9":"rgba(255,255,255,0.1)",flexShrink:0}}/>}
+                  <span style={{width:6,height:6,borderRadius:"50%",background:item.active?"#67e8f9":"rgba(255,255,255,0.1)",flexShrink:0}}/>
                 </button>
               ))}
+              {/* Compact dropdown: Templates, AI Ideas, Library, History */}
+              <div style={{margin:"8px 14px 0",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8}}>
+                <select
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === "ideas") { mediaTab==="Image"?getImageIdeas():getVideoIdeas(); }
+                    else if (v === "library") { setWorkspaceTab("output"); }
+                    else if (v === "history") { setWorkspaceTab("logs"); }
+                    e.target.value = "";
+                  }}
+                  defaultValue=""
+                  style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",borderRadius:8,padding:"8px 10px",fontSize:12,cursor:"pointer",outline:"none",appearance:"auto"}}>
+                  <option value="" disabled style={{background:"#0f172a"}}>More tools…</option>
+                  <option value="templates" style={{background:"#0f172a"}}>Templates</option>
+                  <option value="ideas" style={{background:"#0f172a"}}>AI Ideas</option>
+                  <option value="library" style={{background:"#0f172a"}}>Library</option>
+                  <option value="history" style={{background:"#0f172a"}}>History</option>
+                </select>
+              </div>
               {/* What this panel does */}
               <div style={{margin:"12px 14px",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,marginTop:"auto"}}>
                 <div style={{fontSize:9,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>What this panel does</div>
@@ -1667,50 +1682,70 @@ Accept only if:
               {/* Canvas */}
               <div style={{ flex: 1, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
                 {workspaceTab === "output" && (() => {
-                  // Collect all available outputs for 3-panel preview
-                  const panels = [
-                    { label: "Concept 1", image: conceptOutputs.c1.image, video: conceptOutputs.c1.video },
-                    { label: "Concept 2", image: conceptOutputs.c2.image, video: conceptOutputs.c2.video },
-                    { label: "Concept 3", image: conceptOutputs.c3.image, video: conceptOutputs.c3.video },
-                  ].filter(p => p.image || p.video);
-                  const hasMultiple = panels.length > 1;
-                  const showAll = hasMultiple && deviceFrame === "Custom";
-                  return showAll ? (
-                    // 3-panel preview
-                    <div style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 12 }}>
-                      {[...panels, { label: "Workspace", image: approvedOutputs.image, video: approvedOutputs.video }].map((p, i) => (
+                  // 3 fixed slots: portrait (9:16) | landscape (16:9) | portrait (9:16)
+                  // Slots pull from concept outputs → approved output → empty
+                  const slot1 = { label: "Preview", image: conceptOutputs.c1.image ?? approvedOutputs.image, video: conceptOutputs.c1.video ?? approvedOutputs.video };
+                  const slot2 = { label: "Preview", image: conceptOutputs.c2.image ?? approvedOutputs.image, video: conceptOutputs.c2.video ?? approvedOutputs.video };
+                  const slot3 = { label: "Preview", image: conceptOutputs.c3.image ?? approvedOutputs.image, video: conceptOutputs.c3.video ?? approvedOutputs.video };
+                  const slots = [
+                    { ...slot1, portrait: true  },   // left  — portrait  9:16
+                    { ...slot2, portrait: false },   // center — landscape 16:9
+                    { ...slot3, portrait: true  },   // right  — portrait  9:16
+                  ];
+                  return (
+                    <div style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1.8fr 1fr", gap: 14, alignItems: "start" }}>
+                      {slots.map((slot, i) => (
                         <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          <div style={{ fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>{p.label}</div>
-                          <div style={{ position: "relative", aspectRatio: viewMode === "9:16" ? "9/16" : "16/9", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
-                            {p.video ? <video src={p.video} autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              : p.image ? <img src={p.image} alt={p.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#1e293b", fontSize: 11 }}>Approve an output</div>}
-                            {(p.image || p.video) && (
-                              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", gap: 3, padding: "4px 6px", background: "rgba(0,0,0,0.6)" }}>
-                                {p.image && <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: p.image })); log("✓ " + p.label + " image sent to workspace"); }}
-                                  style={{ flex: 1, background: "rgba(110,231,183,0.8)", border: "none", color: "#000", borderRadius: 4, padding: "3px 0", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>✓ Use</button>}
-                                {p.image && <button onClick={() => window.open(p.image!, "_blank")}
-                                  style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 4, padding: "3px 6px", fontSize: 9, cursor: "pointer" }}>↗</button>}
+                          {/* Frame */}
+                          <div style={{
+                            position: "relative",
+                            width: "100%",
+                            aspectRatio: slot.portrait ? "9/16" : "16/9",
+                            background: "rgba(255,255,255,0.03)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            borderRadius: slot.portrait ? 20 : 12,
+                            overflow: "hidden",
+                            boxShadow: slot.portrait ? "0 0 0 5px rgba(255,255,255,0.04)" : "none",
+                          }}>
+                            {slot.video
+                              ? <video src={slot.video} autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              : slot.image
+                                ? <img src={slot.image} alt={slot.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                : (
+                                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#1e293b" }}>
+                                    <div style={{ fontSize: 22, opacity: 0.4 }}>◻</div>
+                                    <div style={{ fontSize: 10, textAlign: "center", padding: "0 12px", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                                  </div>
+                                )}
+                            {/* Action overlay */}
+                            {(slot.image || slot.video) && (
+                              <div style={{ position: "absolute", inset: 0, opacity: 0, transition: "opacity 150ms", background: "rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = "1"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = "0"; }}>
+                                <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: slot.image ?? o.image, video: slot.video ?? o.video })); log("✓ Preview " + (i+1) + " sent to workspace"); }}
+                                  style={{ background: "rgba(110,231,183,0.9)", border: "none", color: "#000", borderRadius: 7, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", width: "80%" }}>
+                                  ✓ Use This
+                                </button>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  {slot.image && <button onClick={() => window.open(slot.image!, "_blank")}
+                                    style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>↗ View</button>}
+                                  <button onClick={() => { navigator.clipboard.writeText(slot.image ?? slot.video ?? ""); log("✓ URL copied"); }}
+                                    style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>⎘ Copy</button>
+                                </div>
                               </div>
+                            )}
+                          </div>
+                          {/* Label row */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" }}>
+                            <span style={{ fontSize: 10, color: "#334155" }}>{slot.portrait ? "9:16" : "16:9"} {i === 1 ? "· Main" : ""}</span>
+                            {(slot.image || slot.video) && (
+                              <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: slot.image ?? o.image, video: slot.video ?? o.video })); }}
+                                style={{ fontSize: 9, background: "rgba(110,231,183,0.1)", border: "1px solid rgba(110,231,183,0.2)", color: "#6ee7b7", borderRadius: 4, padding: "2px 7px", cursor: "pointer", fontWeight: 600 }}>Send</button>
                             )}
                           </div>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                  <div style={{ position: "relative", width: "100%", maxWidth: viewMode === "9:16" ? 200 : 560, aspectRatio: viewMode === "16:9" ? "16/9" : "9/16", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: deviceFrame === "iPhone" ? 28 : 12, overflow: "hidden", boxShadow: deviceFrame === "iPhone" ? "0 0 0 8px rgba(255,255,255,0.06), 0 0 0 9px rgba(255,255,255,0.03)" : "none" }}>
-                    {approvedOutputs.video ? (
-                      <video src={approvedOutputs.video} controls autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : approvedOutputs.image ? (
-                      <img src={approvedOutputs.image} alt="Approved output" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#334155", gap: 8 }}>
-                        <div style={{ fontSize: 28 }}>◻</div>
-                        <div style={{ fontSize: 12 }}>Approve an output from the generator above</div>
-                        {panels.length > 0 && <div style={{ fontSize: 10, color: "#1e293b" }}>Switch to Custom view to see all 3 panels</div>}
-                      </div>
-                    )}
-                  </div>
                   );
                 })()}
                 {workspaceTab === "logs" && (
