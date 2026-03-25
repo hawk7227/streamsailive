@@ -106,7 +106,7 @@ const buildSystemPrompt = (context: PipelineContext): string => {
 
   return `You are STREAMS — an expert AI pipeline director for telehealth content production.
 
-You help users build compliant, premium telehealth ad campaigns through a 7-step pipeline.
+You help users generate ordinary real-life visual content through a 7-step pipeline. Not ads. Not staged. Not marketing.
 
 CRITICAL: When you see failed concepts or errors in the pipeline state, your FIRST response must:
 1. State clearly what failed and exactly why

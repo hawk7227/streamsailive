@@ -15,12 +15,15 @@ export type ProtectedZone = "face" | "hands" | "phone" | "medication" | "screen"
 
 export interface IntakeBrief {
   targetPlatform: TargetPlatform;
-  funnelStage: "awareness" | "consideration" | "conversion";
-  proofTypeAllowed: "process-based" | "social-proof" | "outcome-based";
-  audienceSegment: string;
-  campaignObjective: string;
-  brandVoiceStatement: string;
-  approvedFacts: string[];
+  // Scene-first fields — preferred over ad-framing fields below
+  sceneContext?: string;           // "ordinary person at home using a phone — not staged"
+  // Legacy ad fields — kept for backward compat, do not inject marketing tone
+  funnelStage?: "awareness" | "consideration" | "conversion";
+  proofTypeAllowed?: "process-based" | "social-proof" | "outcome-based";
+  audienceSegment?: string;
+  campaignObjective?: string;
+  brandVoiceStatement?: string;
+  approvedFacts?: string[];
   niche?: string;
 }
 

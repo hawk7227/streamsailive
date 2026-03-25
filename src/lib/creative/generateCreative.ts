@@ -60,21 +60,18 @@ export async function generateCreative(intake: IntakeBrief): Promise<StrategyOut
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const prompt = `You are a creative director generating ad concepts.
+  const prompt = `You are generating descriptions of ordinary real-life moments. Not ads. Not staged. Not visually impressive.
 
-Campaign objective: ${intake.campaignObjective}
-Target audience: ${intake.audienceSegment}
-Brand voice: ${intake.brandVoiceStatement}
-Platform: ${intake.targetPlatform}
-Funnel stage: ${intake.funnelStage}
-Proof type: ${intake.proofTypeAllowed}
-Approved facts: ${intake.approvedFacts.join("; ")}
+Scene context: ${intake.sceneContext ?? intake.campaignObjective ?? "ordinary everyday moment"}
+Subject: ${intake.audienceSegment ?? "a real person"}
+Platform: ${intake.targetPlatform ?? "web"}
+Approved facts (do not invent beyond these): ${(intake.approvedFacts ?? []).join("; ")}
 
 Generate exactly 3 distinct creative concepts. Each must be a realistic, believable scenario.
 
 Return ONLY valid JSON, no markdown fences, no preamble:
 {
-  "strategySummary": "one sentence describing the campaign direction",
+  "sceneSummary": "one sentence describing the type of real moment being captured",
   "concepts": [
     {
       "angle": "the strategic angle in 3-5 words",
@@ -129,7 +126,7 @@ Rules:
   const conceptDirections: ConceptDirection[] = raw.concepts.slice(0, 3).map((c, i) => ({
     id: `concept-${i + 1}`,
     angle: c.angle ?? `concept ${i + 1}`,
-    hook: intake.campaignObjective,
+    hook: intake.sceneContext ?? intake.campaignObjective ?? "ordinary moment",
     subjectType: toSubjectType(c.subject ?? ""),
     action: c.action ?? "using a device at home",
     environment: c.environment ?? "home",
@@ -137,14 +134,14 @@ Rules:
     desiredMood: c.mood ?? "calm, natural",
     overlayIntent: buildOverlayIntent({
       ...c,
-      headline: c.headline ?? intake.campaignObjective.slice(0, 40),
-      cta: c.cta ?? "Get started",
+      headline: c.headline ?? (intake.campaignObjective ?? intake.sceneContext ?? "").slice(0, 40),
+      cta: c.cta ?? "",
     }),
   }));
 
   return {
     runId: crypto.randomUUID(),
-    strategySummary: raw.strategySummary ?? intake.campaignObjective,
+    strategySummary: (raw as {sceneSummary?:string;strategySummary?:string}).sceneSummary ?? raw.strategySummary ?? "ordinary real-life moment",
     conceptDirections,
     rulesetVersion: REALISM_RULESET_VERSION,
   };

@@ -14,7 +14,7 @@ export function createStrategyFromIntake(intake: IntakeBrief): StrategyOutput {
     {
       id: "concept-1",
       angle: "private digital care",
-      hook: intake.campaignObjective,
+      hook: intake.sceneContext ?? intake.campaignObjective ?? "ordinary moment",
       subjectType: "patient",
       action: "sitting at home using a smartphone calmly",
       environment: "real living room with ordinary household detail",
@@ -25,7 +25,7 @@ export function createStrategyFromIntake(intake: IntakeBrief): StrategyOutput {
     {
       id: "concept-2",
       angle: "clinician review",
-      hook: intake.audienceSegment,
+      hook: intake.audienceSegment ?? "real person in ordinary situation",
       subjectType: "doctor",
       action: "reviewing a case on a computer in a clinic office",
       environment: "believable clinic office",
@@ -36,7 +36,7 @@ export function createStrategyFromIntake(intake: IntakeBrief): StrategyOutput {
     {
       id: "concept-3",
       angle: "follow-up communication",
-      hook: intake.brandVoiceStatement,
+      hook: "ordinary moment — real person, real place",
       subjectType: "patient",
       action: "speaking on a phone at home",
       environment: "ordinary living room with believable detail",
@@ -48,7 +48,7 @@ export function createStrategyFromIntake(intake: IntakeBrief): StrategyOutput {
 
   return {
     runId: crypto.randomUUID(),
-    strategySummary: `${intake.targetPlatform} strategy for ${intake.funnelStage} stage with ${intake.proofTypeAllowed} proof type`,
+    strategySummary: "ordinary real-life moment — not staged, not advertising",
     conceptDirections: concepts,
     rulesetVersion: REALISM_RULESET_VERSION,
   };
@@ -74,8 +74,8 @@ export function createTelehealthValidationResult(): ValidationResult {
 
 function buildOverlayIntent(): OverlayIntent {
   return {
-    headline: "Care starts here",
-    cta: "Get started",
+    headline: "",
+    cta: "",
     disclaimer: "Clinician review required.",
     textDensityHint: "medium",
     titleLengthClass: "medium",

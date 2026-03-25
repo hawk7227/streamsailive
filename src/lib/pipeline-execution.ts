@@ -242,7 +242,7 @@ const buildPerception = (input: string, niche: PipelineNiche): MotionPlanV2["per
 };
 
 const buildIntent = (niche: PipelineNiche, outputMode: OutputMode): MotionPlanV2["intent"] => ({
-  goal: "conversion",
+  goal: "realism",
   format: outputMode === "full_campaign_pack" ? "explainer" : "ad",
   platform: outputMode === "video" || outputMode === "image_to_video" ? "meta" : "general",
   audience: niche === "telehealth" ? "warm" : "cold",
@@ -822,9 +822,9 @@ export async function executeNode(node: any, context: any) {
       `Approved facts: ${gov.approvedFacts.join("; ")}`,
       `Banned phrases: ${gov.bannedPhrases.join(", ")}`,
       `Target platform: ${(context?.intakeBrief as IntakeBrief | undefined)?.targetPlatform ?? "not specified"}`,
-      `Funnel stage: ${(context?.intakeBrief as IntakeBrief | undefined)?.funnelStage ?? "not specified"}`,
+      `Scene context: ${(context?.intakeBrief as IntakeBrief | undefined)?.sceneContext ?? "ordinary real-life moment — not staged, not advertising"}`,
       `Audience: ${(context?.intakeBrief as IntakeBrief | undefined)?.audienceSegment ?? "not specified"}`,
-      `Campaign objective: ${(context?.intakeBrief as IntakeBrief | undefined)?.campaignObjective ?? "not specified"}`,
+      `Realism requirement: not staged, not visually impressive, not advertising, not a landing page image`,
       data.intakeAnalysis ? `Source brief: ${JSON.stringify(data.intakeAnalysis)}` : "",
       `User instruction: ${replaceVariables(data.strategyPrompt || gov.strategyPrompt, context)}`,
     ].filter(Boolean).join("\n");
@@ -846,11 +846,11 @@ export async function executeNode(node: any, context: any) {
       data.copyPrompt || governance.copyPrompt,
       strategyContext ? `Active strategy: ${strategyContext}` : "",
       `Brand tone: ${governance.brandTone}`,
-      `Brand voice: warm, trustworthy, direct. NOT clinical, cold, salesy, or urgent.`,
+      `Tone: plain, factual, ordinary. NOT warm, NOT aspirational, NOT marketing, NOT ad copy.`,
       `Field limits: headline ≤${governance.pipelineType === "google_ads" ? "30 chars" : "8 words"}, subheadline ≤20 words, CTA ≤4 words, bullets: exactly 3 (≤8 words each), microcopy ≤12 words, disclaimer ≤18 words`,
       `Approved facts ONLY — no other factual claims: ${governance.approvedFacts}`,
       `Banned phrases (hard block, any hit = rejected): ${governance.bannedPhrases}`,
-      `Variant differentiation required: v1=access angle, v2=trust/credibility angle, v3=value/cost angle`,
+      `Variant differentiation: v1=different subject, v2=different environment, v3=different action. No marketing angles.`,
       `Disclaimer MANDATORY in every variant — must include eligibility qualifier`,
       `Temperature: 0.3 — factual accuracy over creativity`,
     ].filter(Boolean).join("\n");

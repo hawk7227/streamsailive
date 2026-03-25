@@ -69,7 +69,7 @@ export type ActiveGovernance = {
 const TELEHEALTH_BASE: ActiveGovernance = {
   pipelineType: "telehealth",
   rulesetVersion: "universal-realism-v1",
-  brandTone: "Warm, direct, trustworthy. Not clinical, not salesy.",
+  brandTone: "Plain. Factual. No ad tone. No marketing framing.",
   approvedFacts: [
     "Licensed clinicians review patient information.",
     "Secure intake may be completed online.",
@@ -121,7 +121,7 @@ const TELEHEALTH_BASE: ActiveGovernance = {
     eachMustHave: ["headline", "subheadline", "cta", "disclaimer"],
     differentiation: "Each concept targets a different audience angle.",
   },
-  strategyPrompt: "Build a creative strategy for telehealth advertising that is compliant, believable, and conversion-focused.",
+  strategyPrompt: "Generate ordinary real-life scene descriptions. Not advertising. Not staged. Not visually impressive.",
   copyPrompt: "Generate compliant telehealth copy variants. Avoid diagnostic claims, guarantees, or prescription certainty language.",
   validatorPrompt: "Validate copy for telehealth compliance. Block diagnostic claims, guarantees, and banned phrases.",
   imagePrompt: "Generate a realistic, unpolished image for telehealth advertising. Real person, ordinary setting, natural lighting.",

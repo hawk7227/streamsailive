@@ -9,12 +9,14 @@ export function validateIntakeBrief(input: Partial<IntakeBrief>): IntakeGateResu
   const errors: string[] = [];
 
   if (!input.targetPlatform) errors.push("targetPlatform is required");
-  if (!input.funnelStage) errors.push("funnelStage is required");
-  if (!input.proofTypeAllowed) errors.push("proofTypeAllowed is required");
-  if (!input.audienceSegment || input.audienceSegment.trim().length < 20) errors.push("audienceSegment must be at least 20 characters");
-  if (!input.campaignObjective || input.campaignObjective.trim().length < 10) errors.push("campaignObjective must be at least 10 characters");
-  if (!input.brandVoiceStatement || input.brandVoiceStatement.trim().length < 30) errors.push("brandVoiceStatement must be at least 30 characters");
-  if (!Array.isArray(input.approvedFacts) || input.approvedFacts.length < 3) errors.push("approvedFacts must contain at least 3 items");
+  // sceneContext or campaignObjective must be present — one or the other
+  const hasContext = (input.sceneContext && input.sceneContext.trim().length >= 10)
+    || (input.campaignObjective && input.campaignObjective.trim().length >= 10);
+  if (!hasContext) errors.push("sceneContext (or campaignObjective) must be at least 10 characters");
+
+  // Ad-framing fields are now optional — do not block if missing
+  // funnelStage, proofTypeAllowed, audienceSegment, brandVoiceStatement, approvedFacts
+  // are kept for backward compat but no longer required
 
   return {
     valid: errors.length === 0,
