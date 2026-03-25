@@ -1044,338 +1044,531 @@ Accept only if:
             </button>
           </div>
 
-          {/* ── ROW 1: Dual-Surface Media Generator | Concepts ─────────────── */}
-          {/* Hidden file inputs for reference uploads */}
-          <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-            onChange={e => { Array.from(e.target.files ?? []).forEach(f => handleRefUpload(f, "image", setImageRefs, 3)); e.target.value = ""; }} />
-          <input ref={videoImageRefInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-            onChange={e => { Array.from(e.target.files ?? []).forEach(f => handleRefUpload(f, "image", setVideoImageRefs, 2)); e.target.value = ""; }} />
-          <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{ display: "none" }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoRefUpload(f); e.target.value = ""; }} />
+          {/* ── ROW 1: Image + Video Prompt Panel ──────────────────────────── */}
+          <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
+            onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setImageRefs,3));e.target.value="";}}/>
+          <input ref={videoImageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
+            onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setVideoImageRefs,2));e.target.value="";}}/>
+          <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{display:"none"}}
+            onChange={e=>{const f=e.target.files?.[0];if(f)handleVideoRefUpload(f);e.target.value="";}}/>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 14, marginBottom: 14 }}>
+          <div style={{display:"grid",gridTemplateColumns:"200px 1fr 320px",gap:14,marginBottom:14}}>
 
-            {/* ── DUAL-SURFACE PANEL ──────────────────────────────────────────── */}
-            <div style={P({ padding: 0, display: "flex", flexDirection: "column", minHeight: 360 })}>
-
-              {/* Tab header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <div style={{ display: "flex" }}>
-                  {(["Image", "Video"] as MediaTab[]).map(tab => (
-                    <button key={tab} onClick={() => setMediaTab(tab)}
-                      style={{ padding: "11px 18px", fontSize: 13, fontWeight: 700, background: "none", border: "none",
-                        color: mediaTab === tab ? "#67e8f9" : "#475569",
-                        borderBottom: mediaTab === tab ? "2px solid #67e8f9" : "2px solid transparent",
-                        cursor: "pointer", letterSpacing: "-0.01em" }}>
-                      {tab === "Image" ? "🖼 Image" : "🎬 Video"}
-                    </button>
-                  ))}
+            {/* ── LEFT NAV ────────────────────────────────────────────────── */}
+            <div style={P({padding:0,display:"flex",flexDirection:"column",minHeight:520})}>
+              {/* Logo */}
+              <div style={{padding:"14px 16px 12px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366f1,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",flexShrink:0}}>S</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9",lineHeight:1.2}}>StreamsAI</div>
+                  <div style={{fontSize:10,color:"#475569"}}>Media Generator</div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {/* Image API mode toggle — only on Image tab */}
-                  {mediaTab === "Image" && (
-                    <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
-                      {(["images", "responses"] as ImageApiMode[]).map(m => (
-                        <button key={m} onClick={() => setImageApiMode(m)}
-                          style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
-                            background: imageApiMode === m ? "rgba(103,232,249,0.15)" : "transparent",
-                            color: imageApiMode === m ? "#67e8f9" : "#475569",
-                            borderRight: m === "images" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
-                          {m === "images" ? "Images API" : "Responses API"}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* Video provider + mode toggle — only on Video tab */}
-                  {mediaTab === "Video" && (
-                    <>
-                      <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
-                        {(["scratch_t2v", "i2v"] as VideoGenMode[]).map(m => (
-                          <button key={m} onClick={() => setVideoMode(m)}
-                            style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
-                              background: videoMode === m ? "rgba(168,85,247,0.15)" : "transparent",
-                              color: videoMode === m ? "#a78bfa" : "#475569",
-                              borderRight: m === "scratch_t2v" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
-                            {m === "scratch_t2v" ? "T2V" : "I2V"}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
-                        {(["kling", "runway"] as const).map(p => (
-                          <button key={p} onClick={() => setVideoProvider(p)}
-                            style={{ padding: "5px 11px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
-                              background: videoProvider === p ? "rgba(110,231,183,0.12)" : "transparent",
-                              color: videoProvider === p ? "#6ee7b7" : "#475569",
-                              borderRight: p === "kling" ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
-                            {p === "kling" ? "Kling" : "Runway"}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+              </div>
+              {/* Nav items */}
+              {([
+                {label:"Image Studio", key:"img", active:mediaTab==="Image", action:()=>setMediaTab("Image")},
+                {label:"Video Studio", key:"vid", active:mediaTab==="Video", action:()=>setMediaTab("Video")},
+                {label:"Templates",    key:"tpl", active:false, action:()=>{}},
+                {label:"AI Ideas",     key:"ide", active:false, action:()=>{mediaTab==="Image"?getImageIdeas():getVideoIdeas();}},
+                {label:"Library",      key:"lib", active:false, action:()=>setWorkspaceTab("output")},
+                {label:"History",      key:"his", active:false, action:()=>setWorkspaceTab("logs")},
+              ] as {label:string;key:string;active:boolean;action:()=>void}[]).map(item=>(
+                <button key={item.key} onClick={item.action}
+                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"11px 18px",background:item.active?"rgba(103,232,249,0.07)":"transparent",border:"none",borderLeft:item.active?"2px solid #67e8f9":"2px solid transparent",color:item.active?"#67e8f9":"#64748b",fontSize:12,fontWeight:item.active?600:400,cursor:"pointer",textAlign:"left",transition:"all 150ms"}}>
+                  {item.label}
+                  {(item.key==="img"||item.key==="vid")&&<span style={{width:6,height:6,borderRadius:"50%",background:item.active?"#67e8f9":"rgba(255,255,255,0.1)",flexShrink:0}}/>}
+                </button>
+              ))}
+              {/* What this panel does */}
+              <div style={{margin:"12px 14px",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,marginTop:"auto"}}>
+                <div style={{fontSize:9,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>What this panel does</div>
+                {[
+                  "Type a raw image or video idea.",
+                  "Open templates or generate AI ideas.",
+                  "Upload image/video references.",
+                  "System rewrites for realism before generation.",
+                ].map((t,i)=>(
+                  <div key={i} style={{display:"flex",gap:7,marginBottom:5}}>
+                    <span style={{fontSize:10,color:"#334155",flexShrink:0,fontWeight:600}}>{i+1}.</span>
+                    <span style={{fontSize:10,color:"#475569",lineHeight:1.45}}>{t}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── CENTER: PROMPT PANEL ────────────────────────────────────── */}
+            <div style={P({padding:0,display:"flex",flexDirection:"column"})}>
+
+              {/* Header */}
+              <div style={{padding:"12px 20px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",letterSpacing:"-0.01em",marginBottom:2}}>Image + Video Prompt Panel</div>
+                  <div style={{fontSize:11,color:"#475569",lineHeight:1.4}}>Separate prompt boxes, references, templates, AI ideas, and realism controls.</div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button style={{background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.3)",color:"#67e8f9",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Preview Demo</button>
+                  <button style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:8,padding:"5px 12px",fontSize:11,cursor:"pointer"}}>Split View</button>
                 </div>
               </div>
 
-              {/* ── IMAGE TAB ──────────────────────────────────────────────────── */}
-              {mediaTab === "Image" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", flex: 1 }}>
-                  {/* Left: prompt + controls */}
-                  <div style={{ padding: "14px 16px", borderRight: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {/* Prompt box */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>Image Prompt</label>
-                        <div style={{ display: "flex", gap: 5 }}>
-                          <select value={selectedImageTemplate} onChange={e => { setSelectedImageTemplate(e.target.value); if (e.target.value && IMAGE_TEMPLATES[e.target.value]) { const t = IMAGE_TEMPLATES[e.target.value]; setImagePrompt(t.prompt); } }}
-                            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#94a3b8", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
-                            <option value="">Templates…</option>
-                            {Object.entries(IMAGE_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                      <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} rows={4}
-                        placeholder="Describe a real, ordinary scene. E.g. A person in their 30s sitting at a kitchen table checking their phone, natural morning light, no staging."
-                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.55 }} />
+              {/* Image/Video tabs + API toggles */}
+              <div style={{display:"flex",alignItems:"center",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"0 20px"}}>
+                {(["Image","Video"] as MediaTab[]).map(tab=>(
+                  <button key={tab} onClick={()=>setMediaTab(tab)}
+                    style={{padding:"9px 16px",fontSize:12,fontWeight:600,background:"none",border:"none",
+                      color:mediaTab===tab?"#67e8f9":"#475569",
+                      borderBottom:mediaTab===tab?"2px solid #67e8f9":"2px solid transparent",cursor:"pointer"}}>
+                    {tab}
+                  </button>
+                ))}
+                <div style={{flex:1}}/>
+                {/* API mode toggle */}
+                {mediaTab==="Image"&&(
+                  <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:7,border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                    {(["images","responses"] as ImageApiMode[]).map(m=>(
+                      <button key={m} onClick={()=>setImageApiMode(m)}
+                        style={{padding:"4px 11px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",
+                          background:imageApiMode===m?"rgba(103,232,249,0.15)":"transparent",
+                          color:imageApiMode===m?"#67e8f9":"#475569",
+                          borderRight:m==="images"?"1px solid rgba(255,255,255,0.08)":"none",transition:"all 150ms"}}>
+                        {m==="images"?"Images API":"Responses API"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {mediaTab==="Video"&&(
+                  <div style={{display:"flex",gap:5}}>
+                    <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:7,border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                      {(["scratch_t2v","i2v"] as VideoGenMode[]).map(m=>(
+                        <button key={m} onClick={()=>setVideoMode(m)}
+                          style={{padding:"4px 11px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",
+                            background:videoMode===m?"rgba(167,139,250,0.15)":"transparent",
+                            color:videoMode===m?"#a78bfa":"#475569",
+                            borderRight:m==="scratch_t2v"?"1px solid rgba(255,255,255,0.08)":"none"}}>
+                          {m==="scratch_t2v"?"T2V":"I2V"}
+                        </button>
+                      ))}
                     </div>
+                    <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:7,border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                      {(["kling","runway"] as const).map(p=>(
+                        <button key={p} onClick={()=>setVideoProvider(p)}
+                          style={{padding:"4px 11px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",
+                            background:videoProvider===p?"rgba(110,231,183,0.12)":"transparent",
+                            color:videoProvider===p?"#6ee7b7":"#475569",
+                            borderRight:p==="kling"?"1px solid rgba(255,255,255,0.08)":"none"}}>
+                          {p==="kling"?"Kling":"Runway"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                    {/* AI Ideas chips */}
-                    {imageIdeas.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                        {imageIdeas.map((idea, i) => (
-                          <button key={i} onClick={() => { setImagePrompt(idea); setImageIdeas([]); }}
-                            style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 20, padding: "4px 10px", fontSize: 11, cursor: "pointer", textAlign: "left", maxWidth: 260 }}>
-                            {idea.slice(0, 80)}{idea.length > 80 ? "…" : ""}
+              {/* ── IMAGE TAB ───────────────────────────────────────────── */}
+              {mediaTab==="Image"&&(
+                <div style={{display:"flex",flexDirection:"column",flex:1}}>
+                  {/* Prompt box */}
+                  <div style={{padding:"14px 20px 10px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:"0.02em"}}>Image Prompt</div>
+                        <div style={{fontSize:10,color:"#475569"}}>This box is where the user types the base idea.</div>
+                      </div>
+                      <button onClick={sanitizeImagePromptUI} disabled={imageSanitizing||!imagePrompt.trim()}
+                        style={{background:"rgba(103,232,249,0.08)",border:"1px solid rgba(103,232,249,0.2)",color:"#67e8f9",borderRadius:7,padding:"5px 11px",fontSize:10,fontWeight:600,cursor:imageSanitizing?"wait":"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0,opacity:imageSanitizing||!imagePrompt.trim()?0.5:1}}>
+                        {imageSanitizing?<Spinner size={9}/>:null}Responses API helper rewrite
+                      </button>
+                    </div>
+                    <textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} rows={4}
+                      placeholder="Generate a real everyday photograph of a person sitting at home using a phone in flat natural light. No cinematic look. No text or UI in image."
+                      style={{width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#cbd5e1",borderRadius:10,padding:"10px 12px",fontSize:12,resize:"vertical",lineHeight:1.6,outline:"none"}}/>
+                  </div>
+
+                  {/* 3 control boxes: Aspect Ratio | Realism Mode | Reference Priority */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"0 20px 12px"}}>
+                    {/* Aspect Ratio */}
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Aspect Ratio</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {(["16:9","9:16","1:1"] as ViewMode[]).map(v=>(
+                          <button key={v} onClick={()=>setViewMode(v==="9:16"?"9:16":"16:9")}
+                            style={{flex:1,background:viewMode===v?"rgba(103,232,249,0.15)":"rgba(255,255,255,0.04)",border:"1px solid "+(viewMode===v?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.08)"),color:viewMode===v?"#67e8f9":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                            {v}
                           </button>
                         ))}
-                        <button onClick={() => setImageIdeas([])}
-                          style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer" }}>✕ clear</button>
                       </div>
-                    )}
-
-                    {/* Reference priority */}
-                    {imageRefs.length > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11, color: "#64748b" }}>Ref Priority:</span>
-                        {(["low", "medium", "high"] as ReferencePriority[]).map(p => (
-                          <button key={p} onClick={() => setImageReferencePriority(p)}
-                            style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, borderRadius: 6, border: "1px solid", cursor: "pointer",
-                              background: imageReferencePriority === p ? "rgba(167,139,250,0.15)" : "transparent",
-                              borderColor: imageReferencePriority === p ? "rgba(167,139,250,0.4)" : "rgba(255,255,255,0.1)",
-                              color: imageReferencePriority === p ? "#a78bfa" : "#475569" }}>
+                    </div>
+                    {/* Realism Mode */}
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Realism Mode</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {["Strict","Balanced"].map(m=>(
+                          <button key={m} onClick={()=>{}}
+                            style={{flex:1,background:m==="Strict"?"rgba(110,231,183,0.12)":"rgba(255,255,255,0.04)",border:"1px solid "+(m==="Strict"?"rgba(110,231,183,0.3)":"rgba(255,255,255,0.08)"),color:m==="Strict"?"#6ee7b7":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Reference Priority */}
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Reference Priority</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {(["low","medium","high"] as ReferencePriority[]).map(p=>(
+                          <button key={p} onClick={()=>setImageReferencePriority(p)}
+                            style={{flex:1,background:imageReferencePriority===p?"rgba(167,139,250,0.15)":"rgba(255,255,255,0.04)",border:"1px solid "+(imageReferencePriority===p?"rgba(167,139,250,0.4)":"rgba(255,255,255,0.08)"),color:imageReferencePriority===p?"#a78bfa":"#475569",borderRadius:5,padding:"4px 0",fontSize:8,fontWeight:600,cursor:"pointer",textTransform:"capitalize"}}>
                             {p}
                           </button>
                         ))}
                       </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button onClick={getImageIdeas} disabled={imageIdeasLoading}
-                        style={{ background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", color: "#67e8f9", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: imageIdeasLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: imageIdeasLoading ? 0.6 : 1 }}>
-                        {imageIdeasLoading ? <Spinner size={11} /> : "💡"} AI Ideas
-                      </button>
-                      <button onClick={sanitizeImagePromptUI} disabled={imageSanitizing || !imagePrompt.trim()}
-                        style={{ background: "rgba(110,231,183,0.08)", border: "1px solid rgba(110,231,183,0.2)", color: "#6ee7b7", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: imageSanitizing ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: imageSanitizing ? 0.6 : 1 }}>
-                        {imageSanitizing ? <Spinner size={11} /> : "✦"} Make Realistic
-                      </button>
-                      <div style={{ flex: 1 }} />
-                      <button onClick={generateDualImage} disabled={imageGenerating || !imagePrompt.trim()}
-                        style={{ background: imageGenerating || !imagePrompt.trim() ? "rgba(255,255,255,0.06)" : "linear-gradient(90deg,rgba(103,232,249,0.8),rgba(167,139,250,0.7))", border: "none", color: imageGenerating || !imagePrompt.trim() ? "#475569" : "#0f172a", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: imageGenerating || !imagePrompt.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                        {imageGenerating ? <><Spinner size={12} /> Generating…</> : "▶ Generate Image"}
-                      </button>
                     </div>
-
-                    {/* Result preview */}
-                    {imageResult && (
-                      <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(110,231,183,0.3)" }}>
-                        <img src={imageResult} alt="Generated" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
-                          <button onClick={() => { setApprovedOutputs(p => ({ ...p, image: imageResult })); setWorkspaceTab("output"); log("✓ Image approved to workspace"); }}
-                            style={{ background: "rgba(110,231,183,0.9)", border: "none", color: "#000", borderRadius: 6, padding: "4px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>✓ Approve</button>
-                          <button onClick={() => window.open(imageResult, "_blank")}
-                            style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 6, padding: "4px 9px", fontSize: 10, cursor: "pointer" }}>↗ View</button>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Right: references */}
-                  <div style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                      Image References <span style={{ color: "#334155", fontWeight: 400 }}>({imageRefs.length}/3)</span>
-                    </div>
-                    <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>
-                      Guide composition, lighting, and wardrobe only. Realism rules always win.
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {imageRefs.map(ref => (
-                        <div key={ref.id} style={{ position: "relative", width: 72, height: 72, borderRadius: 8, overflow: "hidden", border: "1px solid " + (ref.classification === "risky" ? "rgba(251,191,36,0.5)" : "rgba(255,255,255,0.1)") }}>
-                          <img src={ref.url} alt={ref.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          {ref.classification === "risky" && <div style={{ position: "absolute", top: 2, left: 2, background: "rgba(251,191,36,0.8)", borderRadius: 3, padding: "1px 4px", fontSize: 8, fontWeight: 700, color: "#000" }}>RISKY</div>}
-                          <button onClick={() => setImageRefs(p => p.filter(r => r.id !== ref.id))}
-                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                        </div>
-                      ))}
-                      {imageRefs.length < 3 && (
-                        <button onClick={() => imageRefInputRef.current?.click()}
-                          style={{ width: 72, height: 72, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#334155", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                  {/* Split bottom: Ref Uploader | Templates+Ideas */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderTop:"1px solid rgba(255,255,255,0.07)",flex:1,minHeight:0}}>
+
+                    {/* Left: Image Reference Uploader */}
+                    <div style={{padding:"12px 16px",borderRight:"1px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:8}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:3}}>Image Reference Uploader</div>
+                        <div style={{fontSize:10,color:"#475569",lineHeight:1.45}}>Upload up to 3 image references for composition, lighting, wardrobe, or room feel.</div>
+                      </div>
+                      {/* 3 ref slots */}
+                      <div style={{display:"flex",gap:8}}>
+                        {[0,1,2].map(i=>{
+                          const ref=imageRefs[i];
+                          return (
+                            <div key={i}
+                              onClick={()=>{if(!ref)imageRefInputRef.current?.click();}}
+                              style={{width:56,height:56,borderRadius:9,border:"1px solid "+(ref?(ref.classification==="risky"?"rgba(251,191,36,0.5)":"rgba(103,232,249,0.25)"):"rgba(255,255,255,0.1)"),background:"rgba(255,255,255,0.03)",cursor:ref?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",flexShrink:0}}>
+                              {ref?(
+                                <>
+                                  <img src={ref.url} alt={"Ref "+(i+1)} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                                  {ref.classification==="risky"&&<div style={{position:"absolute",top:1,left:1,background:"rgba(251,191,36,0.9)",borderRadius:3,padding:"1px 4px",fontSize:7,fontWeight:700,color:"#000"}}>!</div>}
+                                  <button onClick={e=>{e.stopPropagation();setImageRefs(p=>p.filter((_,j)=>j!==i));}}
+                                    style={{position:"absolute",top:1,right:1,background:"rgba(0,0,0,0.75)",border:"none",color:"#fff",borderRadius:"50%",width:14,height:14,fontSize:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>✕</button>
+                                </>
+                              ):(
+                                <div style={{textAlign:"center",pointerEvents:"none"}}>
+                                  <div style={{fontSize:9,color:"#475569",fontWeight:600,letterSpacing:"0.05em"}}>Ref</div>
+                                  <div style={{fontSize:14,color:"#334155",fontWeight:700,lineHeight:1}}>{i+1}</div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {imageRefs.some(r=>r.classification==="risky")&&(
+                        <div style={{fontSize:9,color:"#fbbf24"}}>⚠ Risky ref may conflict with realism rules</div>
                       )}
                     </div>
-                    <div style={{ marginTop: "auto", padding: "8px 0", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: 10, color: "#334155" }}>
-                      <div style={{ marginBottom: 3 }}>API mode: <span style={{ color: imageApiMode === "responses" ? "#67e8f9" : "#a78bfa" }}>{imageApiMode === "responses" ? "Responses (supports inputs)" : "Images (direct render)"}</span></div>
-                      <div>References only sent in Responses mode</div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* ── VIDEO TAB ──────────────────────────────────────────────────── */}
-              {mediaTab === "Video" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", flex: 1 }}>
-                  {/* Left: prompt + controls */}
-                  <div style={{ padding: "14px 16px", borderRight: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {videoMode === "i2v" && !imageResult && (
-                      <div style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#fbbf24" }}>
-                        ⚠ I2V requires an approved image. Generate an image first, then approve it.
+                    {/* Right: Templates + AI Ideas */}
+                    <div style={{padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",maxHeight:240}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:3}}>Templates + AI Ideas</div>
+                        <div style={{fontSize:10,color:"#475569",lineHeight:1.45}}>Open a template or click AI to fill the prompt box with strong realism-first ideas.</div>
                       </div>
-                    )}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                          {videoMode === "i2v" ? "Motion Prompt" : "Video Prompt"}
-                        </label>
-                        <select value={selectedVideoTemplate} onChange={e => { setSelectedVideoTemplate(e.target.value); if (e.target.value && VIDEO_TEMPLATES[e.target.value]) setVideoPrompt(VIDEO_TEMPLATES[e.target.value].prompt); }}
-                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#94a3b8", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
-                          <option value="">Templates…</option>
-                          {Object.entries(VIDEO_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                        </select>
-                      </div>
-                      <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} rows={4}
-                        placeholder={videoMode === "i2v" ? "Describe motion only: slow push-in, natural blink, soft parallax. No dramatic camera moves." : "Describe a real scene with natural motion. No cinematic language."}
-                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.55 }} />
-                    </div>
-
-                    {/* AI Ideas chips */}
-                    {videoIdeas.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                        {videoIdeas.map((idea, i) => (
-                          <button key={i} onClick={() => { setVideoPrompt(idea); setVideoIdeas([]); }}
-                            style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 20, padding: "4px 10px", fontSize: 11, cursor: "pointer", textAlign: "left", maxWidth: 260 }}>
-                            {idea.slice(0, 80)}{idea.length > 80 ? "…" : ""}
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {/* Template chips */}
+                        {Object.entries(IMAGE_TEMPLATES).map(([k,v])=>(
+                          <button key={k} onClick={()=>{setSelectedImageTemplate(k);setImagePrompt(v.prompt);}}
+                            style={{background:selectedImageTemplate===k?"rgba(103,232,249,0.10)":"rgba(255,255,255,0.03)",border:"1px solid "+(selectedImageTemplate===k?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,padding:"6px 10px",fontSize:11,color:selectedImageTemplate===k?"#67e8f9":"#94a3b8",cursor:"pointer",textAlign:"left",fontWeight:selectedImageTemplate===k?600:400,transition:"all 150ms"}}>
+                            {v.label}
                           </button>
                         ))}
-                        <button onClick={() => setVideoIdeas([])}
-                          style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer" }}>✕ clear</button>
+                        {/* AI idea chips — appear after clicking AI Ideas */}
+                        {imageIdeas.length>0&&(
+                          <div style={{marginTop:4,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:6}}>
+                            <div style={{fontSize:9,color:"#64748b",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.1em"}}>AI Generated Ideas</div>
+                            {imageIdeas.map((idea,i)=>(
+                              <button key={"idea"+i} onClick={()=>{setImagePrompt(idea);setImageIdeas([]);}}
+                                style={{display:"block",width:"100%",background:"rgba(167,139,250,0.07)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:8,padding:"6px 10px",fontSize:10,color:"#c4b5fd",cursor:"pointer",textAlign:"left",lineHeight:1.45,marginBottom:5}}>
+                                {idea.slice(0,100)}{idea.length>100?"…":""}
+                              </button>
+                            ))}
+                            <button onClick={()=>setImageIdeas([])} style={{background:"none",border:"none",color:"#334155",fontSize:9,cursor:"pointer"}}>✕ clear</button>
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button onClick={getVideoIdeas} disabled={videoIdeasLoading}
-                        style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: videoIdeasLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: videoIdeasLoading ? 0.6 : 1 }}>
-                        {videoIdeasLoading ? <Spinner size={11} /> : "💡"} AI Ideas
-                      </button>
-                      <div style={{ flex: 1 }} />
-                      <button onClick={generateDualVideo} disabled={videoGenerating || !videoPrompt.trim() || (videoMode === "i2v" && !imageResult)}
-                        style={{ background: videoGenerating || !videoPrompt.trim() ? "rgba(255,255,255,0.06)" : "linear-gradient(90deg,rgba(168,85,247,0.8),rgba(34,211,238,0.6))", border: "none", color: videoGenerating || !videoPrompt.trim() ? "#475569" : "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                        {videoGenerating ? <><Spinner size={12} /> Generating…</> : "▶ Generate Video"}
-                      </button>
                     </div>
-
-                    {/* Video result */}
-                    {videoResult && (
-                      <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(167,139,250,0.3)" }}>
-                        <video src={videoResult} controls autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
-                          <button onClick={() => { setApprovedOutputs(p => ({ ...p, video: videoResult })); setWorkspaceTab("output"); log("✓ Video approved to workspace"); }}
-                            style={{ background: "rgba(167,139,250,0.9)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>✓ Approve</button>
-                        </div>
-                      </div>
-                    )}
-                    {!videoResult && activeCount > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "rgba(103,232,249,0.06)", border: "1px solid rgba(103,232,249,0.15)", borderRadius: 8 }}>
-                        <Spinner size={12} />
-                        <span style={{ fontSize: 11, color: "#67e8f9" }}>{activeCount} video job{activeCount > 1 ? "s" : ""} processing — updating via Realtime…</span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Right: references */}
-                  <div style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                      Image Refs <span style={{ color: "#334155" }}>({videoImageRefs.length}/2)</span>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                      {videoImageRefs.map(ref => (
-                        <div key={ref.id} style={{ position: "relative", width: 64, height: 64, borderRadius: 7, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                          <img src={ref.url} alt={ref.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          <button onClick={() => setVideoImageRefs(p => p.filter(r => r.id !== ref.id))}
-                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 14, height: 14, fontSize: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                        </div>
-                      ))}
-                      {videoImageRefs.length < 2 && (
-                        <button onClick={() => videoImageRefInputRef.current?.click()}
-                          style={{ width: 64, height: 64, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 7, color: "#334155", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>
-                      Video Ref <span style={{ color: "#334155" }}>({videoVideoRef ? 1 : 0}/1)</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 5 }}>
-                      {videoVideoRef ? (
-                        <div style={{ position: "relative", width: 64, height: 64, borderRadius: 7, overflow: "hidden", background: "#0f172a", border: "1px solid rgba(167,139,250,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontSize: 22 }}>🎬</span>
-                          <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.7)", borderRadius: 3, padding: "1px 3px", fontSize: 8, color: "#94a3b8", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{videoVideoRef.name}</div>
-                          <button onClick={() => setVideoVideoRef(null)}
-                            style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 14, height: 14, fontSize: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => videoVideoRefInputRef.current?.click()}
-                          style={{ width: 64, height: 64, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 7, color: "#334155", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 10, color: "#334155", lineHeight: 1.4, marginTop: "auto" }}>
-                      Image refs guide composition. Video ref guides motion feel only. Realism rules always win.
-                    </div>
-                    {imageResult && videoMode === "i2v" && (
-                      <div style={{ background: "rgba(110,231,183,0.06)", border: "1px solid rgba(110,231,183,0.2)", borderRadius: 8, padding: "7px 10px" }}>
-                        <div style={{ fontSize: 10, color: "#6ee7b7", marginBottom: 4 }}>Source image (approved):</div>
-                        <img src={imageResult} alt="Source" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", borderRadius: 6 }} />
+                  {/* Generated image strip */}
+                  {imageResult&&(
+                    <div style={{padding:"8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,alignItems:"center",background:"rgba(110,231,183,0.03)"}}>
+                      <div style={{width:72,height:40,borderRadius:6,overflow:"hidden",flexShrink:0,border:"1px solid rgba(110,231,183,0.25)"}}>
+                        <img src={imageResult} alt="result" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                       </div>
-                    )}
+                      <span style={{flex:1,fontSize:10,color:"#6ee7b7",fontWeight:600}}>Image generated ✓</span>
+                      <button onClick={()=>{setApprovedOutputs(p=>({...p,image:imageResult}));setWorkspaceTab("output");log("✓ Image approved to workspace");}}
+                        style={{background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.3)",color:"#6ee7b7",borderRadius:7,padding:"5px 11px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✓ Approve</button>
+                      <button onClick={()=>window.open(imageResult,"_blank")}
+                        style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:7,padding:"5px 8px",fontSize:10,cursor:"pointer"}}>↗</button>
+                    </div>
+                  )}
+
+                  {/* Bottom action bar */}
+                  <div style={{padding:"10px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <button onClick={generateDualImage} disabled={imageGenerating||!imagePrompt.trim()}
+                      style={{background:imageGenerating||!imagePrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)",border:"1px solid rgba(255,255,255,0.15)",color:imageGenerating||!imagePrompt.trim()?"#475569":"#0f172a",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:imageGenerating||!imagePrompt.trim()?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,minWidth:130}}>
+                      {imageGenerating?<><Spinner size={12}/>Generating…</>:"Generate Image"}
+                    </button>
+                    <button onClick={()=>{if(selectedImageTemplate&&IMAGE_TEMPLATES[selectedImageTemplate])setImagePrompt(IMAGE_TEMPLATES[selectedImageTemplate].prompt);}}
+                      style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:9,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>Open Templates</button>
+                    <button onClick={getImageIdeas} disabled={imageIdeasLoading}
+                      style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:9,padding:"8px 14px",fontSize:12,cursor:imageIdeasLoading?"wait":"pointer",display:"flex",alignItems:"center",gap:5,opacity:imageIdeasLoading?0.6:1}}>
+                      {imageIdeasLoading&&<Spinner size={11}/>}AI Generate Ideas
+                    </button>
+                    <button onClick={sanitizeImagePromptUI} disabled={imageSanitizing||!imagePrompt.trim()}
+                      style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:9,padding:"8px 14px",fontSize:12,cursor:imageSanitizing?"wait":"pointer",display:"flex",alignItems:"center",gap:5,opacity:imageSanitizing||!imagePrompt.trim()?0.6:1}}>
+                      {imageSanitizing&&<Spinner size={11}/>}Make More Realistic
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── VIDEO TAB ───────────────────────────────────────────── */}
+              {mediaTab==="Video"&&(
+                <div style={{display:"flex",flexDirection:"column",flex:1}}>
+                  {videoMode==="i2v"&&!imageResult&&(
+                    <div style={{margin:"12px 20px 0",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.25)",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#fbbf24"}}>
+                      ⚠ I2V requires an approved image. Generate an image on the Image tab first.
+                    </div>
+                  )}
+                  {/* Prompt */}
+                  <div style={{padding:"14px 20px 10px"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:3}}>
+                      {videoMode==="i2v"?"Motion Prompt":"Video Prompt"}
+                    </div>
+                    <div style={{fontSize:10,color:"#475569",marginBottom:6}}>
+                      Separate from image. Supports scratch video and subtle I2V reference flows.
+                    </div>
+                    <textarea value={videoPrompt} onChange={e=>setVideoPrompt(e.target.value)} rows={4}
+                      placeholder={videoMode==="i2v"?"Slow gentle push-in. Natural blink. Soft parallax. No face movement. 5 seconds max.":"Create a short ordinary real world clip of a person in a real setting with natural motion and no cinematic movement."}
+                      style={{width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#cbd5e1",borderRadius:10,padding:"10px 12px",fontSize:12,resize:"vertical",lineHeight:1.6,outline:"none"}}/>
+                    {/* Kling mode badge */}
+                    <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
+                      <span style={{fontSize:9,color:videoProvider==="kling"?"#6ee7b7":"#a78bfa",background:videoProvider==="kling"?"rgba(110,231,183,0.08)":"rgba(167,139,250,0.08)",border:"1px solid "+(videoProvider==="kling"?"rgba(110,231,183,0.2)":"rgba(167,139,250,0.2)"),borderRadius:5,padding:"2px 8px",fontWeight:600}}>
+                        {videoProvider==="kling"?"Kling":"Runway"} / {videoMode==="i2v"?"I2V":"T2V"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Controls row */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"0 20px 12px"}}>
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Aspect Ratio</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {(["16:9","9:16"] as ViewMode[]).map(v=>(
+                          <button key={v} onClick={()=>setViewMode(v==="9:16"?"9:16":"16:9")}
+                            style={{flex:1,background:viewMode===v?"rgba(103,232,249,0.15)":"rgba(255,255,255,0.04)",border:"1px solid "+(viewMode===v?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.08)"),color:viewMode===v?"#67e8f9":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Duration</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {["4s","8s"].map(d=>(
+                          <button key={d}
+                            style={{flex:1,background:d==="4s"?"rgba(110,231,183,0.12)":"rgba(255,255,255,0.04)",border:"1px solid "+(d==="4s"?"rgba(110,231,183,0.3)":"rgba(255,255,255,0.08)"),color:d==="4s"?"#6ee7b7":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"9px 12px"}}>
+                      <div style={{fontSize:9,color:"#475569",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Quality</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {["1080p","720p"].map(q=>(
+                          <button key={q}
+                            style={{flex:1,background:q==="1080p"?"rgba(110,231,183,0.12)":"rgba(255,255,255,0.04)",border:"1px solid "+(q==="1080p"?"rgba(110,231,183,0.3)":"rgba(255,255,255,0.08)"),color:q==="1080p"?"#6ee7b7":"#475569",borderRadius:5,padding:"4px 0",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Split: Refs | Templates+Ideas */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderTop:"1px solid rgba(255,255,255,0.07)",flex:1,minHeight:0}}>
+                    {/* Left: refs */}
+                    <div style={{padding:"12px 16px",borderRight:"1px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#94a3b8"}}>Image + Video References</div>
+                      <div style={{fontSize:10,color:"#475569",lineHeight:1.4}}>Up to 2 image references + 1 video reference. Video reference guides motion feel only.</div>
+                      <div style={{display:"flex",gap:6}}>
+                        {[0,1].map(i=>{
+                          const ref=videoImageRefs[i];
+                          return (
+                            <div key={i} onClick={()=>{if(!ref)videoImageRefInputRef.current?.click();}}
+                              style={{width:52,height:52,borderRadius:8,border:"1px solid "+(ref?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.1)"),background:"rgba(255,255,255,0.03)",cursor:ref?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",flexShrink:0}}>
+                              {ref?(<><img src={ref.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/><button onClick={e=>{e.stopPropagation();setVideoImageRefs(p=>p.filter((_,j)=>j!==i));}} style={{position:"absolute",top:1,right:1,background:"rgba(0,0,0,0.75)",border:"none",color:"#fff",borderRadius:"50%",width:13,height:13,fontSize:7,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></>)
+                                :(<div style={{textAlign:"center"}}><div style={{fontSize:8,color:"#475569",fontWeight:600}}>Img {i+1}</div></div>)}
+                            </div>
+                          );
+                        })}
+                        {/* Video ref */}
+                        <div onClick={()=>{if(!videoVideoRef)videoVideoRefInputRef.current?.click();}}
+                          style={{width:52,height:52,borderRadius:8,border:"1px solid "+(videoVideoRef?"rgba(167,139,250,0.3)":"rgba(255,255,255,0.1)"),background:"rgba(255,255,255,0.03)",cursor:videoVideoRef?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",flexShrink:0}}>
+                          {videoVideoRef?(<><span style={{fontSize:18}}>🎬</span><button onClick={e=>{e.stopPropagation();setVideoVideoRef(null);}} style={{position:"absolute",top:1,right:1,background:"rgba(0,0,0,0.75)",border:"none",color:"#fff",borderRadius:"50%",width:13,height:13,fontSize:7,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></>)
+                            :(<div style={{fontSize:8,color:"#475569",fontWeight:600,textAlign:"center"}}>Video<br/>Ref</div>)}
+                        </div>
+                      </div>
+                      {videoMode==="i2v"&&imageResult&&(
+                        <div>
+                          <div style={{fontSize:9,color:"#6ee7b7",marginBottom:4}}>I2V source (approved image):</div>
+                          <img src={imageResult} style={{width:"100%",aspectRatio:"16/9",objectFit:"cover",borderRadius:6,border:"1px solid rgba(110,231,183,0.2)"}} alt="source"/>
+                        </div>
+                      )}
+                    </div>
+                    {/* Right: templates + ideas */}
+                    <div style={{padding:"12px 16px",overflowY:"auto",maxHeight:200}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:8}}>AI Video Ideas</div>
+                      <div style={{fontSize:10,color:"#475569",marginBottom:8}}>Click an idea to fill the video prompt box.</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {Object.entries(VIDEO_TEMPLATES).map(([k,v])=>(
+                          <button key={k} onClick={()=>{setSelectedVideoTemplate(k);setVideoPrompt(v.prompt);}}
+                            style={{background:selectedVideoTemplate===k?"rgba(167,139,250,0.1)":"rgba(255,255,255,0.03)",border:"1px solid "+(selectedVideoTemplate===k?"rgba(167,139,250,0.3)":"rgba(255,255,255,0.08)"),borderRadius:8,padding:"6px 10px",fontSize:11,color:selectedVideoTemplate===k?"#a78bfa":"#94a3b8",cursor:"pointer",textAlign:"left",fontWeight:selectedVideoTemplate===k?600:400}}>
+                            {v.label}
+                          </button>
+                        ))}
+                        {videoIdeas.map((idea,i)=>(
+                          <button key={"vi"+i} onClick={()=>{setVideoPrompt(idea);setVideoIdeas([]);}}
+                            style={{background:"rgba(167,139,250,0.07)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:8,padding:"6px 10px",fontSize:10,color:"#c4b5fd",cursor:"pointer",textAlign:"left",lineHeight:1.45}}>
+                            {idea.slice(0,100)}{idea.length>100?"…":""}
+                          </button>
+                        ))}
+                        {videoIdeas.length>0&&<button onClick={()=>setVideoIdeas([])} style={{background:"none",border:"none",color:"#334155",fontSize:9,cursor:"pointer"}}>✕ clear</button>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Video result strip */}
+                  {videoResult&&(
+                    <div style={{padding:"8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,alignItems:"center",background:"rgba(167,139,250,0.03)"}}>
+                      <span style={{fontSize:16}}>🎬</span>
+                      <span style={{flex:1,fontSize:10,color:"#a78bfa",fontWeight:600}}>Video processing ✓</span>
+                      <button onClick={()=>{setApprovedOutputs(p=>({...p,video:videoResult}));setWorkspaceTab("output");log("✓ Video approved");}}
+                        style={{background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.3)",color:"#a78bfa",borderRadius:7,padding:"5px 11px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✓ Approve</button>
+                    </div>
+                  )}
+                  {!videoResult&&activeCount>0&&(
+                    <div style={{padding:"8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:8}}>
+                      <Spinner size={11}/><span style={{fontSize:11,color:"#67e8f9"}}>{activeCount} video job{activeCount>1?"s":""} processing…</span>
+                    </div>
+                  )}
+
+                  {/* Bottom bar */}
+                  <div style={{padding:"10px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button onClick={generateDualVideo} disabled={videoGenerating||!videoPrompt.trim()||(videoMode==="i2v"&&!imageResult)}
+                      style={{background:videoGenerating||!videoPrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)",border:"1px solid rgba(255,255,255,0.15)",color:videoGenerating||!videoPrompt.trim()?"#475569":"#0f172a",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,minWidth:130}}>
+                      {videoGenerating?<><Spinner size={12}/>Generating…</>:"Generate Video"}
+                    </button>
+                    <button onClick={getVideoIdeas} disabled={videoIdeasLoading}
+                      style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:9,padding:"8px 14px",fontSize:12,cursor:videoIdeasLoading?"wait":"pointer",display:"flex",alignItems:"center",gap:5,opacity:videoIdeasLoading?0.6:1}}>
+                      {videoIdeasLoading&&<Spinner size={11}/>}AI Generate Ideas
+                    </button>
+                    <button onClick={()=>{if(selectedVideoTemplate&&VIDEO_TEMPLATES[selectedVideoTemplate])setVideoPrompt(VIDEO_TEMPLATES[selectedVideoTemplate].prompt);}}
+                      style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:9,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>Open Templates</button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ── CONCEPT CARDS (right column) ────────────────────────────────── */}
-            <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#a78bfa", textTransform: "uppercase", marginBottom: 2 }}>Concepts</div>
-              {concepts.map((c, i) => (
-                <div key={c.variantId} style={{ background: selectedConceptId === c.variantId ? "rgba(168,85,247,0.10)" : "rgba(255,255,255,0.03)", border: "1px solid " + (selectedConceptId === c.variantId ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"), borderRadius: 12, padding: "10px 12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Concept {i + 1}</span>
-                    <span style={{ fontSize: 10, background: "rgba(168,85,247,0.15)", color: "#a78bfa", borderRadius: 6, padding: "2px 7px" }}>{i === 0 ? "Recommended" : "Preview"}</span>
+            {/* ── RIGHT: LIVE PREVIEW ────────────────────────────────────── */}
+            <div style={P({padding:0,display:"flex",flexDirection:"column"})}>
+              {/* Header */}
+              <div style={{padding:"12px 16px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>Live Preview</div>
+                  <div style={{fontSize:10,color:"#475569",marginTop:1}}>What the selected flow looks like after user actions.</div>
+                </div>
+                <button onClick={()=>setDeviceFrame(f=>f==="Desktop"?"iPhone":"Desktop")}
+                  style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",borderRadius:7,padding:"5px 10px",fontSize:10,cursor:"pointer",fontWeight:600}}>Split View</button>
+              </div>
+
+              {/* Preview area */}
+              <div style={{flex:1,padding:"16px",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                {/* Aspect ratio toggle */}
+                <div style={{display:"flex",gap:6,width:"100%",justifyContent:"center"}}>
+                  {(["16:9","9:16"] as ViewMode[]).map(v=>(
+                    <button key={v} onClick={()=>setViewMode(v==="9:16"?"9:16":"16:9")}
+                      style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:viewMode===v?"rgba(103,232,249,0.1)":"transparent",border:"1px solid "+(viewMode===v?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"),color:viewMode===v?"#67e8f9":"#475569",borderRadius:5,cursor:"pointer"}}>
+                      {v}
+                    </button>
+                  ))}
+                  <span style={{fontSize:10,color:"#334155",alignSelf:"center",marginLeft:2}}>Preview</span>
+                </div>
+
+                {/* Content: actual result or phone mockup */}
+                {imageResult||videoResult?(
+                  <div style={{width:"100%",position:"relative",borderRadius:deviceFrame==="iPhone"?18:10,overflow:"hidden",border:"1px solid rgba(255,255,255,0.1)",aspectRatio:viewMode==="9:16"?"9/16":"16/9",background:"rgba(255,255,255,0.03)",boxShadow:deviceFrame==="iPhone"?"0 0 0 5px rgba(255,255,255,0.05)":"none"}}>
+                    {videoResult?<video src={videoResult} autoPlay muted loop style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      :imageResult?<img src={imageResult} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      :null}
+                    {imageResult&&(
+                      <div style={{position:"absolute",bottom:6,left:6,display:"flex",gap:4}}>
+                        <span style={{background:"rgba(0,0,0,0.65)",color:"#6ee7b7",borderRadius:4,padding:"2px 7px",fontSize:8,fontWeight:700,backdropFilter:"blur(4px)"}}>No text in image</span>
+                        <span style={{background:"rgba(0,0,0,0.65)",color:"#67e8f9",borderRadius:4,padding:"2px 7px",fontSize:8,fontWeight:700,backdropFilter:"blur(4px)"}}>Flat light</span>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", marginBottom: 3 }}>{c.headline}</div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>{c.body ?? c.subheadline ?? ""}</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setSelectedConceptId(c.variantId)}
-                      style={{ flex: 1, background: selectedConceptId === c.variantId ? "rgba(168,85,247,0.25)" : "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: selectedConceptId === c.variantId ? "#e9d5ff" : "#94a3b8", borderRadius: 7, padding: "5px 0", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-                      {selectedConceptId === c.variantId ? "✓ Selected" : "Select"}
-                    </button>
-                    <button onClick={() => document.getElementById("preview-" + c.variantId)?.scrollIntoView({ behavior: "smooth" })}
-                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 7, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>
-                      Preview
-                    </button>
+                ):(
+                  /* Phone mockup empty state — matches screenshot */
+                  <div style={{width:148,position:"relative"}}>
+                    {/* Phone shell */}
+                    <div style={{width:148,height:256,borderRadius:24,border:"2px solid rgba(255,255,255,0.12)",background:"rgba(13,17,38,0.95)",display:"flex",flexDirection:"column",padding:"10px 8px 8px",gap:6,boxShadow:"0 0 0 5px rgba(255,255,255,0.04), 0 10px 30px rgba(0,0,0,0.3)"}}>
+                      {/* Status bar */}
+                      <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px"}}>
+                        <span style={{fontSize:8,color:"#475569",fontWeight:600}}>9:41</span>
+                        <span style={{fontSize:8,color:"#475569"}}>Preview</span>
+                      </div>
+                      {/* Everyday Realism badge */}
+                      <div style={{alignSelf:"center",background:"rgba(103,232,249,0.1)",border:"1px solid rgba(103,232,249,0.2)",borderRadius:6,padding:"3px 12px"}}>
+                        <span style={{fontSize:9,color:"#67e8f9",fontWeight:600}}>Everyday Realism</span>
+                      </div>
+                      {/* Placeholder image area with abstract shape */}
+                      <div style={{flex:1,background:"rgba(255,255,255,0.04)",borderRadius:12,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                        {/* Abstract pill/capsule shape like screenshot */}
+                        <div style={{width:48,height:64,background:"rgba(255,255,255,0.07)",borderRadius:"50%/30%",transform:"rotate(15deg)"}}/>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Prompt result card */}
+                <div style={{width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>Prompt result</div>
+                  <div style={{fontSize:10,color:"#475569",lineHeight:1.45,marginBottom:8}}>
+                    {imageResult?"Image generated from your prompt with references applied. Approve to send to workspace.":"Real image generated from your prompt with references applied. Any badges or text stay outside the AI image."}
+                  </div>
+                  <div style={{display:"flex",gap:5}}>
+                    <span style={{background:"rgba(255,255,255,0.06)",color:"#475569",borderRadius:5,padding:"3px 8px",fontSize:9}}>No text in image</span>
+                    <span style={{background:"rgba(255,255,255,0.06)",color:"#475569",borderRadius:5,padding:"3px 8px",fontSize:9}}>Flat light</span>
                   </div>
                 </div>
-              ))}
-              {/* Quick run */}
-              <button onClick={runPipeline} style={{ marginTop: 4, width: "100%", background: "linear-gradient(90deg,rgba(168,85,247,0.25),rgba(34,211,238,0.2))", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                ▶ Generate All 3
-              </button>
+              </div>
+
+              {/* Demo: how it works */}
+              <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:8,letterSpacing:"0.02em"}}>Demo: how it works</div>
+                {[
+                  "User types a prompt in Image or Video.",
+                  "User optionally uploads references.",
+                  "User can open templates or click AI Generate Ideas.",
+                  "System rewrites prompt for realism, then generates.",
+                  "Result appears in preview and can be regenerated.",
+                ].map((s,i)=>(
+                  <div key={i} style={{display:"flex",gap:6,marginBottom:5}}>
+                    <span style={{fontSize:10,color:"#334155",fontWeight:600,flexShrink:0}}>{i+1}.</span>
+                    <span style={{fontSize:10,color:"#475569",lineHeight:1.4}}>{s}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+
           </div>
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
