@@ -594,6 +594,8 @@ Accept only if:
 
   // ── Step config toggle ────────────────────────────────────────────────────
   function selectStep(id: string) {
+    // Don't switch away from live engine while pipeline is running
+    if (pipelineRunning || engineOpen) return;
     if (selectedStepId === id && stepConfigOpen) {
       setStepConfigOpen(false);
     } else {
@@ -792,11 +794,17 @@ Accept only if:
           context: { creativeStrategy: stratData.output, copyGeneration: null }
         }),
       });
+      if (!copyRes.ok) {
+        const errText = await copyRes.text().catch(() => `HTTP ${copyRes.status}`);
+        emit({ type: "error", stepId: "copy", stepName: "AI Copy Generation", message: `✗ Copy HTTP ${copyRes.status}: ${errText.slice(0,200)}` });
+        setSteps(p => p.map(s => s.id === "copy" ? { ...s, state: "error" } : s));
+        throw new Error(`Copy HTTP ${copyRes.status}: ${errText.slice(0,100)}`);
+      }
       const copyData = await copyRes.json() as { success?: boolean; output?: { responseText?: string }; error?: string };
       if (!copyData.success) {
-        emit({ type: "error", stepId: "copy", stepName: "AI Copy Generation", message: `✗ Copy API failed: ${copyData.error}` });
+        emit({ type: "error", stepId: "copy", stepName: "AI Copy Generation", message: `✗ Copy API failed: ${copyData.error ?? JSON.stringify(copyData)}` });
         setSteps(p => p.map(s => s.id === "copy" ? { ...s, state: "error" } : s));
-        throw new Error(`Copy failed: ${copyData.error}`);
+        throw new Error(`Copy failed: ${copyData.error ?? JSON.stringify(copyData)}`);
       }
 
       let parsedCopy: Record<string, unknown> = {};
@@ -861,6 +869,12 @@ Accept only if:
           context: { copyGeneration: copyData.output, creativeStrategy: stratData.output }
         }),
       });
+      if (!valRes.ok) {
+        const errText = await valRes.text().catch(() => `HTTP ${valRes.status}`);
+        emit({ type: "error", stepId: "validator", stepName: "Validator", message: `✗ Validator HTTP ${valRes.status}: ${errText.slice(0,200)}` });
+        setSteps(p => p.map(s => s.id === "validator" ? { ...s, state: "error" } : s));
+        throw new Error(`Validator HTTP ${valRes.status}: ${errText.slice(0,100)}`);
+      }
       const valData = await valRes.json() as { success?: boolean; output?: { validatorStatus?: string; blockReasons?: string[]; softFailReasons?: string[] }; error?: string };
       const valStatus = valData.output?.validatorStatus ?? "unknown";
 
@@ -2219,6 +2233,7 @@ Accept only if:
               <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.05em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 10 }}>Pipeline Steps</div>
               {steps.map(step => (
                 <div key={step.id} onClick={() => selectStep(step.id)}
+                  title={pipelineRunning || engineOpen ? undefined : "Click to configure this step"}
                   className={step.state === "running" ? "step-running" : step.state === "error" ? "step-error" : ""}
                   style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 12,
                     background: step.state === "running" ? "rgba(124,58,237,0.12)" : liveStepId === step.id ? "rgba(124,58,237,0.08)" : selectedStepId === step.id ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)",
