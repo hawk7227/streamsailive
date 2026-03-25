@@ -895,12 +895,14 @@ Accept only if:
         body: JSON.stringify(payload),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string }; error?: string };
-      if (data.data?.id) {
+      if (!res.ok || data.error || data.data?.status === "failed") {
+        log("✗ Video failed: " + (data.error ?? data.data?.status ?? "unknown error"));
+      } else if (data.data?.id) {
         log("✓ Video job submitted (" + videoProvider + "): " + data.data.id.slice(0, 8));
         queueAdd({ id: data.data.id, type: "video", status: (data.data.status as QueueStatus) ?? "pending", provider: videoProvider, prompt: videoPrompt, conceptId: "c1", completedAt: null, outputUrl: data.data.output_url ?? null, externalId: null, mode: videoMode, costEstimate: 0.05, error: null });
         if (data.data.output_url) setVideoResult(data.data.output_url);
       } else {
-        log("✗ Video failed: " + (data.error ?? "unknown"));
+        log("✗ Video failed: no job ID returned — check Kling/Runway credentials");
       }
     } catch (e) { log("Video generate failed: " + (e instanceof Error ? e.message : String(e))); }
     setVideoGenerating(false);

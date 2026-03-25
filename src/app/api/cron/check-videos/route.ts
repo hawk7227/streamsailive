@@ -33,12 +33,35 @@ async function uploadVideoToSupabase(remoteUrl: string, workspaceId: string): Pr
 type Gen = { id: string; workspace_id: string; external_id: string; provider: string | null; type: string };
 type PollResult = { id: string; status: "completed"|"failed"|"processing"|"skipped"; outputUrl?: string };
 
+function makeKlingJWT(): string {
+  // Kling requires a signed JWT — raw key is NOT a valid bearer token
+  const ak = process.env.KLING_ASSESS_API_KEY;  // access key (iss)
+  const sk = process.env.KLING_API_KEY;          // secret key (sign)
+  if (!ak || !sk) throw new Error("KLING keys not set");
+  const header  = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const now     = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({ iss: ak, exp: now + 1800, nbf: now - 5 })).toString("base64url");
+  const data    = `${header}.${payload}`;
+  // Node built-in HMAC-SHA256
+  const { createHmac } = require("crypto") as typeof import("crypto");
+  const sig = createHmac("sha256", sk).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
 async function pollKling(gen: Gen): Promise<PollResult> {
-  const ep = gen.type === "image"
-    ? `https://api.klingai.com/v1/images/generations/${gen.external_id}`
-    : `https://api.klingai.com/v1/videos/text2video/${gen.external_id}`;
+  // Route to correct endpoint per generation type
+  let ep: string;
+  if (gen.type === "image") {
+    ep = `https://api-singapore.klingai.com/v1/images/generations/${gen.external_id}`;
+  } else if (gen.type === "i2v") {
+    ep = `https://api-singapore.klingai.com/v1/videos/image2video/${gen.external_id}`;
+  } else {
+    ep = `https://api-singapore.klingai.com/v1/videos/text2video/${gen.external_id}`;
+  }
+  let token: string;
+  try { token = makeKlingJWT(); } catch { return { id: gen.id, status: "skipped" }; }
   const res = await fetch(ep, {
-    headers: { Authorization: `Bearer ${process.env.KLING_API_KEY}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) return { id: gen.id, status: "skipped" };
@@ -48,7 +71,7 @@ async function pollKling(gen: Gen): Promise<PollResult> {
   if (t.task_status !== "succeed") return { id: gen.id, status: "processing" };
   const cdnUrl = t.task_result?.videos?.[0]?.url ?? t.task_result?.images?.[0]?.url;
   if (!cdnUrl) return { id: gen.id, status: "failed" };
-  const outputUrl = gen.type === "video"
+  const outputUrl = gen.type === "video" || gen.type === "i2v"
     ? await uploadVideoToSupabase(cdnUrl, gen.workspace_id)
     : await uploadImageToSupabase(cdnUrl, gen.workspace_id);
   return { id: gen.id, status: "completed", outputUrl };
