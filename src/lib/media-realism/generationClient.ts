@@ -1,4 +1,5 @@
 import { ASPECT_RATIO_TO_SIZE, getVideoMotionPolicy } from "./realismPolicy";
+import { generationConfig } from "./generationConfig";
 import type { AspectRatio, GeneratedImageCandidate, VideoCandidate } from "./types";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/images/generations";
@@ -16,6 +17,9 @@ export async function generateImageCandidatesFromProvider(params: {
 }): Promise<GeneratedImageCandidate[]> {
   const apiKey = requiredEnv("OPENAI_API_KEY");
   const size = ASPECT_RATIO_TO_SIZE[params.aspectRatio];
+  const model = generationConfig.image.model;
+  const quality = generationConfig.image.quality;
+
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: {
@@ -23,16 +27,17 @@ export async function generateImageCandidatesFromProvider(params: {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-image-1",
+      model,
       prompt: params.prompt,
       size,
-      quality: "standard",
+      quality,
       n: params.attempts,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Image generation failed with status ${response.status}`);
+    const errText = await response.text().catch(() => response.statusText);
+    throw new Error(`Image generation failed (${response.status}) model=${model}: ${errText}`);
   }
 
   const payload = (await response.json()) as { data?: Array<{ url?: string; b64_json?: string }> };

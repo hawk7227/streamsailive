@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
+import { scoreT2VCandidate } from "@/lib/media-realism-video/t2vQc";
 
 // POST /api/webhook/video-complete
 // Receives Kling and Runway completion callbacks.
@@ -119,10 +120,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Upload failed: ${msg}` }, { status: 500 });
   }
 
-  await admin
-    .from("generations")
-    .update({ status: "completed", output_url: outputUrl })
-    .eq("id", generation.id);
+  // Run QC scoring for video completions — stores score for diagnostics
+  let qcPassed: boolean | null = null;
+  if (generation.type === "video") {
+    try {
+      const qcScore = scoreT2VCandidate(outputUrl);
+      qcPassed = qcScore.passed;
+      await admin
+        .from("generations")
+        .update({ status: "completed", output_url: outputUrl, progress: Math.round(qcScore.totalScore * 100) })
+        .eq("id", generation.id);
+    } catch {
+      // QC failure doesn't block delivery — video is stored, QC is advisory
+      await admin
+        .from("generations")
+        .update({ status: "completed", output_url: outputUrl })
+        .eq("id", generation.id);
+    }
+  } else {
+    await admin
+      .from("generations")
+      .update({ status: "completed", output_url: outputUrl })
+      .eq("id", generation.id);
+  }
 
-  return NextResponse.json({ success: true, generationId: generation.id, outputUrl });
+  return NextResponse.json({ success: true, generationId: generation.id, outputUrl, qcPassed });
 }

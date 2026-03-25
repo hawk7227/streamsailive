@@ -28,7 +28,6 @@ import type {
   AssetLibraryRecord,
   ImageGenerationResult,
   IntakeBrief,
-  VideoCandidate,
   VideoGenerationResult,
 } from "../media-realism/types";
 
