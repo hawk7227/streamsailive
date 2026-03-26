@@ -1257,126 +1257,75 @@ Accept only if:
   // ── AI assistant ──────────────────────────────────────────────────────────
   async function sendAssistantMessage() {
     const text = assistantInput.trim();
-    if ((!text && assistantAttachments.length === 0) || assistantBusy) return;
+    if (!text || assistantBusy) return;
     setAssistantInput("");
     setAssistantBusy(true);
-    setAssistantStreamText("");
-
-    // Build multimodal content
-    const userContent = [
-      ...(text ? [{ type: "text", text }] : []),
-      ...assistantAttachments,
-    ];
-    const userMsg = { role: "user" as const, content: userContent.length === 1 && userContent[0].type === "text" ? text : JSON.stringify(userContent) };
-    setAssistantMessages(p => [...p, userMsg]);
-    setAssistantAttachments([]);
-
+    setAssistantMessages(p => [...p, { role: "user", content: text }]);
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...assistantMessages, { role: "user", content: userContent.length === 1 ? text : userContent }],
-          conversationId: assistantConvId,
+          messages: [...assistantMessages, { role: "user", content: text }],
           context: {
             type: "pipeline",
-            prompt: stepPrompts[selectedStepId] ?? imagePrompt ?? "",
+            prompt: stepPrompts[selectedStepId] ?? "",
             settings: { niche: nicheId, concept: selectedConceptId },
-            provider: assistantProvider,
-            // Full pipeline state
-            pipelineName,
             nicheId,
-            pipelineMode,
-            outputMode,
-            pipelineRunning,
             currentStepId: selectedStepId,
             selectedConceptId,
-            steps: steps.map(s => ({ id: s.id, name: s.name, state: s.state, error: s.error })),
             stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
-            imageProvider,
-            videoProvider,
-            videoMode,
-            imagePrompt,
-            videoPrompt,
-            imageResult,
-            videoResult,
-            conceptOutputs: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, { image: o.image, video: o.video, status: o.status, error: o.error }])),
-            approvedOutputs,
-            csFields,
-            csRealism,
             intakeAnalysis: intakeAnalysis ?? undefined,
-            conceptErrors: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])),
+            conceptErrors: Object.fromEntries(
+              Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
+            ),
+            conceptStatuses: Object.fromEntries(
+              Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
+            ),
             hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
+            imageProvider,
           },
         }),
       });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      // SSE streaming
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          for (const line of chunk.split("\\n").filter(l => l.startsWith("data: "))) {
-            try {
-              const ev = JSON.parse(line.slice(6)) as { type: string; delta?: string; tool?: string; input?: Record<string,unknown>; result?: string; action?: { type: string; payload: Record<string,unknown> }; message?: string; conversationId?: string };
-              if (ev.type === "text" && ev.delta) {
-                fullText += ev.delta;
-                setAssistantStreamText(fullText);
-              } else if (ev.type === "tool_call" && ev.tool) {
-                log(`🔧 ${ev.tool}...`);
-              } else if (ev.type === "tool_result" && ev.tool) {
-                log(`✓ ${ev.tool} done`);
-              } else if (ev.type === "action" && ev.action) {
-                const action = ev.action;
-                const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
-                if (action.type === "generate_image") generateImage(cid).catch(console.error);
-                else if (action.type === "generate_video") generateVideo(cid).catch(console.error);
-                else if (action.type === "run_pipeline") runPipeline().catch(console.error);
-                else if (action.type === "run_step") runPipeline().catch(console.error);
-                else if (action.type === "update_image_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
-                else if (action.type === "update_strategy_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
-                else if (action.type === "update_copy_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
-                else if (action.type === "modify_prompt" && action.payload.value) {
-                  const field = action.payload.field as string;
-                  if (field === "imagePrompt") setImagePrompt(action.payload.value as string);
-                  else if (field === "videoPrompt") setVideoPrompt(action.payload.value as string);
-                  else setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.value as string }));
-                }
-                else if (action.type === "select_concept") setSelectedConceptId(cid);
-                else if (action.type === "open_step_config" && action.payload.stepId) { setSelectedStepId(action.payload.stepId as string); setStepConfigOpen(true); }
-                else if (action.type === "set_niche" && action.payload.nicheId) setNicheId(action.payload.nicheId as string);
-                else if (action.type === "update_prompt" && action.payload.new_prompt) setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
-                else if (action.type === "approve_output" && action.payload.url) approveOutput(action.payload.type as "image"|"video"|"script", action.payload.url as string);
-              } else if (ev.type === "error" && ev.message) {
-                fullText += `
-⚠ ${ev.message}`;
-                setAssistantStreamText(fullText);
-              } else if (ev.type === "done" && ev.conversationId) {
-                setAssistantConvId(ev.conversationId);
-                if (typeof localStorage !== "undefined") localStorage.setItem("streams_conv_id", ev.conversationId);
-              }
-            } catch { /* skip malformed */ }
-          }
+      const data = await res.json() as { message?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
+      const msg = data.message ?? "Done.";
+      const actionCount = (data.actions ?? []).length;
+      setAssistantMessages(p => [...p, { role: "assistant", content: msg + (actionCount > 0 ? ` (executing ${actionCount} action${actionCount > 1 ? "s" : ""}...)` : "") }]);
+      if (actionCount > 0) log(`Assistant: ${actionCount} action(s) — ${(data.actions ?? []).map(a => a.type).join(", ")}`);
+      for (const action of (data.actions ?? [])) {
+        const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
+        if (action.type === "generate_image") {
+          await generateImage(cid);
+        } else if (action.type === "generate_video") {
+          await generateVideo(cid);
+        } else if (action.type === "generate_i2v") {
+          await generateVideo(cid);
+        } else if (action.type === "update_image_prompt" && action.payload.value) {
+          setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
+        } else if (action.type === "update_strategy_prompt" && action.payload.value) {
+          setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
+        } else if (action.type === "update_copy_prompt" && action.payload.value) {
+          setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
+        } else if (action.type === "run_pipeline") {
+          await runPipeline();
+        } else if (action.type === "select_concept") {
+          setSelectedConceptId(cid);
+        } else if (action.type === "open_step_config" && action.payload.stepId) {
+          setSelectedStepId(action.payload.stepId as string);
+          setStepConfigOpen(true);
+        } else if (action.type === "set_niche" && action.payload.nicheId) {
+          setNicheId(action.payload.nicheId as string);
+        } else if (action.type === "update_prompt" && action.payload.new_prompt) {
+          setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
         }
       }
-
-      setAssistantMessages(p => [...p, { role: "assistant", content: fullText || "Done." }]);
-      setAssistantStreamText("");
-
     } catch (e) {
       setAssistantMessages(p => [...p, { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }]);
     }
     setAssistantBusy(false);
   }
 
-  useEffect(() => {
+    useEffect(() => {
     assistantEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [assistantMessages]);
 
