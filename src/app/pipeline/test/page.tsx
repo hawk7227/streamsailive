@@ -193,6 +193,12 @@ Accept only if:
 
   // Workspace
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("output");
+  // ── EditorPro slide-out panel (exact drag logic from studio/page.tsx) ────
+  const [epOpen, setEpOpen] = React.useState(false);
+  const [epW, setEpW] = React.useState(480);
+  const [epDragging, setEpDragging] = React.useState(false);
+  const [epHandleActive, setEpHandleActive] = React.useState(false);
+  const epDragState = React.useRef<{ startX: number; startW: number } | null>(null);
   const [pipelineMode, setPipelineMode] = useState<"manual" | "auto">("manual");
   const [outputMode, setOutputMode] = useState<"image+video" | "image" | "video">("image+video");
   const [diagResult, setDiagResult] = useState<string | null>(null);
@@ -1311,6 +1317,30 @@ Accept only if:
     assistantEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [assistantMessages]);
 
+  // ── EditorPro drag (exact from studio/page.tsx) ─────────────────────────
+  React.useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!epDragState.current) return;
+      e.preventDefault();
+      const dx = epDragState.current.startX - e.clientX; // drag left = grow
+      const maxW = typeof window !== "undefined" ? window.innerWidth - 400 : 1200;
+      setEpW(Math.min(maxW, Math.max(280, epDragState.current.startW + dx)));
+    };
+    const onUp = () => {
+      epDragState.current = null;
+      setEpDragging(false);
+      setEpHandleActive(false);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
   // ── Auto-save pipeline state (3s debounce) ────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2168,7 +2198,59 @@ Accept only if:
             </div>
 
             {/* Production Workspace */}
-            <div style={P({ display: "flex", flexDirection: "column", height: "100%" })}>
+            <div style={P({ display: "flex", flexDirection: "column", height: "100%", position: "relative" })}>
+              {/* EditorPro drag cursor overlay */}
+              {epDragging && <div style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: "col-resize" }} />}
+              {/* EditorPro slide-out panel */}
+              <div style={{
+                position: "absolute", top: 0, right: 0, bottom: 0,
+                width: epOpen ? epW : 0,
+                overflow: "hidden",
+                zIndex: 200,
+                transition: epDragging ? "none" : "width 200ms cubic-bezier(.4,0,.2,1)",
+                background: "#09101a",
+                borderLeft: "1px solid rgba(255,255,255,0.1)",
+                display: "flex",
+                flexDirection: "row",
+              }}>
+                {/* Drag handle — exact ResizeHandle from studio/page.tsx */}
+                <div
+                  onPointerDown={e => {
+                    e.preventDefault();
+                    epDragState.current = { startX: e.clientX, startW: epW };
+                    setEpDragging(true);
+                    setEpHandleActive(true);
+                  }}
+                  style={{ width: 8, cursor: "col-resize", background: epHandleActive ? "rgba(68,195,166,0.18)" : "transparent", position: "relative", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 2, background: epHandleActive ? "rgba(68,195,166,0.65)" : "rgba(255,255,255,0.08)" }} />
+                </div>
+                {/* EditorPro iframe */}
+                <iframe src="/editor" title="EditorPro" style={{ flex: 1, border: "none", display: "block" }} />
+              </div>
+              {/* EditorPro toggle tab */}
+              <button
+                onClick={() => setEpOpen(v => !v)}
+                style={{
+                  position: "absolute", top: "50%", right: epOpen ? epW : 0,
+                  transform: "translateY(-50%)",
+                  zIndex: 201,
+                  width: 20, height: 64,
+                  background: "#09101a",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRight: "none",
+                  borderRadius: "6px 0 0 6px",
+                  color: "rgba(255,255,255,0.5)",
+                  cursor: "pointer",
+                  fontSize: 9,
+                  writingMode: "vertical-rl",
+                  letterSpacing: "0.08em",
+                  transition: epDragging ? "none" : "right 200ms cubic-bezier(.4,0,.2,1)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {epOpen ? "›" : "‹"} EP
+              </button>
               {/* Tabs */}
               <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "0 16px" }}>
                 {(["output", "editor", "export", "publish", "logs"] as WorkspaceTab[]).map(t => (
