@@ -284,6 +284,10 @@ Accept only if:
   const [videoIdeasLoading, setVideoIdeasLoading] = useState(false);
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoResult, setVideoResult] = useState<string | null>(null);
+  const [playbackPlaying, setPlaybackPlaying] = useState(false);
+  const [activeConceptSlot, setActiveConceptSlot] = useState<0|1|2>(0);
+  const playbackRef1 = React.useRef<HTMLVideoElement>(null);
+  const playbackRef2 = React.useRef<HTMLVideoElement>(null);
   const [videoReferencePriority, setVideoReferencePriority] = useState<ReferencePriority>("medium");
   const [selectedVideoTemplate, setSelectedVideoTemplate] = useState("");
   const [videoProvider, setVideoProvider] = useState<"kling" | "runway">("kling");
@@ -2477,71 +2481,197 @@ Accept only if:
                 ))}
               </div>
               {/* Canvas */}
-              <div style={{ flex: 1, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
                 {workspaceTab === "output" && (() => {
-                  // 3 fixed slots: portrait (9:16) | landscape (16:9) | portrait (9:16)
-                  // Slots pull from concept outputs → approved output → empty
-                  const slot1 = { label: "Preview", image: conceptOutputs.c1.image ?? approvedOutputs.image, video: conceptOutputs.c1.video ?? approvedOutputs.video };
-                  const slot2 = { label: "Preview", image: conceptOutputs.c2.image ?? approvedOutputs.image, video: conceptOutputs.c2.video ?? approvedOutputs.video };
-                  const slot3 = { label: "Preview", image: conceptOutputs.c3.image ?? approvedOutputs.image, video: conceptOutputs.c3.video ?? approvedOutputs.video };
-                  const slots = [
-                    { ...slot1, portrait: true  },   // left  — portrait  9:16
-                    { ...slot2, portrait: false },   // center — landscape 16:9
-                    { ...slot3, portrait: true  },   // right  — portrait  9:16
-                  ];
-                  return (
-                    <div style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1.8fr 1fr", gap: 14, alignItems: "start" }}>
-                      {slots.map((slot, i) => (
-                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {/* Frame */}
-                          <div style={{
-                            position: "relative",
-                            width: "100%",
-                            aspectRatio: slot.portrait ? "9/16" : "16/9",
-                            background: "rgba(255,255,255,0.03)",
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            borderRadius: slot.portrait ? 20 : 12,
-                            overflow: "hidden",
-                            boxShadow: slot.portrait ? "0 0 0 5px rgba(255,255,255,0.04)" : "none",
-                          }}>
+                  const c1 = conceptOutputs.c1;
+                  const c3 = conceptOutputs.c3;
+
+                  // iPhone frame component
+                  const IPhoneFrame = ({ slot, ref: vidRef, label }: { slot: typeof c1; ref: React.RefObject<HTMLVideoElement | null>; label: string }) => (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</div>
+                      {/* iPhone shell */}
+                      <div style={{ position: "relative", width: 160, flexShrink: 0 }}>
+                        <div style={{ width: 160, background: "#0d1117", borderRadius: 28, border: "2px solid rgba(255,255,255,0.14)", padding: "14px 6px 10px", boxShadow: "0 0 0 6px rgba(255,255,255,0.04), 0 14px 40px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+                          {/* Notch */}
+                          <div style={{ position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", width: 48, height: 6, background: "#000", borderRadius: 3 }} />
+                          {/* Screen */}
+                          <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             {slot.video
-                              ? <video src={slot.video} autoPlay muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               : slot.image
-                                ? <img src={slot.image} alt={slot.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                : (
-                                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#1e293b" }}>
-                                    <div style={{ fontSize: 22, opacity: 0.4 }}>◻</div>
-                                    <div style={{ fontSize: 10, textAlign: "center", padding: "0 12px", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                                ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
+                                    <div style={{ fontSize: 18, opacity: 0.2 }}>◻</div>
+                                    <div style={{ fontSize: 9, color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
                                   </div>
-                                )}
-                            {/* Action overlay */}
-                            {(slot.image || slot.video) && (
-                              <div style={{ position: "absolute", inset: 0, opacity: 0, transition: "opacity 150ms", background: "rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = "1"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = "0"; }}>
-                                <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: slot.image ?? o.image, video: slot.video ?? o.video })); log("✓ Preview " + (i+1) + " sent to workspace"); }}
-                                  style={{ background: "rgba(110,231,183,0.9)", border: "none", color: "#000", borderRadius: 7, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", width: "80%" }}>
-                                  ✓ Use This
-                                </button>
-                                <div style={{ display: "flex", gap: 6 }}>
-                                  {slot.image && <button onClick={() => window.open(slot.image!, "_blank")}
-                                    style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>↗ View</button>}
-                                  <button onClick={() => { navigator.clipboard.writeText(slot.image ?? slot.video ?? ""); log("✓ URL copied"); }}
-                                    style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>⎘ Copy</button>
-                                </div>
+                            }
+                          </div>
+                        </div>
+                        {/* Home bar */}
+                        <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "6px auto 0" }} />
+                      </div>
+                      <div style={{ fontSize: 9, color: "#334155" }}>9:16</div>
+                    </div>
+                  );
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                      {/* 3-column: iPhone | Prompt Panel | iPhone */}
+                      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", gap: 16, flex: 1, padding: "16px 16px 8px", alignItems: "start" }}>
+
+                        {/* Left iPhone — Concept 1 */}
+                        <IPhoneFrame slot={c1} ref={playbackRef1} label="iPhone 15 Pro Max #1" />
+
+                        {/* Center — Full Image+Video Prompt Panel (inline) */}
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 400, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, overflow: "hidden" }}>
+                          {/* Panel header */}
+                          <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>Image + Video Prompt Panel</div>
+                            <div style={{ fontSize: 10, color: "#475569", marginTop: 1 }}>Separate prompt boxes, references, templates, AI ideas, and realism controls.</div>
+                          </div>
+                          {/* Image/Video tabs */}
+                          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "0 16px" }}>
+                            {(["Image","Video"] as MediaTab[]).map(tab=>(
+                              <button key={tab} onClick={()=>setMediaTab(tab)}
+                                style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, background: "none", border: "none",
+                                  color: mediaTab===tab?"#67e8f9":"#475569",
+                                  borderBottom: mediaTab===tab?"2px solid #67e8f9":"2px solid transparent", cursor: "pointer" }}>
+                                {tab}
+                              </button>
+                            ))}
+                            <div style={{ flex: 1 }} />
+                            {mediaTab==="Video" && (
+                              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                {(["scratch_t2v","i2v"] as VideoGenMode[]).map(m=>(
+                                  <button key={m} onClick={()=>setVideoMode(m)}
+                                    style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, cursor: "pointer",
+                                      background: videoMode===m?"rgba(167,139,250,0.15)":"transparent",
+                                      color: videoMode===m?"#a78bfa":"#475569" }}>
+                                    {m==="scratch_t2v"?"T2V":"I2V"}
+                                  </button>
+                                ))}
+                                {(["kling","runway"] as const).map(p=>(
+                                  <button key={p} onClick={()=>setVideoProvider(p)}
+                                    style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, cursor: "pointer",
+                                      background: videoProvider===p?"rgba(110,231,183,0.12)":"transparent",
+                                      color: videoProvider===p?"#6ee7b7":"#475569" }}>
+                                    {p==="kling"?"Kling":"Runway"}
+                                  </button>
+                                ))}
                               </div>
                             )}
                           </div>
-                          {/* Label row */}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" }}>
-                            <span style={{ fontSize: 10, color: "#334155" }}>{slot.portrait ? "9:16" : "16:9"} {i === 1 ? "· Main" : ""}</span>
-                            {(slot.image || slot.video) && (
-                              <button onClick={() => { setApprovedOutputs(o => ({ ...o, image: slot.image ?? o.image, video: slot.video ?? o.video })); }}
-                                style={{ fontSize: 9, background: "rgba(110,231,183,0.1)", border: "1px solid rgba(110,231,183,0.2)", color: "#6ee7b7", borderRadius: 4, padding: "2px 7px", cursor: "pointer", fontWeight: 600 }}>Send</button>
-                            )}
-                          </div>
+
+                          {/* Prompt textarea */}
+                          {mediaTab==="Image" && (
+                            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                              <div style={{ padding: "12px 16px 8px" }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>Image Prompt</div>
+                                <textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} rows={4}
+                                  placeholder="Generate a real everyday photograph of a person sitting at home using a phone in flat natural light. No cinematic look. No text or UI in image."
+                                  style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
+                              </div>
+                              {/* Refs */}
+                              <div style={{ padding: "0 16px 10px" }}>
+                                <div style={{ fontSize: 10, color: "#475569", marginBottom: 6 }}>Image References (up to 3)</div>
+                                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                                  {[0,1,2].map(i=>{
+                                    const ref=imageRefs[i];
+                                    return (
+                                      <div key={i} onClick={()=>{if(!ref)imageRefInputRef.current?.click();}}
+                                        style={{ width: 48, height: 48, borderRadius: 8, border: "1px solid "+(ref?"rgba(103,232,249,0.25)":"rgba(255,255,255,0.1)"), background: "rgba(255,255,255,0.03)", cursor: ref?"default":"pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+                                        {ref
+                                          ? <><img src={ref.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={e=>{e.stopPropagation();setImageRefs(p=>p.filter((_,j)=>j!==i));}} style={{ position: "absolute", top: 1, right: 1, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 13, height: 13, fontSize: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button></>
+                                          : <div style={{ fontSize: 9, color: "#475569", textAlign: "center", lineHeight: 1.2 }}>Ref<br/>{i+1}</div>
+                                        }
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {/* Upload/Media bar */}
+                                <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                  <button onClick={()=>imageRefInputRef.current?.click()}
+                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+                                    UPLOAD/MEDIA
+                                  </button>
+                                  <input type="text" placeholder="Paste a video URL"
+                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                </div>
+                              </div>
+                              {/* Generate button */}
+                              <div style={{ padding: "0 16px 12px", marginTop: "auto" }}>
+                                <button onClick={()=>gatedGeneration(()=>generateDualImage())} disabled={imageGenerating||!imagePrompt.trim()}
+                                  style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: imageGenerating||!imagePrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)", border: "1px solid rgba(255,255,255,0.15)", color: imageGenerating||!imagePrompt.trim()?"#475569":"#0f172a", fontSize: 13, fontWeight: 700, cursor: imageGenerating||!imagePrompt.trim()?"not-allowed":"pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                  {imageGenerating ? <><Spinner size={13}/>Generating…</> : <>Generate <span style={{ fontSize: 15 }}>✦</span></>}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {mediaTab==="Video" && (
+                            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                              <div style={{ padding: "12px 16px 8px" }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>{videoMode==="i2v"?"Motion Prompt":"Video Prompt"}</div>
+                                <textarea value={videoPrompt} onChange={e=>setVideoPrompt(e.target.value)} rows={4}
+                                  placeholder={videoMode==="i2v"?"Slow gentle push-in. Natural blink. Soft parallax. No face movement. 5 seconds max.":"Create a short ordinary real world clip of a person in a real setting with natural motion."}
+                                  style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
+                              </div>
+                              {/* Upload/Media bar */}
+                              <div style={{ padding: "0 16px 10px" }}>
+                                <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                  <button onClick={()=>videoImageRefInputRef.current?.click()}
+                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+                                    UPLOAD/MEDIA
+                                  </button>
+                                  <input type="text" placeholder="Paste a video URL"
+                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                </div>
+                              </div>
+                              {/* Generate */}
+                              <div style={{ padding: "0 16px 12px", marginTop: "auto" }}>
+                                <button onClick={()=>gatedGeneration(()=>generateDualVideo())} disabled={videoGenerating||!videoPrompt.trim()||(videoMode==="i2v"&&!imageResult)}
+                                  style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: videoGenerating||!videoPrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)", border: "1px solid rgba(255,255,255,0.15)", color: videoGenerating||!videoPrompt.trim()?"#475569":"#0f172a", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                  {videoGenerating ? <><Spinner size={13}/>Generating…</> : <>Generate <span style={{ fontSize: 15 }}>✦</span></>}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ))}
+
+                        {/* Right iPhone — Concept 3 */}
+                        <IPhoneFrame slot={c3} ref={playbackRef2} label="iPhone 15 Pro Max #2" />
+
+                      </div>
+
+                      {/* Playback bar */}
+                      <div style={{ padding: "10px 16px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 20, flexShrink: 0 }}>
+                        {/* Rewind */}
+                        <button onClick={() => { [playbackRef1, playbackRef2].forEach(r => { if (r.current) { r.current.currentTime = 0; } }); }}
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", width: 38, height: 38, borderRadius: "50%", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⏮</button>
+                        {/* Play/Pause */}
+                        <button onClick={() => {
+                          const refs = [playbackRef1, playbackRef2];
+                          if (playbackPlaying) {
+                            refs.forEach(r => r.current?.pause());
+                            setPlaybackPlaying(false);
+                          } else {
+                            refs.forEach(r => r.current?.play().catch(()=>{}));
+                            setPlaybackPlaying(true);
+                          }
+                        }}
+                          style={{ background: playbackPlaying ? "rgba(103,232,249,0.15)" : "rgba(255,255,255,0.08)", border: "1px solid "+(playbackPlaying?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.1)"), color: playbackPlaying?"#67e8f9":"#94a3b8", width: 38, height: 38, borderRadius: "50%", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {playbackPlaying ? "⏸" : "▷"}
+                        </button>
+                        {/* Stop */}
+                        <button onClick={() => { [playbackRef1, playbackRef2].forEach(r => { if (r.current) { r.current.pause(); r.current.currentTime = 0; } }); setPlaybackPlaying(false); }}
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", width: 38, height: 38, borderRadius: "50%", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>◼</button>
+                        {/* Replay */}
+                        <button onClick={() => { [playbackRef1, playbackRef2].forEach(r => { if (r.current) { r.current.currentTime = 0; r.current.play().catch(()=>{}); } }); setPlaybackPlaying(true); }}
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", width: 38, height: 38, borderRadius: "50%", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>↺</button>
+                        {/* Forward */}
+                        <button onClick={() => { [playbackRef1, playbackRef2].forEach(r => { if (r.current) { r.current.currentTime = r.current.duration || 0; } }); }}
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", width: 38, height: 38, borderRadius: "50%", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⏭</button>
+                      </div>
                     </div>
                   );
                 })()}
