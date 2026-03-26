@@ -149,16 +149,31 @@ export default function MediaEditor({
       if (!canvasElRef.current) return;
       if (fabricRef.current) { fabricRef.current.dispose(); }
 
+      const parent = canvasElRef.current.parentElement;
+      const w = parent?.clientWidth || 720;
+      const h = parent?.clientHeight || 480;
+
       const fc = new Canvas(canvasElRef.current, {
-        width: canvasElRef.current.parentElement?.clientWidth ?? 720,
-        height: canvasElRef.current.parentElement?.clientHeight ?? 480,
+        width: w,
+        height: h,
         backgroundColor: "#111827",
         selection: true,
       });
       fabricInstance = fc;
       fabricRef.current = fc;
 
-      // Custom controls style
+      // Resize canvas when container resizes
+      const ro = new ResizeObserver(entries => {
+        const entry = entries[0];
+        if (!entry || !fabricRef.current) return;
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          fabricRef.current.setDimensions({ width, height });
+          fabricRef.current.renderAll();
+        }
+      });
+      if (parent) ro.observe(parent);
+
       fc.renderAll();
 
       // Load initial image
@@ -650,12 +665,12 @@ export default function MediaEditor({
 
           {/* Canvas */}
           <div
-            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "transparent", transition: "background 150ms" }}
+            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "transparent", transition: "background 150ms", minHeight: 0 }}
             onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
             onDragLeave={() => setIsDraggingOver(false)}
             onDrop={handleCanvasDrop}
           >
-            <canvas ref={canvasElRef} style={{ display: "block" }} />
+            <canvas ref={canvasElRef} style={{ display: "block", width: "100%", height: "100%" }} />
             {isDraggingOver && (
               <div style={{ position: "absolute", inset: 0, border: "2px dashed #67e8f9", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
                 <span style={{ color: "#67e8f9", fontSize: 13, fontWeight: 700 }}>Drop image here</span>
