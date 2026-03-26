@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 const MediaEditor = dynamic(() => import("@/components/pipeline/MediaEditor"), { ssr: false });
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -85,6 +86,8 @@ function P(style: React.CSSProperties): React.CSSProperties {
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function PipelineTestPage() {
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams?.get("embed") === "1";
   // Step builder
   const [steps, setSteps] = useState<Step[]>(STEPS_INITIAL);
   const [selectedStepId, setSelectedStepId] = useState<string>("strategy");
@@ -1644,7 +1647,7 @@ Accept only if:
         <div style={{ maxWidth: 1720, margin: "0 auto" }}>
 
           {/* ── TOP BAR ──────────────────────────────────────────────────── */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          {!isEmbed && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
             {/* Custom name tag — replaces Telehealth Master */}
             <div style={{ display: "flex", alignItems: "center", gap: 0, position: "relative" }}>
               <input
@@ -1776,14 +1779,14 @@ Accept only if:
               style={{ background: pipelineRunning ? "rgba(168,85,247,0.3)" : "linear-gradient(90deg,rgba(168,85,247,0.9),rgba(34,211,238,0.7))", border: "none", color: "#fff", borderRadius: 10, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: pipelineRunning ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               {pipelineRunning ? "⏳ Running Pipeline…" : "▶ Run Full Governance Pipeline"}
             </button>
-          </div>
+          </div>}
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} 1fr` : `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
+            {!isEmbed && <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
 
             {/* ── Creative Setup panel ── */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
@@ -1965,7 +1968,7 @@ Accept only if:
               </button>
             </div>
 
-            </div>{/* end left column wrapper */}
+            </div>}{/* end left column wrapper */}
 
             {/* Step Config Rail — transforms into Live Engine when pipeline runs */}
             <div style={P({ overflow: "hidden", display: "flex", flexDirection: "column" })}>
