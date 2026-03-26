@@ -1322,7 +1322,7 @@ Accept only if:
       } catch { /* storage full */ }
     }, 3000);
     return () => clearTimeout(timer);
-  }, [pipelineName, nicheId, pipelineMode, outputMode, imagePrompt, videoPrompt, stepPrompts]);
+  }, [pipelineName, nicheId, pipelineMode, outputMode, imagePrompt, videoPrompt, stepPrompts, csFields]);
 
   // ── Approve output to workspace ───────────────────────────────────────────
   function approveOutput(type: "image" | "video" | "script", url: string) {

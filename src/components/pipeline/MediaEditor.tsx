@@ -639,8 +639,40 @@ export default function MediaEditor({
         <button style={S.modeBtn(mode === "image")} onClick={() => setMode("image")}>🖼 Image</button>
         <button style={S.modeBtn(mode === "video")} onClick={() => setMode("video")}>🎬 Video</button>
         <div style={{ flex: 1 }} />
+        {/* Upload button */}
+        <button onClick={() => (document.getElementById("media-editor-file-input") as HTMLInputElement)?.click()}
+          style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid rgba(103,232,249,0.35)", background: "rgba(103,232,249,0.12)", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", marginRight: 6 }}>
+          ⬆ Upload
+        </button>
+        <input id="media-editor-file-input" type="file" accept="image/*,video/*" style={{ display: "none" }}
+          onChange={async e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            if (file.type.startsWith("video/")) {
+              if (videoRef.current) videoRef.current.src = url;
+              setMode("video");
+              onLog(`✓ Video loaded: ${file.name}`);
+            } else if (file.type.startsWith("image/")) {
+              const { FabricImage } = await import("fabric");
+              if (!fabricRef.current) { setMode("image"); setTimeout(() => {}, 500); }
+              if (fabricRef.current) {
+                const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+                const fc = fabricRef.current;
+                const scale = Math.min((fc.width ?? 720) / (img.width ?? 1), (fc.height ?? 480) / (img.height ?? 1));
+                img.scale(scale);
+                img.set({ left: 0, top: 0, selectable: true });
+                fc.clear();
+                fc.add(img);
+                fc.sendObjectToBack(img);
+                fc.renderAll();
+                onLog(`✓ Image loaded: ${file.name}`);
+              }
+            }
+            e.target.value = "";
+          }} />
         <span style={{ fontSize: 10, color: "#334155" }}>
-          {mode === "image" ? "Ctrl+Z undo · Del remove selected" : "Space play/pause · drag timeline"}
+          {mode === "image" ? "Ctrl+Z undo · Del remove · drag to drop" : "Space play/pause · drag timeline"}
         </span>
       </div>
 
