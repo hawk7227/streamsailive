@@ -1,0 +1,17 @@
+{
+  "name": "streams-ai-assistant",
+  "version": "1.0.0",
+  "description": "Self-contained STREAMS AI Assistant — drop into any Next.js project",
+  "dependencies": {
+    "react": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "next": ">=13.0.0"
+  },
+  "files": [
+    "AIAssistant.tsx",
+    "api/ai-assistant/route.ts",
+    "README.md"
+  ]
+}
