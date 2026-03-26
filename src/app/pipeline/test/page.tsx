@@ -1287,8 +1287,8 @@ Accept only if:
           },
         }),
       });
-      const data = await res.json() as { message?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
-      const msg = data.message ?? "Done.";
+      const data = await res.json() as { message?: string; reply?: string; text?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
+      const msg = data.message ?? data.reply ?? data.text ?? "(No response — check pipeline state)";
       const actionCount = (data.actions ?? []).length;
       setAssistantMessages(p => [...p, { role: "assistant", content: msg + (actionCount > 0 ? ` (executing ${actionCount} action${actionCount > 1 ? "s" : ""}...)` : "") }]);
       if (actionCount > 0) log(`Assistant: ${actionCount} action(s) — ${(data.actions ?? []).map(a => a.type).join(", ")}`);
