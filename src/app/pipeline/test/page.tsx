@@ -610,13 +610,18 @@ Accept only if:
   function sendToDestination(url: string, type: "image"|"video", dest: PreviewDestination) {
     if (dest === "iphone1") {
       setConceptOutputs(p => ({ ...p, c1: { ...p.c1, [type]: url, status: "completed", error: null } }));
+      log(`✓ ${type} → iPhone #1`);
     } else if (dest === "iphone2") {
       setConceptOutputs(p => ({ ...p, c3: { ...p.c3, [type]: url, status: "completed", error: null } }));
+      log(`✓ ${type} → iPhone #2`);
     } else {
-      // desktop — approved output
+      // desktop / center — approved output + concept 2 slot
       setApprovedOutputs(p => ({ ...p, [type]: url }));
+      setConceptOutputs(p => ({ ...p, c2: { ...p.c2, [type]: url, status: "completed", error: null } }));
+      if (type === "image") setImageResult(url);
+      if (type === "video") setVideoResult(url);
+      log(`✓ ${type} → Desktop / Center editor`);
     }
-    log(`✓ ${type} sent to ${dest}`);
   }
 
   function triggerDestPicker(url: string, type: "image"|"video") {
@@ -2019,7 +2024,7 @@ Accept only if:
                   const c1 = conceptOutputs.c1;
                   const c3 = conceptOutputs.c3;
 
-                  const IPhoneFrame = ({ slot, vidRef, label }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string }) => (
+                  const IPhoneFrame = ({ slot, vidRef, label, onEdit }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void }) => (
                     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>{label}</div>
                       {/* iPhone shell — stretches to fill */}
@@ -2028,7 +2033,7 @@ Accept only if:
                           {/* Notch */}
                           <div style={{ width: 48, height: 6, background: "#000", borderRadius: 3, alignSelf: "center", marginBottom: 8, flexShrink: 0 }} />
                           {/* Screen fills remaining space */}
-                          <div style={{ flex: 1, borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
+                          <div style={{ flex: 1, borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, position: "relative" }}>
                             {slot.video
                               ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               : slot.image
@@ -2038,6 +2043,21 @@ Accept only if:
                                     <div style={{ fontSize: 9, color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
                                   </div>
                             }
+                            {/* Hover overlay — Edit + Send buttons */}
+                            {(slot.image || slot.video) && onEdit && (
+                              <div className="iphone-overlay" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, opacity: 0, transition: "opacity 150ms" }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
+                                <button onClick={onEdit}
+                                  style={{ padding: "6px 14px", background: "rgba(103,232,249,0.9)", border: "none", color: "#000", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", width: "80%" }}>
+                                  ✏ Edit in center
+                                </button>
+                                <button onClick={() => triggerDestPicker(slot.image ?? slot.video!, slot.video ? "video" : "image")}
+                                  style={{ padding: "5px 14px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 7, fontSize: 10, cursor: "pointer", width: "80%" }}>
+                                  → Send to screen
+                                </button>
+                              </div>
+                            )}
                           </div>
                           {/* Home bar */}
                           <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "10px auto 0", flexShrink: 0 }} />
@@ -2076,144 +2096,31 @@ Accept only if:
                       <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 16, flex: 1, padding: "16px 16px 8px", minHeight: 0 }}>
 
                         {/* Left iPhone — Concept 1 */}
-                        <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1" />
+                        <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"
+                          onEdit={() => {
+                            // Load iPhone 1 content into approved so editor picks it up
+                            if (c1.image) setApprovedOutputs(p => ({ ...p, image: c1.image! }));
+                            if (c1.video) setApprovedOutputs(p => ({ ...p, video: c1.video! }));
+                            log("✓ iPhone #1 loaded into editor");
+                          }} />
 
-                        {/* Center — Full Image+Video Prompt Panel (inline) */}
-                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 400, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, overflow: "hidden" }}>
-                          {/* Panel header */}
-                          <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>Image + Video Prompt Panel</div>
-                            <div style={{ fontSize: 10, color: "#475569", marginTop: 1 }}>Separate prompt boxes, references, templates, AI ideas, and realism controls.</div>
-                          </div>
-                          {/* Image/Video tabs */}
-                          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "0 16px" }}>
-                            {(["Image","Video"] as MediaTab[]).map(tab=>(
-                              <button key={tab} onClick={()=>setMediaTab(tab)}
-                                style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, background: "none", border: "none",
-                                  color: mediaTab===tab?"#67e8f9":"#475569",
-                                  borderBottom: mediaTab===tab?"2px solid #67e8f9":"2px solid transparent", cursor: "pointer" }}>
-                                {tab}
-                              </button>
-                            ))}
-                            <div style={{ flex: 1 }} />
-                            {mediaTab==="Video" && (
-                              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                                {(["scratch_t2v","i2v"] as VideoGenMode[]).map(m=>(
-                                  <button key={m} onClick={()=>setVideoMode(m)}
-                                    style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, cursor: "pointer",
-                                      background: videoMode===m?"rgba(167,139,250,0.15)":"transparent",
-                                      color: videoMode===m?"#a78bfa":"#475569" }}>
-                                    {m==="scratch_t2v"?"T2V":"I2V"}
-                                  </button>
-                                ))}
-                                {(["kling","runway"] as const).map(p=>(
-                                  <button key={p} onClick={()=>setVideoProvider(p)}
-                                    style={{ padding: "3px 9px", fontSize: 10, fontWeight: 600, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, cursor: "pointer",
-                                      background: videoProvider===p?"rgba(110,231,183,0.12)":"transparent",
-                                      color: videoProvider===p?"#6ee7b7":"#475569" }}>
-                                    {p==="kling"?"Kling":"Runway"}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Prompt textarea */}
-                          {mediaTab==="Image" && (
-                            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                              <div style={{ padding: "12px 16px 8px" }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>Image Prompt</div>
-                                <textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} rows={4}
-                                  placeholder="Generate a real everyday photograph of a person sitting at home using a phone in flat natural light. No cinematic look. No text or UI in image."
-                                  style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
-                              </div>
-                              {/* Refs — underline text links, no boxes */}
-                              <div style={{ padding: "0 16px 10px" }}>
-                                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
-                                  {imageRefs.length === 0
-                                    ? <button onClick={()=>imageRefInputRef.current?.click()} style={{ background: "none", border: "none", color: "#67e8f9", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>+ Add image reference</button>
-                                    : imageRefs.map((ref, i) => (
-                                        <span key={ref.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                          <img src={ref.url} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: "cover", border: "1px solid rgba(103,232,249,0.3)" }} />
-                                          <span style={{ fontSize: 10, color: "#67e8f9" }}>{ref.name.slice(0,18)}</span>
-                                          <button onClick={()=>setImageRefs(p=>p.filter((_,j)=>j!==i))} style={{ background: "none", border: "none", color: "#475569", fontSize: 10, cursor: "pointer", padding: 0 }}>✕</button>
-                                        </span>
-                                      ))
-                                  }
-                                  {imageRefs.length > 0 && imageRefs.length < 3 && (
-                                    <button onClick={()=>imageRefInputRef.current?.click()} style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>+ add more</button>
-                                  )}
-                                </div>
-                                {/* Upload / URL bar */}
-                                <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                                  <button onClick={()=>allFilesInputRef.current?.click()}
-                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em", flexShrink: 0 }}>
-                                    UPLOAD/MEDIA
-                                  </button>
-                                  <input
-                                    value={inlineUrl}
-                                    onChange={e=>setInlineUrl(e.target.value)}
-                                    onKeyDown={e=>{ if(e.key==="Enter") handleInlineUrl(inlineUrl); }}
-                                    placeholder={inlineUrlBusy ? "Analyzing…" : "Paste URL — YouTube, website, image or video"}
-                                    disabled={inlineUrlBusy}
-                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: inlineUrlBusy?"#475569":"#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
-                                  {inlineUrl.trim() && !inlineUrlBusy && (
-                                    <button onClick={()=>handleInlineUrl(inlineUrl)} style={{ padding: "8px 12px", background: "rgba(103,232,249,0.1)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#67e8f9", fontSize: 11, cursor: "pointer" }}>→</button>
-                                  )}
-                                </div>
-                                {/* Hidden all-types file input */}
-                                <input ref={allFilesInputRef} type="file" accept="*/*" style={{ display: "none" }}
-                                  onChange={async e => { const f=e.target.files?.[0]; if(f) await handleAllFilesUpload(f); e.target.value=""; }} />
-                              </div>
-                              {/* Generate button */}
-                              <div style={{ padding: "0 16px 12px", marginTop: "auto" }}>
-                                <button onClick={()=>gatedGeneration(()=>generateDualImage())} disabled={imageGenerating||!imagePrompt.trim()}
-                                  style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: imageGenerating||!imagePrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)", border: "1px solid rgba(255,255,255,0.15)", color: imageGenerating||!imagePrompt.trim()?"#475569":"#0f172a", fontSize: 13, fontWeight: 700, cursor: imageGenerating||!imagePrompt.trim()?"not-allowed":"pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                  {imageGenerating ? <><Spinner size={13}/>Generating…</> : <>Generate <span style={{ fontSize: 15 }}>✦</span></>}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {mediaTab==="Video" && (
-                            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                              <div style={{ padding: "12px 16px 8px" }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>{videoMode==="i2v"?"Motion Prompt":"Video Prompt"}</div>
-                                <textarea value={videoPrompt} onChange={e=>setVideoPrompt(e.target.value)} rows={4}
-                                  placeholder={videoMode==="i2v"?"Slow gentle push-in. Natural blink. Soft parallax. No face movement. 5 seconds max.":"Create a short ordinary real world clip of a person in a real setting with natural motion."}
-                                  style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
-                              </div>
-                              {/* Video upload / URL bar */}
-                              <div style={{ padding: "0 16px 10px" }}>
-                                <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                                  <button onClick={()=>allFilesInputRef.current?.click()}
-                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em", flexShrink: 0 }}>
-                                    UPLOAD/MEDIA
-                                  </button>
-                                  <input
-                                    value={inlineUrl}
-                                    onChange={e=>setInlineUrl(e.target.value)}
-                                    onKeyDown={e=>{ if(e.key==="Enter") handleInlineUrl(inlineUrl); }}
-                                    placeholder={inlineUrlBusy ? "Analyzing…" : "Paste URL — YouTube, website, image or video"}
-                                    disabled={inlineUrlBusy}
-                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: inlineUrlBusy?"#475569":"#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
-                                  {inlineUrl.trim() && !inlineUrlBusy && (
-                                    <button onClick={()=>handleInlineUrl(inlineUrl)} style={{ padding: "8px 12px", background: "rgba(103,232,249,0.1)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#67e8f9", fontSize: 11, cursor: "pointer" }}>→</button>
-                                  )}
-                                </div>
-                              </div>
-                              {/* Generate */}
-                              <div style={{ padding: "0 16px 12px", marginTop: "auto" }}>
-                                <button onClick={()=>gatedGeneration(()=>generateDualVideo())} disabled={videoGenerating||!videoPrompt.trim()||(videoMode==="i2v"&&!imageResult)}
-                                  style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: videoGenerating||!videoPrompt.trim()?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.92)", border: "1px solid rgba(255,255,255,0.15)", color: videoGenerating||!videoPrompt.trim()?"#475569":"#0f172a", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                  {videoGenerating ? <><Spinner size={13}/>Generating…</> : <>Generate <span style={{ fontSize: 15 }}>✦</span></>}
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                        {/* Center — MediaEditor (Fabric.js image + video editor) */}
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 400, minWidth: 0 }}>
+                          <MediaEditor
+                            imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
+                            videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
+                            onSendToScreen={(url, type) => triggerDestPicker(url, type)}
+                            onLog={log}
+                          />
                         </div>
 
                         {/* Right iPhone — Concept 3 */}
-                        <IPhoneFrame slot={c3} vidRef={playbackRef2} label="iPhone 15 Pro Max #2" />
+                        <IPhoneFrame slot={c3} vidRef={playbackRef2} label="iPhone 15 Pro Max #2"
+                          onEdit={() => {
+                            if (c3.image) setApprovedOutputs(p => ({ ...p, image: c3.image! }));
+                            if (c3.video) setApprovedOutputs(p => ({ ...p, video: c3.video! }));
+                            log("✓ iPhone #2 loaded into editor");
+                          }} />
 
                       </div>
 
