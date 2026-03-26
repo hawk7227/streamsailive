@@ -285,6 +285,13 @@ Accept only if:
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoResult, setVideoResult] = useState<string | null>(null);
   const [playbackPlaying, setPlaybackPlaying] = useState(false);
+  type PreviewDestination = "iphone1" | "iphone2" | "desktop";
+  const [previewDestination, setPreviewDestination] = useState<PreviewDestination>("iphone1");
+  const [showDestPicker, setShowDestPicker] = useState(false);
+  const [pendingResult, setPendingResult] = useState<{url: string; type: "image"|"video"} | null>(null);
+  const [inlineUrl, setInlineUrl] = useState("");
+  const [inlineUrlBusy, setInlineUrlBusy] = useState(false);
+  const allFilesInputRef = React.useRef<HTMLInputElement>(null);
   const [activeConceptSlot, setActiveConceptSlot] = useState<0|1|2>(0);
   const playbackRef1 = React.useRef<HTMLVideoElement>(null);
   const playbackRef2 = React.useRef<HTMLVideoElement>(null);
@@ -597,6 +604,68 @@ Accept only if:
   }, [generationQueue]);
 
   // ── Step config toggle ────────────────────────────────────────────────────
+  // ── Send result to chosen preview destination ────────────────────────────
+  function sendToDestination(url: string, type: "image"|"video", dest: PreviewDestination) {
+    if (dest === "iphone1") {
+      setConceptOutputs(p => ({ ...p, c1: { ...p.c1, [type]: url, status: "completed", error: null } }));
+    } else if (dest === "iphone2") {
+      setConceptOutputs(p => ({ ...p, c3: { ...p.c3, [type]: url, status: "completed", error: null } }));
+    } else {
+      // desktop — approved output
+      setApprovedOutputs(p => ({ ...p, [type]: url }));
+    }
+    log(`✓ ${type} sent to ${dest}`);
+  }
+
+  function triggerDestPicker(url: string, type: "image"|"video") {
+    setPendingResult({ url, type });
+    setShowDestPicker(true);
+  }
+
+  // ── Handle all-type file upload ───────────────────────────────────────────
+  async function handleAllFilesUpload(file: File) {
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    const url = URL.createObjectURL(file);
+    if (isVideo) {
+      setVideoResult(url);
+      triggerDestPicker(url, "video");
+    } else if (isImage) {
+      setImageResult(url);
+      triggerDestPicker(url, "image");
+    } else {
+      // Non-media file — treat as reference/context
+      log(`✓ File loaded: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
+    }
+  }
+
+  // ── Handle inline URL (YouTube / website) ────────────────────────────────
+  async function handleInlineUrl(url: string) {
+    if (!url.trim()) return;
+    setInlineUrlBusy(true);
+    setInlineUrl(url);
+    const isYouTube = /youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts/i.test(url);
+    const isVideo = /\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
+    const isImage = /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url);
+    try {
+      if (isVideo) {
+        setVideoResult(url);
+        triggerDestPicker(url, "video");
+      } else if (isImage) {
+        setImageResult(url);
+        triggerDestPicker(url, "image");
+      } else if (isYouTube || url.startsWith("http")) {
+        // Send to intake analyzer
+        setUrlInput(url);
+        await analyzeUrl();
+        log(`✓ URL analyzed: ${url.slice(0, 60)}`);
+      }
+    } catch (e) {
+      log(`✗ URL failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setInlineUrlBusy(false);
+  }
+
   function selectStep(id: string) {
     // Don't switch away from live engine while pipeline is running
     if (pipelineRunning || engineOpen) return;
@@ -1391,7 +1460,7 @@ Accept only if:
       const data = await res.json() as { outputUrl?: string; error?: string; strippedTerms?: string[] };
       if (data.outputUrl) {
         setImageResult(data.outputUrl);
-        setConceptOutputs(p => ({ ...p, c1: { ...p.c1, image: data.outputUrl!, status: "completed", error: null } }));
+        triggerDestPicker(data.outputUrl!, "image");
         log("✓ Image generated via " + imageApiMode + " API" + (data.strippedTerms?.length ? " (stripped: " + data.strippedTerms.join(", ") + ")" : ""));
       } else {
         log("✗ Image failed: " + (data.error ?? "unknown"));
@@ -2486,17 +2555,16 @@ Accept only if:
                   const c1 = conceptOutputs.c1;
                   const c3 = conceptOutputs.c3;
 
-                  // iPhone frame component
-                  const IPhoneFrame = ({ slot, ref: vidRef, label }: { slot: typeof c1; ref: React.RefObject<HTMLVideoElement | null>; label: string }) => (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</div>
-                      {/* iPhone shell */}
-                      <div style={{ position: "relative", width: 160, flexShrink: 0 }}>
-                        <div style={{ width: 160, background: "#0d1117", borderRadius: 28, border: "2px solid rgba(255,255,255,0.14)", padding: "14px 6px 10px", boxShadow: "0 0 0 6px rgba(255,255,255,0.04), 0 14px 40px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+                  const IPhoneFrame = ({ slot, vidRef, label }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string }) => (
+                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>{label}</div>
+                      {/* iPhone shell — stretches to fill */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
+                        <div style={{ flex: 1, background: "#0d1117", borderRadius: 28, border: "2px solid rgba(255,255,255,0.14)", padding: "14px 6px 16px", boxShadow: "0 0 0 6px rgba(255,255,255,0.04), 0 14px 40px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }}>
                           {/* Notch */}
-                          <div style={{ position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", width: 48, height: 6, background: "#000", borderRadius: 3 }} />
-                          {/* Screen */}
-                          <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ width: 48, height: 6, background: "#000", borderRadius: 3, alignSelf: "center", marginBottom: 8, flexShrink: 0 }} />
+                          {/* Screen fills remaining space */}
+                          <div style={{ flex: 1, borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
                             {slot.video
                               ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               : slot.image
@@ -2507,21 +2575,44 @@ Accept only if:
                                   </div>
                             }
                           </div>
+                          {/* Home bar */}
+                          <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "10px auto 0", flexShrink: 0 }} />
                         </div>
-                        {/* Home bar */}
-                        <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "6px auto 0" }} />
                       </div>
-                      <div style={{ fontSize: 9, color: "#334155" }}>9:16</div>
+                      <div style={{ fontSize: 9, color: "#334155", textAlign: "center", marginTop: 6 }}>9:16</div>
                     </div>
                   );
 
                   return (
                     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+
+                      {/* Destination picker modal */}
+                      {showDestPicker && pendingResult && (
+                        <div style={{ position: "absolute", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12 }}>
+                          <div style={{ background: "#0d1525", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: "22px 24px", minWidth: 280 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", marginBottom: 6 }}>Send result to...</div>
+                            <div style={{ fontSize: 11, color: "#475569", marginBottom: 16 }}>Choose which preview screen receives this {pendingResult.type}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {([["iphone1","iPhone 15 Pro Max #1","◱"],["iphone2","iPhone 15 Pro Max #2","◱"],["desktop","Desktop / Wide View","▭"]] as [PreviewDestination,string,string][]).map(([dest, label, icon]) => (
+                                <button key={dest} onClick={() => {
+                                  sendToDestination(pendingResult.url, pendingResult.type, dest);
+                                  setShowDestPicker(false); setPendingResult(null);
+                                }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.1)", background: previewDestination===dest?"rgba(103,232,249,0.1)":"rgba(255,255,255,0.03)", color: "#f1f5f9", fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                                  <span style={{ fontSize: 16, color: "#67e8f9" }}>{icon}</span>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <button onClick={() => { setShowDestPicker(false); setPendingResult(null); }} style={{ marginTop: 12, width: "100%", padding: "7px 0", borderRadius: 8, border: "none", background: "transparent", color: "#475569", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* 3-column: iPhone | Prompt Panel | iPhone */}
-                      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", gap: 16, flex: 1, padding: "16px 16px 8px", alignItems: "start" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 16, flex: 1, padding: "16px 16px 8px", minHeight: 0 }}>
 
                         {/* Left iPhone — Concept 1 */}
-                        <IPhoneFrame slot={c1} ref={playbackRef1} label="iPhone 15 Pro Max #1" />
+                        <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1" />
 
                         {/* Center — Full Image+Video Prompt Panel (inline) */}
                         <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 400, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, overflow: "hidden" }}>
@@ -2572,32 +2663,43 @@ Accept only if:
                                   placeholder="Generate a real everyday photograph of a person sitting at home using a phone in flat natural light. No cinematic look. No text or UI in image."
                                   style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
                               </div>
-                              {/* Refs */}
+                              {/* Refs — underline text links, no boxes */}
                               <div style={{ padding: "0 16px 10px" }}>
-                                <div style={{ fontSize: 10, color: "#475569", marginBottom: 6 }}>Image References (up to 3)</div>
-                                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                                  {[0,1,2].map(i=>{
-                                    const ref=imageRefs[i];
-                                    return (
-                                      <div key={i} onClick={()=>{if(!ref)imageRefInputRef.current?.click();}}
-                                        style={{ width: 48, height: 48, borderRadius: 8, border: "1px solid "+(ref?"rgba(103,232,249,0.25)":"rgba(255,255,255,0.1)"), background: "rgba(255,255,255,0.03)", cursor: ref?"default":"pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", flexShrink: 0 }}>
-                                        {ref
-                                          ? <><img src={ref.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={e=>{e.stopPropagation();setImageRefs(p=>p.filter((_,j)=>j!==i));}} style={{ position: "absolute", top: 1, right: 1, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 13, height: 13, fontSize: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button></>
-                                          : <div style={{ fontSize: 9, color: "#475569", textAlign: "center", lineHeight: 1.2 }}>Ref<br/>{i+1}</div>
-                                        }
-                                      </div>
-                                    );
-                                  })}
+                                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+                                  {imageRefs.length === 0
+                                    ? <button onClick={()=>imageRefInputRef.current?.click()} style={{ background: "none", border: "none", color: "#67e8f9", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>+ Add image reference</button>
+                                    : imageRefs.map((ref, i) => (
+                                        <span key={ref.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                          <img src={ref.url} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: "cover", border: "1px solid rgba(103,232,249,0.3)" }} />
+                                          <span style={{ fontSize: 10, color: "#67e8f9" }}>{ref.name.slice(0,18)}</span>
+                                          <button onClick={()=>setImageRefs(p=>p.filter((_,j)=>j!==i))} style={{ background: "none", border: "none", color: "#475569", fontSize: 10, cursor: "pointer", padding: 0 }}>✕</button>
+                                        </span>
+                                      ))
+                                  }
+                                  {imageRefs.length > 0 && imageRefs.length < 3 && (
+                                    <button onClick={()=>imageRefInputRef.current?.click()} style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>+ add more</button>
+                                  )}
                                 </div>
-                                {/* Upload/Media bar */}
+                                {/* Upload / URL bar */}
                                 <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                                  <button onClick={()=>imageRefInputRef.current?.click()}
-                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+                                  <button onClick={()=>allFilesInputRef.current?.click()}
+                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em", flexShrink: 0 }}>
                                     UPLOAD/MEDIA
                                   </button>
-                                  <input type="text" placeholder="Paste a video URL"
-                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                  <input
+                                    value={inlineUrl}
+                                    onChange={e=>setInlineUrl(e.target.value)}
+                                    onKeyDown={e=>{ if(e.key==="Enter") handleInlineUrl(inlineUrl); }}
+                                    placeholder={inlineUrlBusy ? "Analyzing…" : "Paste URL — YouTube, website, image or video"}
+                                    disabled={inlineUrlBusy}
+                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: inlineUrlBusy?"#475569":"#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                  {inlineUrl.trim() && !inlineUrlBusy && (
+                                    <button onClick={()=>handleInlineUrl(inlineUrl)} style={{ padding: "8px 12px", background: "rgba(103,232,249,0.1)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#67e8f9", fontSize: 11, cursor: "pointer" }}>→</button>
+                                  )}
                                 </div>
+                                {/* Hidden all-types file input */}
+                                <input ref={allFilesInputRef} type="file" accept="*/*" style={{ display: "none" }}
+                                  onChange={async e => { const f=e.target.files?.[0]; if(f) await handleAllFilesUpload(f); e.target.value=""; }} />
                               </div>
                               {/* Generate button */}
                               <div style={{ padding: "0 16px 12px", marginTop: "auto" }}>
@@ -2616,15 +2718,23 @@ Accept only if:
                                   placeholder={videoMode==="i2v"?"Slow gentle push-in. Natural blink. Soft parallax. No face movement. 5 seconds max.":"Create a short ordinary real world clip of a person in a real setting with natural motion."}
                                   style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "10px 12px", fontSize: 12, resize: "none", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
                               </div>
-                              {/* Upload/Media bar */}
+                              {/* Video upload / URL bar */}
                               <div style={{ padding: "0 16px 10px" }}>
                                 <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                                  <button onClick={()=>videoImageRefInputRef.current?.click()}
-                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+                                  <button onClick={()=>allFilesInputRef.current?.click()}
+                                    style={{ padding: "8px 14px", background: "rgba(103,232,249,0.15)", border: "none", color: "#67e8f9", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em", flexShrink: 0 }}>
                                     UPLOAD/MEDIA
                                   </button>
-                                  <input type="text" placeholder="Paste a video URL"
-                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                  <input
+                                    value={inlineUrl}
+                                    onChange={e=>setInlineUrl(e.target.value)}
+                                    onKeyDown={e=>{ if(e.key==="Enter") handleInlineUrl(inlineUrl); }}
+                                    placeholder={inlineUrlBusy ? "Analyzing…" : "Paste URL — YouTube, website, image or video"}
+                                    disabled={inlineUrlBusy}
+                                    style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: inlineUrlBusy?"#475569":"#94a3b8", fontSize: 11, padding: "8px 12px", outline: "none" }} />
+                                  {inlineUrl.trim() && !inlineUrlBusy && (
+                                    <button onClick={()=>handleInlineUrl(inlineUrl)} style={{ padding: "8px 12px", background: "rgba(103,232,249,0.1)", border: "none", borderLeft: "1px solid rgba(255,255,255,0.1)", color: "#67e8f9", fontSize: 11, cursor: "pointer" }}>→</button>
+                                  )}
                                 </div>
                               </div>
                               {/* Generate */}
@@ -2639,7 +2749,7 @@ Accept only if:
                         </div>
 
                         {/* Right iPhone — Concept 3 */}
-                        <IPhoneFrame slot={c3} ref={playbackRef2} label="iPhone 15 Pro Max #2" />
+                        <IPhoneFrame slot={c3} vidRef={playbackRef2} label="iPhone 15 Pro Max #2" />
 
                       </div>
 
