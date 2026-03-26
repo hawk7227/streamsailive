@@ -1770,7 +1770,158 @@ Accept only if:
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
           <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease" }}>
 
-            {/* Step Builder */}
+            {/* Left column: Creative Setup + Pipeline Steps */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* ── Creative Setup panel ── */}
+            <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>Creative Setup <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400 }}>(Required Before Run)</span></div>
+
+              {/* Studio tabs */}
+              <div style={{ display: "flex", gap: 4 }}>
+                {["Image Studio","Video Studio"].map(t => (
+                  <button key={t} onClick={()=>setCsFields(p=>({...p,csStudio:t}))}
+                    style={{ padding:"5px 12px", borderRadius:7, border:`1px solid ${csFields.csStudio===t?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.1)"}`, background:csFields.csStudio===t?"rgba(103,232,249,0.1)":"transparent", color:csFields.csStudio===t?"#67e8f9":"#64748b", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {/* 1. Intent */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>1. Intent</div>
+                {[
+                  { label:"Objective", key:"csObjective" },
+                  { label:"Audience",  key:"csAudience" },
+                  { label:"Platform",  key:"csPlatform" },
+                  { label:"Output",    key:"csOutputType" },
+                ].map(f => (
+                  <div key={f.key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                    <span style={{ fontSize:13, color:"#94a3b8", minWidth:80, flexShrink:0 }}>{f.label}</span>
+                    <input value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))}
+                      style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, color:"#e2e8f0", fontSize:13, padding:"7px 10px", outline:"none" }} />
+                  </div>
+                ))}
+              </div>
+
+              {/* 2. Scene */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>2. Scene</div>
+                {[
+                  { label:"Subject",     key:"csSubject" },
+                  { label:"Action",      key:"csAction" },
+                  { label:"Environment", key:"csEnvironment" },
+                ].map(f => (
+                  <div key={f.key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                    <span style={{ fontSize:13, color:"#94a3b8", minWidth:80, flexShrink:0 }}>{f.label}</span>
+                    <input value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))}
+                      style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, color:"#e2e8f0", fontSize:13, padding:"7px 10px", outline:"none" }} />
+                  </div>
+                ))}
+                <div style={{ display:"flex", gap:8 }}>
+                  {[
+                    { label:"Time of Day", key:"csTimeOfDay", opts:["morning","afternoon","evening","night"] },
+                    { label:"Camera",      key:"csCameraType", opts:["smartphone","dslr","film","documentary"] },
+                  ].map(f => (
+                    <div key={f.key} style={{ flex:1 }}>
+                      <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>{f.label}</div>
+                      <select value={csFields[f.key]??""} onChange={e=>setCsFields(p=>({...p,[f.key]:e.target.value}))}
+                        style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, color:"#e2e8f0", fontSize:12, padding:"6px 8px", outline:"none" }}>
+                        <option value="">—</option>
+                        {f.opts.map(o=><option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Realism Control */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>3. Realism Control</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                  <span style={{ fontSize:13, color:"#94a3b8", minWidth:80 }}>Mode</span>
+                  <select value={csRealism.mode} onChange={e=>setCsRealism(p=>({...p,mode:e.target.value as "STRICT"|"STANDARD"|"SOFT"|"RAW"}))}
+                    style={{ flex:1, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, color:"#e2e8f0", fontSize:13, padding:"6px 8px", outline:"none" }}>
+                    <option value="STRICT">STRICT</option>
+                    <option value="STANDARD">Standard</option>
+                    <option value="SOFT">Soft</option>
+                    <option value="RAW">RAW</option>
+                  </select>
+                </div>
+                {/* Imperfections */}
+                <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Imperfections</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px", marginBottom:8 }}>
+                  {(Object.keys(csRealism.imperfections) as (keyof typeof csRealism.imperfections)[]).map(k=>(
+                    <label key={k} style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>
+                      <input type="checkbox" checked={csRealism.imperfections[k]}
+                        onChange={e=>setCsRealism(p=>({...p,imperfections:{...p.imperfections,[k]:e.target.checked}}))} />
+                      <span style={{ fontSize:13, color:csRealism.imperfections[k]?"#e2e8f0":"#64748b" }}>{k.replace(/([A-Z])/g," $1").trim()}</span>
+                    </label>
+                  ))}
+                </div>
+                {/* Strict Negatives */}
+                <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Strict Negatives</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px", marginBottom:8 }}>
+                  {(Object.keys(csRealism.strictNegatives) as (keyof typeof csRealism.strictNegatives)[]).map(k=>(
+                    <label key={k} style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>
+                      <input type="checkbox" checked={csRealism.strictNegatives[k]}
+                        onChange={e=>setCsRealism(p=>({...p,strictNegatives:{...p.strictNegatives,[k]:e.target.checked}}))} />
+                      <span style={{ fontSize:13, color:csRealism.strictNegatives[k]?"#e2e8f0":"#64748b" }}>no {k.replace("no","").replace(/([A-Z])/g," $1").trim().toLowerCase()}</span>
+                    </label>
+                  ))}
+                </div>
+                {/* Strict Blocks */}
+                <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Strict Blocks</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px" }}>
+                  {(Object.keys(csRealism.strictBlocks) as (keyof typeof csRealism.strictBlocks)[]).map(k=>(
+                    <label key={k} style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>
+                      <input type="checkbox" checked={csRealism.strictBlocks[k]}
+                        onChange={e=>setCsRealism(p=>({...p,strictBlocks:{...p.strictBlocks,[k]:e.target.checked}}))} />
+                      <span style={{ fontSize:13, color:csRealism.strictBlocks[k]?"#e2e8f0":"#64748b" }}>no {k.replace("no","").replace(/([A-Z])/g," $1").trim().toLowerCase()}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Final Generation Prompt */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>4. Final Generation Prompt</div>
+                <textarea value={csFields.csFinalPrompt??""} onChange={e=>setCsFields(p=>({...p,csFinalPrompt:e.target.value}))}
+                  placeholder="Assembled prompt — or type manually..."
+                  rows={3}
+                  style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, color:"#e2e8f0", fontSize:12, padding:"8px 10px", outline:"none", resize:"vertical", lineHeight:1.5, boxSizing:"border-box" }} />
+                <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                  <button onClick={()=>gatedGeneration(()=>generateDualImage())} disabled={imageGenerating}
+                    style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid rgba(255,255,255,0.1)", background:"rgba(255,255,255,0.05)", color:"#94a3b8", fontSize:11, cursor:"pointer" }}>Generate Ideas</button>
+                  <button onClick={()=>setCsFields(p=>({...p,csFinalPrompt:[p.csSubject,p.csAction,p.csEnvironment].filter(Boolean).join(", ")}))}
+                    style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid rgba(255,255,255,0.1)", background:"rgba(255,255,255,0.05)", color:"#94a3b8", fontSize:11, cursor:"pointer" }}>Apply Template</button>
+                  <button style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid rgba(103,232,249,0.3)", background:"rgba(103,232,249,0.08)", color:"#67e8f9", fontSize:11, cursor:"pointer", fontWeight:600 }}>Make More Real</button>
+                </div>
+              </div>
+
+              {/* Run Pipeline + Upload guidance */}
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>gatedGeneration(()=>runFullGovernancePipeline())} disabled={pipelineRunning}
+                  style={{ flex:1, padding:"10px 0", borderRadius:10, border:"none", background:pipelineRunning?"rgba(103,232,249,0.3)":"rgba(103,232,249,0.9)", color:pipelineRunning?"#475569":"#000", fontSize:13, fontWeight:700, cursor:pipelineRunning?"not-allowed":"pointer" }}>
+                  {pipelineRunning ? "⏳ Running…" : "▶ Run Pipeline"}
+                </button>
+                <button onClick={()=>guidanceInputRef.current?.click()}
+                  style={{ padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.1)", background:"rgba(255,255,255,0.04)", color:"#94a3b8", fontSize:12, cursor:"pointer" }}>
+                  ↑ upload rule/guidance
+                </button>
+              </div>
+
+              {/* Pipeline Prompt */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Pipeline Prompt</div>
+                <textarea value={csFields.csPipelinePrompt??""} onChange={e=>setCsFields(p=>({...p,csPipelinePrompt:e.target.value}))}
+                  placeholder="Describe what you want the pipeline to generate..."
+                  rows={3}
+                  style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:`1px solid ${csFields.csPipelinePrompt?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"}`, borderRadius:8, color:"#e2e8f0", fontSize:11, padding:"8px 10px", outline:"none", resize:"vertical", lineHeight:1.5, boxSizing:"border-box" }} />
+              </div>
+            </div>
+
+            {/* ── Step Builder */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 6 })}>
               <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.05em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 10 }}>Pipeline Steps</div>
               {steps.map(step => (
@@ -1795,6 +1946,8 @@ Accept only if:
                 + Add Step
               </button>
             </div>
+
+            </div>{/* end left column wrapper */}
 
             {/* Step Config Rail — transforms into Live Engine when pipeline runs */}
             <div style={P({ overflow: "hidden", display: "flex", flexDirection: "column" })}>
