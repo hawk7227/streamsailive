@@ -317,6 +317,7 @@ Accept only if:
   });
 
   // ── Creative Setup state ──────────────────────────────────────────────────
+  const [csOpen, setCsOpen] = React.useState(true);
   const [csFields, setCsFields] = React.useState<Record<string,string>>(() => {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(window.localStorage.getItem("streamsai:cs:fields") ?? "{}"); } catch { return {}; }
@@ -1786,8 +1787,13 @@ Accept only if:
 
             {/* ── Creative Setup panel ── */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>Creative Setup <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400 }}>(Required Before Run)</span></div>
+              <button onClick={() => setCsOpen(o => !o)}
+                style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"none", border:"none", cursor:"pointer", padding:0, width:"100%" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>Creative Setup <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400 }}>(Required Before Run)</span></span>
+                <span style={{ fontSize: 12, color: "#475569" }}>{csOpen ? "▲" : "▼"}</span>
+              </button>
 
+              {csOpen && (<>
               {/* Studio tabs */}
               <div style={{ display: "flex", gap: 4 }}>
                 {["Image Studio","Video Studio"].map(t => (
@@ -1930,6 +1936,7 @@ Accept only if:
                   rows={3}
                   style={{ width:"100%", background:"rgba(255,255,255,0.04)", border:`1px solid ${csFields.csPipelinePrompt?"rgba(103,232,249,0.3)":"rgba(255,255,255,0.08)"}`, borderRadius:8, color:"#e2e8f0", fontSize:11, padding:"8px 10px", outline:"none", resize:"vertical", lineHeight:1.5, boxSizing:"border-box" }} />
               </div>
+              </>)}
             </div>
 
             {/* ── Step Builder */}
@@ -2257,7 +2264,7 @@ Accept only if:
                       )}
 
                       {/* 3-column: iPhone | MediaEditor | iPhone */}
-                      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: 12, padding: "12px 12px 8px", height: 620, alignItems: "stretch" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 220px", gap: 8, padding: "8px 8px 6px", height: 640, alignItems: "stretch" }}>
 
                         {/* Left iPhone — Concept 1 */}
                         <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"
