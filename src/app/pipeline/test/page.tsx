@@ -1627,6 +1627,17 @@ Accept only if:
       `}</style>
       <input ref={fileInputRef} type="file" style={{ display: "none" }}
         onChange={e => { const f = e.target.files?.[0]; if (f) log(`File: ${f.name}`); }} />
+      {/* Hidden file inputs for all upload triggers */}
+      <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
+        onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setImageRefs,3));e.target.value="";}}/>
+      <input ref={videoImageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
+        onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setVideoImageRefs,2));e.target.value="";}}/>
+      <input ref={videoVideoRefInputRef} type="file" accept="video/*" style={{display:"none"}}
+        onChange={e=>{const f=e.target.files?.[0];if(f)handleVideoRefUpload(f);e.target.value="";}}/>
+      <input ref={allFilesInputRef} type="file" accept="*/*" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(f) await handleAllFilesUpload(f); e.target.value=""; }} />
+      <input ref={guidanceInputRef} type="file" accept=".txt,.md,.json,.pdf" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(f) await handleGuidanceUpload(f); e.target.value=""; }} />
 
       <div style={s}>
         <div style={{ maxWidth: 1720, margin: "0 auto" }}>
@@ -1771,7 +1782,7 @@ Accept only if:
           <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
 
             {/* ── Creative Setup panel ── */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
@@ -2246,7 +2257,7 @@ Accept only if:
                       )}
 
                       {/* 3-column: iPhone | MediaEditor | iPhone */}
-                      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 16, padding: "12px 12px 8px", height: 580, alignItems: "stretch" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: 12, padding: "12px 12px 8px", height: 620, alignItems: "stretch" }}>
 
                         {/* Left iPhone — Concept 1 */}
                         <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"

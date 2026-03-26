@@ -646,7 +646,7 @@ export default function MediaEditor({
 
       {/* ══ IMAGE EDITOR ══ */}
       {mode === "image" && (
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
           {/* Left toolbar */}
           <div style={{ width: 46, background: "rgba(0,0,0,0.2)", borderRight: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "8px 0", flexShrink: 0 }}>
             {([
@@ -665,7 +665,7 @@ export default function MediaEditor({
 
           {/* Canvas */}
           <div
-            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "transparent", transition: "background 150ms", minHeight: 0, minWidth: 0 }}
+            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "#111827", transition: "background 150ms", minHeight: 0, minWidth: 0 }}
             onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
             onDragLeave={() => setIsDraggingOver(false)}
             onDrop={handleCanvasDrop}
