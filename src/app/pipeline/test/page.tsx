@@ -255,6 +255,20 @@ Accept only if:
   ]);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantBusy, setAssistantBusy] = useState(false);
+  const [assistantAttachments, setAssistantAttachments] = useState<Array<{type:string;text?:string;image_url?:{url:string}}>>([]);
+  const [assistantStreamText, setAssistantStreamText] = useState("");
+  const [assistantProvider, setAssistantProvider] = useState<"openai"|"anthropic">(() => {
+    if (typeof window === "undefined") return "openai";
+    return (typeof localStorage !== "undefined" ? localStorage.getItem("streams_assistant_provider") : null) as "openai"|"anthropic" ?? "openai";
+  });
+  const assistantImgRef = React.useRef<HTMLInputElement>(null);
+  const assistantVidRef = React.useRef<HTMLInputElement>(null);
+  const assistantDocRef = React.useRef<HTMLInputElement>(null);
+  const assistantAudioRef = React.useRef<HTMLInputElement>(null);
+  const [assistantConvId, setAssistantConvId] = useState<string|undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    return typeof localStorage !== "undefined" ? localStorage.getItem("streams_conv_id") ?? undefined : undefined;
+  });
 
   // Intake
   const [activeIntake, setActiveIntake] = useState<IntakeType>(null);
@@ -1243,70 +1257,119 @@ Accept only if:
   // ── AI assistant ──────────────────────────────────────────────────────────
   async function sendAssistantMessage() {
     const text = assistantInput.trim();
-    if (!text || assistantBusy) return;
+    if ((!text && assistantAttachments.length === 0) || assistantBusy) return;
     setAssistantInput("");
     setAssistantBusy(true);
-    setAssistantMessages(p => [...p, { role: "user", content: text }]);
+    setAssistantStreamText("");
+
+    // Build multimodal content
+    const userContent = [
+      ...(text ? [{ type: "text", text }] : []),
+      ...assistantAttachments,
+    ];
+    const userMsg = { role: "user" as const, content: userContent.length === 1 && userContent[0].type === "text" ? text : JSON.stringify(userContent) };
+    setAssistantMessages(p => [...p, userMsg]);
+    setAssistantAttachments([]);
+
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...assistantMessages, { role: "user", content: text }],
+          messages: [...assistantMessages, { role: "user", content: userContent.length === 1 ? text : userContent }],
+          conversationId: assistantConvId,
           context: {
             type: "pipeline",
-            prompt: stepPrompts[selectedStepId] ?? "",
+            prompt: stepPrompts[selectedStepId] ?? imagePrompt ?? "",
             settings: { niche: nicheId, concept: selectedConceptId },
+            provider: assistantProvider,
+            // Full pipeline state
+            pipelineName,
             nicheId,
+            pipelineMode,
+            outputMode,
+            pipelineRunning,
             currentStepId: selectedStepId,
             selectedConceptId,
+            steps: steps.map(s => ({ id: s.id, name: s.name, state: s.state, error: s.error })),
             stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
-            intakeAnalysis: intakeAnalysis ?? undefined,
-            // Live error state — assistant uses this to diagnose and guide fixes
-            conceptErrors: Object.fromEntries(
-              Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
-            ),
-            conceptStatuses: Object.fromEntries(
-              Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
-            ),
-            hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
             imageProvider,
+            videoProvider,
+            videoMode,
+            imagePrompt,
+            videoPrompt,
+            imageResult,
+            videoResult,
+            conceptOutputs: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, { image: o.image, video: o.video, status: o.status, error: o.error }])),
+            approvedOutputs,
+            csFields,
+            csRealism,
+            intakeAnalysis: intakeAnalysis ?? undefined,
+            conceptErrors: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])),
+            hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
           },
         }),
       });
-      const data = await res.json() as { message?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
-      const msg = data.message ?? "Done.";
-      const actionCount = (data.actions ?? []).length;
-      setAssistantMessages(p => [...p, { role: "assistant", content: msg + (actionCount > 0 ? ` (executing ${actionCount} action${actionCount > 1 ? "s" : ""}...)` : "") }]);
-      if (actionCount > 0) log(`Assistant: ${actionCount} action(s) — ${(data.actions ?? []).map(a => a.type).join(", ")}`);
-      // Execute actions — fall back to selectedConceptId when action omits it
-      for (const action of (data.actions ?? [])) {
-        const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
-        if (action.type === "generate_image") {
-          await generateImage(cid);
-        } else if (action.type === "generate_video") {
-          await generateVideo(cid);
-        } else if (action.type === "generate_i2v") {
-          await generateVideo(cid);
-        } else if (action.type === "update_image_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
-        } else if (action.type === "update_strategy_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
-        } else if (action.type === "update_copy_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
-        } else if (action.type === "run_pipeline") {
-          await runPipeline();
-        } else if (action.type === "select_concept") {
-          setSelectedConceptId(cid);
-        } else if (action.type === "open_step_config" && action.payload.stepId) {
-          setSelectedStepId(action.payload.stepId as string);
-          setStepConfigOpen(true);
-        } else if (action.type === "set_niche" && action.payload.nicheId) {
-          setNicheId(action.payload.nicheId as string);
-        } else if (action.type === "update_prompt" && action.payload.new_prompt) {
-          setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      // SSE streaming
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split("\\n").filter(l => l.startsWith("data: "))) {
+            try {
+              const ev = JSON.parse(line.slice(6)) as { type: string; delta?: string; tool?: string; input?: Record<string,unknown>; result?: string; action?: { type: string; payload: Record<string,unknown> }; message?: string; conversationId?: string };
+              if (ev.type === "text" && ev.delta) {
+                fullText += ev.delta;
+                setAssistantStreamText(fullText);
+              } else if (ev.type === "tool_call" && ev.tool) {
+                log(`🔧 ${ev.tool}...`);
+              } else if (ev.type === "tool_result" && ev.tool) {
+                log(`✓ ${ev.tool} done`);
+              } else if (ev.type === "action" && ev.action) {
+                const action = ev.action;
+                const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
+                if (action.type === "generate_image") generateImage(cid).catch(console.error);
+                else if (action.type === "generate_video") generateVideo(cid).catch(console.error);
+                else if (action.type === "run_pipeline") runPipeline().catch(console.error);
+                else if (action.type === "run_step") runPipeline().catch(console.error);
+                else if (action.type === "update_image_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
+                else if (action.type === "update_strategy_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
+                else if (action.type === "update_copy_prompt" && action.payload.value) setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
+                else if (action.type === "modify_prompt" && action.payload.value) {
+                  const field = action.payload.field as string;
+                  if (field === "imagePrompt") setImagePrompt(action.payload.value as string);
+                  else if (field === "videoPrompt") setVideoPrompt(action.payload.value as string);
+                  else setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.value as string }));
+                }
+                else if (action.type === "select_concept") setSelectedConceptId(cid);
+                else if (action.type === "open_step_config" && action.payload.stepId) { setSelectedStepId(action.payload.stepId as string); setStepConfigOpen(true); }
+                else if (action.type === "set_niche" && action.payload.nicheId) setNicheId(action.payload.nicheId as string);
+                else if (action.type === "update_prompt" && action.payload.new_prompt) setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
+                else if (action.type === "approve_output" && action.payload.url) approveOutput(action.payload.type as "image"|"video"|"script", action.payload.url as string);
+              } else if (ev.type === "error" && ev.message) {
+                fullText += `
+⚠ ${ev.message}`;
+                setAssistantStreamText(fullText);
+              } else if (ev.type === "done" && ev.conversationId) {
+                setAssistantConvId(ev.conversationId);
+                if (typeof localStorage !== "undefined") localStorage.setItem("streams_conv_id", ev.conversationId);
+              }
+            } catch { /* skip malformed */ }
+          }
         }
       }
+
+      setAssistantMessages(p => [...p, { role: "assistant", content: fullText || "Done." }]);
+      setAssistantStreamText("");
+
     } catch (e) {
       setAssistantMessages(p => [...p, { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }]);
     }
@@ -1661,6 +1724,15 @@ Accept only if:
       `}</style>
       <input ref={fileInputRef} type="file" style={{ display: "none" }}
         onChange={e => { const f = e.target.files?.[0]; if (f) log(`File: ${f.name}`); }} />
+      {/* Assistant per-type file inputs */}
+      <input ref={assistantImgRef} type="file" accept="image/*" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ const url=ev.target?.result as string; setAssistantAttachments(p=>[...p,{type:"image_url",image_url:{url}}]); }; r.readAsDataURL(f); e.target.value=""; }} />
+      <input ref={assistantVidRef} type="file" accept="video/*" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const url=URL.createObjectURL(f); setAssistantAttachments(p=>[...p,{type:"text",text:`[VIDEO: ${f.name}] ${url}`}]); e.target.value=""; }} />
+      <input ref={assistantDocRef} type="file" accept=".pdf,.txt,.md,.json,.csv" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const text=await f.text().catch(()=>`[${f.name}]`); setAssistantAttachments(p=>[...p,{type:"text",text:`[DOC: ${f.name}]\n${text.slice(0,4000)}`}]); e.target.value=""; }} />
+      <input ref={assistantAudioRef} type="file" accept="audio/*" style={{display:"none"}}
+        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const url=URL.createObjectURL(f); setAssistantAttachments(p=>[...p,{type:"text",text:`[AUDIO: ${f.name}] ${url}`}]); e.target.value=""; }} />
       {/* Hidden file inputs for all upload triggers */}
       <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
         onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setImageRefs,3));e.target.value="";}}/>
@@ -2662,7 +2734,13 @@ Accept only if:
               <div style={{ fontSize: 12, fontWeight: 700, color: "#67e8f9", letterSpacing: "0.1em" }}>AI ASSISTANT</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {(["url", "image", "video", "doc", "audio"] as IntakeType[]).map(t => (
-                  <button key={t!} onClick={() => { setActiveIntake(a => a === t ? null : t); if (t !== "url") fileInputRef.current?.click(); }}
+                  <button key={t!} onClick={() => {
+                    setActiveIntake(a => a === t ? null : t);
+                    if (t === "image") assistantImgRef.current?.click();
+                    else if (t === "video") assistantVidRef.current?.click();
+                    else if (t === "doc") assistantDocRef.current?.click();
+                    else if (t === "audio") assistantAudioRef.current?.click();
+                  }}
                     style={{ background: activeIntake === t ? "rgba(34,211,238,0.15)" : "rgba(255,255,255,0.05)", border: "1px solid " + (activeIntake === t ? "rgba(34,211,238,0.5)" : "rgba(255,255,255,0.1)"), color: activeIntake === t ? "#67e8f9" : "#475569", borderRadius: 5, padding: "2px 7px", fontSize: 9, cursor: "pointer", fontWeight: 600, textTransform: "uppercase" }}>
                     {t}
                   </button>
@@ -2775,7 +2853,36 @@ Accept only if:
                   </div>
                 </div>
               ))}
+              {/* Streaming text */}
+              {assistantStreamText && assistantBusy && (
+                <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                  <div style={{ maxWidth: "85%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "6px 10px", fontSize: 11, color: "#cbd5e1", lineHeight: 1.45 }}>
+                    {assistantStreamText}<span style={{ display: "inline-block", width: 6, height: 11, background: "#67e8f9", marginLeft: 2, animation: "pulse 1s infinite" }} />
+                  </div>
+                </div>
+              )}
+              {/* Attachment previews */}
+              {assistantAttachments.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "4px 0" }}>
+                  {assistantAttachments.map((a, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(103,232,249,0.1)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 5, padding: "2px 7px", fontSize: 9, color: "#67e8f9" }}>
+                      {a.type === "image_url" ? "🖼 Image" : `📎 ${(a.text ?? "").slice(0, 20)}…`}
+                      <button onClick={() => setAssistantAttachments(p => p.filter((_,j) => j!==i))} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 10, padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div ref={assistantEndRef} />
+            </div>
+            {/* Provider toggle */}
+            <div style={{ padding: "4px 12px", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 9, color: "#334155", marginRight: 4 }}>Model:</span>
+              {(["openai","anthropic"] as const).map(p => (
+                <button key={p} onClick={() => { setAssistantProvider(p); if (typeof localStorage !== "undefined") localStorage.setItem("streams_assistant_provider", p); }}
+                  style={{ padding: "1px 7px", borderRadius: 4, border: `1px solid ${assistantProvider===p?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.08)"}`, background: assistantProvider===p?"rgba(103,232,249,0.1)":"transparent", color: assistantProvider===p?"#67e8f9":"#475569", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>
+                  {p === "openai" ? "GPT-4o" : "Claude"}
+                </button>
+              ))}
             </div>
             {/* Input */}
             <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 7 }}>
