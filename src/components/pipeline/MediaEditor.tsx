@@ -622,7 +622,7 @@ export default function MediaEditor({
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   const S = {
-    root: { display: "flex", flexDirection: "column" as const, height: "100%", minHeight: 0, background: "rgba(255,255,255,0.01)", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)" },
+    root: { display: "flex", flexDirection: "column" as const, height: "100%", width: "100%", background: "rgba(255,255,255,0.01)", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)" },
     header: { display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 },
     modeBtn: (active: boolean) => ({ padding: "4px 12px", borderRadius: 6, border: `1px solid ${active ? "rgba(103,232,249,0.4)" : "rgba(255,255,255,0.1)"}`, background: active ? "rgba(103,232,249,0.12)" : "transparent", color: active ? "#67e8f9" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }),
     toolBtn: (active: boolean) => ({ width: 34, height: 34, borderRadius: 8, border: `1px solid ${active ? "rgba(103,232,249,0.4)" : "rgba(255,255,255,0.08)"}`, background: active ? "rgba(103,232,249,0.12)" : "rgba(255,255,255,0.03)", color: active ? "#67e8f9" : "#64748b", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }),
@@ -665,7 +665,7 @@ export default function MediaEditor({
 
           {/* Canvas */}
           <div
-            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "transparent", transition: "background 150ms", minHeight: 0 }}
+            style={{ flex: 1, position: "relative", overflow: "hidden", background: isDraggingOver ? "rgba(103,232,249,0.06)" : "transparent", transition: "background 150ms", minHeight: 0, minWidth: 0 }}
             onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
             onDragLeave={() => setIsDraggingOver(false)}
             onDrop={handleCanvasDrop}

@@ -1768,7 +1768,7 @@ Accept only if:
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease" }}>
+          <div style={{ display: "grid", gridTemplateColumns: `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2178,7 +2178,7 @@ Accept only if:
                   const c3 = conceptOutputs.c3;
 
                   const IPhoneFrame = ({ slot, vidRef, label, onEdit }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void }) => (
-                    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 480 }}>
+                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>{label}</div>
                       {/* iPhone shell — stretches to fill */}
                       <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
@@ -2221,7 +2221,7 @@ Accept only if:
                   );
 
                   return (
-                    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }}>
 
                       {/* Destination picker modal */}
                       {showDestPicker && pendingResult && (
@@ -2246,7 +2246,7 @@ Accept only if:
                       )}
 
                       {/* 3-column: iPhone | MediaEditor | iPhone */}
-                      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 16, flex: 1, padding: "12px 12px 8px", minHeight: 500, alignItems: "stretch" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 16, padding: "12px 12px 8px", height: 580, alignItems: "stretch" }}>
 
                         {/* Left iPhone — Concept 1 */}
                         <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"
@@ -2258,7 +2258,7 @@ Accept only if:
                           }} />
 
                         {/* Center — MediaEditor (Fabric.js image + video editor) */}
-                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 480, minWidth: 0 }}>
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
                           <MediaEditor
                             imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
                             videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
