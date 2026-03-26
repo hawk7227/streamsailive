@@ -2234,22 +2234,24 @@ Accept only if:
                   position: "absolute", top: "50%", right: epOpen ? epW : 0,
                   transform: "translateY(-50%)",
                   zIndex: 201,
-                  width: 20, height: 64,
-                  background: "#09101a",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  width: 28, height: 96,
+                  background: "linear-gradient(180deg, rgba(45,212,160,0.25), rgba(45,212,160,0.1))",
+                  border: "1px solid rgba(45,212,160,0.4)",
                   borderRight: "none",
-                  borderRadius: "6px 0 0 6px",
-                  color: "rgba(255,255,255,0.5)",
+                  borderRadius: "8px 0 0 8px",
+                  color: "#2dd4a0",
                   cursor: "pointer",
-                  fontSize: 9,
+                  fontSize: 10,
+                  fontWeight: 700,
                   writingMode: "vertical-rl",
-                  letterSpacing: "0.08em",
+                  letterSpacing: "0.1em",
                   transition: epDragging ? "none" : "right 200ms cubic-bezier(.4,0,.2,1)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0,
+                  boxShadow: "-2px 0 12px rgba(45,212,160,0.15)",
                 }}
               >
-                {epOpen ? "›" : "‹"} EP
+                {epOpen ? "› CLOSE" : "‹ EDITOR"}
               </button>
               {/* Tabs */}
               <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "0 16px" }}>
