@@ -93,6 +93,8 @@ export default function PipelineTestPage() {
   const [selectedStepId, setSelectedStepId] = useState<string>("strategy");
   const [stepConfigOpen, setStepConfigOpen] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
+  const [iPhoneWidth, setIPhoneWidth] = useState(220);
+  const iphoneDragRef = React.useRef<{side:"left"|"right";startX:number;startW:number}|null>(null);
 
   // Step prompts — keyed by step id
   const [stepPrompts, setStepPrompts] = useState<Record<string, string>>({
@@ -2384,8 +2386,8 @@ Accept only if:
                         </div>
                       )}
 
-                      {/* 3-column: iPhone | MediaEditor | iPhone */}
-                      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 220px", gap: 8, padding: "8px 8px 6px", height: 640, alignItems: "stretch" }}>
+                      {/* 3-column: iPhone | handle | MediaEditor | handle | iPhone */}
+                      <div style={{ display: "grid", gridTemplateColumns: `${iPhoneWidth}px 8px 1fr 8px ${iPhoneWidth}px`, gap: 0, padding: "8px 8px 6px", height: 640, alignItems: "stretch" }}>
 
                         {/* Left iPhone — Concept 1 */}
                         <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"
@@ -2396,6 +2398,24 @@ Accept only if:
                             log("✓ iPhone #1 loaded into editor");
                           }} />
 
+                        {/* Left drag handle */}
+                        <div
+                          style={{ cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}
+                          onPointerDown={e => {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            iphoneDragRef.current = { side: "left", startX: e.clientX, startW: iPhoneWidth };
+                          }}
+                          onPointerMove={e => {
+                            if (!iphoneDragRef.current) return;
+                            const delta = e.clientX - iphoneDragRef.current.startX;
+                            const adj = iphoneDragRef.current.side === "left" ? delta : -delta;
+                            setIPhoneWidth(Math.max(140, Math.min(360, iphoneDragRef.current.startW + adj)));
+                          }}
+                          onPointerUp={() => { iphoneDragRef.current = null; }}
+                        >
+                          <div style={{ width: 2, height: "60%", background: "rgba(255,255,255,0.08)", borderRadius: 1 }} />
+                        </div>
+
                         {/* Center — MediaEditor (Fabric.js image + video editor) */}
                         <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
                           <MediaEditor
@@ -2404,6 +2424,24 @@ Accept only if:
                             onSendToScreen={(url, type) => triggerDestPicker(url, type)}
                             onLog={log}
                           />
+                        </div>
+
+                        {/* Right drag handle */}
+                        <div
+                          style={{ cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}
+                          onPointerDown={e => {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            iphoneDragRef.current = { side: "right", startX: e.clientX, startW: iPhoneWidth };
+                          }}
+                          onPointerMove={e => {
+                            if (!iphoneDragRef.current) return;
+                            const delta = e.clientX - iphoneDragRef.current.startX;
+                            const adj = iphoneDragRef.current.side === "right" ? -delta : delta;
+                            setIPhoneWidth(Math.max(140, Math.min(360, iphoneDragRef.current.startW + adj)));
+                          }}
+                          onPointerUp={() => { iphoneDragRef.current = null; }}
+                        >
+                          <div style={{ width: 2, height: "60%", background: "rgba(255,255,255,0.08)", borderRadius: 1 }} />
                         </div>
 
                         {/* Right iPhone — Concept 3 */}
