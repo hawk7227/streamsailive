@@ -1,0 +1,80 @@
+"use client";
+
+import React from "react";
+import { useAssistantWindow } from "./useAssistantWindow";
+
+interface AIAssistantShellProps {
+  title?: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+  onClose?: () => void;
+}
+
+export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed, streaming, multimodal", children, footer, onClose }: AIAssistantShellProps) {
+  const { state, shellStyle, toggleOpen, startDrag, startResize } = useAssistantWindow();
+
+  if (!state.open) {
+    return (
+      <button
+        type="button"
+        onClick={toggleOpen}
+        className="fixed bottom-6 right-6 z-[70] rounded-full border border-white/10 bg-[#0A0C10]/90 px-5 py-3 text-sm font-semibold text-white shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+      >
+        Open assistant
+      </button>
+    );
+  }
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[70]">
+      <section
+        className="pointer-events-auto absolute overflow-hidden rounded-[28px] border border-white/12 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_rgba(255,255,255,0.02)_32%,_rgba(6,7,10,0.96)_72%)] shadow-[0_40px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+        style={shellStyle}
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_25%,transparent_75%,rgba(255,255,255,0.02))]" />
+        <div className="relative flex h-full flex-col">
+          <header
+            onPointerDown={startDrag}
+            className="flex cursor-grab items-start justify-between border-b border-white/8 px-5 py-4 active:cursor-grabbing"
+          >
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Floating AI chat</div>
+              <div className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">{title}</div>
+              <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={toggleOpen} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">Minimize</button>
+              <button type="button" onClick={onClose} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">Close</button>
+            </div>
+          </header>
+
+          <div className="relative min-h-0 flex-1">{children}</div>
+
+          <footer className="relative border-t border-white/8 px-4 py-4">{footer}</footer>
+
+          <button
+            type="button"
+            onPointerDown={startResize("right")}
+            className="absolute right-0 top-14 h-[calc(100%-64px)] w-3 cursor-ew-resize opacity-0"
+            aria-label="Resize assistant width"
+          />
+          <button
+            type="button"
+            onPointerDown={startResize("bottom")}
+            className="absolute bottom-0 left-0 h-3 w-[calc(100%-16px)] cursor-ns-resize opacity-0"
+            aria-label="Resize assistant height"
+          />
+          <button
+            type="button"
+            onPointerDown={startResize("corner")}
+            className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize"
+            aria-label="Resize assistant"
+          >
+            <span className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-sm border border-white/20 bg-white/10" />
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}

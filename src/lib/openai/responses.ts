@@ -1,16 +1,21 @@
 import { getSiteConfig } from '@/lib/config';
+import { detectModeFromText } from '@/lib/enforcement/modeEngine';
+import { runValidators } from '@/lib/enforcement/validatorRunner';
+import { validateChatResponse } from '@/lib/enforcement/validators/chat';
+import type { AssistantMode } from '@/lib/enforcement/types';
+import { formatIntegratedContext } from '@/lib/ai-chat/context/buildIntegratedContext';
+import type { IntegratedChatContextParts } from '@/lib/ai-chat/context/types';
 
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } };
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
 
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | ContentBlock[];
+  tool_call_id?: string;
 }
 
 export interface PipelineContext {
@@ -33,351 +38,239 @@ export interface PipelineContext {
   imageUrl?: string;
   videoUrl?: string;
   sessionId?: string;
+  provider?: string;
+  extraKeys?: Record<string, string>;
+  integratedContext?: IntegratedChatContextParts;
 }
 
 export interface AssistantAction {
-  type: ActionType;
+  type:
+    | 'update_prompt'
+    | 'update_settings'
+    | 'update_strategy_prompt'
+    | 'update_copy_prompt'
+    | 'update_validator_prompt'
+    | 'update_image_prompt'
+    | 'update_i2v_prompt'
+    | 'update_qa_instruction'
+    | 'generate_image'
+    | 'generate_video'
+    | 'generate_i2v'
+    | 'run_step'
+    | 'run_pipeline'
+    | 'select_concept'
+    | 'approve_output'
+    | 'open_step_config'
+    | 'set_niche';
   payload: Record<string, unknown>;
 }
 
 export interface AssistantResponse {
   message: string;
   actions: AssistantAction[];
-  mode: ResponseMode;
+  mode: AssistantMode;
   reply: string;
   action?: AssistantAction;
+  ledger?: unknown;
 }
 
-type ResponseMode = "conversation" | "action" | "extraction" | "status";
-
-type ActionType =
-  | "update_prompt"
-  | "update_settings"
-  | "update_strategy_prompt"
-  | "update_copy_prompt"
-  | "update_validator_prompt"
-  | "update_image_prompt"
-  | "update_i2v_prompt"
-  | "update_qa_instruction"
-  | "generate_image"
-  | "generate_video"
-  | "generate_i2v"
-  | "run_step"
-  | "run_pipeline"
-  | "select_concept"
-  | "approve_output"
-  | "open_step_config"
-  | "set_niche";
-
-// ─── Status-only response detection ──────────────────────────────────────────
-
-const STATUS_ONLY_PATTERNS = [
-  /^done\.?$/i,
-  /^completed\.?$/i,
-  /^finished\.?$/i,
-  /^ok\.?$/i,
-  /^sure\.?$/i,
-  /^alright\.?$/i,
-  /^no action needed\.?$/i,
-  /^nothing to do\.?$/i,
-];
-
-function isStatusOnly(text: string): boolean {
-  const t = text.trim();
-  return t.length < 20 || STATUS_ONLY_PATTERNS.some(p => p.test(t));
+function extractTextContent(content: string | ContentBlock[]): string {
+  if (typeof content === 'string') return content;
+  return content.filter((block): block is { type: 'text'; text: string } => block.type === 'text').map((block) => block.text).join(' ');
 }
 
-// ─── Intent classifier ────────────────────────────────────────────────────────
-
-const ACTION_KEYWORDS = [
-  "generate", "create", "make", "run", "trigger", "deploy", "push",
-  "approve", "select", "start", "execute", "launch", "build",
-];
-const STATUS_KEYWORDS = [
-  "is it done", "status", "are you done", "finished yet", "complete yet",
-];
-const EXTRACTION_KEYWORDS = [
-  "extract", "parse", "list all", "give me json", "return json",
-  "structured output", "schema",
-];
-
-function classifyIntent(messages: ChatMessage[]): ResponseMode {
-  const lastUser = [...messages].reverse().find(m => m.role === "user");
-  if (!lastUser) return "conversation";
-  const text = (typeof lastUser.content === "string"
-    ? lastUser.content
-    : lastUser.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map(b => b.text).join(" ")
-  ).toLowerCase();
-
-  if (STATUS_KEYWORDS.some(k => text.includes(k))) return "status";
-  if (EXTRACTION_KEYWORDS.some(k => text.includes(k))) return "extraction";
-  if (ACTION_KEYWORDS.some(k => text.includes(k))) return "action";
-  return "conversation";
+function getLastUserText(messages: ChatMessage[]): string {
+  const lastUser = [...messages].reverse().find((message) => message.role === 'user');
+  return lastUser ? extractTextContent(lastUser.content) : '';
 }
-
-// ─── Provider knowledge ───────────────────────────────────────────────────────
-
-const PROVIDER_KNOWLEDGE = `
-KLING T2V: ≤50 words. Subject+Action+Environment+Camera+Mood. Include negative prompt.
-KLING I2V: ≤40 words. Motion ONLY — never re-describe the image.
-RUNWAY T2V: ≤1000 chars. No separate negative prompts.
-TELEHEALTH MOTION BANNED: fast zoom, whip pan, face distortion, lip sync, mouth animation.
-TELEHEALTH MOTION ALLOWED: slow push-in, gentle pan, soft parallax, natural blink.
-`.trim();
-
-// ─── Mode-specific system prompts ─────────────────────────────────────────────
-
-function buildConversationPrompt(context: PipelineContext, pipelineInfo: string, settingsInfo: string): string {
-  return `You are STREAMS — an expert AI assistant and pipeline director for telehealth content production.
-
-You help users understand, debug, plan, and execute their content pipelines.
-
-RESPONSE RULES:
-- Answer the user's actual question directly and completely
-- Respond the way a strong human expert would in chat — natural, direct, thorough
-- Never compress your answer into a status word like "Done." or "Completed."
-- Never say "verified", "confirmed", or "working" unless you actually checked through a tool — if you haven't checked, say so explicitly
-- Give at minimum: a direct answer, an explanation tied to the question, and uncertainty where it exists
-- If the user asks about capabilities, list them fully and honestly
-- If the user asks to debug, give structured findings: what exists, what is broken, what is missing, confidence level
-
-HONESTY RULES:
-- Never claim to have verified something you did not actually check
-- If you do not know, say exactly that
-- Separate what you confirmed from what you inferred from what you assumed
-
-CURRENT PIPELINE STATE:
-${pipelineInfo || "No pipeline context loaded"}
-
-CURRENT SETTINGS: ${settingsInfo || "none"}
-CURRENT PROMPT: ${context.prompt || "none"}
-
-PROVIDER KNOWLEDGE:
-${PROVIDER_KNOWLEDGE}
-
-Respond in plain natural language. No JSON envelope. No action wrapper.`;
-}
-
-function buildActionPrompt(context: PipelineContext, pipelineInfo: string, settingsInfo: string): string {
-  return `You are STREAMS — an expert AI pipeline director for telehealth content production.
-
-CRITICAL: When you see failed concepts or errors in the pipeline state, your FIRST response must:
-1. State clearly what failed and exactly why
-2. Give the specific fix in plain language
-3. Tell the user exactly what to do next
-
-Common errors and their fixes:
-- "Unauthorized" from OpenAI → API key is wrong or expired. Fix: check DigitalOcean env vars.
-- "gpt-image-1" model error → requires special org access. Revert to dall-e-3.
-- "Generation failed" → Check the Logs tab for the specific error message.
-- Images look too polished/AI → Realism sanitizer is active. Try regenerating.
-
-PIPELINE STEPS (in order):
-1. creativeStrategy — brand and audience strategy
-2. copyGeneration — 3 compliant copy variants
-3. validator — regulatory compliance check
-4. imageryGeneration — image generation
-5. imageToVideoStep — image-to-video
-6. assetLibrary — organise all outputs
-7. qualityAssurance — final compliance QA
-
-PROVIDER KNOWLEDGE:
-${PROVIDER_KNOWLEDGE}
-
-CURRENT PIPELINE STATE:
-${pipelineInfo || "No pipeline context loaded"}
-
-CURRENT SETTINGS: ${settingsInfo || "none"}
-CURRENT PROMPT: ${context.prompt || "none"}
-
-AVAILABLE ACTIONS:
-- generate_image — { conceptId?: string }
-- generate_video — { conceptId?: string }
-- generate_i2v — { prompt, imageUrl, conceptId? }
-- run_pipeline — {}
-- run_step — { stepId }
-- update_image_prompt — { value: string }
-- update_strategy_prompt / update_copy_prompt / update_validator_prompt / update_i2v_prompt / update_qa_instruction — { value: string }
-- select_concept — { conceptId }
-- approve_output — { type, url }
-- open_step_config — { stepId }
-- set_niche — { nicheId }
-- update_prompt — { new_prompt: string }
-
-GOVERNANCE: NO diagnostic claims, NO guaranteed outcomes, NO prescription certainty.
-
-RESPONSE FORMAT — return valid JSON:
-{
-  "message": "A real human reply explaining what you are doing and why — never a status word",
-  "actions": [{ "type": "action_type", "payload": { ... } }]
-}
-
-The message field must always be a real explanation to the user, not a status word.
-If no action is needed, return empty actions array.`;
-}
-
-function buildStatusPrompt(): string {
-  return `You are STREAMS. The user asked for a status update. 
-Return valid JSON: { "message": "brief status", "actions": [] }
-Be short and factual.`;
-}
-
-function buildExtractionPrompt(): string {
-  return `You are STREAMS. Extract and return structured data as requested.
-Return valid JSON with the requested schema.`;
-}
-
-// ─── Pipeline info builder ────────────────────────────────────────────────────
 
 function buildPipelineInfo(context: PipelineContext): string {
-  const ctx = context as unknown as Record<string, unknown>;
-  const conceptErrors = ctx.conceptErrors as Record<string, string | null> | undefined;
-  const conceptStatuses = ctx.conceptStatuses as Record<string, string> | undefined;
-  const hasFailedConcepts = ctx.hasFailedConcepts as boolean | undefined;
-  const imageProvider = ctx.imageProvider as string | undefined;
-
-  const errorSummary = conceptErrors
-    ? Object.entries(conceptErrors).filter(([, e]) => e).map(([id, e]) => `${id}: ${e}`).join("; ")
-    : "";
-
   return [
-    context.nicheId ? `Active niche: ${context.nicheId}` : "",
-    context.currentStepId ? `Current step: ${context.currentStepId}` : "",
-    context.selectedConceptId ? `Selected concept: ${context.selectedConceptId}` : "",
-    context.stepStates ? `Step states: ${JSON.stringify(context.stepStates)}` : "",
-    conceptStatuses ? `Concept statuses: ${JSON.stringify(conceptStatuses)}` : "",
-    hasFailedConcepts ? `⚠️ FAILED CONCEPTS DETECTED` : "",
-    errorSummary ? `Errors: ${errorSummary}` : "",
-    imageProvider ? `Image provider: ${imageProvider}` : "",
-    context.intakeAnalysis ? `Intake analysis: ${context.intakeAnalysis}` : "",
-    context.imageUrl ? `Image available: ${context.imageUrl}` : "",
-    context.videoUrl ? `Video available: ${context.videoUrl}` : "",
-  ].filter(Boolean).join("\n");
+    context.nicheId ? `Active niche: ${context.nicheId}` : '',
+    context.currentStepId ? `Current step: ${context.currentStepId}` : '',
+    context.selectedConceptId ? `Selected concept: ${context.selectedConceptId}` : '',
+    context.stepStates ? `Step states: ${JSON.stringify(context.stepStates)}` : '',
+    context.intakeAnalysis ? 'Intake analysis present' : '',
+    context.strategyOutput ? 'Strategy output present' : '',
+    context.copyOutput ? 'Copy output present' : '',
+    context.imageUrl ? `Image available: ${context.imageUrl}` : '',
+    context.videoUrl ? `Video available: ${context.videoUrl}` : '',
+  ].filter(Boolean).join('\n');
 }
 
-// ─── Model call config per mode ───────────────────────────────────────────────
-
-function getModelConfig(mode: ResponseMode) {
-  switch (mode) {
-    case "conversation":
-      return { temperature: 0.7, max_tokens: 2000, response_format: undefined };
-    case "action":
-      return { temperature: 0.4, max_tokens: 1000, response_format: { type: "json_object" as const } };
-    case "extraction":
-      return { temperature: 0.2, max_tokens: 1200, response_format: { type: "json_object" as const } };
-    case "status":
-      return { temperature: 0.2, max_tokens: 200, response_format: { type: "json_object" as const } };
-  }
+function buildContextInfo(context: PipelineContext): string {
+  const integrated = context.integratedContext ? formatIntegratedContext(context.integratedContext) : '';
+  if (!integrated.trim()) return 'No file, URL, voice, or project context injected.';
+  return integrated;
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
-
-export async function createAssistantChatResponse(
-  messages: ChatMessage[],
-  context: PipelineContext
-): Promise<AssistantResponse> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
-
-  void getSiteConfig(); // keep import live
-
+function buildSystemPrompt(mode: AssistantMode, context: PipelineContext): string {
   const pipelineInfo = buildPipelineInfo(context);
-  const settingsInfo = Object.entries(context.settings ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ");
+  const settingsInfo = Object.entries(context.settings ?? {}).map(([key, value]) => `${key}: ${value}`).join(', ');
+  const integratedContext = buildContextInfo(context);
 
-  // Classify intent
-  const mode = classifyIntent(messages);
+  const base = `You are STREAMS — a production-grade assistant, builder, and verifier.\n\nCURRENT PIPELINE STATE:\n${pipelineInfo || 'No pipeline context loaded'}\nCURRENT SETTINGS: ${settingsInfo || 'none'}\nCURRENT PROMPT: ${context.prompt || 'none'}\n\nINJECTED CONTEXT:\n${integratedContext}`;
 
-  // Build mode-specific system prompt
-  let systemContent: string;
   switch (mode) {
-    case "conversation":
-      systemContent = buildConversationPrompt(context, pipelineInfo, settingsInfo);
-      break;
-    case "action":
-      systemContent = buildActionPrompt(context, pipelineInfo, settingsInfo);
-      break;
-    case "status":
-      systemContent = buildStatusPrompt();
-      break;
-    case "extraction":
-      systemContent = buildExtractionPrompt();
-      break;
+    case 'conversation':
+      return `${base}\n\nMODE: CONVERSATION\nRules:\n- Answer naturally in plain language\n- Keep simple questions simple\n- Start with the direct answer\n- Use attached files, URLs, voice transcript, and project memory when relevant\n- Avoid documentation-style formatting unless clarity requires it\n- Never return status-only text`;
+    case 'builder':
+      return `${base}\n\nMODE: BUILDER\nRules:\n- Be precise and production-minded\n- Use provided files, URLs, and project context before giving implementation guidance\n- Preserve architecture and avoid broad rewrites unless necessary\n- No fluff`;
+    case 'verification':
+      return `${base}\n\nMODE: VERIFICATION\nRules:\n- Be strict and evidence-first\n- Use provided file/url/voice/project context as evidence where available\n- Never claim something works without evidence\n- Always include sections exactly titled VERIFIED:, NOT VERIFIED:, and REQUIRES RUNTIME:\n- Do not replace proof with suggestions`;
+    case 'execution':
+      return `${base}\n\nMODE: EXECUTION\nRules:\n- Return the requested artifact directly\n- Keep explanation minimal but non-zero\n- If returning schema or JSON, introduce it with one brief line`;
+    case 'action':
+      return `${base}\n\nMODE: ACTION\nReturn valid JSON with exact shape: {"message":"real explanation","actions":[{"type":"...","payload":{}}]}\nThe message field must never be a status word.`;
   }
+}
 
-  const systemMessage: ChatMessage = { role: "system", content: systemContent };
+function getModelConfig(mode: AssistantMode) {
+  switch (mode) {
+    case 'conversation':
+      return { temperature: 0.65, max_tokens: 2200, stream: true, response_format: undefined };
+    case 'builder':
+      return { temperature: 0.35, max_tokens: 2600, stream: true, response_format: undefined };
+    case 'verification':
+      return { temperature: 0.2, max_tokens: 2200, stream: true, response_format: undefined };
+    case 'execution':
+      return { temperature: 0.2, max_tokens: 1800, stream: true, response_format: undefined };
+    case 'action':
+      return { temperature: 0.2, max_tokens: 1200, stream: false, response_format: { type: 'json_object' as const } };
+  }
+}
+
+function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean): Record<string, unknown> {
   const config = getModelConfig(mode);
-
-  const bodyObj: Record<string, unknown> = {
-    model: "gpt-4o",
-    messages: [systemMessage, ...messages],
+  const body: Record<string, unknown> = {
+    model: getSiteConfig().copilotModel || 'gpt-4o',
+    messages: [{ role: 'system', content: buildSystemPrompt(mode, context) }, ...messages],
     temperature: config.temperature,
     max_tokens: config.max_tokens,
+    stream,
   };
-  if (config.response_format) bodyObj.response_format = config.response_format;
+  if (!stream && config.response_format) body.response_format = config.response_format;
+  return body;
+}
 
+function parseActionPayload(raw: string): { message: string; actions: AssistantAction[] } {
+  try {
+    const parsed = JSON.parse(raw) as { message?: string; actions?: AssistantAction[] };
+    return {
+      message: parsed.message?.trim() || 'I completed the action request, but no explanation was returned.',
+      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+    };
+  } catch {
+    return { message: raw.trim() || 'I completed the action request, but no explanation was returned.', actions: [] };
+  }
+}
+
+export async function createAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<AssistantResponse> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('Missing OPENAI_API_KEY');
+
+  const requestText = getLastUserText(messages);
+  const mode = detectModeFromText(requestText);
   const response = await fetch(OPENAI_API_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(bodyObj),
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(createRequestBody(mode, messages, context, false)),
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(errorBody?.error?.message ?? "OpenAI request failed");
+    const errorBody = await response.text();
+    throw new Error(`Assistant request failed (${response.status}): ${errorBody}`);
   }
 
-  const payload = await response.json() as { choices: { message: { content: string } }[] };
-  const raw = payload.choices?.[0]?.message?.content ?? "";
+  const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const raw = payload.choices?.[0]?.message?.content?.trim() ?? '';
+  const { message, actions } = mode === 'action' ? parseActionPayload(raw) : { message: raw, actions: [] as AssistantAction[] };
 
-  let message: string;
-  let actions: AssistantAction[] = [];
+  const ledger = runValidators('chat', [{ name: 'chat-response', result: validateChatResponse({ mode, requestText, responseText: message, streamed: false }) }], { mode });
+  const blocking = ledger.issues.find((issue) => issue.severity === 'error');
+  if (blocking) throw new Error(blocking.message);
 
-  if (mode === "conversation") {
-    // Plain text — no JSON parsing
-    message = raw.trim();
-  } else {
-    // JSON modes
-    try {
-      const parsed = JSON.parse(raw) as { message?: string; actions?: AssistantAction[] };
-      message = parsed.message ?? raw;
-      actions = Array.isArray(parsed.actions) ? parsed.actions : [];
-    } catch {
-      message = raw;
-      actions = [];
-    }
+  return { message, actions, mode, reply: message, action: actions[0], ledger };
+}
+
+function sse(data: unknown): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+function parseStreamingLine(line: string): string {
+  if (!line.startsWith('data: ')) return '';
+  const payload = line.slice(6).trim();
+  if (!payload || payload === '[DONE]') return '';
+  try {
+    const parsed = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
+    return parsed.choices?.[0]?.delta?.content ?? '';
+  } catch {
+    return '';
   }
+}
 
-  // ── Output rejection gate ─────────────────────────────────────────────────
-  // If conversation mode returned a status-only answer, regenerate once
-  if (mode === "conversation" && isStatusOnly(message)) {
-    const retryBody: Record<string, unknown> = {
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemContent },
-        ...messages,
-        { role: "system", content: "Your previous response was too short or a status-only reply. Answer the user's actual question directly and completely in natural language. Give a real explanation." },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    };
-    const retryRes = await fetch(OPENAI_API_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(retryBody),
+export async function streamAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<ReadableStream<Uint8Array>> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('Missing OPENAI_API_KEY');
+
+  const requestText = getLastUserText(messages);
+  const mode = detectModeFromText(requestText);
+  const encoder = new TextEncoder();
+
+  if (mode === 'action') {
+    const finalResponse = await createAssistantChatResponse(messages, context);
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        const chunks = finalResponse.message.match(/.{1,80}/g) ?? [finalResponse.message];
+        for (const chunk of chunks) controller.enqueue(encoder.encode(sse({ type: 'text', delta: chunk })));
+        for (const action of finalResponse.actions) controller.enqueue(encoder.encode(sse({ type: 'action', action })));
+        controller.enqueue(encoder.encode(sse({ type: 'done', mode }))); controller.close();
+      },
     });
-    if (retryRes.ok) {
-      const retryPayload = await retryRes.json() as { choices: { message: { content: string } }[] };
-      const retryRaw = retryPayload.choices?.[0]?.message?.content ?? "";
-      if (retryRaw.trim().length > 20) message = retryRaw.trim();
-    }
   }
 
-  const firstAction = actions[0];
-  return {
-    message,
-    actions,
-    mode,
-    reply: message,
-    action: firstAction,
-  };
+  const upstream = await fetch(OPENAI_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(createRequestBody(mode, messages, context, true)),
+  });
+
+  if (!upstream.ok || !upstream.body) {
+    const errorBody = await upstream.text().catch(() => 'Unknown upstream error');
+    throw new Error(`Assistant stream failed (${upstream.status}): ${errorBody}`);
+  }
+
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let buffer = '';
+      let fullText = '';
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            const delta = parseStreamingLine(line.trim());
+            if (!delta) continue;
+            fullText += delta;
+            controller.enqueue(encoder.encode(sse({ type: 'text', delta })));
+          }
+        }
+
+        const ledger = runValidators('chat', [{ name: 'chat-response', result: validateChatResponse({ mode, requestText, responseText: fullText, streamed: true }) }], { mode });
+        const blocking = ledger.issues.find((issue) => issue.severity === 'error');
+        if (blocking) controller.enqueue(encoder.encode(sse({ type: 'error', message: blocking.message })));
+        controller.enqueue(encoder.encode(sse({ type: 'done', mode, ledger })));
+        controller.close();
+      } catch (error) {
+        controller.enqueue(encoder.encode(sse({ type: 'error', message: error instanceof Error ? error.message : String(error) })));
+        controller.close();
+      }
+    },
+  });
 }

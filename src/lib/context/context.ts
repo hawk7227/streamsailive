@@ -4,7 +4,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getFileContextForChat } from "@/lib/files/chunker";
+import { buildFileContext } from "@/lib/files/retrieval";
 
 // ── Session memory ─────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ export async function buildChatContext(
   } = options ?? {};
 
   const [fileContext, urlContext, projectMemory] = await Promise.all([
-    includeFiles  ? getFileContextForChat(query, workspaceId, Math.floor(maxChars * 0.5)) : Promise.resolve(""),
+    includeFiles  ? buildFileContext(workspaceId, query, 6) : Promise.resolve(""),
     includeUrls   ? getRecentUrlContext(workspaceId) : Promise.resolve(""),
     includeMemory ? getProjectMemory(workspaceId)    : Promise.resolve(""),
   ]);

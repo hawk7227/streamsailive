@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 const MediaEditor = dynamic(() => import("@/components/pipeline/MediaEditor"), { ssr: false });
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { VoiceBar } from "@/components/ai-chat/VoiceBar";
 import { createClient } from "@/lib/supabase/client";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -1263,13 +1264,15 @@ Accept only if:
     if (!text || assistantBusy) return;
     setAssistantInput("");
     setAssistantBusy(true);
-    setAssistantMessages(p => [...p, { role: "user", content: text }]);
+    setAssistantStreamText("");
+    const userMessages = [...assistantMessages, { role: "user" as const, content: text }];
+    setAssistantMessages(userMessages);
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...assistantMessages, { role: "user", content: text }],
+          messages: userMessages,
           context: {
             type: "pipeline",
             prompt: stepPrompts[selectedStepId] ?? "",
@@ -1290,18 +1293,59 @@ Accept only if:
           },
         }),
       });
-      const data = await res.json() as { message?: string; reply?: string; text?: string; actions?: { type: string; payload: Record<string, unknown> }[] };
-      const msg = data.message ?? data.reply ?? data.text ?? "(No response — check pipeline state)";
-      const actionCount = (data.actions ?? []).length;
-      setAssistantMessages(p => [...p, { role: "assistant", content: msg + (actionCount > 0 ? ` (executing ${actionCount} action${actionCount > 1 ? "s" : ""}...)` : "") }]);
-      if (actionCount > 0) log(`Assistant: ${actionCount} action(s) — ${(data.actions ?? []).map(a => a.type).join(", ")}`);
-      for (const action of (data.actions ?? [])) {
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      // ── SSE stream reader ─────────────────────────────────────────────────
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      const pendingActions: { type: string; payload: Record<string, unknown> }[] = [];
+
+      if (reader) {
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (!raw || raw === "[DONE]") continue;
+            try {
+              const ev = JSON.parse(raw) as {
+                type: string;
+                delta?: string;
+                action?: { type: string; payload: Record<string, unknown> };
+                message?: string;
+              };
+              if (ev.type === "text" && ev.delta) {
+                fullText += ev.delta;
+                setAssistantStreamText(fullText);
+              } else if (ev.type === "action" && ev.action) {
+                pendingActions.push(ev.action);
+              } else if (ev.type === "error" && ev.message) {
+                fullText += `
+⚠ ${ev.message}`;
+                setAssistantStreamText(fullText);
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+      }
+
+      const finalMsg = fullText || "(No response)";
+      setAssistantStreamText("");
+      setAssistantMessages(p => [...p, { role: "assistant", content: finalMsg }]);
+
+      // Execute actions after stream completes
+      for (const action of pendingActions) {
         const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
         if (action.type === "generate_image") {
           await generateImage(cid);
-        } else if (action.type === "generate_video") {
-          await generateVideo(cid);
-        } else if (action.type === "generate_i2v") {
+        } else if (action.type === "generate_video" || action.type === "generate_i2v") {
           await generateVideo(cid);
         } else if (action.type === "update_image_prompt" && action.payload.value) {
           setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
@@ -1322,6 +1366,7 @@ Accept only if:
           setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
         }
       }
+      if (pendingActions.length > 0) log(`Assistant: ${pendingActions.length} action(s) — ${pendingActions.map(a => a.type).join(", ")}`);
     } catch (e) {
       setAssistantMessages(p => [...p, { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }]);
     }
@@ -2883,6 +2928,13 @@ Accept only if:
                   {p === "openai" ? "GPT-4o" : "Claude"}
                 </button>
               ))}
+            </div>
+            {/* Voice bar */}
+            <div style={{ padding: "6px 12px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <VoiceBar
+                onTranscript={(t) => setAssistantInput(prev => prev ? prev + " " + t : t)}
+                speakText={assistantMessages.at(-1)?.role === "assistant" ? String(assistantMessages.at(-1)?.content ?? "") : undefined}
+              />
             </div>
             {/* Input */}
             <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 7 }}>
