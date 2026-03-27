@@ -7,6 +7,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { VoiceBar } from "@/components/ai-chat/VoiceBar";
 import { createClient } from "@/lib/supabase/client";
 
+// ── Activity Stream + Artifact Preview ────────────────────────────────────────
+import { registerActivityStreamMiddleware, ActivityController } from "@/lib/activity-stream/index";
+import { ActivityStreamBar } from "@/lib/activity-stream/ActivityStreamBar";
+import { extractArtifactFromBuffer, type ExtractedArtifact } from "@/lib/activity-stream/code-extractor";
+import { ArtifactCard, type ArtifactDestination } from "@/components/pipeline/ArtifactCard";
+import { FloatingPreviewPanel } from "@/components/pipeline/FloatingPreviewPanel";
+import { LivePreviewRenderer } from "@/components/pipeline/LivePreviewRenderer";
+
 // ── Types ──────────────────────────────────────────────────────────────────
 type StepState = "complete" | "running" | "review" | "queued" | "blocked" | "error";
 type Step = { id: string; name: string; state: StepState; icon: string; output: unknown; error: string | null; startedAt: number | null; completedAt: number | null; };
@@ -324,7 +332,20 @@ Accept only if:
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [navMenuOpen, setNavMenuOpen] = useState(false);
 
-  // ── Name tag + preset state ───────────────────────────────────────────────
+  // ── Activity stream + artifact preview state ─────────────────────────────
+  const [currentArtifact, setCurrentArtifact] = useState<ExtractedArtifact | null>(null);
+  const [artifactStreaming, setArtifactStreaming] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("streams:autoPreview") !== "false";
+  });
+  const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
+  const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: "iphone1" | "iphone2" | "desktop" } | null>(null);
+
+  // Register activity stream middleware once on mount
+  useEffect(() => {
+    return registerActivityStreamMiddleware();
+  }, []);
   const [pipelineName, setPipelineName] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("streamsai:pipeline:name") ?? "";
@@ -1269,9 +1290,17 @@ Accept only if:
     setAssistantInput("");
     setAssistantBusy(true);
     setAssistantStreamText("");
+    setCurrentArtifact(null);
+    setArtifactStreaming(false);
+
+    // Feature 1: Activity stream — mandatory on every response
+    ActivityController.responseStarted();
+    ActivityController.phase("understanding_request", "Understanding your request...");
+
     const userMessages = [...assistantMessages, { role: "user" as const, content: text }];
     setAssistantMessages(userMessages);
     try {
+      ActivityController.phase("reviewing_context", "Reviewing pipeline context...");
       const authHeaders = await getAuthHeader();
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
@@ -1302,10 +1331,13 @@ Accept only if:
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+      ActivityController.toolStarted("repo_reader", "Reading pipeline context...");
+
       // ── SSE stream reader ─────────────────────────────────────────────────
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let deltaCount = 0;
       const pendingActions: { type: string; payload: Record<string, unknown> }[] = [];
 
       if (reader) {
@@ -1314,9 +1346,9 @@ Accept only if:
           const { done, value } = await reader.read();
           if (done) break;
           buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-          for (const line of lines) {
+          const lines2 = buf.split("\n");
+          buf = lines2.pop() ?? "";
+          for (const line of lines2) {
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim();
             if (!raw || raw === "[DONE]") continue;
@@ -1329,22 +1361,45 @@ Accept only if:
               };
               if (ev.type === "text" && ev.delta) {
                 fullText += ev.delta;
+                deltaCount++;
                 setAssistantStreamText(fullText);
+                if (deltaCount === 1) {
+                  ActivityController.toolCompleted("repo_reader");
+                  ActivityController.phase("planning", "Preparing response...");
+                }
+                // Feature 2: detect code artifacts in real-time
+                const detected = extractArtifactFromBuffer(fullText);
+                if (detected) {
+                  setCurrentArtifact(detected);
+                  setArtifactStreaming(!detected.isComplete);
+                  if (!detected.isComplete) {
+                    ActivityController.toolStarted("code_generator", "Generating component...");
+                  } else {
+                    ActivityController.toolCompleted("code_generator", "Component ready");
+                    ActivityController.previewRendered(100, "Component ready");
+                  }
+                }
               } else if (ev.type === "action" && ev.action) {
                 pendingActions.push(ev.action);
+                if (ev.action.type === "generate_image" || ev.action.type === "generate_video") {
+                  ActivityController.toolStarted("preview_renderer", "Preparing generation...");
+                }
               } else if (ev.type === "error" && ev.message) {
-                fullText += `
-⚠ ${ev.message}`;
+                fullText += `\n⚠ ${ev.message}`;
                 setAssistantStreamText(fullText);
+                ActivityController.toolFailed("unknown", ev.message);
               }
             } catch { /* skip malformed */ }
           }
         }
       }
 
+      ActivityController.phase("finalizing", "Finalizing response...");
       const finalMsg = fullText || "(No response)";
       setAssistantStreamText("");
+      setArtifactStreaming(false);
       setAssistantMessages(p => [...p, { role: "assistant", content: finalMsg }]);
+      ActivityController.responseCompleted();
 
       // Execute actions after stream completes
       for (const action of pendingActions) {
@@ -1374,6 +1429,7 @@ Accept only if:
       }
       if (pendingActions.length > 0) log(`Assistant: ${pendingActions.length} action(s) — ${pendingActions.map(a => a.type).join(", ")}`);
     } catch (e) {
+      ActivityController.toolFailed("unknown", e instanceof Error ? e.message : String(e));
       setAssistantMessages(p => [...p, { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }]);
     }
     setAssistantBusy(false);
@@ -2935,6 +2991,48 @@ Accept only if:
                 </button>
               ))}
             </div>
+            {/* ── Activity Stream Bar — Feature 1, always on ─────────── */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <ActivityStreamBar />
+            </div>
+            {/* ── Auto-detect settings + artifact card — Feature 2 ──── */}
+            <div style={{ padding: "4px 12px", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#334155" }}>Auto-preview:</span>
+              <button
+                onClick={() => {
+                  const next = !autoPreview;
+                  setAutoPreview(next);
+                  if (typeof localStorage !== "undefined") localStorage.setItem("streams:autoPreview", String(next));
+                }}
+                style={{
+                  padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 700,
+                  cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em",
+                  border: `1px solid ${autoPreview ? "rgba(103,232,249,0.4)" : "rgba(255,255,255,0.08)"}`,
+                  background: autoPreview ? "rgba(103,232,249,0.12)" : "transparent",
+                  color: autoPreview ? "#67e8f9" : "#475569",
+                }}
+              >
+                {autoPreview ? "Auto ON" : "Manual"}
+              </button>
+            </div>
+            {/* Artifact card — appears when code block is detected in stream */}
+            {currentArtifact && (
+              <div style={{ padding: "0 12px 4px" }}>
+                <ArtifactCard
+                  artifact={currentArtifact}
+                  isStreaming={artifactStreaming}
+                  autoPreview={autoPreview}
+                  onPreview={(dest) => {
+                    if (dest === "float") {
+                      setFloatingArtifact(currentArtifact);
+                    } else {
+                      setLivePreviewArtifact({ artifact: currentArtifact, dest: dest as "iphone1" | "iphone2" | "desktop" });
+                    }
+                  }}
+                  onViewCode={() => setEpOpen(true)}
+                />
+              </div>
+            )}
             {/* Voice bar */}
             <div style={{ padding: "6px 12px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               <VoiceBar
@@ -2963,6 +3061,43 @@ Accept only if:
         </button>
       </div>
 
+      {/* ── Floating Preview Panel — Feature 2 (float destination) ──── */}
+      {floatingArtifact && (
+        <FloatingPreviewPanel
+          artifact={floatingArtifact}
+          onClose={() => setFloatingArtifact(null)}
+        />
+      )}
+      {/* ── Live Preview Overlay — Feature 2 (iphone/desktop destinations) */}
+      {livePreviewArtifact && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 8000,
+          background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexDirection: "column", gap: 12,
+        }}
+          onClick={() => setLivePreviewArtifact(null)}
+        >
+          <div onClick={e => e.stopPropagation()}
+            style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+            <LivePreviewRenderer
+              artifact={livePreviewArtifact.artifact}
+              width={livePreviewArtifact.dest === "desktop" ? 900 : 390}
+              height={livePreviewArtifact.dest === "desktop" ? 600 : 700}
+            />
+          </div>
+          <button
+            onClick={() => setLivePreviewArtifact(null)}
+            style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", borderRadius: 8, padding: "7px 20px", fontSize: 12,
+              cursor: "pointer", fontWeight: 600,
+            }}
+          >
+            Close preview
+          </button>
+        </div>
+      )}
       {/* ── Diagnostic Modal ─────────────────────────────────────────── */}
       {diagResult && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
