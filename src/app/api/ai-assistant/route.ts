@@ -58,7 +58,13 @@ async function runProbes(requestUrl: string, cookieHeader: string, features: str
     const origin = new URL(requestUrl).origin;
     const res = await fetch(`${origin}/api/verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookieHeader },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': cookieHeader,
+        // Tell /api/verify where to probe — derived from the live request URL,
+        // so it works in dev (localhost:3000) and prod (coral-app-rpgt7.ondigitalocean.app)
+        'X-Probe-Origin': origin,
+      },
       body: JSON.stringify({ features }),
     });
     if (!res.ok) return null;

@@ -382,12 +382,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Determine APP_URL — self-referential probes against this deployment
-  const appUrl = process.env['VERCEL_URL']
-    ? `https://${process.env['VERCEL_URL']}`
-    : process.env['NEXT_PUBLIC_APP_URL']
-      ?? process.env['APP_URL']
-      ?? 'http://localhost:3000';
+  // Determine APP_URL from the incoming request — always correct, no env vars needed.
+  // X-Probe-Origin header is set by ai-assistant route. Direct calls fall back to request.url.
+  const appUrl =
+    request.headers.get('x-probe-origin') ??
+    process.env['NEXT_PUBLIC_APP_URL'] ??
+    (() => { try { const u = new URL(request.url); return `${u.protocol}//${u.host}`; } catch { return 'http://localhost:3000'; } })();
 
   const runId = `verify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
