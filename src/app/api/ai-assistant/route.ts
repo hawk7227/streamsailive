@@ -6,6 +6,9 @@ import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 import { buildIntegratedChatContext } from '@/lib/ai-chat/context/buildIntegratedContext';
 import type { AssistantRequestContext } from '@/lib/ai-chat/context/types';
 import type { VerifyResponse } from '@/app/api/verify/route';
+import type { User } from '@supabase/supabase-js';
+
+export const maxDuration = 60; // streaming route — required for DO App Platform
 
 // ── Conversation persistence ───────────────────────────────────────────────────
 
@@ -117,8 +120,30 @@ function sse(data: unknown): string {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Primary auth: SSR cookie-based session (works in normal browser requests)
+  let user: User | null = null;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch { /* fall through to admin check */ }
+
+  // Fallback auth: verify JWT from Authorization header
+  // Handles edge cases where cookie parsing fails in streaming route context
+  if (!user) {
+    try {
+      const admin = createAdminClient();
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : null;
+      if (token) {
+        const { data } = await admin.auth.getUser(token);
+        user = data.user;
+      }
+    } catch { /* non-fatal */ }
+  }
+
   if (!user) return new Response('Unauthorized', { status: 401 });
 
   let payload: { messages?: unknown; context?: unknown; requestContext?: unknown; conversationId?: string; };

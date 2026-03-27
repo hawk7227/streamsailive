@@ -508,6 +508,17 @@ Accept only if:
   const assistantEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
+  // ── Get session token for API calls ──────────────────────────────────────
+  async function getAuthHeader(): Promise<Record<string, string>> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        return { Authorization: `Bearer ${session.access_token}` };
+      }
+    } catch { /* non-fatal */ }
+    return {};
+  }
+
   function log(msg: string) {
     setLogs(p => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...p].slice(0, 100));
   }
@@ -1261,9 +1272,10 @@ Accept only if:
     const userMessages = [...assistantMessages, { role: "user" as const, content: text }];
     setAssistantMessages(userMessages);
     try {
+      const authHeaders = await getAuthHeader();
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         credentials: "include",
         body: JSON.stringify({
           messages: userMessages,
