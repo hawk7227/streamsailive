@@ -11,9 +11,17 @@ interface IntegrationCredentialState {
 export function IntegrationCredentialsPanel() {
   const [items, setItems] = useState<IntegrationCredentialState[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetch('/api/operator/integrations-credentials').then((r) => r.json()).then((json) => setItems(json.data || [])).finally(() => setLoading(false));
+    fetch('/api/operator/integrations-credentials', { credentials: 'include' })
+      .then(async (r) => {
+        if (!r.ok) { const e = await r.json().catch(() => ({ error: 'Unknown' })) as { error?: string }; throw new Error(e.error ?? 'Failed'); }
+        return r.json() as Promise<{ data?: IntegrationCredentialState[] }>;
+      })
+      .then((json) => setItems(json.data ?? []))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load credentials'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -21,6 +29,7 @@ export function IntegrationCredentialsPanel() {
       <h3 className="text-sm font-semibold text-white/90">Integration credentials</h3>
       <div className="mt-3 grid gap-2">
         {loading && <div className="text-sm text-white/50">Loading…</div>}
+        {error && <div className="text-sm text-red-400/80">{error}</div>}
         {items.map((item) => (
           <div key={item.provider} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
             <div>

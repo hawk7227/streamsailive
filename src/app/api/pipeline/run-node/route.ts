@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { executeNode, executePipeline } from "../../../../lib/pipeline/pipeline-execution";
 
 export async function POST(request: NextRequest) {
+  // Auth gate — pipeline execution calls AI providers and costs money
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = (await request.json()) as {
       mode?: "runStep" | "runPipeline";
@@ -17,18 +23,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, result });
     }
 
-    // Support both legacy { step } and current { type, data, context } shapes
     const nodeType = body.type ?? body.step;
     if (!nodeType) {
-      return NextResponse.json({ ok: false, error: "type (or step) is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "type (or step) is required" }, { status: 400 });
     }
 
-    // executeNode expects node = { type, data } and context as second arg
     const node = { type: nodeType, data: body.data ?? body.payload ?? {} };
     const context = body.context ?? {};
 
     const result = await executeNode(node as never, context);
-    // executeNode already returns { success, output, generationId } — pass through directly
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -13,9 +13,17 @@ interface PipelineSession {
 export function PipelineSessionsPanel() {
   const [data, setData] = useState<PipelineSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetch('/api/operator/pipeline-sessions').then((r) => r.json()).then((json) => setData(json.data || [])).finally(() => setLoading(false));
+    fetch('/api/operator/pipeline-sessions', { credentials: 'include' })
+      .then(async (r) => {
+        if (!r.ok) { const e = await r.json().catch(() => ({ error: 'Unknown' })) as { error?: string }; throw new Error(e.error ?? 'Failed'); }
+        return r.json() as Promise<{ data?: PipelineSession[] }>;
+      })
+      .then((json) => setData(json.data ?? []))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load sessions'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -23,6 +31,7 @@ export function PipelineSessionsPanel() {
       <h3 className="text-sm font-semibold text-white/90">Pipeline sessions</h3>
       <div className="mt-3 grid gap-2">
         {loading && <div className="text-sm text-white/50">Loading…</div>}
+        {error && <div className="text-sm text-red-400/80">{error}</div>}
         {data.map((item) => (
           <div key={item.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
             <div>
