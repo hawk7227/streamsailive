@@ -340,7 +340,7 @@ Accept only if:
   });
 
   // ── Creative Setup state ──────────────────────────────────────────────────
-  const [csOpen, setCsOpen] = React.useState(true);
+  const [csOpen, setCsOpen] = React.useState(false);
   const [csFields, setCsFields] = React.useState<Record<string,string>>(() => {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(window.localStorage.getItem("streamsai:cs:fields") ?? "{}"); } catch { return {}; }
@@ -1695,7 +1695,7 @@ Accept only if:
         onChange={async e => { const f=e.target.files?.[0]; if(f) await handleGuidanceUpload(f); e.target.value=""; }} />
 
       <div style={s}>
-        <div style={{ maxWidth: 1720, margin: "0 auto" }}>
+        <div style={{ maxWidth: "100%", margin: "0 auto" }}>
 
           {/* ── TOP BAR ──────────────────────────────────────────────────── */}
           {!isEmbed && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -1834,7 +1834,7 @@ Accept only if:
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} 1fr` : `320px ${stepConfigOpen ? "320px" : "48px"} 1fr`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `clamp(220px,18vw,300px) ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
             {!isEmbed && <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
