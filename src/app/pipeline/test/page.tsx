@@ -92,6 +92,7 @@ export default function PipelineTestPage() {
   const [steps, setSteps] = useState<Step[]>(STEPS_INITIAL);
   const [selectedStepId, setSelectedStepId] = useState<string>("strategy");
   const [stepConfigOpen, setStepConfigOpen] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(false);
 
   // Step prompts — keyed by step id
   const [stepPrompts, setStepPrompts] = useState<Record<string, string>>({
@@ -1695,7 +1696,7 @@ Accept only if:
         onChange={async e => { const f=e.target.files?.[0]; if(f) await handleGuidanceUpload(f); e.target.value=""; }} />
 
       <div style={s}>
-        <div style={{ maxWidth: "100%", margin: "0 auto" }}>
+        <div style={{ maxWidth: "100%", margin: "0 auto", minWidth: 1100, overflowX: "auto" }}>
 
           {/* ── TOP BAR ──────────────────────────────────────────────────── */}
           {!isEmbed && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -1834,10 +1835,17 @@ Accept only if:
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `clamp(220px,18vw,300px) ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `${leftOpen ? "clamp(220px,18vw,300px)" : "48px"} ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
             {!isEmbed && <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
+              {!leftOpen && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 0", gap: 16 }}>
+                  <button onClick={() => setLeftOpen(true)} title="Open Creative Setup"
+                    style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16, padding: 4 }}>✦</button>
+                </div>
+              )}
+              {leftOpen && <>
 
             {/* ── Creative Setup panel ── */}
             <div style={P({ padding: 14, display: "flex", flexDirection: "column", gap: 10 })}>
@@ -2019,6 +2027,11 @@ Accept only if:
               </button>
             </div>
 
+              <button onClick={() => setLeftOpen(false)}
+                style={{ margin: "4px 8px 8px", background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 11, textAlign: "left", padding: "4px 6px" }}>
+                ← Hide
+              </button>
+            </> }{/* end leftOpen */}
             </div>}{/* end left column wrapper */}
 
             {/* Step Config Rail — transforms into Live Engine when pipeline runs */}
