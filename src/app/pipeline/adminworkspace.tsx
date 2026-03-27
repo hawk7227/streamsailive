@@ -139,7 +139,7 @@ export default function AIPipelinePage() {
     "Context switched to image-to-video planning.",
   ]);
   const [strategyPrompt, setStrategyPrompt] = useState(
-    "You are a conversion-focused creative generator for a telehealth campaign. Build 3 safe, premium, high-trust concepts optimized for image-to-video motion."
+    "You are a conversion-focused creative generator. Build 3 authentic, high-trust concepts optimized for image-to-video motion. Adapt tone and content to the active niche and governance settings."
   );
   const [brandTone, setBrandTone] = useState(
     "Premium, calm, clinically reassuring, modern, highly trustworthy."

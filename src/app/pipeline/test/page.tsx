@@ -98,29 +98,13 @@ export default function PipelineTestPage() {
   const iphoneDragRef = React.useRef<{side:"left"|"right";startX:number;startW:number}|null>(null);
 
   // Step prompts — keyed by step id
+  // strategy prompt is updated via useEffect when nicheId changes
   const [stepPrompts, setStepPrompts] = useState<Record<string, string>>({
-    strategy: `You are building a creative strategy for a telehealth content campaign.
+    strategy: `You are building a creative strategy for a general content campaign.
 
-Goal:
-Create a strategy for generating a believable, realistic image of a real person using telehealth at home.
-
-The image must:
-- Look like a real moment, not a production shoot
-- Show a real person in a real home environment
-- Be believable and ordinary — not impressive or polished
-- NOT a landing page image — an ordinary real-life moment
-
-Scene:
-- Real human subject, natural and unposed
-- Home environment — couch, kitchen, or bedroom
-- Person holding a phone and looking at the screen
-- No staged clinical props
-
-DO NOT:
-- Use premium, cinematic, or lifestyle photography language
-- Request shallow depth of field or soft lighting effects
-- Use clean composition or professional portrait framing
-- Request anything that makes the image look polished or produced`,
+Generate a strategy for producing realistic, believable visual content.
+The content should feel authentic, non-staged, and appropriate for the target audience.
+Return a JSON object with: concepts (array), rulesetVersion, strategySummary.`,
 
     copy: `Generate minimal overlay UI content that feels real, not designed.
 
@@ -168,7 +152,16 @@ Accept only if:
   });
 
   // Pipeline config
-  const [nicheId, setNicheId] = useState("telehealth");
+  const [nicheId, setNicheId] = useState("");
+
+  // Sync strategy prompt when nicheId changes
+  React.useEffect(() => {
+    const label = nicheId || "general";
+    setStepPrompts(prev => ({
+      ...prev,
+      strategy: `You are building a creative strategy for a ${label} content campaign.\n\nGenerate a strategy for producing realistic, believable visual content.\nThe content should feel authentic, non-staged, and appropriate for the target audience.\nReturn a JSON object with: concepts (array), rulesetVersion, strategySummary.`,
+    }));
+  }, [nicheId]);
   const [selectedConceptId, setSelectedConceptId] = useState("c1");
   const [concepts, setConcepts] = useState<ConceptVariant[]>([
     { variantId: "c1", headline: "Private Care, From Home",   body: "Licensed provider review. Next steps after intake.", cta: "Start Your Visit" },

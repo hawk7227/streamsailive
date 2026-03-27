@@ -3,14 +3,11 @@ import { defaultPack } from "./default";
 
 export type { DomainPackOutput } from "./types";
 
-// Domain packs are loaded by niche key. Only the telehealth domain pack is
-// currently active. Additional packs (ecommerce, saas) follow the same contract.
+// Domain packs are loaded by niche key. The default pack is niche-agnostic.
+// Additional packs (telehealth, ecommerce, saas) extend this with niche-specific rules.
 function loadPack(niche?: string): DomainPack {
-  // Telehealth governance is handled directly in pipeline-execution via
-  // createStrategyFromIntake — domain pack layer normalizes for Step 4 input.
-  if (niche === "telehealth" || niche === "telehealth-master" || !niche) {
-    return defaultPack;
-  }
+  // Telehealth and google_ads are handled in pipeline-execution via governance layer.
+  // Domain pack layer normalizes for Step 4 input regardless of niche.
   return defaultPack;
 }
 

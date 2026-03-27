@@ -6,7 +6,24 @@ import type { AssistantMode } from '@/lib/enforcement/types';
 import { formatIntegratedContext } from '@/lib/ai-chat/context/buildIntegratedContext';
 import type { IntegratedChatContextParts } from '@/lib/ai-chat/context/types';
 
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+// ── Provider routing ─────────────────────────────────────────────────────────
+// URL and auth header are determined by the active model, not hardcoded.
+// Set AI_PROVIDER_COPILOT=anthropic or copilotModel=claude-* to route to Anthropic.
+// Defaults to OpenAI if no model prefix matches.
+
+function getProviderConfig(model: string): { url: string; authHeader: (key: string) => Record<string, string> } {
+  if (model.startsWith('claude-')) {
+    return {
+      url: 'https://api.anthropic.com/v1/messages',
+      authHeader: (key) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01' }),
+    };
+  }
+  // Default: OpenAI-compatible endpoint (works for gpt-*, o1-*, and any OpenAI-compatible API)
+  return {
+    url: process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1/chat/completions',
+    authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+  };
+}
 
 type ContentBlock =
   | { type: 'text'; text: string }
@@ -142,8 +159,9 @@ function getModelConfig(mode: AssistantMode) {
 
 function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean): Record<string, unknown> {
   const config = getModelConfig(mode);
+  const activeModel = getSiteConfig().copilotModel || 'gpt-4o';
   const body: Record<string, unknown> = {
-    model: getSiteConfig().copilotModel || 'gpt-4o',
+    model: activeModel,
     messages: [{ role: 'system', content: buildSystemPrompt(mode, context) }, ...messages],
     temperature: config.temperature,
     max_tokens: config.max_tokens,
@@ -166,14 +184,16 @@ function parseActionPayload(raw: string): { message: string; actions: AssistantA
 }
 
 export async function createAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<AssistantResponse> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('Missing OPENAI_API_KEY');
+  const activeModel2 = getSiteConfig().copilotModel || 'gpt-4o';
+  const provider = getProviderConfig(activeModel2);
+  const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY or ANTHROPIC_API_KEY)');
 
   const requestText = getLastUserText(messages);
   const mode = detectModeFromText(requestText);
-  const response = await fetch(OPENAI_API_URL, {
+  const response = await fetch(provider.url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { ...provider.authHeader(apiKey), 'Content-Type': 'application/json' },
     body: JSON.stringify(createRequestBody(mode, messages, context, false)),
   });
 
@@ -210,8 +230,10 @@ function parseStreamingLine(line: string): string {
 }
 
 export async function streamAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<ReadableStream<Uint8Array>> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('Missing OPENAI_API_KEY');
+  const activeModel3 = getSiteConfig().copilotModel || 'gpt-4o';
+  const streamProvider = getProviderConfig(activeModel3);
+  const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY or ANTHROPIC_API_KEY)');
 
   const requestText = getLastUserText(messages);
   const mode = detectModeFromText(requestText);
@@ -229,9 +251,9 @@ export async function streamAssistantChatResponse(messages: ChatMessage[], conte
     });
   }
 
-  const upstream = await fetch(OPENAI_API_URL, {
+  const upstream = await fetch(streamProvider.url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { ...streamProvider.authHeader(apiKey), 'Content-Type': 'application/json' },
     body: JSON.stringify(createRequestBody(mode, messages, context, true)),
   });
 

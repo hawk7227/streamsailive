@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     .from("pipeline_sessions")
     .insert({
       workspace_id: workspaceId,
-      niche_id: niche_id ?? "telehealth",
+      niche_id: niche_id ?? null,
       selected_concept_id: selected_concept_id ?? null,
       prompts: prompts ?? {},
       step_states: step_states ?? {

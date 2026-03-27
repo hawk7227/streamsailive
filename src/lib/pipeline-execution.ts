@@ -159,7 +159,7 @@ const normalizeString = (value: unknown): string => {
 const getGovernance = (data: Record<string, any>) => {
   const governance = data?.governance || {};
   return {
-    pipelineType: (governance.pipelineType || data.pipelineType || "telehealth") as PipelineNiche,
+    pipelineType: (governance.pipelineType || data.pipelineType || "general") as PipelineNiche,
     imageToVideo: normalizeString(governance.imageToVideo),
     strategyPrompt: normalizeString(governance.strategyPrompt),
     copyPrompt: normalizeString(governance.copyPrompt),
@@ -485,7 +485,7 @@ export async function executeNode(node: any, context: any) {
     const prompt = replaceVariables(data.content || "", context);
     const output = await generateContent("script" as GenerationType, {
       prompt,
-      style: data?.governance?.pipelineType || data?.pipelineType || "telehealth",
+      style: data?.governance?.pipelineType || data?.pipelineType || "general",
     });
 
     return {
@@ -813,7 +813,7 @@ export async function executeNode(node: any, context: any) {
     }
 
     const gov = loadGovernance(
-      (context?.intakeBrief as IntakeBrief | undefined)?.niche ?? data?.governance?.pipelineType ?? "telehealth"
+      (context?.intakeBrief as IntakeBrief | undefined)?.niche ?? data?.governance?.pipelineType ?? "general"
     );
     // Ruleset version is locked in REALISM_RULESET_VERSION via media-realism/realismPolicy
 

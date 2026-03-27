@@ -66,10 +66,10 @@ export type ActiveGovernance = {
 
 // Telehealth base governance — reconstructed from spec constants
 // since TELEHEALTH_GOVERNANCE is no longer exported by the spec's telehealth.ts
-const TELEHEALTH_BASE: ActiveGovernance = {
-  pipelineType: "telehealth",
+const GENERAL_BASE: ActiveGovernance = {
+  pipelineType: "general",
   rulesetVersion: "universal-realism-v1",
-  brandTone: "Plain. Factual. No ad tone. No marketing framing.",
+  brandTone: "Clear, direct, benefit-focused. Adapt to niche context.",
   approvedFacts: [
     "Licensed clinicians review patient information.",
     "Secure intake may be completed online.",
@@ -134,7 +134,7 @@ export function loadGovernance(
   customNiches: CustomNiche[] = [],
 ): ActiveGovernance {
   if (nicheId === "telehealth" || nicheId === "telehealth-master") {
-    return { ...TELEHEALTH_BASE };
+    return { ...GENERAL_BASE };
   }
   if (nicheId === "google_ads") {
     return governanceToActive(GOOGLE_ADS_GOVERNANCE);
@@ -142,23 +142,23 @@ export function loadGovernance(
 
   const custom = customNiches.find(n => n.id === nicheId || n.pipeline_type === nicheId);
   if (!custom) {
-    console.warn(`[Governance] Niche "${nicheId}" not found — falling back to telehealth`);
-    return { ...TELEHEALTH_BASE };
+    console.warn(`[Governance] Niche "${nicheId}" not found — falling back to general defaults`);
+    return { ...GENERAL_BASE };
   }
 
   return {
-    ...TELEHEALTH_BASE,
+    ...GENERAL_BASE,
     pipelineType: custom.pipeline_type,
     rulesetVersion: custom.ruleset_version,
-    brandTone: custom.brand_tone ?? TELEHEALTH_BASE.brandTone,
-    approvedFacts: custom.approved_facts.length > 0 ? custom.approved_facts : TELEHEALTH_BASE.approvedFacts,
-    bannedPhrases: custom.banned_phrases.length > 0 ? custom.banned_phrases : TELEHEALTH_BASE.bannedPhrases,
-    strategyPrompt: custom.strategy_prompt ?? TELEHEALTH_BASE.strategyPrompt,
-    copyPrompt: custom.copy_prompt ?? TELEHEALTH_BASE.copyPrompt,
-    validatorPrompt: custom.validator_prompt ?? TELEHEALTH_BASE.validatorPrompt,
-    imagePrompt: custom.image_prompt ?? TELEHEALTH_BASE.imagePrompt,
-    imageToVideo: custom.image_to_video ?? TELEHEALTH_BASE.imageToVideo,
-    qaInstruction: custom.qa_instruction ?? TELEHEALTH_BASE.qaInstruction,
+    brandTone: custom.brand_tone ?? GENERAL_BASE.brandTone,
+    approvedFacts: custom.approved_facts.length > 0 ? custom.approved_facts : GENERAL_BASE.approvedFacts,
+    bannedPhrases: custom.banned_phrases.length > 0 ? custom.banned_phrases : GENERAL_BASE.bannedPhrases,
+    strategyPrompt: custom.strategy_prompt ?? GENERAL_BASE.strategyPrompt,
+    copyPrompt: custom.copy_prompt ?? GENERAL_BASE.copyPrompt,
+    validatorPrompt: custom.validator_prompt ?? GENERAL_BASE.validatorPrompt,
+    imagePrompt: custom.image_prompt ?? GENERAL_BASE.imagePrompt,
+    imageToVideo: custom.image_to_video ?? GENERAL_BASE.imageToVideo,
+    qaInstruction: custom.qa_instruction ?? GENERAL_BASE.qaInstruction,
   };
 }
 
