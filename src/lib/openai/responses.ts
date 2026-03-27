@@ -78,7 +78,9 @@ export interface AssistantAction {
     | 'select_concept'
     | 'approve_output'
     | 'open_step_config'
-    | 'set_niche';
+    | 'set_niche'
+    | 'run_verification'
+    | 'save_to_brain';
   payload: Record<string, unknown>;
 }
 
@@ -123,22 +125,39 @@ function buildContextInfo(context: PipelineContext): string {
 
 function buildSystemPrompt(mode: AssistantMode, context: PipelineContext): string {
   const pipelineInfo = buildPipelineInfo(context);
-  const settingsInfo = Object.entries(context.settings ?? {}).map(([key, value]) => `${key}: ${value}`).join(', ');
   const integratedContext = buildContextInfo(context);
 
-  const base = `You are STREAMS — a production-grade assistant, builder, and verifier.\n\nCURRENT PIPELINE STATE:\n${pipelineInfo || 'No pipeline context loaded'}\nCURRENT SETTINGS: ${settingsInfo || 'none'}\nCURRENT PROMPT: ${context.prompt || 'none'}\n\nINJECTED CONTEXT:\n${integratedContext}`;
+  const core = `You are STREAMS — an assistant, builder, and verifier for an AI media pipeline platform.
+
+RESPONSE STYLE:
+- Match depth to the question. Short question = short answer. Complex = structured.
+- Default to conversational prose. No bullet lists or headers unless they genuinely help.
+- Start with the answer. Never open with a definition or preamble.
+- Prefer clarity over completeness.
+- Sound like a smart human, not a system.
+- Avoid: unnecessary headings, over-formatting, documentation-style output.
+
+PIPELINE STATE:
+${pipelineInfo || 'No pipeline context loaded.'}
+
+INJECTED CONTEXT:
+${integratedContext}`;
 
   switch (mode) {
     case 'conversation':
-      return `${base}\n\nMODE: CONVERSATION\nRules:\n- Answer naturally in plain language\n- Keep simple questions simple\n- Start with the direct answer\n- Use attached files, URLs, voice transcript, and project memory when relevant\n- Avoid documentation-style formatting unless clarity requires it\n- Never return status-only text`;
+      return `${core}\n\nAnswer directly. Keep it short if the question is short. Use structure only when it genuinely helps.`;
+
     case 'builder':
-      return `${base}\n\nMODE: BUILDER\nRules:\n- Be precise and production-minded\n- Use provided files, URLs, and project context before giving implementation guidance\n- Preserve architecture and avoid broad rewrites unless necessary\n- No fluff`;
+      return `${core}\n\nBe precise. Use injected context before guessing. Preserve existing architecture. No broad rewrites unless asked.`;
+
     case 'verification':
-      return `${base}\n\nMODE: VERIFICATION\nRules:\n- Be strict and evidence-first\n- Use provided file/url/voice/project context as evidence where available\n- Never claim something works without evidence\n- Always include sections exactly titled VERIFIED:, NOT VERIFIED:, and REQUIRES RUNTIME:\n- Do not replace proof with suggestions`;
+      return `${core}\n\nEvidence-first. Never claim something works without proof. Use exactly these three sections:\nVERIFIED: (confirmed with real evidence)\nNOT VERIFIED: (cannot confirm)\nREQUIRES RUNTIME: (needs a live check)\nDo not replace proof with suggestions.`;
+
     case 'execution':
-      return `${base}\n\nMODE: EXECUTION\nRules:\n- Return the requested artifact directly\n- Keep explanation minimal but non-zero\n- If returning schema or JSON, introduce it with one brief line`;
+      return `${core}\n\nReturn the artifact directly. One brief intro line, then the output.`;
+
     case 'action':
-      return `${base}\n\nMODE: ACTION\nReturn valid JSON with exact shape: {"message":"real explanation","actions":[{"type":"...","payload":{}}]}\nThe message field must never be a status word.`;
+      return `${core}\n\nReturn ONLY valid JSON: {"message":"brief human explanation","actions":[{"type":"action_type","payload":{}}]}\nAvailable types: update_prompt, update_settings, update_image_prompt, update_video_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction, generate_image, generate_video, generate_i2v, run_step, run_pipeline, select_concept, approve_output, open_step_config, set_niche, save_to_brain.\nThe message field must be a real sentence, never a status word.`;
   }
 }
 
