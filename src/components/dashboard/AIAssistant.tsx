@@ -13,8 +13,8 @@ import { registerActivityStreamMiddleware, ActivityController } from '@/lib/acti
 import { ActivityStreamBar } from '@/lib/activity-stream/ActivityStreamBar';
 import { extractArtifactFromBuffer } from '@/lib/activity-stream/code-extractor';
 import type { ExtractedArtifact } from '@/lib/activity-stream/code-extractor';
-import { ArtifactCard } from '@/components/pipeline/ArtifactCard';
-import type { ArtifactDestination } from '@/components/pipeline/ArtifactCard';
+
+
 import { FloatingPreviewPanel } from '@/components/pipeline/FloatingPreviewPanel';
 import { LivePreviewRenderer } from '@/components/pipeline/LivePreviewRenderer';
 interface Action { type: string; payload: Record<string, unknown>; }
@@ -86,10 +86,6 @@ export default function AIAssistant(props: AIAssistantProps) {
   // ── Activity stream + artifact preview ────────────────────────────────────
   const [currentArtifact, setCurrentArtifact] = useState<ExtractedArtifact | null>(null);
   const [artifactStreaming, setArtifactStreaming] = useState(false);
-  const [autoPreview, setAutoPreview] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('streams:autoPreview') !== 'false';
-  });
   const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
   const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: 'iphone1' | 'iphone2' | 'desktop' } | null>(null);
 
@@ -508,43 +504,47 @@ export default function AIAssistant(props: AIAssistantProps) {
 
   const footer = useMemo(() => (
     <div className="grid gap-2">
-      {/* Feature 1 — Activity Stream Bar, always on */}
+      {/* Strip 1 — Response Activity Stream: always on, always visible */}
       <ActivityStreamBar />
-      {/* Feature 2 — Auto-detect toggle + artifact card */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] text-white/30">Auto-preview</span>
-        <button
-          type="button"
-          onClick={() => {
-            const next = !autoPreview;
-            setAutoPreview(next);
-            if (typeof window !== 'undefined') localStorage.setItem('streams:autoPreview', String(next));
-          }}
-          className={[
-            'rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition',
-            autoPreview
-              ? 'border border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
-              : 'border border-white/10 bg-transparent text-white/30',
-          ].join(' ')}
-        >
-          {autoPreview ? 'Auto ON' : 'Manual'}
-        </button>
-      </div>
+      {/* Strip 2 — Preview Streaming Engine: only when a preview/build artifact exists */}
       {currentArtifact && (
-        <div className="px-1">
-          <ArtifactCard
-            artifact={currentArtifact}
-            isStreaming={artifactStreaming}
-            autoPreview={autoPreview}
-            onPreview={(dest: ArtifactDestination) => {
-              if (dest === 'float') {
-                setFloatingArtifact(currentArtifact);
-              } else {
-                setLivePreviewArtifact({ artifact: currentArtifact, dest: dest as 'iphone1' | 'iphone2' | 'desktop' });
-              }
-            }}
-            onViewCode={() => { /* no-op in dashboard context — code shown inline */ }}
-          />
+        <div style={{
+          margin: '0 12px',
+          padding: '5px 10px',
+          borderRadius: 8,
+          background: artifactStreaming ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.03)',
+          border: artifactStreaming ? '1px solid rgba(139,92,246,0.22)' : '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          transition: 'all 180ms',
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: artifactStreaming ? '#c4b5fd' : 'rgba(196,181,253,0.5)', letterSpacing: '0.06em' }}>
+              STREAMS Preview Engine
+            </div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {artifactStreaming ? `Streaming ${currentArtifact.language ?? 'component'}…` : `${currentArtifact.language ?? 'Component'} ready`}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {artifactStreaming && (
+              <span style={{ position: 'relative', display: 'inline-flex', width: 8, height: 8 }}>
+                <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(167,139,250,0.75)', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite' }} />
+                <span style={{ position: 'relative', borderRadius: '50%', width: 8, height: 8, background: '#a78bfa' }} />
+              </span>
+            )}
+            {!artifactStreaming && (
+              <button
+                type="button"
+                onClick={() => setFloatingArtifact(currentArtifact)}
+                style={{ fontSize: 9, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.06em', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 4, padding: '2px 6px', cursor: 'pointer' }}
+              >
+                PREVIEW
+              </button>
+            )}
+          </div>
         </div>
       )}
       <AttachmentRail onAdd={addAttachment} />
@@ -571,7 +571,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, artifactStreaming, autoPreview, brainSaved, clearVoiceTranscript, currentArtifact, floatingArtifact, input, livePreviewArtifact, pending, removeAttachment, sendMessage, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[70]">
