@@ -12,7 +12,7 @@ interface AIAssistantShellProps {
 }
 
 export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed, streaming, multimodal", children, footer, onClose }: AIAssistantShellProps) {
-  const { state, shellStyle, toggleOpen, startDrag, startResize } = useAssistantWindow();
+  const { state, shellStyle, isMobile, toggleOpen, startDrag, startResize } = useAssistantWindow();
 
   if (!state.open) {
     return (
@@ -29,14 +29,17 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
   return (
     <div className="pointer-events-none fixed inset-0 z-[70]">
       <section
-        className="pointer-events-auto absolute overflow-hidden rounded-[28px] border border-white/12 bg-[#0A0C10] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
+        className={[
+          "pointer-events-auto absolute overflow-hidden border border-white/12 bg-[#0A0C10]",
+          isMobile ? "rounded-none shadow-none" : "rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]",
+        ].join(" ")}
         style={shellStyle}
       >
         
         <div className="relative flex h-full flex-col">
           <header
-            onPointerDown={startDrag}
-            className="flex cursor-grab items-start justify-between border-b border-white/8 px-5 py-4 active:cursor-grabbing"
+            onPointerDown={isMobile ? undefined : startDrag}
+            className={["flex items-start justify-between border-b border-white/8 px-5 py-4", isMobile ? "" : "cursor-grab active:cursor-grabbing"].join(" ")}
           >
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Floating AI chat</div>
@@ -51,28 +54,33 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
 
           <div className="relative min-h-0 flex-1">{children}</div>
 
-          <footer className="relative border-t border-white/8 px-4 py-4">{footer}</footer>
+          <footer
+            className="relative border-t border-white/8 px-4 py-4"
+            style={isMobile ? { paddingBottom: "calc(16px + env(safe-area-inset-bottom))" } : undefined}
+          >{footer}</footer>
 
-          <button
-            type="button"
-            onPointerDown={startResize("right")}
-            className="absolute right-0 top-14 h-[calc(100%-64px)] w-3 cursor-ew-resize opacity-0"
-            aria-label="Resize assistant width"
-          />
-          <button
-            type="button"
-            onPointerDown={startResize("bottom")}
-            className="absolute bottom-0 left-0 h-3 w-[calc(100%-16px)] cursor-ns-resize opacity-0"
-            aria-label="Resize assistant height"
-          />
-          <button
-            type="button"
-            onPointerDown={startResize("corner")}
-            className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize"
-            aria-label="Resize assistant"
-          >
-            <span className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-sm border border-white/20 bg-white/10" />
-          </button>
+          {!isMobile && <>
+            <button
+              type="button"
+              onPointerDown={startResize("right")}
+              className="absolute right-0 top-14 h-[calc(100%-64px)] w-3 cursor-ew-resize opacity-0"
+              aria-label="Resize assistant width"
+            />
+            <button
+              type="button"
+              onPointerDown={startResize("bottom")}
+              className="absolute bottom-0 left-0 h-3 w-[calc(100%-16px)] cursor-ns-resize opacity-0"
+              aria-label="Resize assistant height"
+            />
+            <button
+              type="button"
+              onPointerDown={startResize("corner")}
+              className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize"
+              aria-label="Resize assistant"
+            >
+              <span className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-sm border border-white/20 bg-white/10" />
+            </button>
+          </>}
         </div>
       </section>
     </div>

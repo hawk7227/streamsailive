@@ -34,8 +34,14 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
 }
 
 function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
-  const parts = splitCodeFence(text);
   const isVerification = mode === "verification" || /VERIFIED:/i.test(text);
+
+  // Verification responses: render structured cards only — no raw text
+  if (isVerification) {
+    return <VerificationBlock text={text} />;
+  }
+
+  const parts = splitCodeFence(text);
 
   return (
     <>
@@ -51,11 +57,10 @@ function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
         return (
           <Fragment key={`text-${index}`}>
             {paragraphs.map((paragraph, paragraphIndex) => (
-              <p key={`p-${paragraphIndex}`} className="whitespace-pre-wrap text-[15px] leading-7 text-white/90">
+              <p key={`p-${paragraphIndex}`} className="whitespace-pre-wrap text-[14px] leading-6 text-white/90">
                 {paragraph}
               </p>
             ))}
-            {isVerification && <VerificationBlock text={cleaned} />}
           </Fragment>
         );
       })}

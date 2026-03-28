@@ -82,6 +82,13 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [pending, setPending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingMode, setStreamingMode] = useState<AssistantMode>('conversation');
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 600);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ── Activity stream + artifact preview ────────────────────────────────────
   const [currentArtifact, setCurrentArtifact] = useState<ExtractedArtifact | null>(null);
@@ -579,8 +586,8 @@ export default function AIAssistant(props: AIAssistantProps) {
     <div className="pointer-events-none fixed inset-0 z-[70]">
       {sidebarOpen ? (
         <div
-          className="pointer-events-auto absolute bottom-6 right-6 flex overflow-hidden rounded-[28px] border border-white/12 bg-[#0A0C10] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
-          style={{ width: 660, height: 680 }}
+          className={["pointer-events-auto flex overflow-hidden border border-white/12 bg-[#0A0C10]", isMobile ? "fixed inset-0 rounded-none shadow-none" : "absolute bottom-6 right-6 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
+          style={isMobile ? undefined : { width: 660, height: 680 }}
         >
           <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>
           <div className="flex min-w-0 flex-1 flex-col">
@@ -607,7 +614,7 @@ export default function AIAssistant(props: AIAssistantProps) {
             <div className="min-h-0 flex-1 overflow-hidden">
               <AssistantMessageList messages={messages} streamingText={streamingText} streamingMode={streamingMode} pending={pending} />
             </div>
-            <div className="border-t border-white/8 px-4 py-3">{footer}</div>
+            <div className="border-t border-white/8 px-4 py-3" style={isMobile ? { paddingBottom: "calc(12px + env(safe-area-inset-bottom))" } : undefined}>{footer}</div>
           </div>
         </div>
       ) : (

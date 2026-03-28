@@ -1,3 +1,4 @@
+import React from "react";
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -103,8 +104,16 @@ export function useAssistantWindow(options?: UseAssistantWindowOptions) {
     window.localStorage.setItem(opts.storageKey, JSON.stringify(state));
   }, [opts.storageKey, state]);
 
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < 600;
+  });
+
   useEffect(() => {
-    const onResize = () => setState((current) => normalizeState(current, opts));
+    const onResize = () => {
+      setState((current) => normalizeState(current, opts));
+      setIsMobile(window.innerWidth < 600);
+    };
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
   }, [opts]);
@@ -204,16 +213,29 @@ export function useAssistantWindow(options?: UseAssistantWindowOptions) {
     };
   }, [onDragMove, onResizeMove, stopDrag, stopResize]);
 
-  const shellStyle = useMemo(() => ({
-    width: `${state.width}px`,
-    height: `${state.height}px`,
-    transform: `translate3d(${state.x}px, ${state.y}px, 0)`,
-    willChange: "transform",
-  }), [state]);
+  const shellStyle = useMemo(() => {
+    if (isMobile) {
+      return {
+        inset: "0px",
+        width: "100%",
+        height: "100%",
+        transform: "none",
+        willChange: "auto",
+        borderRadius: "0px",
+      } as React.CSSProperties;
+    }
+    return {
+      width: `${state.width}px`,
+      height: `${state.height}px`,
+      transform: `translate3d(${state.x}px, ${state.y}px, 0)`,
+      willChange: "transform",
+    } as React.CSSProperties;
+  }, [state, isMobile]);
 
   return {
     state,
     shellStyle,
+    isMobile,
     setOpen,
     toggleOpen,
     startDrag,
