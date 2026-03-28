@@ -11,7 +11,7 @@ import type { IntegratedChatContextParts } from '@/lib/ai-chat/context/types';
 // Set AI_PROVIDER_COPILOT=anthropic or copilotModel=claude-* to route to Anthropic.
 // Defaults to OpenAI if no model prefix matches.
 
-function getProviderConfig(model: string): { url: string; authHeader: (key: string) => Record<string, string> } {
+export function getProviderConfig(model: string): { url: string; authHeader: (key: string) => Record<string, string> } {
   if (model.startsWith('claude-')) {
     return {
       url: 'https://api.anthropic.com/v1/messages',
@@ -98,7 +98,7 @@ function extractTextContent(content: string | ContentBlock[]): string {
   return content.filter((block): block is { type: 'text'; text: string } => block.type === 'text').map((block) => block.text).join(' ');
 }
 
-function getLastUserText(messages: ChatMessage[]): string {
+export function getLastUserText(messages: ChatMessage[]): string {
   const lastUser = [...messages].reverse().find((message) => message.role === 'user');
   return lastUser ? extractTextContent(lastUser.content) : '';
 }
@@ -176,7 +176,7 @@ function getModelConfig(mode: AssistantMode) {
   }
 }
 
-function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean): Record<string, unknown> {
+export function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean): Record<string, unknown> {
   const config = getModelConfig(mode);
   const activeModel = getSiteConfig().copilotModel || 'gpt-4o';
   const body: Record<string, unknown> = {
@@ -236,7 +236,7 @@ function sse(data: unknown): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
-function parseStreamingLine(line: string): string {
+export function parseStreamingLine(line: string): string {
   if (!line.startsWith('data: ')) return '';
   const payload = line.slice(6).trim();
   if (!payload || payload === '[DONE]') return '';

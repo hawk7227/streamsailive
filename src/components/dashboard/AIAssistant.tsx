@@ -263,12 +263,10 @@ export default function AIAssistant(props: AIAssistantProps) {
     setCurrentArtifact(null);
     setArtifactStreaming(false);
 
-    // Feature 1: Activity stream — mandatory on every response
+    // Emit only the very first local signal — everything else comes from server phase events
     ActivityController.responseStarted();
-    ActivityController.phase('understanding_request', 'Understanding your request...');
 
     try {
-      ActivityController.phase('reviewing_context', 'Reviewing context...');
       const res = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -281,14 +279,11 @@ export default function AIAssistant(props: AIAssistantProps) {
         throw new Error(await res.text().catch(() => 'Assistant failed'));
       }
 
-      ActivityController.toolStarted('repo_reader', 'Reviewing context...');
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let fullText = '';
       let mode: AssistantMode = 'conversation';
-      let deltaCount = 0;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -301,20 +296,18 @@ export default function AIAssistant(props: AIAssistantProps) {
           if (!line) continue;
           try {
             const evt = JSON.parse(line.slice(6)) as {
-              type: string; delta?: string; action?: Action;
-              message?: string; conversationId?: string; mode?: AssistantMode;
+              type: string; delta?: string; action?: Action; phase?: string;
+              label?: string; message?: string; conversationId?: string; mode?: AssistantMode;
             };
-            if (evt.type === 'conversation_id' && evt.conversationId) {
+            if (evt.type === 'phase' && evt.phase) {
+              // Real server-side progress event — drive activity bar directly
+              ActivityController.phase(evt.phase as import('@/lib/activity-stream/index').ActivityPhase, evt.label);
+            } else if (evt.type === 'conversation_id' && evt.conversationId) {
               setConversationId(evt.conversationId);
               if (typeof window !== 'undefined') localStorage.setItem('streams_conv_id', evt.conversationId);
             } else if (evt.type === 'text' && evt.delta) {
               fullText += evt.delta;
-              deltaCount++;
               setStreamingText(fullText);
-              if (deltaCount === 1) {
-                ActivityController.toolCompleted('repo_reader');
-                ActivityController.phase('planning', 'Preparing response...');
-              }
               // Feature 2: detect code artifacts in real-time
               const detected = extractArtifactFromBuffer(fullText);
               if (detected) {
@@ -344,7 +337,6 @@ export default function AIAssistant(props: AIAssistantProps) {
         }
       }
 
-      ActivityController.phase('finalizing', 'Finalizing response...');
       setArtifactStreaming(false);
       setMessages((prev) => [...prev, {
         role: 'assistant', mode,
