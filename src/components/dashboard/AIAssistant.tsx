@@ -334,6 +334,8 @@ export default function AIAssistant(props: AIAssistantProps) {
       }
 
       setArtifactStreaming(false);
+      // Clear streaming text BEFORE pushing final message — prevents one-frame duplicate render
+      setStreamingText('');
       setMessages((prev) => [...prev, {
         role: 'assistant', mode,
         content: [{ type: 'text', text: fullText || 'Request completed.' }, ...detectMedia(fullText)],
@@ -345,13 +347,13 @@ export default function AIAssistant(props: AIAssistantProps) {
       if (err instanceof Error && err.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : 'Assistant failed';
       ActivityController.toolFailed('unknown', msg);
+      setStreamingText('');
       setMessages((prev) => [...prev, {
         role: 'assistant', mode: 'verification',
         content: [{ type: 'text', text: `VERIFIED:\n- Request reached the assistant layer.\n\nNOT VERIFIED:\n- Response could not be completed.\n\nREQUIRES RUNTIME:\n- Inspect the failed request path.\n\nRISKS:\n- ${msg}` }],
       }]);
     } finally {
       setPending(false);
-      setStreamingText('');
       abortRef.current = null;
     }
   }, [attachments, clearAttachments, clearVoiceTranscript, conversationId, messages, pending, performAction, props.context, requestContext, voiceTranscript]);
@@ -577,7 +579,7 @@ export default function AIAssistant(props: AIAssistantProps) {
     <div className="pointer-events-none fixed inset-0 z-[70]">
       {sidebarOpen ? (
         <div
-          className="pointer-events-auto absolute bottom-6 right-6 flex overflow-hidden rounded-[28px] border border-white/12 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),rgba(6,7,10,0.97)_60%)] shadow-[0_40px_120px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
+          className="pointer-events-auto absolute bottom-6 right-6 flex overflow-hidden rounded-[28px] border border-white/12 bg-[#0A0C10] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
           style={{ width: 660, height: 680 }}
         >
           <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>

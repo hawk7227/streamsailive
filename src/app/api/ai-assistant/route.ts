@@ -65,7 +65,9 @@ async function persistExchange(
 
 async function runProbes(requestUrl: string, cookieHeader: string, features: string): Promise<VerifyResponse | null> {
   try {
-    const origin = new URL(requestUrl).origin;
+    // Use env var first — request.url in DO may be an internal container address
+    const origin = process.env['NEXT_PUBLIC_APP_URL']
+      ?? (() => { try { return new URL(requestUrl).origin; } catch { return 'http://localhost:3000'; } })();
     const res = await fetch(`${origin}/api/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Cookie': cookieHeader, 'X-Probe-Origin': origin },

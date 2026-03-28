@@ -29,10 +29,10 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
   return (
     <div className="pointer-events-none fixed inset-0 z-[70]">
       <section
-        className="pointer-events-auto absolute overflow-hidden rounded-[28px] border border-white/12 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_rgba(255,255,255,0.02)_32%,_rgba(6,7,10,0.96)_72%)] shadow-[0_40px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+        className="pointer-events-auto absolute overflow-hidden rounded-[28px] border border-white/12 bg-[#0A0C10] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
         style={shellStyle}
       >
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_25%,transparent_75%,rgba(255,255,255,0.02))]" />
+        
         <div className="relative flex h-full flex-col">
           <header
             onPointerDown={startDrag}
