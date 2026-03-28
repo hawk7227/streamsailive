@@ -1,16 +1,26 @@
-import { streamAssistantChatResponse, type PipelineContext, type ChatMessage } from '@/lib/openai/responses';
-import { shouldRunProbes, extractFeatureTarget } from '@/lib/enforcement/modeEngine';
+import { type PipelineContext, type ChatMessage, getProviderConfig, createRequestBody, getLastUserText, createAssistantChatResponse } from '@/lib/openai/responses';
+import { shouldRunProbes, extractFeatureTarget, detectModeFromText } from '@/lib/enforcement/modeEngine';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 import { buildIntegratedChatContext } from '@/lib/ai-chat/context/buildIntegratedContext';
+import { runValidators } from '@/lib/enforcement/validatorRunner';
+import { validateChatResponse } from '@/lib/enforcement/validators/chat';
+import { getSiteConfig } from '@/lib/config';
 import type { AssistantRequestContext } from '@/lib/ai-chat/context/types';
 import type { VerifyResponse } from '@/app/api/verify/route';
 import type { User } from '@supabase/supabase-js';
 
-export const maxDuration = 60; // streaming route — required for DO App Platform
+export const maxDuration = 60;
 
-// ── Conversation persistence ───────────────────────────────────────────────────
+function sse(data: unknown): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+const enc = new TextEncoder();
+function emit(controller: ReadableStreamDefaultController<Uint8Array>, data: unknown) {
+  controller.enqueue(enc.encode(sse(data)));
+}
 
 async function ensureConversation(
   admin: ReturnType<typeof createAdminClient>,
@@ -48,104 +58,56 @@ async function persistExchange(
   if (userText) inserts.push({ conversation_id: conversationId, role: 'user', content: userText });
   if (assistantText) inserts.push({ conversation_id: conversationId, role: 'assistant', content: assistantText, model });
   if (inserts.length > 0) await admin.from('assistant_messages').insert(inserts);
-  await admin
-    .from('assistant_conversations')
+  await admin.from('assistant_conversations')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', conversationId);
 }
-
-// ── Probe runner (self-calls /api/verify) ─────────────────────────────────────
 
 async function runProbes(requestUrl: string, cookieHeader: string, features: string): Promise<VerifyResponse | null> {
   try {
     const origin = new URL(requestUrl).origin;
     const res = await fetch(`${origin}/api/verify`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cookie': cookieHeader,
-        // Tell /api/verify where to probe — derived from the live request URL,
-        // so it works in dev (localhost:3000) and prod (coral-app-rpgt7.ondigitalocean.app)
-        'X-Probe-Origin': origin,
-      },
+      headers: { 'Content-Type': 'application/json', 'Cookie': cookieHeader, 'X-Probe-Origin': origin },
       body: JSON.stringify({ features }),
     });
     if (!res.ok) return null;
     return await res.json() as VerifyResponse;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function formatProbeResults(data: VerifyResponse): string {
   const passed = data.results.filter((r) => r.status === 'pass');
   const failed = data.results.filter((r) => r.status !== 'pass');
-
   const lines: string[] = ['VERIFIED:'];
-  if (passed.length === 0) {
-    lines.push('- None passed.');
-  } else {
-    for (const r of passed) {
-      lines.push(`- ${r.label} → HTTP ${r.httpStatus} (${r.durationMs}ms)`);
-    }
-  }
-
+  if (passed.length === 0) lines.push('- None passed.');
+  else for (const r of passed) lines.push(`- ${r.label} \u2192 HTTP ${r.httpStatus} (${r.durationMs}ms)`);
   lines.push('', 'NOT VERIFIED:');
-  if (failed.length === 0) {
-    lines.push('- All checks passed.');
-  } else {
-    for (const r of failed) {
-      const status = r.httpStatus !== null ? `HTTP ${r.httpStatus}` : r.status.toUpperCase();
-      lines.push(`- ${r.label} → ${status}${r.error ? ` — ${r.error}` : ''}`);
-    }
+  if (failed.length === 0) lines.push('- All checks passed.');
+  else for (const r of failed) {
+    const status = r.httpStatus !== null ? `HTTP ${r.httpStatus}` : r.status.toUpperCase();
+    lines.push(`- ${r.label} \u2192 ${status}${r.error ? ` \u2014 ${r.error}` : ''}`);
   }
-
   lines.push('', 'REQUIRES RUNTIME:');
-  if (failed.length > 0) {
-    lines.push(`- ${failed.length} check${failed.length > 1 ? 's' : ''} did not pass. Inspect Vercel logs for details.`);
-  } else {
-    lines.push('- Nothing — all routes responded as expected.');
-  }
-
-  lines.push('', `Pass rate: ${data.summary.passRate}% (${data.summary.passed}/${data.summary.total}) · Run ID: ${data.runId}`);
+  lines.push(failed.length > 0
+    ? `- ${failed.length} check${failed.length > 1 ? 's' : ''} did not pass. Inspect logs for details.`
+    : '- Nothing \u2014 all routes responded as expected.');
+  lines.push('', `Pass rate: ${data.summary.passRate}% (${data.summary.passed}/${data.summary.total}) \u00b7 Run ID: ${data.runId}`);
   return lines.join('\n');
 }
 
-// ── SSE helper ─────────────────────────────────────────────────────────────────
-
-function sse(data: unknown): string {
-  return `data: ${JSON.stringify(data)}\n\n`;
+function parseStreamingLine(line: string): string {
+  if (!line.startsWith('data: ')) return '';
+  const payload = line.slice(6).trim();
+  if (!payload || payload === '[DONE]') return '';
+  try {
+    const parsed = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
+    return parsed.choices?.[0]?.delta?.content ?? '';
+  } catch { return ''; }
 }
 
-// ── Route ─────────────────────────────────────────────────────────────────────
-
 export async function POST(request: Request) {
-  // Primary auth: SSR cookie-based session (works in normal browser requests)
-  let user: User | null = null;
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
-  } catch { /* fall through to admin check */ }
-
-  // Fallback auth: verify JWT from Authorization header
-  // Handles edge cases where cookie parsing fails in streaming route context
-  if (!user) {
-    try {
-      const admin = createAdminClient();
-      const authHeader = request.headers.get('authorization');
-      const token = authHeader?.startsWith('Bearer ')
-        ? authHeader.slice(7)
-        : null;
-      if (token) {
-        const { data } = await admin.auth.getUser(token);
-        user = data.user;
-      }
-    } catch { /* non-fatal */ }
-  }
-
-  if (!user) return new Response('Unauthorized', { status: 401 });
-
+  // Parse body first — synchronous, zero network cost
   let payload: { messages?: unknown; context?: unknown; requestContext?: unknown; conversationId?: string; };
   try { payload = await request.json(); }
   catch { return new Response('Invalid JSON', { status: 400 }); }
@@ -154,145 +116,188 @@ export async function POST(request: Request) {
   if (!messages || !Array.isArray(messages)) return new Response('messages array is required', { status: 400 });
   if (!context || typeof context !== 'object') return new Response('context object is required', { status: 400 });
 
-  const admin = createAdminClient();
-  let workspaceId: string | undefined = (requestContext as AssistantRequestContext | undefined)?.workspaceId;
-  if (!workspaceId) {
-    try {
-      const selection = await getCurrentWorkspaceSelection(admin, user);
-      workspaceId = selection.current.workspace.id;
-    } catch { workspaceId = undefined; }
-  }
-
-  const integratedContext = await buildIntegratedChatContext({
-    ...(typeof requestContext === 'object' && requestContext ? requestContext as AssistantRequestContext : {}),
-    workspaceId,
-  });
-
-  // Extract user text
   const lastUserMsg = (messages as Array<{ role: string; content: unknown }>).findLast((m) => m.role === 'user');
   const userText =
-    typeof lastUserMsg?.content === 'string'
-      ? lastUserMsg.content
-      : Array.isArray(lastUserMsg?.content)
-        ? (lastUserMsg.content as Array<{ type: string; text?: string }>)
-            .filter((b) => b.type === 'text').map((b) => b.text ?? '').join(' ')
-        : '';
+    typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
+    : Array.isArray(lastUserMsg?.content)
+      ? (lastUserMsg.content as Array<{ type: string; text?: string }>)
+          .filter((b) => b.type === 'text').map((b) => b.text ?? '').join(' ')
+      : '';
 
-  let conversationId: string | undefined;
-  try { conversationId = await ensureConversation(admin, user.id, incomingConvId, userText); }
-  catch { conversationId = undefined; }
-
-  const encoder = new TextEncoder();
-  const convId = conversationId;
+  // Snapshot before async — headers not readable after stream opens
+  const requestUrl = request.url;
   const cookieHeader = request.headers.get('cookie') ?? '';
+  const authHeader = request.headers.get('authorization') ?? '';
 
-  // ── Probe path: text-match only, zero LLM calls, zero delay ──────────────
-  // shouldRunProbes() is pure string matching — no network, instant.
-  if (shouldRunProbes(userText)) {
-    const features = extractFeatureTarget(userText);
+  // ── Open SSE to client IMMEDIATELY ──────────────────────────────────────
+  // All async work (auth, DB, LLM) happens INSIDE the stream.
+  // Client receives first byte within one network RTT — no dead time.
 
-    const stream = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        if (convId) controller.enqueue(encoder.encode(sse({ type: 'conversation_id', conversationId: convId })));
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const close = () => { try { controller.close(); } catch { /* already closed */ } };
 
-        controller.enqueue(encoder.encode(sse({
-          type: 'text',
-          delta: `Running live HTTP probes (${features === 'all' ? 'all systems' : features})...\n\n`,
-        })));
+      // Phase 1: Auth
+      emit(controller, { type: 'phase', phase: 'starting', label: 'Starting secure session...' });
 
-        const data = await runProbes(request.url, cookieHeader, features);
+      let user: User | null = null;
+      try {
+        const supabase = await createClient();
+        const { data } = await supabase.auth.getUser();
+        user = data.user;
+      } catch { /* fall through */ }
 
-        let fullText: string;
-        if (!data) {
-          fullText = 'VERIFIED:\n- None — probe runner failed.\n\nNOT VERIFIED:\n- All routes — /api/verify returned an error.\n\nREQUIRES RUNTIME:\n- Ensure /api/verify is deployed and reachable.';
-        } else {
-          fullText = formatProbeResults(data);
-        }
-
-        // Stream the result text in small chunks so it feels live
-        const chunks: string[] = [];
-        for (let i = 0; i < fullText.length; i += 80) chunks.push(fullText.slice(i, i + 80));
-        if (chunks.length === 0) chunks.push(fullText);
-        for (const chunk of chunks) {
-          controller.enqueue(encoder.encode(sse({ type: 'text', delta: chunk })));
-        }
-
-        controller.enqueue(encoder.encode(sse({ type: 'done', mode: 'verification' })));
-        controller.close();
-
-        if (convId) {
-          const preamble = `Running live HTTP probes (${features === 'all' ? 'all systems' : features})...\n\n`;
-          persistExchange(admin, convId, userText, preamble + fullText, 'probe').catch(() => {});
-        }
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-      },
-    });
-  }
-
-  // ── Normal streaming path — single LLM call, streamed from first token ────
-  try {
-    const upstream = await streamAssistantChatResponse(
-      messages as ChatMessage[],
-      { ...(context as PipelineContext), integratedContext },
-    );
-
-    const [clientStream, persistStream] = upstream.tee();
-
-    if (convId) {
-      (async () => {
-        const reader = persistStream.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let fullText = '';
+      if (!user) {
         try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const chunks = buf.split('\n\n');
-            buf = chunks.pop() ?? '';
-            for (const chunk of chunks) {
-              const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-              if (!line) continue;
-              try {
-                const evt = JSON.parse(line.slice(6)) as { type: string; delta?: string };
-                if (evt.type === 'text' && evt.delta) fullText += evt.delta;
-              } catch { /* ignore */ }
-            }
-          }
-          await persistExchange(admin, convId, userText, fullText, 'gpt-4o');
+          const admin = createAdminClient();
+          const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+          if (token) { const { data } = await admin.auth.getUser(token); user = data.user; }
         } catch { /* non-fatal */ }
-      })();
-    }
+      }
 
-    const wrappedStream = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        if (convId) controller.enqueue(encoder.encode(sse({ type: 'conversation_id', conversationId: convId })));
-        const reader = clientStream.getReader();
+      if (!user) {
+        emit(controller, { type: 'error', message: 'Unauthorized' });
+        close();
+        return;
+      }
+
+      // Phase 2: Context
+      emit(controller, { type: 'phase', phase: 'reviewing_context', label: 'Reviewing context...' });
+
+      const admin = createAdminClient();
+      let workspaceId: string | undefined = (requestContext as AssistantRequestContext | undefined)?.workspaceId;
+      if (!workspaceId) {
+        try {
+          const selection = await getCurrentWorkspaceSelection(admin, user);
+          workspaceId = selection.current.workspace.id;
+        } catch { workspaceId = undefined; }
+      }
+
+      const integratedContext = await buildIntegratedChatContext({
+        ...(typeof requestContext === 'object' && requestContext ? requestContext as AssistantRequestContext : {}),
+        workspaceId,
+      });
+
+      // Phase 3: Conversation record
+      emit(controller, { type: 'phase', phase: 'planning', label: 'Preparing the best path...' });
+
+      let conversationId: string | undefined;
+      try { conversationId = await ensureConversation(admin, user.id, incomingConvId, userText); }
+      catch { conversationId = undefined; }
+
+      if (conversationId) emit(controller, { type: 'conversation_id', conversationId });
+
+      // Probe path — bypass LLM
+      if (shouldRunProbes(userText)) {
+        const features = extractFeatureTarget(userText);
+        emit(controller, { type: 'phase', phase: 'validating', label: 'Running live HTTP probes...' });
+        emit(controller, { type: 'text', delta: `Running live HTTP probes (${features === 'all' ? 'all systems' : features})...\n\n` });
+        const probeData = await runProbes(requestUrl, cookieHeader, features);
+        const fullText = probeData ? formatProbeResults(probeData)
+          : 'VERIFIED:\n- None.\n\nNOT VERIFIED:\n- All routes — /api/verify returned an error.\n\nREQUIRES RUNTIME:\n- Ensure /api/verify is deployed and reachable.';
+        for (let i = 0; i < fullText.length; i += 80) emit(controller, { type: 'text', delta: fullText.slice(i, i + 80) });
+        emit(controller, { type: 'done', mode: 'verification' });
+        close();
+        if (conversationId) persistExchange(admin, conversationId, userText, fullText, 'probe').catch(() => {});
+        return;
+      }
+
+      // Phase 4: Model call — emit understanding phase BEFORE the blocking fetch
+      emit(controller, { type: 'phase', phase: 'understanding_request', label: 'Understanding your request...' });
+
+      const activeModel = getSiteConfig().copilotModel || 'gpt-4o';
+      const provider = getProviderConfig(activeModel);
+      const apiKey = process.env.OPENAI_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
+
+      if (!apiKey) {
+        emit(controller, { type: 'error', message: 'Missing API key' });
+        close();
+        return;
+      }
+
+      const pipelineContext: PipelineContext = { ...(context as PipelineContext), integratedContext };
+      const requestText = getLastUserText(messages as ChatMessage[]);
+      const mode = detectModeFromText(requestText);
+
+      try {
+        if (mode === 'action') {
+          emit(controller, { type: 'phase', phase: 'finalizing', label: 'Finalizing response...' });
+          const finalResponse = await createAssistantChatResponse(messages as ChatMessage[], pipelineContext);
+          const chunks = finalResponse.message.match(/.{1,80}/g) ?? [finalResponse.message];
+          for (const chunk of chunks) emit(controller, { type: 'text', delta: chunk });
+          for (const action of finalResponse.actions) emit(controller, { type: 'action', action });
+          emit(controller, { type: 'done', mode });
+          close();
+          if (conversationId) persistExchange(admin, conversationId, userText, finalResponse.message, activeModel).catch(() => {});
+          return;
+        }
+
+        // Signal we are about to call the model — user sees this immediately
+        emit(controller, { type: 'phase', phase: 'planning', label: 'Connecting to model...' });
+
+        // Streaming — pipe deltas as they arrive from provider
+        const upstream = await fetch(provider.url, {
+          method: 'POST',
+          headers: { ...provider.authHeader(apiKey), 'Content-Type': 'application/json' },
+          body: JSON.stringify(createRequestBody(mode, messages as ChatMessage[], pipelineContext, true)),
+        });
+
+        if (!upstream.ok || !upstream.body) {
+          const errBody = await upstream.text().catch(() => 'Unknown upstream error');
+          emit(controller, { type: 'error', message: `Model request failed (${upstream.status}): ${errBody}` });
+          close();
+          return;
+        }
+
+        // Upstream connected — first token arriving now
+        emit(controller, { type: 'phase', phase: 'finalizing', label: 'Streaming response...' });
+
+        const reader = upstream.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        let firstToken = true;
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
-          controller.enqueue(value);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            const delta = parseStreamingLine(line.trim());
+            if (!delta) continue;
+            if (firstToken) {
+              // Real first token — clear the "streaming" phase, let text speak for itself
+              emit(controller, { type: 'phase', phase: 'completed', label: 'Ready' });
+              firstToken = false;
+            }
+            fullText += delta;
+            emit(controller, { type: 'text', delta });
+          }
         }
-        controller.close();
-      },
-    });
 
-    return new Response(wrappedStream, {
-      headers: {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-      },
-    });
-  } catch (error) {
-    return new Response(error instanceof Error ? error.message : 'Assistant failed', { status: 500 });
-  }
+        const ledger = runValidators('chat', [{
+          name: 'chat-response',
+          result: validateChatResponse({ mode, requestText, responseText: fullText, streamed: true }),
+        }], { mode });
+        const blocking = ledger.issues.find((i) => i.severity === 'error');
+        if (blocking) emit(controller, { type: 'error', message: blocking.message });
+        emit(controller, { type: 'done', mode, ledger });
+        close();
+        if (conversationId) persistExchange(admin, conversationId, userText, fullText, activeModel).catch(() => {});
+      } catch (error) {
+        emit(controller, { type: 'error', message: error instanceof Error ? error.message : String(error) });
+        close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    },
+  });
 }
