@@ -36,9 +36,12 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
 function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
   const isVerification = mode === "verification" || /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:/i.test(text);
 
-  // Verification responses: render structured cards only — no raw text
+  // Verification responses: strip preamble text before first section header,
+  // then render structured cards only — no raw text leaks
   if (isVerification) {
-    return <VerificationBlock text={text} />;
+    const sectionStart = text.search(/VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i);
+    const structured = sectionStart > 0 ? text.slice(sectionStart) : text;
+    return <VerificationBlock text={structured} />;
   }
 
   const parts = splitCodeFence(text);

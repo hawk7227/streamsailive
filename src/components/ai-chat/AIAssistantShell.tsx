@@ -27,13 +27,13 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70]" style={isMobile ? { touchAction: "none" } : undefined}>
+    <div className={["fixed inset-0 z-[70]", isMobile ? "pointer-events-auto bg-[#0A0C10]" : "pointer-events-none"].join(" ")} style={isMobile ? { touchAction: "none" } : undefined}>
       <section
         className={[
-          "pointer-events-auto overflow-hidden border-white/12 bg-[#0A0C10]",
+          "pointer-events-auto overflow-hidden bg-[#0A0C10]",
           isMobile
-            ? "fixed inset-0 border-0 rounded-none shadow-none"
-            : "absolute border rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]",
+            ? "border-0 rounded-none shadow-none"
+            : "absolute border border-white/12 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]",
         ].join(" ")}
         style={shellStyle}
       >

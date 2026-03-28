@@ -583,11 +583,11 @@ export default function AIAssistant(props: AIAssistantProps) {
   ), [addAttachment, attachments, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70]">
+    <div className={["fixed inset-0 z-[70]", isMobile ? "pointer-events-auto bg-[#0A0C10]" : "pointer-events-none"].join(" ")}>
       {sidebarOpen ? (
         <div
-          className={["pointer-events-auto flex overflow-hidden border-white/12 bg-[#0A0C10]", isMobile ? "fixed inset-0 border-0 rounded-none shadow-none" : "absolute bottom-6 right-6 border rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
-          style={isMobile ? { touchAction: "none" } : { width: 660, height: 680 }}
+          className={["pointer-events-auto flex overflow-hidden bg-[#0A0C10]", isMobile ? "fixed inset-0 border-0 rounded-none shadow-none" : "absolute bottom-6 right-6 border border-white/12 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
+          style={isMobile ? { touchAction: "none", zIndex: 80 } : { width: 660, height: 680 }}
         >
           {!isMobile && <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>}
           <div className="flex min-w-0 flex-1 flex-col">
