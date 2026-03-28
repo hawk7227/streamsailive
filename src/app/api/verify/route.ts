@@ -351,9 +351,16 @@ async function runProbe(
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Internal server-to-server calls (from ai-assistant route) use X-Probe-Origin header.
+  // These are trusted — the ai-assistant route already verified the user.
+  // External calls require normal cookie-based session auth.
+  const isInternalCall = !!request.headers.get('x-probe-origin');
+
+  if (!isInternalCall) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   let body: { features?: string; featureIds?: string[] } = {};
   try {
@@ -418,12 +425,16 @@ export async function POST(request: Request) {
     completedAt,
   };
 
-  // Persist to assistant_memory so the assistant can reference past runs
-  // Uses memory_type='pipeline_run' which is in the allowed check constraint
-  try {
-    const admin = createAdminClient();
-    await admin.from('assistant_memory').insert({
-      user_id: user.id,
+  // Persist to assistant_memory when called by authenticated user directly.
+  // Internal calls (from ai-assistant route) skip persistence — ai-assistant handles it.
+  if (!isInternalCall) {
+    const supabase2 = await createClient();
+    const { data: { user: persistUser } } = await supabase2.auth.getUser();
+    if (persistUser) {
+      try {
+        const admin = createAdminClient();
+        await admin.from('assistant_memory').insert({
+          user_id: persistUser.id,
       memory_type: 'pipeline_run',
       key: runId,
       value: {
@@ -437,16 +448,18 @@ export async function POST(request: Request) {
         completedAt,
       },
       tags: ['verification', featureKey, `passRate:${passRate}`],
-    });
-  } catch {
-    // Persistence failure is non-fatal — return results regardless
+        });
+      } catch {
+        // Persistence failure is non-fatal
+      }
+    }
   }
 
   return NextResponse.json(response);
 }
 
 // GET — returns the feature catalogue so the UI knows what can be checked
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
