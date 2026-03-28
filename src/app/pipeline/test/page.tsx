@@ -14,6 +14,7 @@ import { extractArtifactFromBuffer, type ExtractedArtifact } from "@/lib/activit
 import { ArtifactCard, type ArtifactDestination } from "@/components/pipeline/ArtifactCard";
 import { FloatingPreviewPanel } from "@/components/pipeline/FloatingPreviewPanel";
 import { LivePreviewRenderer } from "@/components/pipeline/LivePreviewRenderer";
+import AIAssistant from "@/components/dashboard/AIAssistant";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type StepState = "complete" | "running" | "review" | "queued" | "blocked" | "error";
@@ -255,26 +256,6 @@ Accept only if:
   const [deviceFrame, setDeviceFrame] = useState<DeviceFrame>("Desktop");
 
   // AI assistant
-  const [assistantMessages, setAssistantMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([
-    { role: "assistant", content: "Ready. Select a niche and run the pipeline, or ask me to generate something." }
-  ]);
-  const [assistantInput, setAssistantInput] = useState("");
-  const [assistantBusy, setAssistantBusy] = useState(false);
-  const [assistantAttachments, setAssistantAttachments] = useState<Array<{type:string;text?:string;image_url?:{url:string}}>>([]);
-  const [assistantStreamText, setAssistantStreamText] = useState("");
-  const [assistantProvider, setAssistantProvider] = useState<"openai"|"anthropic">(() => {
-    if (typeof window === "undefined") return "openai";
-    return (typeof localStorage !== "undefined" ? localStorage.getItem("streams_assistant_provider") : null) as "openai"|"anthropic" ?? "openai";
-  });
-  const assistantImgRef = React.useRef<HTMLInputElement>(null);
-  const assistantVidRef = React.useRef<HTMLInputElement>(null);
-  const assistantDocRef = React.useRef<HTMLInputElement>(null);
-  const assistantAudioRef = React.useRef<HTMLInputElement>(null);
-  const [assistantConvId, setAssistantConvId] = useState<string|undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    return typeof localStorage !== "undefined" ? localStorage.getItem("streams_conv_id") ?? undefined : undefined;
-  });
-
   // Intake
   const [activeIntake, setActiveIntake] = useState<IntakeType>(null);
   const [urlInput, setUrlInput] = useState("");
@@ -526,20 +507,7 @@ Accept only if:
   const videoVideoRefInputRef = useRef<HTMLInputElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const assistantEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
-
-  // ── Get session token for API calls ──────────────────────────────────────
-  async function getAuthHeader(): Promise<Record<string, string>> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        return { Authorization: `Bearer ${session.access_token}` };
-      }
-    } catch { /* non-fatal */ }
-    return {};
-  }
-
   function log(msg: string) {
     setLogs(p => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...p].slice(0, 100));
   }
@@ -1284,161 +1252,6 @@ Accept only if:
   }
 
   // ── AI assistant ──────────────────────────────────────────────────────────
-  async function sendAssistantMessage() {
-    const text = assistantInput.trim();
-    if (!text || assistantBusy) return;
-    setAssistantInput("");
-    setAssistantBusy(true);
-    setAssistantStreamText("");
-    setCurrentArtifact(null);
-    setArtifactStreaming(false);
-
-    // Feature 1: Activity stream — mandatory on every response
-    ActivityController.responseStarted();
-    ActivityController.phase("understanding_request", "Understanding your request...");
-
-    const userMessages = [...assistantMessages, { role: "user" as const, content: text }];
-    setAssistantMessages(userMessages);
-    try {
-      ActivityController.phase("reviewing_context", "Reviewing pipeline context...");
-      const authHeaders = await getAuthHeader();
-      const res = await fetch("/api/ai-assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        credentials: "include",
-        body: JSON.stringify({
-          messages: userMessages,
-          context: {
-            type: "pipeline",
-            prompt: stepPrompts[selectedStepId] ?? "",
-            settings: { niche: nicheId, concept: selectedConceptId },
-            nicheId,
-            currentStepId: selectedStepId,
-            selectedConceptId,
-            stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
-            intakeAnalysis: intakeAnalysis ?? undefined,
-            conceptErrors: Object.fromEntries(
-              Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
-            ),
-            conceptStatuses: Object.fromEntries(
-              Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
-            ),
-            hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
-            imageProvider,
-          },
-        }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      ActivityController.toolStarted("repo_reader", "Reading pipeline context...");
-
-      // ── SSE stream reader ─────────────────────────────────────────────────
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let deltaCount = 0;
-      const pendingActions: { type: string; payload: Record<string, unknown> }[] = [];
-
-      if (reader) {
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines2 = buf.split("\n");
-          buf = lines2.pop() ?? "";
-          for (const line of lines2) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim();
-            if (!raw || raw === "[DONE]") continue;
-            try {
-              const ev = JSON.parse(raw) as {
-                type: string;
-                delta?: string;
-                action?: { type: string; payload: Record<string, unknown> };
-                message?: string;
-              };
-              if (ev.type === "text" && ev.delta) {
-                fullText += ev.delta;
-                deltaCount++;
-                setAssistantStreamText(fullText);
-                if (deltaCount === 1) {
-                  ActivityController.toolCompleted("repo_reader");
-                  ActivityController.phase("planning", "Preparing response...");
-                }
-                // Feature 2: detect code artifacts in real-time
-                const detected = extractArtifactFromBuffer(fullText);
-                if (detected) {
-                  setCurrentArtifact(detected);
-                  setArtifactStreaming(!detected.isComplete);
-                  if (!detected.isComplete) {
-                    ActivityController.toolStarted("code_generator", "Generating component...");
-                  } else {
-                    ActivityController.toolCompleted("code_generator", "Component ready");
-                    ActivityController.previewRendered(100, "Component ready");
-                  }
-                }
-              } else if (ev.type === "action" && ev.action) {
-                pendingActions.push(ev.action);
-                if (ev.action.type === "generate_image" || ev.action.type === "generate_video") {
-                  ActivityController.toolStarted("preview_renderer", "Preparing generation...");
-                }
-              } else if (ev.type === "error" && ev.message) {
-                fullText += `\n⚠ ${ev.message}`;
-                setAssistantStreamText(fullText);
-                ActivityController.toolFailed("unknown", ev.message);
-              }
-            } catch { /* skip malformed */ }
-          }
-        }
-      }
-
-      ActivityController.phase("finalizing", "Finalizing response...");
-      const finalMsg = fullText || "(No response)";
-      setAssistantStreamText("");
-      setArtifactStreaming(false);
-      setAssistantMessages(p => [...p, { role: "assistant", content: finalMsg }]);
-      ActivityController.responseCompleted();
-
-      // Execute actions after stream completes
-      for (const action of pendingActions) {
-        const cid = (action.payload.conceptId as string | undefined) ?? selectedConceptId;
-        if (action.type === "generate_image") {
-          await generateImage(cid);
-        } else if (action.type === "generate_video" || action.type === "generate_i2v") {
-          await generateVideo(cid);
-        } else if (action.type === "update_image_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, imagery: action.payload.value as string }));
-        } else if (action.type === "update_strategy_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, strategy: action.payload.value as string }));
-        } else if (action.type === "update_copy_prompt" && action.payload.value) {
-          setStepPrompts(p => ({ ...p, copy: action.payload.value as string }));
-        } else if (action.type === "run_pipeline") {
-          await runPipeline();
-        } else if (action.type === "select_concept") {
-          setSelectedConceptId(cid);
-        } else if (action.type === "open_step_config" && action.payload.stepId) {
-          setSelectedStepId(action.payload.stepId as string);
-          setStepConfigOpen(true);
-        } else if (action.type === "set_niche" && action.payload.nicheId) {
-          setNicheId(action.payload.nicheId as string);
-        } else if (action.type === "update_prompt" && action.payload.new_prompt) {
-          setStepPrompts(p => ({ ...p, [selectedStepId]: action.payload.new_prompt as string }));
-        }
-      }
-      if (pendingActions.length > 0) log(`Assistant: ${pendingActions.length} action(s) — ${pendingActions.map(a => a.type).join(", ")}`);
-    } catch (e) {
-      ActivityController.toolFailed("unknown", e instanceof Error ? e.message : String(e));
-      setAssistantMessages(p => [...p, { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }]);
-    }
-    setAssistantBusy(false);
-  }
-
-    useEffect(() => {
-    assistantEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [assistantMessages]);
-
   // ── EditorPro drag (exact from studio/page.tsx) ─────────────────────────
   React.useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -1783,16 +1596,6 @@ Accept only if:
       `}</style>
       <input ref={fileInputRef} type="file" style={{ display: "none" }}
         onChange={e => { const f = e.target.files?.[0]; if (f) log(`File: ${f.name}`); }} />
-      {/* Assistant per-type file inputs */}
-      <input ref={assistantImgRef} type="file" accept="image/*" style={{display:"none"}}
-        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ const url=ev.target?.result as string; setAssistantAttachments(p=>[...p,{type:"image_url",image_url:{url}}]); }; r.readAsDataURL(f); e.target.value=""; }} />
-      <input ref={assistantVidRef} type="file" accept="video/*" style={{display:"none"}}
-        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const url=URL.createObjectURL(f); setAssistantAttachments(p=>[...p,{type:"text",text:`[VIDEO: ${f.name}] ${url}`}]); e.target.value=""; }} />
-      <input ref={assistantDocRef} type="file" accept=".pdf,.txt,.md,.json,.csv" style={{display:"none"}}
-        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const text=await f.text().catch(()=>`[${f.name}]`); setAssistantAttachments(p=>[...p,{type:"text",text:`[DOC: ${f.name}]\n${text.slice(0,4000)}`}]); e.target.value=""; }} />
-      <input ref={assistantAudioRef} type="file" accept="audio/*" style={{display:"none"}}
-        onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const url=URL.createObjectURL(f); setAssistantAttachments(p=>[...p,{type:"text",text:`[AUDIO: ${f.name}] ${url}`}]); e.target.value=""; }} />
-      {/* Hidden file inputs for all upload triggers */}
       <input ref={imageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
         onChange={e=>{Array.from(e.target.files??[]).forEach(f=>handleRefUpload(f,"image",setImageRefs,3));e.target.value="";}}/>
       <input ref={videoImageRefInputRef} type="file" accept="image/*" multiple style={{display:"none"}}
@@ -2832,235 +2635,56 @@ Accept only if:
 
         </div>
       </div>
-      {/* ── Floating AI Assistant ────────────────────────────────────── */}
-      <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-        {assistantOpen && (
-          <div style={{ width: 360, background: "rgba(8,12,33,0.97)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 16, boxShadow: "0 18px 60px rgba(0,0,0,0.4)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            {/* Header */}
-            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#67e8f9", letterSpacing: "0.1em" }}>AI ASSISTANT</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {(["url", "image", "video", "doc", "audio"] as IntakeType[]).map(t => (
-                  <button key={t!} onClick={() => {
-                    setActiveIntake(a => a === t ? null : t);
-                    if (t === "image") assistantImgRef.current?.click();
-                    else if (t === "video") assistantVidRef.current?.click();
-                    else if (t === "doc") assistantDocRef.current?.click();
-                    else if (t === "audio") assistantAudioRef.current?.click();
-                  }}
-                    style={{ background: activeIntake === t ? "rgba(34,211,238,0.15)" : "rgba(255,255,255,0.05)", border: "1px solid " + (activeIntake === t ? "rgba(34,211,238,0.5)" : "rgba(255,255,255,0.1)"), color: activeIntake === t ? "#67e8f9" : "#475569", borderRadius: 5, padding: "2px 7px", fontSize: 9, cursor: "pointer", fontWeight: 600, textTransform: "uppercase" }}>
-                    {t}
-                  </button>
-                ))}
-                <button onClick={() => setAssistantOpen(false)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>✕</button>
-              </div>
-            </div>
-            {activeIntake === "url" && (
-              <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 6 }}>
-                <input value={urlInput} onChange={e => setUrlInput(e.target.value)} onKeyDown={e => e.key === "Enter" && analyzeUrl()}
-                  placeholder="https://..." style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11 }} />
-                <button onClick={analyzeUrl} disabled={intakeBusy}
-                  style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.4)", color: "#67e8f9", borderRadius: 7, padding: "5px 11px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  {intakeBusy ? <Spinner size={9} /> : "Analyze"}
-                </button>
-              </div>
-            )}
-            {intakeAnalysis && !intakeResult && (
-              <div style={{ margin: "6px 14px", fontSize: 10, color: "#6ee7b7", background: "rgba(16,185,129,0.08)", borderRadius: 6, padding: "5px 8px" }}>
-                ✓ {intakeAnalysis.slice(0, 100)}...
-              </div>
-            )}
-            {/* ── Intake result card ── */}
-            {intakeResult && (
-              <div style={{ margin: "6px 14px", background: "rgba(8,12,33,0.95)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 10, overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(103,232,249,0.05)" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#67e8f9", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    {intakeResult.type === "youtube" ? "🎬 YouTube" : "🌐 Website"}
-                  </span>
-                  <button onClick={() => { setIntakeResult(null); setIntakeAnalysis(null); }}
-                    style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 12 }}>✕</button>
-                </div>
-                {/* YouTube card */}
-                {intakeResult.type === "youtube" && (
-                  <div style={{ padding: "8px 10px", display: "flex", gap: 8 }}>
-                    {intakeResult.thumbnailUrl && (
-                      <img src={intakeResult.thumbnailUrl} alt="thumbnail"
-                        style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 5, flexShrink: 0 }} />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {intakeResult.title}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4 }}>{intakeResult.channelName}</div>
-                      {intakeResult.transcriptSnippet && (
-                        <div style={{ fontSize: 9, color: "#475569", lineHeight: 1.4, maxHeight: 36, overflow: "hidden" }}>
-                          {intakeResult.transcriptSnippet.slice(0, 120)}…
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {/* Website card */}
-                {intakeResult.type === "website" && (
-                  <div style={{ padding: "8px 10px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#f1f5f9", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {intakeResult.brandName || intakeResult.title}
-                    </div>
-                    {intakeResult.colorPalette && (
-                      <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
-                        {Object.entries(intakeResult.colorPalette).slice(0, 5).map(([k, v]) => (
-                          <div key={k} title={k + ": " + v}
-                            style={{ width: 16, height: 16, borderRadius: 3, background: v.startsWith("#") ? v : "#334155", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }} />
-                        ))}
-                        <span style={{ fontSize: 9, color: "#475569", alignSelf: "center", marginLeft: 3 }}>palette</span>
-                      </div>
-                    )}
-                    {intakeResult.layoutPattern && (
-                      <div style={{ fontSize: 9, color: "#64748b", marginBottom: 3 }}>Layout: {intakeResult.layoutPattern}</div>
-                    )}
-                    {intakeResult.toneOfVoice && (
-                      <div style={{ fontSize: 9, color: "#64748b", marginBottom: 3 }}>Tone: {intakeResult.toneOfVoice}</div>
-                    )}
-                  </div>
-                )}
-                {/* Shared bottom: analysis + actions */}
-                <div style={{ padding: "6px 10px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.4, marginBottom: 6 }}>
-                    {intakeAnalysis?.slice(0, 120)}…
-                  </div>
-                  {intakeResult.keyMessages && intakeResult.keyMessages.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
-                      {intakeResult.keyMessages.slice(0, 3).map((m, i) => (
-                        <span key={i} style={{ fontSize: 9, background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.15)", color: "#67e8f9", borderRadius: 4, padding: "2px 6px" }}>{m.slice(0, 40)}</span>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => { if (imagePrompt.length > 0) { setImagePrompt(imagePrompt); } log("✓ Prompts applied from intake"); setIntakeExpanded(false); }}
-                      style={{ flex: 1, background: "rgba(103,232,249,0.12)", border: "1px solid rgba(103,232,249,0.25)", color: "#67e8f9", borderRadius: 6, padding: "4px 0", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                      ✓ Prompts Applied
-                    </button>
-                    {intakeResult.type === "website" && intakeResult.duplicateLayoutSuggestion && (
-                      <button onClick={() => { setAssistantMessages(p => [...p, { role: "assistant", content: "Layout duplication guide:\n" + intakeResult.duplicateLayoutSuggestion }]); }}
-                        style={{ flex: 1, background: "rgba(167,139,250,0.10)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa", borderRadius: 6, padding: "4px 0", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                        Layout Guide →
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* Chat */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 7, maxHeight: 260 }}>
-              {assistantMessages.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{ maxWidth: "85%", background: m.role === "user" ? "rgba(168,85,247,0.18)" : "rgba(255,255,255,0.06)", border: "1px solid " + (m.role === "user" ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.08)"), borderRadius: 10, padding: "6px 10px", fontSize: 11, color: m.role === "user" ? "#e9d5ff" : "#cbd5e1", lineHeight: 1.45 }}>
-                    {m.content}
-                  </div>
-                </div>
-              ))}
-              {/* Streaming text */}
-              {assistantStreamText && assistantBusy && (
-                <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                  <div style={{ maxWidth: "85%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "6px 10px", fontSize: 11, color: "#cbd5e1", lineHeight: 1.45 }}>
-                    {assistantStreamText}<span style={{ display: "inline-block", width: 6, height: 11, background: "#67e8f9", marginLeft: 2, animation: "pulse 1s infinite" }} />
-                  </div>
-                </div>
-              )}
-              {/* Attachment previews */}
-              {assistantAttachments.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "4px 0" }}>
-                  {assistantAttachments.map((a, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(103,232,249,0.1)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 5, padding: "2px 7px", fontSize: 9, color: "#67e8f9" }}>
-                      {a.type === "image_url" ? "🖼 Image" : `📎 ${(a.text ?? "").slice(0, 20)}…`}
-                      <button onClick={() => setAssistantAttachments(p => p.filter((_,j) => j!==i))} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 10, padding: 0 }}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div ref={assistantEndRef} />
-            </div>
-            {/* Provider toggle */}
-            <div style={{ padding: "4px 12px", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 4, alignItems: "center" }}>
-              <span style={{ fontSize: 9, color: "#334155", marginRight: 4 }}>Model:</span>
-              {(["openai","anthropic"] as const).map(p => (
-                <button key={p} onClick={() => { setAssistantProvider(p); if (typeof localStorage !== "undefined") localStorage.setItem("streams_assistant_provider", p); }}
-                  style={{ padding: "1px 7px", borderRadius: 4, border: `1px solid ${assistantProvider===p?"rgba(103,232,249,0.4)":"rgba(255,255,255,0.08)"}`, background: assistantProvider===p?"rgba(103,232,249,0.1)":"transparent", color: assistantProvider===p?"#67e8f9":"#475569", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>
-                  {p === "openai" ? "GPT-4o" : "Claude"}
-                </button>
-              ))}
-            </div>
-            {/* ── Activity Stream Bar — Feature 1, always on ─────────── */}
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-              <ActivityStreamBar />
-            </div>
-            {/* ── Auto-detect settings + artifact card — Feature 2 ──── */}
-            <div style={{ padding: "4px 12px", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 9, color: "#334155" }}>Auto-preview:</span>
-              <button
-                onClick={() => {
-                  const next = !autoPreview;
-                  setAutoPreview(next);
-                  if (typeof localStorage !== "undefined") localStorage.setItem("streams:autoPreview", String(next));
-                }}
-                style={{
-                  padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 700,
-                  cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em",
-                  border: `1px solid ${autoPreview ? "rgba(103,232,249,0.4)" : "rgba(255,255,255,0.08)"}`,
-                  background: autoPreview ? "rgba(103,232,249,0.12)" : "transparent",
-                  color: autoPreview ? "#67e8f9" : "#475569",
-                }}
-              >
-                {autoPreview ? "Auto ON" : "Manual"}
-              </button>
-            </div>
-            {/* Artifact card — appears when code block is detected in stream */}
-            {currentArtifact && (
-              <div style={{ padding: "0 12px 4px" }}>
-                <ArtifactCard
-                  artifact={currentArtifact}
-                  isStreaming={artifactStreaming}
-                  autoPreview={autoPreview}
-                  onPreview={(dest) => {
-                    if (dest === "float") {
-                      setFloatingArtifact(currentArtifact);
-                    } else {
-                      setLivePreviewArtifact({ artifact: currentArtifact, dest: dest as "iphone1" | "iphone2" | "desktop" });
-                    }
-                  }}
-                  onViewCode={() => setEpOpen(true)}
-                />
-              </div>
-            )}
-            {/* Voice bar */}
-            <div style={{ padding: "6px 12px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-              <VoiceBar
-                onTranscript={(t) => setAssistantInput(prev => prev ? prev + " " + t : t)}
-                speakText={assistantMessages.at(-1)?.role === "assistant" ? String(assistantMessages.at(-1)?.content ?? "") : undefined}
-              />
-            </div>
-            {/* Input */}
-            <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 7 }}>
-              <input value={assistantInput} onChange={e => setAssistantInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && sendAssistantMessage()}
-                placeholder="Ask STREAMS..." disabled={assistantBusy}
-                style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", color: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 12 }} />
-              <button onClick={sendAssistantMessage} disabled={assistantBusy || !assistantInput.trim()}
-                style={{ background: assistantInput.trim() ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.04)", border: "1px solid " + (assistantInput.trim() ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.08)"), color: assistantInput.trim() ? "#67e8f9" : "#475569", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                {assistantBusy ? <Spinner size={11} /> : "Send"}
-              </button>
-            </div>
-          </div>
-        )}
-        {/* Float toggle button */}
-        <button onClick={() => setAssistantOpen(o => !o)}
-          style={{ width: 48, height: 48, borderRadius: "50%", background: assistantOpen ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,rgba(103,232,249,0.6),rgba(167,139,250,0.5))", border: "1px solid rgba(103,232,249,0.4)", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(0,0,0,0.3)", position: "relative" }}>
-          {assistantBusy ? <Spinner size={16} /> : "✦"}
-          {activeCount > 0 && <span style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#67e8f9", border: "2px solid #050816", fontSize: 8, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>{activeCount}</span>}
-        </button>
-      </div>
-
+      {/* ── AI Assistant — full featured with sidebar, history, search, voice ── */}
+      <AIAssistant
+        context={{
+          type: "pipeline",
+          prompt: stepPrompts[selectedStepId] ?? "",
+          settings: { niche: nicheId, concept: selectedConceptId },
+          nicheId,
+          currentStepId: selectedStepId,
+          selectedConceptId,
+          stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
+          intakeAnalysis: intakeAnalysis ?? undefined,
+          conceptErrors: Object.fromEntries(
+            Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
+          ),
+          conceptStatuses: Object.fromEntries(
+            Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
+          ),
+          hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
+          imageProvider,
+        }}
+        onApplyPrompt={(prompt) => setStepPrompts(p => ({ ...p, [selectedStepId]: prompt }))}
+        onUpdateSettings={(key, value) => {
+          if (key === "nicheId") setNicheId(value);
+          if (key === "imageProvider") setImageProvider(value as "openai" | "fal");
+          if (key === "pipelineMode") setPipelineMode(value as "manual" | "auto");
+        }}
+        onGenerateImage={(conceptId, prompt) => {
+          if (prompt) setStepPrompts(p => ({ ...p, imagery: prompt }));
+          void generateImage(conceptId ?? selectedConceptId);
+        }}
+        onGenerateVideo={(conceptId, prompt) => {
+          if (prompt) setStepPrompts(p => ({ ...p, i2v: prompt }));
+          void generateVideo(conceptId ?? selectedConceptId);
+        }}
+        onRunPipeline={() => void runPipeline()}
+        onRunStep={(stepId) => {
+          setSelectedStepId(stepId);
+          setStepConfigOpen(true);
+        }}
+        onSelectConcept={(conceptId) => setSelectedConceptId(conceptId)}
+        onApproveOutput={(type, url) => approveOutput(type as "image" | "video" | "script", url)}
+        onOpenStepConfig={(stepId) => { setSelectedStepId(stepId); setStepConfigOpen(true); }}
+        onSetNiche={(nicheId) => setNicheId(nicheId)}
+        onUpdateImagePrompt={(v) => setStepPrompts(p => ({ ...p, imagery: v }))}
+        onUpdateVideoPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
+        onUpdateStrategyPrompt={(v) => setStepPrompts(p => ({ ...p, strategy: v }))}
+        onUpdateCopyPrompt={(v) => setStepPrompts(p => ({ ...p, copy: v }))}
+        onUpdateI2VPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
+        onUpdateQAInstruction={(v) => setStepPrompts(p => ({ ...p, qa: v }))}
+      />
       {/* ── Floating Preview Panel — Feature 2 (float destination) ──── */}
       {floatingArtifact && (
         <FloatingPreviewPanel

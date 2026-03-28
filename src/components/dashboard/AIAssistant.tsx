@@ -9,7 +9,14 @@ import { ContextChips } from '@/components/ai-chat/ContextChips';
 import { VoiceBar } from '@/components/ai-chat/VoiceBar';
 import { useAssistantContextBridge } from '@/components/ai-chat/useAssistantContextBridge';
 import type { AssistantMode } from '@/lib/enforcement/types';
-
+import { registerActivityStreamMiddleware, ActivityController } from '@/lib/activity-stream/index';
+import { ActivityStreamBar } from '@/lib/activity-stream/ActivityStreamBar';
+import { extractArtifactFromBuffer } from '@/lib/activity-stream/code-extractor';
+import type { ExtractedArtifact } from '@/lib/activity-stream/code-extractor';
+import { ArtifactCard } from '@/components/pipeline/ArtifactCard';
+import type { ArtifactDestination } from '@/components/pipeline/ArtifactCard';
+import { FloatingPreviewPanel } from '@/components/pipeline/FloatingPreviewPanel';
+import { LivePreviewRenderer } from '@/components/pipeline/LivePreviewRenderer';
 interface Action { type: string; payload: Record<string, unknown>; }
 
 interface ConversationItem {
@@ -75,6 +82,19 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [pending, setPending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingMode, setStreamingMode] = useState<AssistantMode>('conversation');
+
+  // ── Activity stream + artifact preview ────────────────────────────────────
+  const [currentArtifact, setCurrentArtifact] = useState<ExtractedArtifact | null>(null);
+  const [artifactStreaming, setArtifactStreaming] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('streams:autoPreview') !== 'false';
+  });
+  const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
+  const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: 'iphone1' | 'iphone2' | 'desktop' } | null>(null);
+
+  // Register middleware once
+  useEffect(() => registerActivityStreamMiddleware(), []);
   const [conversationId, setConversationId] = useState<string | undefined>(() => {
     if (typeof window === 'undefined') return undefined;
     return localStorage.getItem('streams_conv_id') ?? undefined;
@@ -240,8 +260,15 @@ export default function AIAssistant(props: AIAssistantProps) {
     setPending(true);
     setStreamingText('');
     setStreamingMode('conversation');
+    setCurrentArtifact(null);
+    setArtifactStreaming(false);
+
+    // Feature 1: Activity stream — mandatory on every response
+    ActivityController.responseStarted();
+    ActivityController.phase('understanding_request', 'Understanding your request...');
 
     try {
+      ActivityController.phase('reviewing_context', 'Reviewing context...');
       const res = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -254,11 +281,14 @@ export default function AIAssistant(props: AIAssistantProps) {
         throw new Error(await res.text().catch(() => 'Assistant failed'));
       }
 
+      ActivityController.toolStarted('repo_reader', 'Reviewing context...');
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let fullText = '';
       let mode: AssistantMode = 'conversation';
+      let deltaCount = 0;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -279,7 +309,23 @@ export default function AIAssistant(props: AIAssistantProps) {
               if (typeof window !== 'undefined') localStorage.setItem('streams_conv_id', evt.conversationId);
             } else if (evt.type === 'text' && evt.delta) {
               fullText += evt.delta;
+              deltaCount++;
               setStreamingText(fullText);
+              if (deltaCount === 1) {
+                ActivityController.toolCompleted('repo_reader');
+                ActivityController.phase('planning', 'Preparing response...');
+              }
+              // Feature 2: detect code artifacts in real-time
+              const detected = extractArtifactFromBuffer(fullText);
+              if (detected) {
+                setCurrentArtifact(detected);
+                setArtifactStreaming(!detected.isComplete);
+                if (!detected.isComplete) {
+                  ActivityController.toolStarted('code_generator', 'Generating component...');
+                } else {
+                  ActivityController.toolCompleted('code_generator', 'Component ready');
+                }
+              }
             } else if (evt.type === 'action' && evt.action) {
               performAction(evt.action);
             } else if (evt.type === 'done') {
@@ -292,20 +338,25 @@ export default function AIAssistant(props: AIAssistantProps) {
             } else if (evt.type === 'error' && evt.message) {
               fullText += `\n\n${evt.message}`;
               setStreamingText(fullText);
+              ActivityController.toolFailed('unknown', evt.message);
             }
           } catch { /* ignore malformed SSE frame */ }
         }
       }
 
+      ActivityController.phase('finalizing', 'Finalizing response...');
+      setArtifactStreaming(false);
       setMessages((prev) => [...prev, {
         role: 'assistant', mode,
         content: [{ type: 'text', text: fullText || 'Request completed.' }, ...detectMedia(fullText)],
       }]);
+      ActivityController.responseCompleted();
       clearAttachments();
       clearVoiceTranscript();
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : 'Assistant failed';
+      ActivityController.toolFailed('unknown', msg);
       setMessages((prev) => [...prev, {
         role: 'assistant', mode: 'verification',
         content: [{ type: 'text', text: `VERIFIED:\n- Request reached the assistant layer.\n\nNOT VERIFIED:\n- Response could not be completed.\n\nREQUIRES RUNTIME:\n- Inspect the failed request path.\n\nRISKS:\n- ${msg}` }],
@@ -465,6 +516,45 @@ export default function AIAssistant(props: AIAssistantProps) {
 
   const footer = useMemo(() => (
     <div className="grid gap-2">
+      {/* Feature 1 — Activity Stream Bar, always on */}
+      <ActivityStreamBar />
+      {/* Feature 2 — Auto-detect toggle + artifact card */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] text-white/30">Auto-preview</span>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !autoPreview;
+            setAutoPreview(next);
+            if (typeof window !== 'undefined') localStorage.setItem('streams:autoPreview', String(next));
+          }}
+          className={[
+            'rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition',
+            autoPreview
+              ? 'border border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+              : 'border border-white/10 bg-transparent text-white/30',
+          ].join(' ')}
+        >
+          {autoPreview ? 'Auto ON' : 'Manual'}
+        </button>
+      </div>
+      {currentArtifact && (
+        <div className="px-1">
+          <ArtifactCard
+            artifact={currentArtifact}
+            isStreaming={artifactStreaming}
+            autoPreview={autoPreview}
+            onPreview={(dest: ArtifactDestination) => {
+              if (dest === 'float') {
+                setFloatingArtifact(currentArtifact);
+              } else {
+                setLivePreviewArtifact({ artifact: currentArtifact, dest: dest as 'iphone1' | 'iphone2' | 'desktop' });
+              }
+            }}
+            onViewCode={() => { /* no-op in dashboard context — code shown inline */ }}
+          />
+        </div>
+      )}
       <AttachmentRail onAdd={addAttachment} />
       <VoiceBar onTranscript={setVoiceTranscript} speakText={streamingText && !pending ? streamingText : undefined} />
       <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
@@ -489,7 +579,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, brainSaved, clearVoiceTranscript, input, pending, removeAttachment, sendMessage, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, artifactStreaming, autoPreview, brainSaved, clearVoiceTranscript, currentArtifact, floatingArtifact, input, livePreviewArtifact, pending, removeAttachment, sendMessage, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[70]">
@@ -553,6 +643,34 @@ export default function AIAssistant(props: AIAssistantProps) {
         >
           <AssistantMessageList messages={messages} streamingText={streamingText} streamingMode={streamingMode} pending={pending} />
         </AIAssistantShell>
+      )}
+      {/* Feature 2 — Floating preview panel */}
+      {floatingArtifact && (
+        <FloatingPreviewPanel
+          artifact={floatingArtifact}
+          onClose={() => setFloatingArtifact(null)}
+        />
+      )}
+      {/* Feature 2 — Live preview modal overlay */}
+      {livePreviewArtifact && (
+        <div
+          className="pointer-events-auto fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-black/65 backdrop-blur-sm"
+          onClick={() => setLivePreviewArtifact(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="overflow-hidden rounded-xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+            <LivePreviewRenderer
+              artifact={livePreviewArtifact.artifact}
+              width={livePreviewArtifact.dest === 'desktop' ? 900 : 390}
+              height={livePreviewArtifact.dest === 'desktop' ? 600 : 700}
+            />
+          </div>
+          <button
+            onClick={() => setLivePreviewArtifact(null)}
+            className="rounded-lg border border-white/15 bg-white/8 px-5 py-2 text-sm font-semibold text-white"
+          >
+            Close preview
+          </button>
+        </div>
       )}
     </div>
   );
