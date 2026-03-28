@@ -586,10 +586,10 @@ export default function AIAssistant(props: AIAssistantProps) {
     <div className="pointer-events-none fixed inset-0 z-[70]">
       {sidebarOpen ? (
         <div
-          className={["pointer-events-auto flex overflow-hidden border border-white/12 bg-[#0A0C10]", isMobile ? "fixed inset-0 rounded-none shadow-none" : "absolute bottom-6 right-6 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
-          style={isMobile ? undefined : { width: 660, height: 680 }}
+          className={["pointer-events-auto flex overflow-hidden border-white/12 bg-[#0A0C10]", isMobile ? "fixed inset-0 border-0 rounded-none shadow-none" : "absolute bottom-6 right-6 border rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
+          style={isMobile ? { touchAction: "none" } : { width: 660, height: 680 }}
         >
-          <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>
+          {!isMobile && <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>}
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex items-center justify-between border-b border-white/8 px-4 py-3">
               <div>

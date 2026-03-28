@@ -34,7 +34,7 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
 }
 
 function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
-  const isVerification = mode === "verification" || /VERIFIED:/i.test(text);
+  const isVerification = mode === "verification" || /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:/i.test(text);
 
   // Verification responses: render structured cards only — no raw text
   if (isVerification) {

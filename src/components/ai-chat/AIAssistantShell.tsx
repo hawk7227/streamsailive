@@ -27,11 +27,13 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70]">
+    <div className="pointer-events-none fixed inset-0 z-[70]" style={isMobile ? { touchAction: "none" } : undefined}>
       <section
         className={[
-          "pointer-events-auto absolute overflow-hidden border border-white/12 bg-[#0A0C10]",
-          isMobile ? "rounded-none shadow-none" : "rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]",
+          "pointer-events-auto overflow-hidden border-white/12 bg-[#0A0C10]",
+          isMobile
+            ? "fixed inset-0 border-0 rounded-none shadow-none"
+            : "absolute border rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]",
         ].join(" ")}
         style={shellStyle}
       >
@@ -39,16 +41,16 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
         <div className="relative flex h-full flex-col">
           <header
             onPointerDown={isMobile ? undefined : startDrag}
-            className={["flex items-start justify-between border-b border-white/8 px-5 py-4", isMobile ? "" : "cursor-grab active:cursor-grabbing"].join(" ")}
+            className={["flex items-center justify-between border-b border-white/8", isMobile ? "px-4 py-3" : "px-5 py-4 cursor-grab active:cursor-grabbing items-start"].join(" ")}
           >
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Floating AI chat</div>
-              <div className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">{title}</div>
-              <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+              {!isMobile && <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Floating AI chat</div>}
+              <div className={isMobile ? "text-[15px] font-semibold text-white" : "mt-1 text-lg font-semibold tracking-[-0.02em] text-white"}>{title}</div>
+              {!isMobile && <p className="mt-1 text-sm text-white/55">{subtitle}</p>}
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={toggleOpen} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">Minimize</button>
-              <button type="button" onClick={onClose} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">Close</button>
+              {!isMobile && <button type="button" onClick={toggleOpen} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">Minimize</button>}
+              <button type="button" onClick={isMobile ? toggleOpen : onClose} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white">{isMobile ? "✕" : "Close"}</button>
             </div>
           </header>
 

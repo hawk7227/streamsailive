@@ -19,7 +19,17 @@ export function AssistantMessageList({ messages, streamingText, streamingMode, p
   }, [messages, pending, streamingText]);
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable]">
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto px-4 py-4"
+      style={{
+        // Contain scroll to this element — prevents page scroll-through on mobile
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch' as never,
+        // Explicit height so flex-1 resolves correctly in all mobile browsers
+        minHeight: 0,
+      }}
+    >
       <div className="mx-auto flex max-w-[760px] flex-col gap-4">
         {messages.map((message, index) => (
           <AssistantMessage key={`${message.role}-${index}`} message={message} />
