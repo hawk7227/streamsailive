@@ -34,13 +34,21 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
 }
 
 function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
-  const isVerification = mode === "verification" || /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:/i.test(text);
+  // A response is verification if mode is set OR any section header appears
+  const hasAnyHeader = /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i.test(text);
+  const isVerification = mode === "verification" || hasAnyHeader;
 
-  // Verification responses: strip preamble text before first section header,
-  // then render structured cards only — no raw text leaks
   if (isVerification) {
-    const sectionStart = text.search(/VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i);
-    const structured = sectionStart > 0 ? text.slice(sectionStart) : text;
+    // Strip any preamble before the first section header
+    const sectionStart = text.search(/VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i);
+
+    // If no section header found yet (still streaming preamble) — render nothing,
+    // show a subtle placeholder so the bubble doesn't flash raw text
+    if (sectionStart === -1) {
+      return <p className="text-[13px] text-white/35 italic">Analyzing...</p>;
+    }
+
+    const structured = text.slice(sectionStart);
     return <VerificationBlock text={structured} />;
   }
 

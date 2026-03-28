@@ -82,9 +82,10 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [pending, setPending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingMode, setStreamingMode] = useState<AssistantMode>('conversation');
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 600);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
   useEffect(() => {
+    setIsMobile(window.innerWidth < 600);
     const onResize = () => setIsMobile(window.innerWidth < 600);
     window.addEventListener('resize', onResize, { passive: true });
     return () => window.removeEventListener('resize', onResize);

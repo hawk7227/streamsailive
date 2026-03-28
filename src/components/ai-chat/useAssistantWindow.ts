@@ -89,6 +89,8 @@ export function useAssistantWindow(options?: UseAssistantWindowOptions) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Skip localStorage restore on mobile — persisted desktop dimensions corrupt mobile layout
+    if (window.innerWidth < 600) return;
     try {
       const raw = window.localStorage.getItem(opts.storageKey);
       if (!raw) return;
@@ -101,15 +103,19 @@ export function useAssistantWindow(options?: UseAssistantWindowOptions) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Don't persist state on mobile — nothing to restore
+    if (window.innerWidth < 600) return;
     window.localStorage.setItem(opts.storageKey, JSON.stringify(state));
   }, [opts.storageKey, state]);
 
-  const [isMobile, setIsMobile] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.innerWidth < 600;
-  });
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
+    // Resolve isMobile immediately on mount — before any paint on mobile
+    setIsMobile(window.innerWidth < 600);
+    setMounted(true);
+
     const onResize = () => {
       setState((current) => normalizeState(current, opts));
       setIsMobile(window.innerWidth < 600);
@@ -242,6 +248,7 @@ export function useAssistantWindow(options?: UseAssistantWindowOptions) {
     state,
     shellStyle,
     isMobile,
+    mounted,
     setOpen,
     toggleOpen,
     startDrag,

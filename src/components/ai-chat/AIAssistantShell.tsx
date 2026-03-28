@@ -12,7 +12,11 @@ interface AIAssistantShellProps {
 }
 
 export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed, streaming, multimodal", children, footer, onClose }: AIAssistantShellProps) {
-  const { state, shellStyle, isMobile, toggleOpen, startDrag, startResize } = useAssistantWindow();
+  const { state, shellStyle, isMobile, mounted, toggleOpen, startDrag, startResize } = useAssistantWindow();
+
+  // Don't render until mounted — isMobile resolves in first effect,
+  // rendering before that causes one frame with wrong desktop shellStyle on mobile
+  if (!mounted) return null;
 
   if (!state.open) {
     return (
