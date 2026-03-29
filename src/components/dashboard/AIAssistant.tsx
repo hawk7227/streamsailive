@@ -80,6 +80,11 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [messages, setMessages] = useState<AssistantMessageShape[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState('');
   const [pending, setPending] = useState(false);
+  const [model, setModel] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'claude-sonnet-4-6';
+    return localStorage.getItem('streams:model') ?? 'claude-sonnet-4-6';
+  });
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingMode, setStreamingMode] = useState<AssistantMode>('conversation');
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -518,7 +523,9 @@ export default function AIAssistant(props: AIAssistantProps) {
 
   const footer = useMemo(() => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Activity bar — always on */}
       <ActivityStreamBar />
+      {/* Artifact chip — only when code detected and done streaming */}
       {currentArtifact && !artifactStreaming && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 8, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: '#c4b5fd', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -530,31 +537,70 @@ export default function AIAssistant(props: AIAssistantProps) {
           </button>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <AttachmentRail onAdd={addAttachment} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
+      {/* Attachment rail — toggled by + button */}
+      {attachmentOpen && (
+        <div style={{ borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+          <AttachmentRail onAdd={(a) => { addAttachment(a); setAttachmentOpen(false); }} />
         </div>
-        {brainSaved && <span style={{ fontSize: 9, color: '#6ee7b7', flexShrink: 0 }}>💡 Saved</span>}
-      </div>
+      )}
+      {/* Context chips */}
+      {(attachments.length > 0 || voiceTranscript?.trim()) && (
+        <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
+      )}
+      {brainSaved && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6ee7b7' }}>
+          <span>💡</span><span>Saved to STREAMS Brain</span>
+        </div>
+      )}
+      {/* Voice bar */}
       <VoiceBar onTranscript={setVoiceTranscript} speakText={streamingText && !pending ? streamingText : undefined} />
-      <form onSubmit={(e) => { e.preventDefault(); void sendMessage(input); }} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+      {/* Input row */}
+      <form onSubmit={(e) => { e.preventDefault(); void sendMessage(input); }} style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+        {/* + attachment toggle */}
+        <button
+          type="button"
+          onClick={() => setAttachmentOpen(o => !o)}
+          style={{
+            width: 36, height: 36, borderRadius: '50%', flexShrink: 0, marginBottom: 4,
+            border: attachmentOpen ? '1px solid rgba(103,232,249,0.4)' : '1px solid rgba(255,255,255,0.15)',
+            background: attachmentOpen ? 'rgba(103,232,249,0.1)' : 'rgba(255,255,255,0.06)',
+            color: attachmentOpen ? '#67e8f9' : 'rgba(255,255,255,0.6)',
+            fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          aria-label="Attach file"
+        >+</button>
+        {/* Textarea */}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(input); } }}
           placeholder="Ask, build, explore, verify…"
           rows={1}
-          style={{ flex: 1, resize: 'none', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', padding: '10px 16px', fontSize: 14, outline: 'none', maxHeight: 120, minHeight: 44 }}
+          style={{ flex: 1, resize: 'none', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', padding: '10px 14px', fontSize: 14, outline: 'none', maxHeight: 120, minHeight: 40 }}
         />
+        {/* Model selector */}
+        <select
+          value={model}
+          onChange={(e) => { setModel(e.target.value); if (typeof window !== 'undefined') localStorage.setItem('streams:model', e.target.value); }}
+          style={{
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+            color: 'rgba(255,255,255,0.6)', borderRadius: 10, padding: '4px 6px',
+            fontSize: 10, cursor: 'pointer', outline: 'none', marginBottom: 4, flexShrink: 0,
+          }}
+        >
+          <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+          <option value="claude-opus-4-6">Opus 4.6</option>
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+        </select>
+        {/* Send button */}
         <button type="submit"
-          disabled={(!input.trim() && !attachments.length && !voiceTranscript.trim()) || pending}
-          style={{ height: 44, borderRadius: 20, background: '#fff', color: '#0A0C10', padding: '0 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: ((!input.trim() && !attachments.length && !voiceTranscript.trim()) || pending) ? 0.4 : 1, border: 'none', flexShrink: 0 }}>
+          disabled={(!input.trim() && !attachments.length && !voiceTranscript?.trim()) || pending}
+          style={{ height: 40, borderRadius: 20, background: '#fff', color: '#0A0C10', padding: '0 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: ((!input.trim() && !attachments.length && !voiceTranscript?.trim()) || pending) ? 0.4 : 1, border: 'none', flexShrink: 0, marginBottom: 0 }}>
           {pending ? '…' : 'Send'}
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, attachmentOpen, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, model, pending, removeAttachment, sendMessage, setAttachmentOpen, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
     <>

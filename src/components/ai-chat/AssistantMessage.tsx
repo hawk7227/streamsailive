@@ -23,9 +23,7 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text))) {
-    if (match.index > cursor) {
-      parts.push({ type: "text", value: text.slice(cursor, match.index) });
-    }
+    if (match.index > cursor) parts.push({ type: "text", value: text.slice(cursor, match.index) });
     parts.push({ type: "code", language: match[1], value: match[2].trimEnd() });
     cursor = regex.lastIndex;
   }
@@ -33,49 +31,99 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
   return parts.length > 0 ? parts : [{ type: "text", value: text }];
 }
 
-function TextBlock({ text, mode }: { text: string; mode?: AssistantMode }) {
-  // A response is verification if mode is set OR any section header appears
+// Inline: bold + inline code chip
+function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+          return (
+            <code key={i} style={{
+              fontFamily: "ui-monospace, Menlo, Monaco, Consolas, monospace",
+              fontSize: "0.85em",
+              color: "#b91c1c",
+              background: "#fef2f2",
+              borderRadius: 4,
+              padding: "1px 5px",
+              border: "1px solid rgba(185,28,28,0.15)",
+            }}>{part.slice(1, -1)}</code>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+// Single line — heading, bullet, numbered, or plain
+function MarkdownLine({ line, isUser }: { line: string; isUser?: boolean }) {
+  const color = isUser ? "rgba(10,12,16,0.9)" : "rgba(255,255,255,0.88)";
+
+  if (/^### /.test(line)) return (
+    <p style={{ fontSize: 14, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 10, marginBottom: 2 }}>
+      <InlineText text={line.slice(4)} />
+    </p>
+  );
+  if (/^## /.test(line)) return (
+    <p style={{ fontSize: 15, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 12, marginBottom: 2 }}>
+      <InlineText text={line.slice(3)} />
+    </p>
+  );
+  if (/^# /.test(line)) return (
+    <p style={{ fontSize: 16, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 14, marginBottom: 4 }}>
+      <InlineText text={line.slice(2)} />
+    </p>
+  );
+  if (/^[-*] /.test(line)) return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", paddingLeft: 4 }}>
+      <span style={{ color: isUser ? "rgba(10,12,16,0.4)" : "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 3, flexShrink: 0 }}>•</span>
+      <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={line.slice(2)} /></p>
+    </div>
+  );
+  const numMatch = line.match(/^(\d+)\. (.+)/);
+  if (numMatch) return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", paddingLeft: 4 }}>
+      <span style={{ color: isUser ? "rgba(10,12,16,0.4)" : "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 3, flexShrink: 0, minWidth: 16 }}>{numMatch[1]}.</span>
+      <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={numMatch[2]} /></p>
+    </div>
+  );
+  return <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={line} /></p>;
+}
+
+function TextBlock({ text, mode, isUser }: { text: string; mode?: AssistantMode; isUser?: boolean }) {
   const hasAnyHeader = /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i.test(text);
   const isVerification = mode === "verification" || hasAnyHeader;
 
   if (isVerification) {
-    // Strip any preamble before the first section header
-    const sectionStart = text.search(/VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i);
-
-    // If no section header found yet (still streaming preamble) — render nothing,
-    // show a subtle placeholder so the bubble doesn't flash raw text
-    if (sectionStart === -1) {
-      return <p className="text-[13px] text-white/35 italic">Analyzing...</p>;
-    }
-
-    const structured = text.slice(sectionStart);
-    return <VerificationBlock text={structured} />;
+    const sectionStart = text.search(/\bVERIFIED:|\bNOT VERIFIED:|\bREQUIRES RUNTIME:|\bRISKS:/i);
+    if (sectionStart === -1) return <p className="text-[13px] text-white/35 italic">Analyzing...</p>;
+    return <VerificationBlock text={text.slice(sectionStart)} />;
   }
 
   const parts = splitCodeFence(text);
-
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {parts.map((part, index) => {
         if (part.type === "code") {
           return <AssistantCodeBlock key={`code-${index}`} code={part.value} language={part.language} />;
         }
-
         const cleaned = part.value.trim();
         if (!cleaned) return null;
-        const paragraphs = cleaned.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
-
         return (
           <Fragment key={`text-${index}`}>
-            {paragraphs.map((paragraph, paragraphIndex) => (
-              <p key={`p-${paragraphIndex}`} className="whitespace-pre-wrap text-[14px] leading-6 text-white/90">
-                {paragraph}
-              </p>
-            ))}
+            {cleaned.split("\n").map((line, li) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={li} style={{ height: 5 }} />;
+              return <MarkdownLine key={li} line={trimmed} isUser={isUser} />;
+            })}
           </Fragment>
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -120,12 +168,14 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
         ].join(" ")}
       >
         {typeof message.content === "string" ? (
-          <TextBlock text={message.content} mode={message.mode} />
+          <TextBlock text={message.content} mode={message.mode} isUser={isUser} />
         ) : (
           <div className="grid gap-3">
             {message.content.map((block, index) => (
               <div key={index}>
-                {block.type === "text" && block.text ? <TextBlock text={block.text} mode={message.mode} /> : <MediaBlock block={block} />}
+                {block.type === "text" && block.text
+                  ? <TextBlock text={block.text} mode={message.mode} isUser={isUser} />
+                  : <MediaBlock block={block} />}
               </div>
             ))}
           </div>
