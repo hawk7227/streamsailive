@@ -517,75 +517,44 @@ export default function AIAssistant(props: AIAssistantProps) {
   ), [sidebarView, startNewChat, historyLoading, historyError, conversations, searchQuery, searchLoading, searchResults, conversationId, ConvItem]);
 
   const footer = useMemo(() => (
-    <div className="grid gap-2">
-      {/* Strip 1 — Response Activity Stream: always on, always visible */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <ActivityStreamBar />
-      {/* Strip 2 — Preview Streaming Engine: only when a preview/build artifact exists */}
-      {currentArtifact && (
-        <div style={{
-          margin: '0 12px',
-          padding: '5px 10px',
-          borderRadius: 8,
-          background: artifactStreaming ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.03)',
-          border: artifactStreaming ? '1px solid rgba(139,92,246,0.22)' : '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          transition: 'all 180ms',
-        }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: artifactStreaming ? '#c4b5fd' : 'rgba(196,181,253,0.5)', letterSpacing: '0.06em' }}>
-              STREAMS Preview Engine
-            </div>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {artifactStreaming ? `Streaming ${currentArtifact.language ?? 'component'}…` : `${currentArtifact.language ?? 'Component'} ready`}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {artifactStreaming && (
-              <span style={{ position: 'relative', display: 'inline-flex', width: 8, height: 8 }}>
-                <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(167,139,250,0.75)', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite' }} />
-                <span style={{ position: 'relative', borderRadius: '50%', width: 8, height: 8, background: '#a78bfa' }} />
-              </span>
-            )}
-            {!artifactStreaming && (
-              <button
-                type="button"
-                onClick={() => setFloatingArtifact(currentArtifact)}
-                style={{ fontSize: 9, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.06em', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 4, padding: '2px 6px', cursor: 'pointer' }}
-              >
-                PREVIEW
-              </button>
-            )}
-          </div>
+      {currentArtifact && !artifactStreaming && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 8, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#c4b5fd', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            ⚛ {currentArtifact.componentName} · {currentArtifact.lineCount} lines
+          </span>
+          <button type="button" onClick={() => setFloatingArtifact(currentArtifact)}
+            style={{ fontSize: 9, fontWeight: 700, color: '#c4b5fd', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>
+            Preview
+          </button>
         </div>
       )}
-      <AttachmentRail onAdd={addAttachment} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <AttachmentRail onAdd={addAttachment} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
+        </div>
+        {brainSaved && <span style={{ fontSize: 9, color: '#6ee7b7', flexShrink: 0 }}>💡 Saved</span>}
+      </div>
       <VoiceBar onTranscript={setVoiceTranscript} speakText={streamingText && !pending ? streamingText : undefined} />
-      <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
-      {brainSaved && (
-        <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-400">
-          <span>💡</span><span>Saved to STREAMS Brain</span>
-        </div>
-      )}
-      <form onSubmit={(e) => { e.preventDefault(); void sendMessage(input); }} className="flex items-end gap-2">
+      <form onSubmit={(e) => { e.preventDefault(); void sendMessage(input); }} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(input); } }}
           placeholder="Ask, build, explore, verify…"
           rows={1}
-          className="max-h-36 min-h-[48px] flex-1 resize-none rounded-[20px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/28 focus:border-white/20"
+          style={{ flex: 1, resize: 'none', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', padding: '10px 16px', fontSize: 14, outline: 'none', maxHeight: 120, minHeight: 44 }}
         />
         <button type="submit"
           disabled={(!input.trim() && !attachments.length && !voiceTranscript.trim()) || pending}
-          className="h-[48px] rounded-[20px] bg-white px-5 text-sm font-semibold text-[#0A0C10] transition disabled:cursor-not-allowed disabled:opacity-40">
+          style={{ height: 44, borderRadius: 20, background: '#fff', color: '#0A0C10', padding: '0 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: ((!input.trim() && !attachments.length && !voiceTranscript.trim()) || pending) ? 0.4 : 1, border: 'none', flexShrink: 0 }}>
           {pending ? '…' : 'Send'}
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, artifactStreaming, autoPreview, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
     <>
