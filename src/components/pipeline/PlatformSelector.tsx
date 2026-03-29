@@ -86,7 +86,7 @@ export function PlatformSelector({ value, onChange, contentType, onDesktopView, 
   return (
     <div ref={pickerRef} style={{ position: 'relative', userSelect: 'none' }}>
       {/* Logo row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: sz(4), padding: `${sz(4)}px 0` }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', gap: sz(5), padding: `${sz(4)}px 0` }}>
         {/* None button */}
         <button
           type="button"
@@ -117,7 +117,7 @@ export function PlatformSelector({ value, onChange, contentType, onDesktopView, 
                 background: ico.bg,
                 border: isActive ? `2px solid #67e8f9` : isExpanded ? `2px solid rgba(103,232,249,0.5)` : '1.5px solid transparent',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: sz(11), color: ico.color, fontWeight: 900, flexShrink: 0,
+                fontSize: sz(13), color: ico.color, fontWeight: 900, flexShrink: 0, letterSpacing: '-0.02em',
                 boxShadow: isActive ? '0 0 0 2px rgba(103,232,249,0.3)' : 'none',
                 transform: isExpanded ? 'scale(1.1)' : 'scale(1)',
                 transition: 'transform 120ms, border 120ms',

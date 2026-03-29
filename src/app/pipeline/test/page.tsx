@@ -2305,18 +2305,7 @@ Accept only if:
                     return (
                       <div style={{ display: "flex", flexDirection: "column", height: "100%", alignItems: "center" }}>
                         {/* Label */}
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4, textAlign: "center", flexShrink: 0 }}>{label}</div>
-
-                        {/* Platform selector */}
-                        <div style={{ marginBottom: 6, flexShrink: 0 }}>
-                          <PlatformSelector
-                            value={platformSelection}
-                            onChange={onPlatformChange}
-                            contentType={slot.video ? 'video' : slot.image ? 'image' : null}
-                            onDesktopView={(pid, vid) => setDesktopPlatform({ platformId: pid, viewId: vid })}
-                            scale={S * 0.9}
-                          />
-                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6, textAlign: "center", flexShrink: 0 }}>{label}</div>
 
                         {/* Outer device shell — titanium body */}
                         <div style={{
@@ -2490,8 +2479,16 @@ Accept only if:
                           </div>{/* end screen */}
                         </div>{/* end body */}
 
-                        {/* Aspect ratio label */}
-                        <div style={{ fontSize: 9, color: "#334155", textAlign: "center", marginTop: 6, flexShrink: 0 }}>9:16 · 430×932pt</div>
+                        {/* Platform selector — below the iPhone body, larger icons */}
+                        <div style={{ marginTop: 8, flexShrink: 0, width: bodyW, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          <PlatformSelector
+                            value={platformSelection}
+                            onChange={onPlatformChange}
+                            contentType={slot.video ? 'video' : slot.image ? 'image' : null}
+                            onDesktopView={(pid, vid) => setDesktopPlatform({ platformId: pid, viewId: vid })}
+                            scale={Math.max(1.2, S * 1.6)}
+                          />
+                        </div>
                       </div>
                     );
                   };
