@@ -15,6 +15,11 @@ import { ArtifactCard, type ArtifactDestination } from "@/components/pipeline/Ar
 import { FloatingPreviewPanel } from "@/components/pipeline/FloatingPreviewPanel";
 import { LivePreviewRenderer } from "@/components/pipeline/LivePreviewRenderer";
 import AIAssistant from "@/components/dashboard/AIAssistant";
+import { PlatformViewer } from "@/components/pipeline/PlatformViewer";
+import { PlatformSelector, type PlatformSelection } from "@/components/pipeline/PlatformSelector";
+import { BatchPreviewModal } from "@/components/pipeline/BatchPreviewModal";
+import { DesktopPlatformView } from "@/components/pipeline/DesktopPlatformView";
+import type { PlatformId, ViewId } from "@/lib/platform-views/index";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type StepState = "complete" | "running" | "review" | "queued" | "blocked" | "error";
@@ -322,6 +327,15 @@ Accept only if:
   });
   const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
   const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: "iphone1" | "iphone2" | "desktop" } | null>(null);
+
+  // ── Platform view state ────────────────────────────────────────────────────
+  const EMPTY_SELECTION: PlatformSelection = { platformId: null, viewId: null, destination: 'mobile' };
+  const [iphone1Platform, setIphone1Platform] = useState<PlatformSelection>(EMPTY_SELECTION);
+  const [iphone2Platform, setIphone2Platform] = useState<PlatformSelection>(EMPTY_SELECTION);
+  const [desktopPlatform, setDesktopPlatform] = useState<{ platformId: PlatformId; viewId: ViewId } | null>(null);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [wireframeMode, setWireframeMode] = useState(false);
+  const [showSafeZone, setShowSafeZone] = useState(false);
 
   // Register activity stream middleware once on mount
   useEffect(() => {
@@ -2237,7 +2251,7 @@ Accept only if:
                   // Safe areas: top 59pt, bottom 34pt.
                   // Home indicator: 134pt wide × 5pt tall, centered, 8pt from bottom.
                   // Screen corner radius: 55pt. Body corner radius: 47pt.
-                  const IPhoneFrame = ({ slot, vidRef, label, onEdit }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void }) => {
+                  const IPhoneFrame = ({ slot, vidRef, label, onEdit, platformSelection, onPlatformChange, frameId }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void; platformSelection: PlatformSelection; onPlatformChange: (sel: PlatformSelection) => void; frameId: 'iphone1' | 'iphone2'; }) => {
                     // Scale everything relative to iPhoneWidth (user-draggable).
                     // Base reference: 430pt viewport width → maps to iPhoneWidth px.
                     const S = iPhoneWidth / 430; // scale factor
@@ -2280,7 +2294,18 @@ Accept only if:
                     return (
                       <div style={{ display: "flex", flexDirection: "column", height: "100%", alignItems: "center" }}>
                         {/* Label */}
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6, textAlign: "center", flexShrink: 0 }}>{label}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4, textAlign: "center", flexShrink: 0 }}>{label}</div>
+
+                        {/* Platform selector */}
+                        <div style={{ marginBottom: 6, flexShrink: 0 }}>
+                          <PlatformSelector
+                            value={platformSelection}
+                            onChange={onPlatformChange}
+                            contentType={slot.video ? 'video' : slot.image ? 'image' : null}
+                            onDesktopView={(pid, vid) => setDesktopPlatform({ platformId: pid, viewId: vid })}
+                            scale={S * 0.9}
+                          />
+                        </div>
 
                         {/* Outer device shell — titanium body */}
                         <div style={{
@@ -2324,20 +2349,38 @@ Accept only if:
                             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
                           }}>
 
-                            {/* ── Content layer (image/video/empty) ── */}
-                            <div style={{ position: "absolute", inset: 0 }}>
-                              {slot.video
-                                ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                : slot.image
-                                  ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                  : (
-                                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(180deg, #0d0d12 0%, #090912 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
-                                      <div style={{ fontSize: Math.round(22 * S), opacity: 0.15 }}>◻</div>
-                                      <div style={{ fontSize: Math.max(7, Math.round(9 * S)), color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
-                                    </div>
-                                  )
-                              }
-                            </div>
+                            {/* ── Content layer — platform view or raw ── */}
+                            {platformSelection.platformId && platformSelection.viewId ? (
+                              <PlatformViewer
+                                platformId={platformSelection.platformId}
+                                viewId={platformSelection.viewId}
+                                imageUrl={slot.image}
+                                videoUrl={slot.video}
+                                vidRef={vidRef}
+                                conceptId={frameId === 'iphone1' ? 'c1' : 'c3'}
+                                nicheId={nicheId}
+                                copyOutput={stepPrompts.copy}
+                                strategyOutput={stepPrompts.strategy}
+                                conceptHeadline={concepts[frameId === 'iphone1' ? 0 : 2]?.headline}
+                                wireframe={wireframeMode}
+                                showSafeZone={showSafeZone}
+                                scale={S}
+                              />
+                            ) : (
+                              <div style={{ position: "absolute", inset: 0 }}>
+                                {slot.video
+                                  ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                  : slot.image
+                                    ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    : (
+                                      <div style={{ width: "100%", height: "100%", background: "linear-gradient(180deg, #0d0d12 0%, #090912 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
+                                        <div style={{ fontSize: Math.round(22 * S), opacity: 0.15 }}>◻</div>
+                                        <div style={{ fontSize: Math.max(7, Math.round(9 * S)), color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                                      </div>
+                                    )
+                                }
+                              </div>
+                            )}
 
                             {/* ── Safe zone overlay ── */}
                             {/* Top safe zone: status bar + Dynamic Island area */}
@@ -2471,13 +2514,17 @@ Accept only if:
                       <div style={{ display: "grid", gridTemplateColumns: `${iPhoneWidth}px 8px 1fr 8px ${iPhoneWidth}px`, gap: 0, padding: "8px 8px 6px", height: 640, alignItems: "stretch" }}>
 
                         {/* Left iPhone — Concept 1 */}
+                        <div data-export="iphone1" style={{ display: "contents" }}>
                         <IPhoneFrame slot={c1} vidRef={playbackRef1} label="iPhone 15 Pro Max #1"
+                          frameId="iphone1"
+                          platformSelection={iphone1Platform}
+                          onPlatformChange={setIphone1Platform}
                           onEdit={() => {
-                            // Load iPhone 1 content into approved so editor picks it up
                             if (c1.image) setApprovedOutputs(p => ({ ...p, image: c1.image! }));
                             if (c1.video) setApprovedOutputs(p => ({ ...p, video: c1.video! }));
                             log("✓ iPhone #1 loaded into editor");
                           }} />
+                        </div>
 
                         {/* Left drag handle */}
                         <div
@@ -2497,14 +2544,54 @@ Accept only if:
                           <div style={{ width: 2, height: "60%", background: "rgba(255,255,255,0.08)", borderRadius: 1 }} />
                         </div>
 
-                        {/* Center — MediaEditor (Fabric.js image + video editor) */}
+                        {/* Center — DesktopPlatformView or MediaEditor */}
                         <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
-                          <MediaEditor
-                            imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
-                            videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
-                            onSendToScreen={(url, type) => triggerDestPicker(url, type)}
-                            onLog={log}
-                          />
+                          {/* Platform toolbar */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+                            {desktopPlatform && (
+                              <button type="button" onClick={() => setDesktopPlatform(null)}
+                                style={{ fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                                ✕ Exit platform view
+                              </button>
+                            )}
+                            <button type="button" onClick={() => setBatchModalOpen(true)}
+                              style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                              ⊞ Batch preview
+                            </button>
+                            <button type="button" onClick={() => setWireframeMode(w => !w)}
+                              style={{ fontSize: 10, color: wireframeMode ? "#a78bfa" : "rgba(255,255,255,0.4)", background: wireframeMode ? "rgba(167,139,250,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${wireframeMode ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                              ⬜ Wireframe
+                            </button>
+                            <button type="button" onClick={() => setShowSafeZone(s => !s)}
+                              style={{ fontSize: 10, color: showSafeZone ? "#fb923c" : "rgba(255,255,255,0.4)", background: showSafeZone ? "rgba(251,146,60,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${showSafeZone ? "rgba(251,146,60,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                              ◫ Safe zones
+                            </button>
+                          </div>
+                          {desktopPlatform ? (
+                            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                              <DesktopPlatformView
+                                platformId={desktopPlatform.platformId}
+                                viewId={desktopPlatform.viewId}
+                                imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
+                                videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
+                                conceptId="c2"
+                                nicheId={nicheId}
+                                copyOutput={stepPrompts.copy}
+                                strategyOutput={stepPrompts.strategy}
+                                conceptHeadline={concepts[1]?.headline}
+                                wireframe={wireframeMode}
+                                showSafeZone={showSafeZone}
+                                onDismiss={() => setDesktopPlatform(null)}
+                              />
+                            </div>
+                          ) : (
+                            <MediaEditor
+                              imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
+                              videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
+                              onSendToScreen={(url, type) => triggerDestPicker(url, type)}
+                              onLog={log}
+                            />
+                          )}
                         </div>
 
                         {/* Right drag handle */}
@@ -2526,15 +2613,83 @@ Accept only if:
                         </div>
 
                         {/* Right iPhone — Concept 3 */}
+                        <div data-export="iphone2" style={{ display: "contents" }}>
                         <IPhoneFrame slot={c3} vidRef={playbackRef2} label="iPhone 15 Pro Max #2"
+                          frameId="iphone2"
+                          platformSelection={iphone2Platform}
+                          onPlatformChange={setIphone2Platform}
                           onEdit={() => {
                             if (c3.image) setApprovedOutputs(p => ({ ...p, image: c3.image! }));
                             if (c3.video) setApprovedOutputs(p => ({ ...p, video: c3.video! }));
                             log("✓ iPhone #2 loaded into editor");
                           }} />
+                        </div>
 
                       </div>
 
+                      {/* Platform controls bar */}
+                      <div style={{ padding: "4px 12px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <button type="button" onClick={() => setBatchModalOpen(true)}
+                          style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                          ⊞ Batch preview
+                        </button>
+                        <button type="button" onClick={() => setWireframeMode(w => !w)}
+                          style={{ fontSize: 10, color: wireframeMode ? "#a78bfa" : "rgba(255,255,255,0.35)", background: wireframeMode ? "rgba(167,139,250,0.1)" : "rgba(255,255,255,0.03)", border: `1px solid ${wireframeMode ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.08)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                          ⬜ {wireframeMode ? "Wireframe ON" : "Wireframe"}
+                        </button>
+                        <button type="button" onClick={() => setShowSafeZone(s => !s)}
+                          style={{ fontSize: 10, color: showSafeZone ? "#fb923c" : "rgba(255,255,255,0.35)", background: showSafeZone ? "rgba(251,146,60,0.1)" : "rgba(255,255,255,0.03)", border: `1px solid ${showSafeZone ? "rgba(251,146,60,0.3)" : "rgba(255,255,255,0.08)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                          ◫ {showSafeZone ? "Safe zones ON" : "Safe zones"}
+                        </button>
+                        <div style={{ flex: 1 }} />
+                        <button type="button" title="Export iPhone #1 as PNG" onClick={async () => {
+                          try {
+                            const exportFrame = async (selector: string, filename: string) => {
+                              const el = document.querySelector(selector) as HTMLElement;
+                              if (!el) { log("Export target not found"); return; }
+                              // Load html2canvas from CDN at runtime — no build-time dep
+                              await new Promise<void>((resolve, reject) => {
+                                if ((window as unknown as Record<string,unknown>).html2canvas) { resolve(); return; }
+                                const s = document.createElement("script");
+                                s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+                                s.onload = () => resolve(); s.onerror = reject;
+                                document.head.appendChild(s);
+                              });
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const canvas = await (window as any).html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true });
+                              const a = document.createElement("a"); a.href = canvas.toDataURL("image/png"); a.download = filename; a.click();
+                            };
+                            await exportFrame("[data-export='iphone1']", `iphone1-${Date.now()}.png`);
+                            log("✓ iPhone #1 exported");
+                          } catch(e) { log("Export failed: " + String(e)); }
+                        }}
+                          style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                          ↓ Export #1
+                        </button>
+                        <button type="button" title="Export iPhone #2 as PNG" onClick={async () => {
+                          try {
+                            const exportFrame = async (selector: string, filename: string) => {
+                              const el = document.querySelector(selector) as HTMLElement;
+                              if (!el) { log("Export target not found"); return; }
+                              await new Promise<void>((resolve, reject) => {
+                                if ((window as unknown as Record<string,unknown>).html2canvas) { resolve(); return; }
+                                const s = document.createElement("script");
+                                s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+                                s.onload = () => resolve(); s.onerror = reject;
+                                document.head.appendChild(s);
+                              });
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const canvas = await (window as any).html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true });
+                              const a = document.createElement("a"); a.href = canvas.toDataURL("image/png"); a.download = filename; a.click();
+                            };
+                            await exportFrame("[data-export='iphone2']", `iphone2-${Date.now()}.png`);
+                            log("✓ iPhone #2 exported");
+                          } catch(e) { log("Export failed: " + String(e)); }
+                        }}
+                          style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
+                          ↓ Export #2
+                        </button>
+                      </div>
                       {/* Playback bar */}
                       <div style={{ padding: "10px 16px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 20, flexShrink: 0 }}>
                         {/* Rewind */}
@@ -2855,6 +3010,29 @@ Accept only if:
         onUpdateCopyPrompt={(v) => setStepPrompts(p => ({ ...p, copy: v }))}
         onUpdateI2VPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
         onUpdateQAInstruction={(v) => setStepPrompts(p => ({ ...p, qa: v }))}
+      />
+      {/* ── Batch Preview Modal ─────────────────────────────────────── */}
+      <BatchPreviewModal
+        open={batchModalOpen}
+        onClose={() => setBatchModalOpen(false)}
+        platformId={iphone1Platform.platformId}
+        viewId={iphone1Platform.viewId}
+        concepts={[
+          { id: "c1", label: "Concept 1", image: conceptOutputs.c1.image, video: conceptOutputs.c1.video, headline: concepts[0]?.headline },
+          { id: "c2", label: "Concept 2", image: conceptOutputs.c2.image, video: conceptOutputs.c2.video, headline: concepts[1]?.headline },
+          { id: "c3", label: "Concept 3", image: conceptOutputs.c3.image, video: conceptOutputs.c3.video, headline: concepts[2]?.headline },
+        ]}
+        nicheId={nicheId}
+        copyOutput={stepPrompts.copy}
+        strategyOutput={stepPrompts.strategy}
+        wireframe={wireframeMode}
+        showSafeZone={showSafeZone}
+        onPromoteToConcept={(conceptId) => {
+          const slot = conceptOutputs[conceptId];
+          if (slot?.image) setConceptOutputs(p => ({ ...p, c1: { ...p.c1, image: slot.image, status: "completed", error: null } }));
+          if (slot?.video) setConceptOutputs(p => ({ ...p, c1: { ...p.c1, video: slot.video, status: "completed", error: null } }));
+          log(`✓ ${conceptId} promoted to iPhone #1`);
+        }}
       />
       {/* ── Floating Preview Panel — Feature 2 (float destination) ──── */}
       {floatingArtifact && (

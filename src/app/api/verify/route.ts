@@ -279,6 +279,59 @@ const ALL_CHECKS: Array<{
     body: { lyrics: 'test', style: 'pop' },
     expectedStatus: [200, 400, 401],
   },
+
+  // ── Pipeline run (full, not just run-node) ─────────────────────────────
+  {
+    checkId: 'pipeline_run',
+    featureId: 'pipeline_workspace',
+    label: 'Pipeline Run (POST /api/pipeline/run)',
+    path: '/api/pipeline/run',
+    method: 'POST',
+    body: {},
+    expectedStatus: [200, 201, 400, 401, 404],
+  },
+
+  // ── Code editor write-back ─────────────────────────────────────────────
+  {
+    checkId: 'editor_write',
+    featureId: 'pipeline_workspace',
+    label: 'Editor Write (POST /api/editor)',
+    path: '/api/editor',
+    method: 'POST',
+    body: {},
+    expectedStatus: [200, 201, 400, 401, 404],
+  },
+
+  // ── Copilot chat ───────────────────────────────────────────────────────
+  {
+    checkId: 'copilot_chat',
+    featureId: 'governed_assistant',
+    label: 'Copilot Chat (POST /api/copilot-chat)',
+    path: '/api/copilot-chat',
+    method: 'POST',
+    body: { messages: [] },
+    expectedStatus: [200, 400, 401, 404],
+  },
+
+  // ── Video render + scratch ─────────────────────────────────────────────
+  {
+    checkId: 'video_render',
+    featureId: 'pipeline_workspace',
+    label: 'Video Render (POST /api/video/render)',
+    path: '/api/video/render',
+    method: 'POST',
+    body: {},
+    expectedStatus: [200, 201, 400, 401, 404],
+  },
+  {
+    checkId: 'video_scratch',
+    featureId: 'pipeline_workspace',
+    label: 'Video Scratch (POST /api/video/scratch)',
+    path: '/api/video/scratch',
+    method: 'POST',
+    body: {},
+    expectedStatus: [200, 201, 400, 401, 404],
+  },
 ];
 
 // ── Feature set registry ──────────────────────────────────────────────────────
