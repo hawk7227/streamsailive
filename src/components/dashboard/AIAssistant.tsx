@@ -616,7 +616,7 @@ export default function AIAssistant(props: AIAssistantProps) {
                 </button>
               </div>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <AssistantMessageList messages={messages} streamingText={streamingText} streamingMode={streamingMode} pending={pending} />
             </div>
             <div className="border-t border-white/8 px-4 py-3" style={isMobile ? { paddingBottom: "calc(12px + env(safe-area-inset-bottom))" } : undefined}>{footer}</div>

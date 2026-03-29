@@ -58,7 +58,7 @@ export function AIAssistantShell({ title = "AI Assistant", subtitle = "Governed,
             </div>
           </header>
 
-          <div className="relative min-h-0 flex-1">{children}</div>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
 
           <footer
             className="relative border-t border-white/8 px-4 py-4"
