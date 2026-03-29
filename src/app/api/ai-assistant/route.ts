@@ -98,23 +98,33 @@ function formatProbeResults(data: VerifyResponse): string {
   return lines.join('\n');
 }
 
-function parseStreamingLine(line: string): string {
+function parseStreamingLine(line: string, isAnthropic: boolean): string {
   if (!line.startsWith('data: ')) return '';
   const payload = line.slice(6).trim();
   if (!payload || payload === '[DONE]') return '';
   try {
-    const parsed = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
-    return parsed.choices?.[0]?.delta?.content ?? '';
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    if (isAnthropic) {
+      // Anthropic: { type: "content_block_delta", delta: { type: "text_delta", text: "..." } }
+      if (parsed.type === 'content_block_delta') {
+        const delta = parsed.delta as Record<string, unknown> | undefined;
+        return typeof delta?.text === 'string' ? delta.text : '';
+      }
+      return '';
+    }
+    // OpenAI: { choices: [{ delta: { content: "..." } }] }
+    const choices = parsed.choices as Array<{ delta?: { content?: string } }> | undefined;
+    return choices?.[0]?.delta?.content ?? '';
   } catch { return ''; }
 }
 
 export async function POST(request: Request) {
   // Parse body first — synchronous, zero network cost
-  let payload: { messages?: unknown; context?: unknown; requestContext?: unknown; conversationId?: string; };
+  let payload: { messages?: unknown; context?: unknown; requestContext?: unknown; conversationId?: string; model?: string; };
   try { payload = await request.json(); }
   catch { return new Response('Invalid JSON', { status: 400 }); }
 
-  const { messages, context, requestContext, conversationId: incomingConvId } = payload;
+  const { messages, context, requestContext, conversationId: incomingConvId, model: clientModel } = payload;
   if (!messages || !Array.isArray(messages)) return new Response('messages array is required', { status: 400 });
   if (!context || typeof context !== 'object') return new Response('context object is required', { status: 400 });
 
@@ -207,9 +217,12 @@ export async function POST(request: Request) {
       // Phase 4: Model call — emit understanding phase BEFORE the blocking fetch
       emit(controller, { type: 'phase', phase: 'understanding_request', label: 'Understanding your request...' });
 
-      const activeModel = getSiteConfig().copilotModel || 'gpt-4o';
+      const activeModel = clientModel || getSiteConfig().copilotModel || 'gpt-4o';
       const provider = getProviderConfig(activeModel);
-      const apiKey = process.env.OPENAI_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
+      // Use the correct API key based on provider
+      const apiKey = activeModel.startsWith('claude-')
+        ? (process.env.ANTHROPIC_API_KEY ?? '')
+        : (process.env.OPENAI_API_KEY ?? '');
 
       if (!apiKey) {
         emit(controller, { type: 'error', message: 'Missing API key' });
@@ -241,7 +254,24 @@ export async function POST(request: Request) {
         const upstream = await fetch(provider.url, {
           method: 'POST',
           headers: { ...provider.authHeader(apiKey), 'Content-Type': 'application/json' },
-          body: JSON.stringify(createRequestBody(mode, messages as ChatMessage[], pipelineContext, true)),
+          // Override model with client selection — createRequestBody uses getSiteConfig() internally
+          body: JSON.stringify((() => {
+            const base = createRequestBody(mode, messages as ChatMessage[], pipelineContext, true);
+            if (activeModel.startsWith('claude-')) {
+              // Anthropic format: system is top-level, not inside messages[]
+              const msgs = (base.messages as Array<{role:string;content:unknown}>) ?? [];
+              const systemMsg = msgs.find(m => m.role === 'system');
+              const userMsgs = msgs.filter(m => m.role !== 'system');
+              return {
+                model: activeModel,
+                max_tokens: (base.max_tokens as number) ?? 4096,
+                stream: true,
+                system: typeof systemMsg?.content === 'string' ? systemMsg.content : undefined,
+                messages: userMsgs,
+              };
+            }
+            return { ...base, model: activeModel };
+          })()),
         });
 
         if (!upstream.ok || !upstream.body) {
@@ -259,6 +289,7 @@ export async function POST(request: Request) {
         let buffer = '';
         let fullText = '';
         let firstToken = true;
+        const isAnthropic = activeModel.startsWith('claude-');
 
         while (true) {
           const { value, done } = await reader.read();
@@ -267,7 +298,7 @@ export async function POST(request: Request) {
           const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
           for (const line of lines) {
-            const delta = parseStreamingLine(line.trim());
+            const delta = parseStreamingLine(line.trim(), isAnthropic);
             if (!delta) continue;
             if (firstToken) {
               // Real first token — clear the "streaming" phase, let text speak for itself
