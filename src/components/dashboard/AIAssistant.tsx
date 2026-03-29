@@ -56,15 +56,15 @@ const INITIAL_MESSAGE: AssistantMessageShape = {
 };
 
 const STREAMS_APPS = [
-  { id: 'pipeline',  name: 'STREAMS Pipeline',  icon: '\u26A1', href: '/pipeline/test',       desc: 'AI pipeline builder' },
-  { id: 'image',     name: 'STREAMS Image',      icon: '\uD83C\uDFA8', href: '/dashboard/image',      desc: 'Image generation' },
-  { id: 'video',     name: 'STREAMS Video',      icon: '\uD83C\uDFAC', href: '/dashboard/video',      desc: 'T2V and I2V' },
-  { id: 'voice',     name: 'STREAMS Voice',      icon: '\uD83C\uDFA4', href: '/dashboard/voice',      desc: 'STT / TTS' },
-  { id: 'library',   name: 'STREAMS Library',    icon: '\uD83D\uDCDA', href: '/dashboard/library',    desc: 'Generated assets' },
-  { id: 'campaigns', name: 'STREAMS Campaigns',  icon: '\uD83D\uDCE2', href: '/dashboard/campaigns',  desc: 'Campaign mgmt' },
-  { id: 'analytics', name: 'STREAMS Analytics',  icon: '\uD83D\uDCCA', href: '/dashboard/analytics',  desc: 'Usage and perf' },
-  { id: 'operator',  name: 'STREAMS Operator',   icon: '\uD83D\uDEE1', href: '/dashboard/operator',   desc: 'System health' },
-  { id: 'settings',  name: 'STREAMS Settings',   icon: '\u2699', href: '/dashboard/settings',   desc: 'Account & workspace' },
+  { id: 'pipeline',  name: 'STREAMS Pipeline',  icon: '⚡', href: '/pipeline/test',       desc: 'AI pipeline builder' },
+  { id: 'image',     name: 'STREAMS Image',      icon: '🎨', href: '/dashboard/image',      desc: 'Image generation' },
+  { id: 'video',     name: 'STREAMS Video',      icon: '🎬', href: '/dashboard/video',      desc: 'T2V and I2V' },
+  { id: 'voice',     name: 'STREAMS Voice',      icon: '🎤', href: '/dashboard/voice',      desc: 'STT / TTS' },
+  { id: 'library',   name: 'STREAMS Library',    icon: '📚', href: '/dashboard/library',    desc: 'Generated assets' },
+  { id: 'campaigns', name: 'STREAMS Campaigns',  icon: '📢', href: '/dashboard/campaigns',  desc: 'Campaign mgmt' },
+  { id: 'analytics', name: 'STREAMS Analytics',  icon: '📊', href: '/dashboard/analytics',  desc: 'Usage and perf' },
+  { id: 'operator',  name: 'STREAMS Operator',   icon: '🛡', href: '/dashboard/operator',   desc: 'System health' },
+  { id: 'settings',  name: 'STREAMS Settings',   icon: '⚙', href: '/dashboard/settings',   desc: 'Account & workspace' },
 ] as const;
 
 function detectMedia(text: string): import('@/components/ai-chat/AssistantMessage').MsgContent[] {
@@ -94,6 +94,10 @@ export default function AIAssistant(props: AIAssistantProps) {
   // ── Activity stream + artifact preview ────────────────────────────────────
   const [currentArtifact, setCurrentArtifact] = useState<ExtractedArtifact | null>(null);
   const [artifactStreaming, setArtifactStreaming] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('streams:autoPreview') !== 'false';
+  });
   const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
   const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: 'iphone1' | 'iphone2' | 'desktop' } | null>(null);
 
@@ -394,11 +398,11 @@ export default function AIAssistant(props: AIAssistantProps) {
     <div className="flex h-full flex-col">
       <nav className="flex items-center gap-0.5 border-b border-white/8 px-2 py-2">
         {([
-          { id: 'home',     icon: '\u2302', label: 'Home' },
-          { id: 'history',  icon: '\u25F7', label: 'History' },
-          { id: 'search',   icon: '\u2315', label: 'Search' },
-          { id: 'projects', icon: '\u229E', label: 'Projects' },
-          { id: 'apps',     icon: '\u2295', label: 'Apps' },
+          { id: 'home',     icon: '⌂', label: 'Home' },
+          { id: 'history',  icon: '◷', label: 'History' },
+          { id: 'search',   icon: '⌕', label: 'Search' },
+          { id: 'projects', icon: '⊞', label: 'Projects' },
+          { id: 'apps',     icon: '⊕', label: 'Apps' },
         ] as const).map((nav) => (
           <button key={nav.id} type="button" title={nav.label}
             onClick={() => setSidebarView(nav.id as SidebarView)}
@@ -409,7 +413,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         ))}
         <button type="button" title="New chat" onClick={startNewChat}
           className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-[13px] text-white/35 transition hover:bg-white/6 hover:text-white">
-          \u270E
+          ✎
         </button>
       </nav>
 
@@ -419,10 +423,10 @@ export default function AIAssistant(props: AIAssistantProps) {
           <div>
             <button type="button" onClick={startNewChat}
               className="mb-3 flex w-full items-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-white/65 transition hover:border-white/20 hover:text-white">
-              <span>\u270E</span><span className="font-medium">New conversation</span>
+              <span>✎</span><span className="font-medium">New conversation</span>
             </button>
             <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/25">Recent</p>
-            {historyLoading && <p className="px-3 py-2 text-[12px] text-white/25">Loading\u2026</p>}
+            {historyLoading && <p className="px-3 py-2 text-[12px] text-white/25">Loading…</p>}
             {historyError && <p className="px-3 py-2 text-[12px] text-red-400/70">{historyError}</p>}
             {!historyLoading && !historyError && conversations.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-white/25">No conversations yet</p>
@@ -431,7 +435,7 @@ export default function AIAssistant(props: AIAssistantProps) {
             {conversations.length > 6 && (
               <button type="button" onClick={() => setSidebarView('history')}
                 className="mt-1 w-full px-3 py-1.5 text-left text-[11px] text-white/28 hover:text-white/60">
-                View all {conversations.length} \u2192
+                View all {conversations.length} →
               </button>
             )}
           </div>
@@ -442,7 +446,7 @@ export default function AIAssistant(props: AIAssistantProps) {
             <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/25">
               All conversations {conversations.length > 0 && `(${conversations.length})`}
             </p>
-            {historyLoading && <p className="px-3 py-2 text-[12px] text-white/25">Loading\u2026</p>}
+            {historyLoading && <p className="px-3 py-2 text-[12px] text-white/25">Loading…</p>}
             {historyError && <p className="px-3 py-2 text-[12px] text-red-400/70">{historyError}</p>}
             {!historyLoading && !historyError && conversations.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-white/25">No conversations yet</p>
@@ -454,9 +458,9 @@ export default function AIAssistant(props: AIAssistantProps) {
         {sidebarView === 'search' && (
           <div>
             <input type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conversations\u2026" autoFocus
+              placeholder="Search conversations…" autoFocus
               className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/20" />
-            {searchLoading && <p className="px-3 py-2 text-[12px] text-white/25">Searching\u2026</p>}
+            {searchLoading && <p className="px-3 py-2 text-[12px] text-white/25">Searching…</p>}
             {!searchLoading && searchQuery.trim() && searchResults.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-white/25">No results for &quot;{searchQuery}&quot;</p>
             )}
@@ -507,7 +511,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       </div>
 
       <div className="border-t border-white/8 px-3 py-2">
-        <p className="text-[10px] text-white/18">Auto-mode \u00B7 governed \u00B7 no manual switching</p>
+        <p className="text-[10px] text-white/18">Auto-mode · governed · no manual switching</p>
       </div>
     </div>
   ), [sidebarView, startNewChat, historyLoading, historyError, conversations, searchQuery, searchLoading, searchResults, conversationId, ConvItem]);
@@ -562,7 +566,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       <ContextChips attachments={attachments} voiceTranscript={voiceTranscript} onRemoveAttachment={removeAttachment} onClearVoice={clearVoiceTranscript} />
       {brainSaved && (
         <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-400">
-          <span>\uD83D\uDCA1</span><span>Saved to STREAMS Brain</span>
+          <span>💡</span><span>Saved to STREAMS Brain</span>
         </div>
       )}
       <form onSubmit={(e) => { e.preventDefault(); void sendMessage(input); }} className="flex items-end gap-2">
@@ -570,25 +574,25 @@ export default function AIAssistant(props: AIAssistantProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(input); } }}
-          placeholder="Ask, build, explore, verify\u2026"
+          placeholder="Ask, build, explore, verify…"
           rows={1}
           className="max-h-36 min-h-[48px] flex-1 resize-none rounded-[20px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/28 focus:border-white/20"
         />
         <button type="submit"
           disabled={(!input.trim() && !attachments.length && !voiceTranscript.trim()) || pending}
           className="h-[48px] rounded-[20px] bg-white px-5 text-sm font-semibold text-[#0A0C10] transition disabled:cursor-not-allowed disabled:opacity-40">
-          {pending ? '\u2026' : 'Send'}
+          {pending ? '…' : 'Send'}
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, artifactStreaming, autoPreview, brainSaved, clearVoiceTranscript, currentArtifact, input, pending, removeAttachment, sendMessage, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
-    <div className={["fixed inset-0 z-[70]", isMobile ? "pointer-events-auto bg-[#0A0C10]" : "pointer-events-none"].join(" ")}>
+    <>
       {sidebarOpen ? (
         <div
-          className={["pointer-events-auto flex overflow-hidden bg-[#0A0C10]", isMobile ? "fixed inset-0 border-0 rounded-none shadow-none" : "absolute bottom-6 right-6 border border-white/12 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
-          style={isMobile ? { touchAction: "none", zIndex: 80 } : { width: 660, height: 680 }}
+          className={["fixed z-[70] pointer-events-auto flex overflow-hidden bg-[#0A0C10]", isMobile ? "inset-0 border-0 rounded-none shadow-none" : "bottom-6 right-6 border border-white/12 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
+          style={isMobile ? { touchAction: "none" } : { width: 660, height: 680 }}
         >
           {!isMobile && <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>}
           <div className="flex min-w-0 flex-1 flex-col">
@@ -604,15 +608,15 @@ export default function AIAssistant(props: AIAssistantProps) {
               <div className="flex gap-2">
                 <button type="button" onClick={startNewChat}
                   className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/45 hover:border-white/20 hover:text-white">
-                  \u270E New
+                  ✎ New
                 </button>
                 <button type="button" onClick={() => setSidebarOpen(false)}
                   className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/45 hover:border-white/20 hover:text-white">
-                  \u2715
+                  ✕
                 </button>
               </div>
             </header>
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <AssistantMessageList messages={messages} streamingText={streamingText} streamingMode={streamingMode} pending={pending} />
             </div>
             <div className="border-t border-white/8 px-4 py-3" style={isMobile ? { paddingBottom: "calc(12px + env(safe-area-inset-bottom))" } : undefined}>{footer}</div>
@@ -621,7 +625,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       ) : (
         <AIAssistantShell
           title="STREAMS Chat"
-          subtitle="Auto-mode \u00B7 governed \u00B7 multimodal"
+          subtitle="Auto-mode · governed · multimodal"
           onClose={() => undefined}
           footer={
             <div className="grid gap-2">
@@ -629,14 +633,14 @@ export default function AIAssistant(props: AIAssistantProps) {
                 <button type="button"
                   onClick={() => { setSidebarOpen(true); setSidebarView('home'); }}
                   className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12px] text-white/45 hover:border-white/20 hover:text-white">
-                  <span>\u2630</span><span>Chats</span>
+                  <span>☰</span><span>Chats</span>
                   {conversations.length > 0 && (
                     <span className="rounded-full bg-white/10 px-1.5 text-[10px] text-white/55">{conversations.length}</span>
                   )}
                 </button>
                 <button type="button" onClick={startNewChat}
                   className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12px] text-white/45 hover:border-white/20 hover:text-white">
-                  <span>\u270E</span><span>New</span>
+                  <span>✎</span><span>New</span>
                 </button>
               </div>
               {footer}
@@ -674,6 +678,6 @@ export default function AIAssistant(props: AIAssistantProps) {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
