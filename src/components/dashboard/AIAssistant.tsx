@@ -29,6 +29,13 @@ interface ConversationItem {
 
 type SidebarView = 'home' | 'history' | 'search' | 'projects' | 'apps';
 
+export interface ProactiveMessage {
+  id: string;
+  text: string;
+  imageUrl?: string;
+  type: 'generation_complete' | 'pipeline_result' | 'generation_failed';
+}
+
 interface AIAssistantProps {
   context: Record<string, unknown>;
   onApplyPrompt?: (prompt: string) => void;
@@ -47,6 +54,7 @@ interface AIAssistantProps {
   onUpdateCopyPrompt?: (value: string) => void;
   onUpdateI2VPrompt?: (value: string) => void;
   onUpdateQAInstruction?: (value: string) => void;
+  proactiveMessage?: ProactiveMessage | null;
 }
 
 const INITIAL_MESSAGE: AssistantMessageShape = {
@@ -108,6 +116,23 @@ export default function AIAssistant(props: AIAssistantProps) {
 
   // Register middleware once
   useEffect(() => registerActivityStreamMiddleware(), []);
+
+  // ── Proactive message injection ───────────────────────────────────────────
+  // When the page pushes a proactiveMessage (generation complete, pipeline result)
+  // inject it directly into the chat without requiring a user prompt.
+  const injectedIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const msg = props.proactiveMessage;
+    if (!msg || injectedIds.current.has(msg.id)) return;
+    injectedIds.current.add(msg.id);
+    const content: import('@/components/ai-chat/AssistantMessage').MsgContent[] = [
+      { type: 'text', text: msg.text },
+    ];
+    if (msg.imageUrl) {
+      content.push({ type: 'image_url', image_url: { url: msg.imageUrl } });
+    }
+    setMessages(prev => [...prev, { role: 'assistant', mode: 'conversation', content }]);
+  }, [props.proactiveMessage]);
   const [conversationId, setConversationId] = useState<string | undefined>(() => {
     if (typeof window === 'undefined') return undefined;
     return localStorage.getItem('streams_conv_id') ?? undefined;

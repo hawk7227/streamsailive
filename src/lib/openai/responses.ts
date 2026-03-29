@@ -58,6 +58,22 @@ export interface PipelineContext {
   provider?: string;
   extraKeys?: Record<string, string>;
   integratedContext?: IntegratedChatContextParts;
+  // Expanded pipeline state
+  allStepPrompts?: Record<string, string>;
+  conceptOutputs?: Record<string, { image: string | null; video: string | null; status: string; error: string | null }>;
+  approvedOutputs?: { image: string | null; video: string | null; script: string | null };
+  pipelineRunning?: boolean;
+  pipelineLog?: string[];
+  generationQueueSummary?: { pending: number; processing: number; completed: number; failed: number };
+  conceptNames?: Record<string, string>;
+  conceptCount?: number;
+  workspaceTab?: string;
+  viewMode?: string;
+  deviceFrame?: string;
+  editorOpen?: boolean;
+  previewTabs?: Record<string, string>;
+  intakeResult?: Record<string, unknown>;
+  liveEventsSummary?: string;
 }
 
 export interface AssistantAction {
@@ -104,17 +120,88 @@ export function getLastUserText(messages: ChatMessage[]): string {
 }
 
 function buildPipelineInfo(context: PipelineContext): string {
-  return [
-    context.nicheId ? `Active niche: ${context.nicheId}` : '',
-    context.currentStepId ? `Current step: ${context.currentStepId}` : '',
-    context.selectedConceptId ? `Selected concept: ${context.selectedConceptId}` : '',
-    context.stepStates ? `Step states: ${JSON.stringify(context.stepStates)}` : '',
-    context.intakeAnalysis ? 'Intake analysis present' : '',
-    context.strategyOutput ? 'Strategy output present' : '',
-    context.copyOutput ? 'Copy output present' : '',
-    context.imageUrl ? `Image available: ${context.imageUrl}` : '',
-    context.videoUrl ? `Video available: ${context.videoUrl}` : '',
-  ].filter(Boolean).join('\n');
+  const lines: string[] = [];
+
+  // ── Identity & step ────────────────────────────────────────────────────
+  if (context.nicheId) lines.push(`Active niche: ${context.nicheId}`);
+  if (context.currentStepId) lines.push(`Current step: ${context.currentStepId}`);
+  if (context.selectedConceptId) lines.push(`Selected concept: ${context.selectedConceptId}`);
+  if (context.conceptCount !== undefined) lines.push(`Total concepts: ${context.conceptCount}`);
+  if (context.stepStates) lines.push(`Step states: ${JSON.stringify(context.stepStates)}`);
+
+  // ── Pipeline execution state ───────────────────────────────────────────
+  if (context.pipelineRunning !== undefined) {
+    lines.push(`Pipeline running: ${context.pipelineRunning ? 'YES — currently executing' : 'idle'}`);
+  }
+  if (context.liveEventsSummary) lines.push(`Live events: ${context.liveEventsSummary}`);
+  if (context.pipelineLog && context.pipelineLog.length > 0) {
+    const tail = context.pipelineLog.slice(-5);
+    lines.push(`Recent pipeline log (last 5):\n${tail.map(l => '  ' + l).join('\n')}`);
+  }
+
+  // ── Generation queue ───────────────────────────────────────────────────
+  if (context.generationQueueSummary) {
+    const q = context.generationQueueSummary;
+    lines.push(`Generation queue: ${q.processing} processing, ${q.pending} pending, ${q.completed} completed, ${q.failed} failed`);
+  }
+
+  // ── Concept outputs (images/videos) ───────────────────────────────────
+  if (context.conceptOutputs) {
+    const entries = Object.entries(context.conceptOutputs);
+    if (entries.length > 0) {
+      lines.push('Concept outputs:');
+      for (const [id, out] of entries) {
+        const name = context.conceptNames?.[id] ?? id;
+        const img = out.image ? `image: ${out.image}` : 'no image';
+        const vid = out.video ? `video: ${out.video}` : 'no video';
+        lines.push(`  ${name} (${id}): ${img} | ${vid} | status: ${out.status}${out.error ? ` | error: ${out.error}` : ''}`);
+      }
+    }
+  }
+
+  // ── Approved outputs ───────────────────────────────────────────────────
+  if (context.approvedOutputs) {
+    const a = context.approvedOutputs;
+    const parts: string[] = [];
+    if (a.image) parts.push(`image: ${a.image}`);
+    if (a.video) parts.push(`video: ${a.video}`);
+    if (a.script) parts.push(`script present`);
+    if (parts.length > 0) lines.push(`Approved outputs: ${parts.join(' | ')}`);
+    else lines.push('Approved outputs: none yet');
+  }
+
+  // ── All step prompts ───────────────────────────────────────────────────
+  if (context.allStepPrompts) {
+    const prompts = context.allStepPrompts;
+    const filled = Object.entries(prompts).filter(([, v]) => v?.trim());
+    if (filled.length > 0) {
+      lines.push('All step prompts:');
+      for (const [stepId, prompt] of filled) {
+        lines.push(`  ${stepId}: ${String(prompt).slice(0, 200)}${String(prompt).length > 200 ? '…' : ''}`);
+      }
+    }
+  }
+
+  // ── Intake ─────────────────────────────────────────────────────────────
+  if (context.intakeAnalysis) lines.push(`Intake analysis: ${context.intakeAnalysis.slice(0, 400)}`);
+  if (context.intakeResult && Object.keys(context.intakeResult).length > 0) {
+    lines.push(`Intake structured result: ${JSON.stringify(context.intakeResult).slice(0, 600)}`);
+  }
+
+  // ── Existing outputs ───────────────────────────────────────────────────
+  if (context.strategyOutput) lines.push('Strategy output: present');
+  if (context.copyOutput) lines.push('Copy output: present');
+  if (context.imageUrl) lines.push(`Direct image URL: ${context.imageUrl}`);
+  if (context.videoUrl) lines.push(`Direct video URL: ${context.videoUrl}`);
+
+  // ── Workspace state ────────────────────────────────────────────────────
+  if (context.workspaceTab) lines.push(`Workspace tab: ${context.workspaceTab}`);
+  if (context.viewMode) lines.push(`View mode: ${context.viewMode}`);
+  if (context.deviceFrame) lines.push(`Device frame: ${context.deviceFrame}`);
+  if (context.editorOpen !== undefined) lines.push(`Editor panel: ${context.editorOpen ? 'open' : 'closed'}`);
+  if (context.previewTabs) lines.push(`Preview tabs: ${JSON.stringify(context.previewTabs)}`);
+
+  return lines.filter(Boolean).join('\n');
 }
 
 function buildContextInfo(context: PipelineContext): string {

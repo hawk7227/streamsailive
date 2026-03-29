@@ -14,7 +14,7 @@ import { extractArtifactFromBuffer, type ExtractedArtifact } from "@/lib/activit
 import { ArtifactCard, type ArtifactDestination } from "@/components/pipeline/ArtifactCard";
 import { FloatingPreviewPanel } from "@/components/pipeline/FloatingPreviewPanel";
 import { LivePreviewRenderer } from "@/components/pipeline/LivePreviewRenderer";
-import AIAssistant from "@/components/dashboard/AIAssistant";
+import AIAssistant, { type ProactiveMessage } from "@/components/dashboard/AIAssistant";
 import { PlatformViewer } from "@/components/pipeline/PlatformViewer";
 import { PlatformSelector, type PlatformSelection } from "@/components/pipeline/PlatformSelector";
 import { BatchPreviewModal } from "@/components/pipeline/BatchPreviewModal";
@@ -336,6 +336,12 @@ Accept only if:
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [wireframeMode, setWireframeMode] = useState(false);
   const [showSafeZone, setShowSafeZone] = useState(false);
+  // Proactive assistant messages — injected when generation completes
+  const [proactiveMessage, setProactiveMessage] = useState<ProactiveMessage | null>(null);
+  const proactiveIdCounter = useRef(0);
+  const pushProactive = useCallback((text: string, imageUrl?: string, type: ProactiveMessage['type'] = 'generation_complete') => {
+    setProactiveMessage({ id: `proactive_${++proactiveIdCounter.current}_${Date.now()}`, text, imageUrl, type });
+  }, []);
 
   // Register activity stream middleware once on mount
   useEffect(() => {
@@ -577,15 +583,18 @@ Accept only if:
               if (conceptId && row.type === "image") {
                 setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: row.output_url!, status: "completed" } }));
                 setImageResult(prev => prev ?? row.output_url!);
+                pushProactive(`✓ ${conceptId} image ready. Want me to review it or suggest edits?`, row.output_url!, 'generation_complete');
               }
               if (conceptId && (row.type === "video" || row.type === "i2v")) {
                 setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: row.output_url!, status: "completed" } }));
                 setVideoResult(row.output_url!);
+                pushProactive(`✓ ${conceptId} video ready. Want me to review it or suggest next steps?`, undefined, 'generation_complete');
               }
               log("✓ " + row.type + " completed: " + row.id.slice(0, 8));
             }
             if (row.status === "failed") {
               log("✗ generation failed: " + row.id.slice(0, 8));
+              pushProactive(`✗ Generation failed (${row.type ?? "unknown"}) — ${row.id.slice(0, 8)}. Check logs or retry.`, undefined, 'generation_failed');
             }
           }
         })
@@ -624,6 +633,7 @@ Accept only if:
                 setConceptOutputs(p => ({ ...p, [item.conceptId!]: { ...p[item.conceptId!], video: data.output_url!, status: "completed" } }));
               }
               log("✓ Video ready (poll): " + item.id.slice(0, 8));
+              pushProactive(`✓ ${item.conceptId ?? "Video"} video ready. Want me to review or suggest next steps?`, undefined, 'generation_complete');
             }
             if (data.type === "image" || item.type === "image") {
               setImageResult(prev => prev ?? data.output_url!);
@@ -631,6 +641,7 @@ Accept only if:
                 setConceptOutputs(p => ({ ...p, [item.conceptId!]: { ...p[item.conceptId!], image: data.output_url!, status: "completed" } }));
               }
               log("✓ Image ready (poll): " + item.id.slice(0, 8));
+              pushProactive(`✓ ${item.conceptId ?? "Image"} ready. Want me to review it or suggest edits?`, data.output_url!, 'generation_complete');
             }
           }
         } catch { /* non-fatal */ }
@@ -2980,6 +2991,43 @@ Accept only if:
           ),
           hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
           imageProvider,
+          // ── Previously invisible state — now fully visible to assistant ──
+          allStepPrompts: stepPrompts,
+          conceptOutputs: Object.fromEntries(
+            Object.entries(conceptOutputs).map(([id, o]) => [id, {
+              image: o.image, video: o.video, status: o.status, error: o.error,
+            }])
+          ),
+          approvedOutputs,
+          pipelineRunning,
+          pipelineLog: pipelineLog.slice(-10),
+          generationQueueSummary: {
+            pending: [...generationQueue.values()].filter(i => i.status === "pending").length,
+            processing: [...generationQueue.values()].filter(i => i.status === "processing").length,
+            completed: [...generationQueue.values()].filter(i => i.status === "completed").length,
+            failed: [...generationQueue.values()].filter(i => i.status === "failed").length,
+          },
+          conceptNames: Object.fromEntries(concepts.map((cv, i) => [`c${i + 1}`, cv.headline ?? `Concept ${i + 1}`])),
+          conceptCount: concepts.length,
+          workspaceTab,
+          viewMode,
+          deviceFrame,
+          editorOpen: epOpen,
+          previewTabs,
+          intakeResult: intakeResult ? {
+            type: intakeResult.type,
+            title: intakeResult.title,
+            brandName: intakeResult.brandName,
+            colorPalette: intakeResult.colorPalette,
+            keyMessages: intakeResult.keyMessages,
+            layoutPattern: intakeResult.layoutPattern,
+            targetAudience: intakeResult.targetAudience,
+            toneOfVoice: intakeResult.toneOfVoice,
+            suggestedCopy: intakeResult.suggestedCopy,
+          } : undefined,
+          liveEventsSummary: liveEvents.slice(-3).map(e => e.message ?? e.stepName ?? '').filter(Boolean).join(' → ') || undefined,
+          strategyOutput: stepPrompts.strategy,
+          copyOutput: stepPrompts.copy,
         }}
         onApplyPrompt={(prompt) => setStepPrompts(p => ({ ...p, [selectedStepId]: prompt }))}
         onUpdateSettings={(key, value) => {
@@ -3010,6 +3058,7 @@ Accept only if:
         onUpdateCopyPrompt={(v) => setStepPrompts(p => ({ ...p, copy: v }))}
         onUpdateI2VPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
         onUpdateQAInstruction={(v) => setStepPrompts(p => ({ ...p, qa: v }))}
+        proactiveMessage={proactiveMessage}
       />
       {/* ── Batch Preview Modal ─────────────────────────────────────── */}
       <BatchPreviewModal
