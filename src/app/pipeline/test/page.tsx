@@ -2228,48 +2228,219 @@ Accept only if:
                   const c1 = conceptOutputs.c1;
                   const c3 = conceptOutputs.c3;
 
-                  const IPhoneFrame = ({ slot, vidRef, label, onEdit }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void }) => (
-                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>{label}</div>
-                      {/* iPhone shell — stretches to fill */}
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
-                        <div style={{ flex: 1, background: "#0d1117", borderRadius: 28, border: "2px solid rgba(255,255,255,0.14)", padding: "14px 6px 16px", boxShadow: "0 0 0 6px rgba(255,255,255,0.04), 0 14px 40px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }}>
-                          {/* Notch */}
-                          <div style={{ width: 48, height: 6, background: "#000", borderRadius: 3, alignSelf: "center", marginBottom: 8, flexShrink: 0 }} />
-                          {/* Screen fills remaining space */}
-                          <div style={{ flex: 1, borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, position: "relative" }}>
-                            {slot.video
-                              ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              : slot.image
-                                ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
-                                    <div style={{ fontSize: 18, opacity: 0.2 }}>◻</div>
-                                    <div style={{ fontSize: 9, color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                  // ── iPhone 15 Pro Max accurate frame ──────────────────────
+                  // All dimensions derived from verified specs, scaled proportionally.
+                  // Canonical CSS viewport: 430 × 932 points.
+                  // Physical body ratio: 76.7mm × 159.9mm → 0.4797 w/h body ratio.
+                  // Screen-to-body: ~89.8%. Bezel: 1.55mm.
+                  // Dynamic Island: 126pt wide × 37pt tall, fully pill, 12pt from top.
+                  // Safe areas: top 59pt, bottom 34pt.
+                  // Home indicator: 134pt wide × 5pt tall, centered, 8pt from bottom.
+                  // Screen corner radius: 55pt. Body corner radius: 47pt.
+                  const IPhoneFrame = ({ slot, vidRef, label, onEdit }: { slot: typeof c1; vidRef: React.RefObject<HTMLVideoElement | null>; label: string; onEdit?: () => void }) => {
+                    // Scale everything relative to iPhoneWidth (user-draggable).
+                    // Base reference: 430pt viewport width → maps to iPhoneWidth px.
+                    const S = iPhoneWidth / 430; // scale factor
+
+                    // Body: 76.7mm × 159.9mm physical. Viewport 430×932pt.
+                    // Body is slightly taller/wider than viewport due to bezels.
+                    // Bezel ≈ 1.55mm → at 460ppi → ~3pt per side.
+                    // Body width = viewport 430 + 2×3 = 436pt → scale to iPhoneWidth × (436/430)
+                    const bodyW = iPhoneWidth * (436 / 430);
+                    const bodyH = bodyW * (159.9 / 76.7); // physical aspect ratio
+                    const bodyRadius = Math.round(47 * S);
+
+                    // Screen area
+                    const screenRadius = Math.round(55 * S);
+                    const bezel = Math.round(3 * S);
+
+                    // Dynamic Island: 126pt wide × 37pt tall, 12pt from top of screen
+                    const diW = Math.round(126 * S);
+                    const diH = Math.round(37 * S);
+                    const diTop = Math.round(12 * S);
+
+                    // Safe areas
+                    const safeTop = Math.round(59 * S);    // status bar + DI + gap
+                    const safeBot = Math.round(34 * S);    // home indicator area
+
+                    // Home indicator: 134pt wide × 5pt tall, 8pt from bottom edge
+                    const homeW = Math.round(134 * S);
+                    const homeH = Math.max(2, Math.round(5 * S));
+                    const homeBottom = Math.round(8 * S);
+
+                    // Side buttons (visual only)
+                    const btnW = Math.max(2, Math.round(3 * S));
+                    const volH = Math.round(32 * S);
+                    const powerH = Math.round(42 * S);
+                    const actionH = Math.round(20 * S);
+
+                    // Status bar text scale
+                    const statusFontSize = Math.max(7, Math.round(12 * S));
+
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", height: "100%", alignItems: "center" }}>
+                        {/* Label */}
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6, textAlign: "center", flexShrink: 0 }}>{label}</div>
+
+                        {/* Outer device shell — titanium body */}
+                        <div style={{
+                          position: "relative",
+                          width: bodyW,
+                          height: bodyH,
+                          flexShrink: 0,
+                          // Titanium: warm near-black with subtle gradient
+                          background: "linear-gradient(160deg, #2c2c2e 0%, #1c1c1e 40%, #141416 100%)",
+                          borderRadius: bodyRadius,
+                          // Titanium frame: subtle highlight on edges
+                          boxShadow: [
+                            // Outer edge highlight — titanium catch light
+                            `0 0 0 1px rgba(255,255,255,0.18)`,
+                            // Inner shadow to separate frame from screen
+                            `inset 0 0 0 ${bezel}px #0a0a0c`,
+                            // Drop shadow
+                            `0 20px 60px rgba(0,0,0,0.7), 0 4px 12px rgba(0,0,0,0.5)`,
+                          ].join(", "),
+                          overflow: "visible",
+                        }}>
+
+                          {/* Volume buttons — left side */}
+                          {/* Silent/Action button (top-left) */}
+                          <div style={{ position: "absolute", left: -btnW, top: Math.round(80 * S), width: btnW, height: actionH, background: "linear-gradient(90deg, #1a1a1c, #2a2a2e)", borderRadius: `${btnW}px 0 0 ${btnW}px`, boxShadow: "-1px 0 0 rgba(255,255,255,0.08)" }} />
+                          {/* Volume up */}
+                          <div style={{ position: "absolute", left: -btnW, top: Math.round(120 * S), width: btnW, height: volH, background: "linear-gradient(90deg, #1a1a1c, #2a2a2e)", borderRadius: `${btnW}px 0 0 ${btnW}px`, boxShadow: "-1px 0 0 rgba(255,255,255,0.08)" }} />
+                          {/* Volume down */}
+                          <div style={{ position: "absolute", left: -btnW, top: Math.round(165 * S), width: btnW, height: volH, background: "linear-gradient(90deg, #1a1a1c, #2a2a2e)", borderRadius: `${btnW}px 0 0 ${btnW}px`, boxShadow: "-1px 0 0 rgba(255,255,255,0.08)" }} />
+                          {/* Power button — right side */}
+                          <div style={{ position: "absolute", right: -btnW, top: Math.round(130 * S), width: btnW, height: powerH, background: "linear-gradient(270deg, #1a1a1c, #2a2a2e)", borderRadius: `0 ${btnW}px ${btnW}px 0`, boxShadow: "1px 0 0 rgba(255,255,255,0.08)" }} />
+
+                          {/* Screen — flush inside body with correct corner radius */}
+                          <div style={{
+                            position: "absolute",
+                            inset: bezel,
+                            borderRadius: screenRadius,
+                            overflow: "hidden",
+                            background: "#000",
+                            // Screen glass: subtle inner glow
+                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                          }}>
+
+                            {/* ── Content layer (image/video/empty) ── */}
+                            <div style={{ position: "absolute", inset: 0 }}>
+                              {slot.video
+                                ? <video ref={vidRef} src={slot.video} muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                : slot.image
+                                  ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                  : (
+                                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(180deg, #0d0d12 0%, #090912 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
+                                      <div style={{ fontSize: Math.round(22 * S), opacity: 0.15 }}>◻</div>
+                                      <div style={{ fontSize: Math.max(7, Math.round(9 * S)), color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                                    </div>
+                                  )
+                              }
+                            </div>
+
+                            {/* ── Safe zone overlay ── */}
+                            {/* Top safe zone: status bar + Dynamic Island area */}
+                            <div style={{
+                              position: "absolute", top: 0, left: 0, right: 0,
+                              height: safeTop,
+                              // Semi-transparent so content can show underneath but zone is visible
+                              background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 100%)",
+                              pointerEvents: "none",
+                            }}>
+                              {/* Status bar */}
+                              <div style={{
+                                position: "absolute", top: Math.round(14 * S), left: Math.round(16 * S), right: Math.round(16 * S),
+                                display: "flex", alignItems: "center", justifyContent: "space-between",
+                                fontSize: statusFontSize, fontWeight: 600, color: "rgba(255,255,255,0.9)",
+                                letterSpacing: "0.01em",
+                                fontFamily: "-apple-system, SF Pro Display, sans-serif",
+                              }}>
+                                {/* Time — left */}
+                                <span>9:41</span>
+                                {/* Right indicators: signal + wifi + battery */}
+                                <div style={{ display: "flex", alignItems: "center", gap: Math.round(4 * S) }}>
+                                  {/* Signal bars */}
+                                  <svg width={Math.round(16 * S)} height={Math.round(12 * S)} viewBox="0 0 16 12" fill="white">
+                                    <rect x="0" y="7" width="3" height="5" rx="0.5" opacity="1"/>
+                                    <rect x="4.5" y="5" width="3" height="7" rx="0.5" opacity="1"/>
+                                    <rect x="9" y="2.5" width="3" height="9.5" rx="0.5" opacity="1"/>
+                                    <rect x="13.5" y="0" width="2.5" height="12" rx="0.5" opacity="0.35"/>
+                                  </svg>
+                                  {/* WiFi */}
+                                  <svg width={Math.round(15 * S)} height={Math.round(12 * S)} viewBox="0 0 15 12" fill="white">
+                                    <path d="M7.5 9.5 a0.8 0.8 0 1 1 0.001 0Z" fill="white"/>
+                                    <path d="M4.8 6.8 Q7.5 4.5 10.2 6.8" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+                                    <path d="M2.2 4.2 Q7.5 0.5 12.8 4.2" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+                                  </svg>
+                                  {/* Battery */}
+                                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                                    <div style={{ width: Math.round(22 * S), height: Math.round(11 * S), borderRadius: 2, border: "1px solid rgba(255,255,255,0.55)", position: "relative", overflow: "visible" }}>
+                                      <div style={{ position: "absolute", inset: 1, width: "75%", background: "rgba(255,255,255,0.9)", borderRadius: 1 }} />
+                                    </div>
+                                    {/* Battery tip */}
+                                    <div style={{ width: Math.round(2 * S), height: Math.round(5 * S), background: "rgba(255,255,255,0.55)", borderRadius: "0 1px 1px 0", marginLeft: 1 }} />
                                   </div>
-                            }
-                            {/* Hover overlay — Edit + Send buttons */}
+                                </div>
+                              </div>
+
+                              {/* Dynamic Island — pill cutout */}
+                              <div style={{
+                                position: "absolute",
+                                top: diTop,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                width: diW,
+                                height: diH,
+                                background: "#000",
+                                borderRadius: diH / 2,
+                                // Slight inner glow to sell the OLED black cutout
+                                boxShadow: "0 0 0 1px rgba(255,255,255,0.03), inset 0 0 4px rgba(0,0,0,0.8)",
+                              }} />
+                            </div>
+
+                            {/* Bottom safe zone: home indicator */}
+                            <div style={{
+                              position: "absolute", bottom: 0, left: 0, right: 0,
+                              height: safeBot,
+                              background: "linear-gradient(0deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 100%)",
+                              pointerEvents: "none",
+                              display: "flex", alignItems: "flex-end", justifyContent: "center",
+                              paddingBottom: homeBottom,
+                            }}>
+                              {/* Home indicator pill */}
+                              <div style={{
+                                width: homeW,
+                                height: homeH,
+                                background: "rgba(255,255,255,0.55)",
+                                borderRadius: homeH,
+                              }} />
+                            </div>
+
+                            {/* Hover overlay — Edit + Send buttons (sits above safe zones) */}
                             {(slot.image || slot.video) && onEdit && (
-                              <div className="iphone-overlay" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, opacity: 0, transition: "opacity 150ms" }}
+                              <div className="iphone-overlay" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, opacity: 0, transition: "opacity 150ms", zIndex: 10 }}
                                 onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
                                 onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
                                 <button onClick={onEdit}
-                                  style={{ padding: "6px 14px", background: "rgba(103,232,249,0.9)", border: "none", color: "#000", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", width: "80%" }}>
+                                  style={{ padding: "6px 14px", background: "rgba(103,232,249,0.9)", border: "none", color: "#000", borderRadius: 7, fontSize: Math.max(9, Math.round(11 * S)), fontWeight: 700, cursor: "pointer", width: "80%" }}>
                                   ✏ Edit in center
                                 </button>
                                 <button onClick={() => triggerDestPicker(slot.image ?? slot.video!, slot.video ? "video" : "image")}
-                                  style={{ padding: "5px 14px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 7, fontSize: 10, cursor: "pointer", width: "80%" }}>
+                                  style={{ padding: "5px 14px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: 7, fontSize: Math.max(8, Math.round(10 * S)), cursor: "pointer", width: "80%" }}>
                                   → Send to screen
                                 </button>
                               </div>
                             )}
-                          </div>
-                          {/* Home bar */}
-                          <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "10px auto 0", flexShrink: 0 }} />
-                        </div>
+
+                          </div>{/* end screen */}
+                        </div>{/* end body */}
+
+                        {/* Aspect ratio label */}
+                        <div style={{ fontSize: 9, color: "#334155", textAlign: "center", marginTop: 6, flexShrink: 0 }}>9:16 · 430×932pt</div>
                       </div>
-                      <div style={{ fontSize: 9, color: "#334155", textAlign: "center", marginTop: 6 }}>9:16</div>
-                    </div>
-                  );
+                    );
+                  };
 
                   return (
                     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }}>
