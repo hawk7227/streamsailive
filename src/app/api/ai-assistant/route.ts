@@ -6,7 +6,6 @@ import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 import { buildIntegratedChatContext } from '@/lib/ai-chat/context/buildIntegratedContext';
 import { runValidators } from '@/lib/enforcement/validatorRunner';
 import { validateChatResponse } from '@/lib/enforcement/validators/chat';
-import { getSiteConfig } from '@/lib/config';
 import type { AssistantRequestContext } from '@/lib/ai-chat/context/types';
 import type { VerifyResponse } from '@/app/api/verify/route';
 import type { User } from '@supabase/supabase-js';
@@ -217,7 +216,7 @@ export async function POST(request: Request) {
       // Phase 4: Model call — emit understanding phase BEFORE the blocking fetch
       emit(controller, { type: 'phase', phase: 'understanding_request', label: 'Understanding your request...' });
 
-      const activeModel = clientModel || getSiteConfig().copilotModel || 'gpt-4o';
+      const activeModel = clientModel || 'gpt-4o';
       const provider = getProviderConfig(activeModel);
       // Use the correct API key based on provider
       const apiKey = activeModel.startsWith('claude-')
