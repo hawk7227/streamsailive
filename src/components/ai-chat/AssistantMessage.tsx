@@ -144,6 +144,17 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const isTool = message.role === "tool";
+  const [copied, setCopied] = React.useState(false);
+
+  function copyText() {
+    const text = typeof message.content === "string"
+      ? message.content
+      : message.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    }).catch(() => {});
+  }
 
   if (isSystem) {
     return (
@@ -156,7 +167,7 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   }
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
         className={[
           "max-w-[88%] rounded-[24px] px-4 py-3 shadow-[0_16px_40px_rgba(0,0,0,0.16)]",
@@ -181,6 +192,25 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
           </div>
         )}
       </div>
+      {/* Copy button — only on assistant messages */}
+      {!isUser && !isSystem && (
+        <button
+          type="button"
+          onClick={copyText}
+          style={{
+            marginTop: 4,
+            fontSize: 10,
+            color: copied ? "rgba(110,231,183,0.9)" : "rgba(255,255,255,0.25)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px 4px",
+            transition: "color 150ms",
+          }}
+        >
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+      )}
     </div>
   );
 }

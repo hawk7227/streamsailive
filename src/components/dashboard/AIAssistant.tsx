@@ -81,8 +81,8 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [input, setInput] = useState('');
   const [pending, setPending] = useState(false);
   const [model, setModel] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'claude-sonnet-4-6';
-    return localStorage.getItem('streams:model') ?? 'claude-sonnet-4-6';
+    if (typeof window === 'undefined') return 'gpt-4o';
+    return localStorage.getItem('streams:model') ?? 'gpt-4o';
   });
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -285,7 +285,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify({ messages: nextMessages, context: { ...props.context, conversationId }, requestContext, conversationId }),
+        body: JSON.stringify({ messages: nextMessages, context: { ...props.context, conversationId }, requestContext, conversationId, model }),
       });
 
       if (!res.ok || !res.body) {
@@ -579,7 +579,7 @@ export default function AIAssistant(props: AIAssistantProps) {
           style={{ flex: 1, resize: 'none', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', padding: '10px 14px', fontSize: 14, outline: 'none', maxHeight: 120, minHeight: 40 }}
         />
         {/* Model selector */}
-        <select
+          <select
           value={model}
           onChange={(e) => { setModel(e.target.value); if (typeof window !== 'undefined') localStorage.setItem('streams:model', e.target.value); }}
           style={{
@@ -588,9 +588,16 @@ export default function AIAssistant(props: AIAssistantProps) {
             fontSize: 10, cursor: 'pointer', outline: 'none', marginBottom: 4, flexShrink: 0,
           }}
         >
-          <option value="claude-sonnet-4-6">Sonnet 4.6</option>
-          <option value="claude-opus-4-6">Opus 4.6</option>
-          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+          <optgroup label="OpenAI">
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o mini</option>
+            <option value="o1">o1</option>
+          </optgroup>
+          <optgroup label="Anthropic">
+            <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+            <option value="claude-opus-4-6">Opus 4.6</option>
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+          </optgroup>
         </select>
         {/* Send button */}
         <button type="submit"
