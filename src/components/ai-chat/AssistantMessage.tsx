@@ -140,17 +140,37 @@ function MediaBlock({ block }: { block: MsgContent }) {
   return null;
 }
 
+// Clipboard SVG icon — matches Claude.ai's copy icon
+function ClipboardIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 export function AssistantMessage({ message }: { message: AssistantMessageShape }) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const isTool = message.role === "tool";
   const [copied, setCopied] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
 
+  // Copy raw markdown (preserves **bold**, ## headings, `code`, etc.)
   function copyText() {
-    const text = typeof message.content === "string"
+    const raw = typeof message.content === "string"
       ? message.content
-      : message.content.filter(b => b.type === "text").map(b => b.text).join("\n");
-    navigator.clipboard.writeText(text).then(() => {
+      : message.content.filter(b => b.type === "text").map(b => b.text ?? "").join("\n");
+    navigator.clipboard.writeText(raw).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     }).catch(() => {});
@@ -167,7 +187,11 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   }
 
   return (
-    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+    <div
+      className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div
         className={[
           "max-w-[88%] rounded-[24px] px-4 py-3 shadow-[0_16px_40px_rgba(0,0,0,0.16)]",
@@ -192,24 +216,45 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
           </div>
         )}
       </div>
-      {/* Copy button — only on assistant messages */}
+
+      {/* Action bar — hover only, assistant messages only, matches Claude.ai */}
       {!isUser && !isSystem && (
-        <button
-          type="button"
-          onClick={copyText}
-          style={{
-            marginTop: 4,
-            fontSize: 10,
-            color: copied ? "rgba(110,231,183,0.9)" : "rgba(255,255,255,0.25)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 4px",
-            transition: "color 150ms",
-          }}
-        >
-          {copied ? "✓ Copied" : "Copy"}
-        </button>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          marginTop: 4,
+          opacity: hovered ? 1 : 0,
+          transition: "opacity 150ms ease",
+          pointerEvents: hovered ? "auto" : "none",
+        }}>
+          <button
+            type="button"
+            onClick={copyText}
+            title={copied ? "Copied!" : "Copy"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: copied ? "rgba(110,231,183,0.12)" : "rgba(255,255,255,0.05)",
+              color: copied ? "rgba(110,231,183,0.9)" : "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              transition: "all 150ms ease",
+            }}
+            onMouseEnter={e => {
+              if (!copied) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)";
+            }}
+            onMouseLeave={e => {
+              if (!copied) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.05)";
+            }}
+          >
+            {copied ? <CheckIcon size={13} /> : <ClipboardIcon size={13} />}
+          </button>
+        </div>
       )}
     </div>
   );
