@@ -1,0 +1,122 @@
+import type { GeneratorProfile, GeneratorTarget, GeneratorMedium } from "./types";
+
+export const GENERATOR_REGISTRY: Record<GeneratorTarget, GeneratorProfile> = {
+  "openai-image": {
+    id: "openai-image",
+    label: "OpenAI Image",
+    medium: "image",
+    promptStyle: "descriptive",
+    strengths: ["good natural language grounding", "strong reference handling", "realistic stills"],
+    weaknesses: ["can drift toward polished advertising"],
+    realismBias: 9,
+    requiresMotionPlan: false,
+    requiresReferencePack: false,
+    commonFailureModes: ["too polished", "too symmetrical", "clean showroom look"],
+  },
+  "openai-video": {
+    id: "openai-video",
+    label: "OpenAI Video",
+    medium: "video",
+    promptStyle: "structured",
+    strengths: ["prompt + image reference guidance", "character reuse", "video edits and extensions"],
+    weaknesses: ["identity drift under heavy motion", "anatomy failures from weak stills"],
+    realismBias: 9,
+    requiresMotionPlan: true,
+    requiresReferencePack: true,
+    commonFailureModes: ["face drift", "blobbing", "limb instability"],
+  },
+  "runway-video": {
+    id: "runway-video",
+    label: "Runway Video",
+    medium: "video",
+    promptStyle: "hybrid",
+    strengths: ["camera language", "shot shaping"],
+    weaknesses: ["can stylize too far"],
+    realismBias: 8,
+    requiresMotionPlan: true,
+    requiresReferencePack: true,
+    commonFailureModes: ["cinematic over-stylization", "smooth skin", "imprecise identity"],
+  },
+  "kling-video": {
+    id: "kling-video",
+    label: "Kling Video",
+    medium: "video",
+    promptStyle: "structured",
+    strengths: ["motion", "energetic scene rendering"],
+    weaknesses: ["extra motion drift if prompt is loose"],
+    realismBias: 8,
+    requiresMotionPlan: true,
+    requiresReferencePack: true,
+    commonFailureModes: ["drift", "extra fingers", "background wobble"],
+  },
+  "suno-song": {
+    id: "suno-song",
+    label: "Suno Song",
+    medium: "song",
+    promptStyle: "structured",
+    strengths: ["song structure", "hooks", "full song generation"],
+    weaknesses: ["needs concise genre framing"],
+    realismBias: 7,
+    requiresMotionPlan: false,
+    requiresReferencePack: true,
+    commonFailureModes: ["generic lyrics", "weak vocal direction"],
+  },
+  "udio-song": {
+    id: "udio-song",
+    label: "Udio Song",
+    medium: "song",
+    promptStyle: "structured",
+    strengths: ["musical texture", "genre steering"],
+    weaknesses: ["needs clearer vocal goals"],
+    realismBias: 7,
+    requiresMotionPlan: false,
+    requiresReferencePack: true,
+    commonFailureModes: ["muddy arrangement", "voice mismatch"],
+  },
+  "openai-script": {
+    id: "openai-script",
+    label: "OpenAI Script",
+    medium: "script",
+    promptStyle: "structured",
+    strengths: ["story compression", "shot-ready formatting", "narration structure", "dialogue clarity"],
+    weaknesses: ["can over-format if not given scene context"],
+    realismBias: 8,
+    requiresMotionPlan: false,
+    requiresReferencePack: false,
+    commonFailureModes: ["generic narration", "weak shot cues", "missing emotional beats"],
+  },
+  "openai-voice": {
+    id: "openai-voice",
+    label: "OpenAI Voice",
+    medium: "voice",
+    promptStyle: "structured",
+    strengths: ["clear tone direction", "speaking mode fidelity", "voice style control"],
+    weaknesses: ["limited singing mode", "no identity anchoring"],
+    realismBias: 8,
+    requiresMotionPlan: false,
+    requiresReferencePack: true,
+    commonFailureModes: ["monotone delivery", "wrong speaking pace", "mismatched register"],
+  },
+  "elevenlabs-voice": {
+    id: "elevenlabs-voice",
+    label: "ElevenLabs Voice",
+    medium: "voice",
+    promptStyle: "hybrid",
+    strengths: ["voice cloning", "emotional range", "accent control", "multilingual"],
+    weaknesses: ["needs clean reference audio", "can overfit on short clips"],
+    realismBias: 9,
+    requiresMotionPlan: false,
+    requiresReferencePack: true,
+    commonFailureModes: ["reference bleed", "unnatural prosody at extremes", "clipping artifacts"],
+  },
+};
+
+export function resolveGeneratorTarget(input: { medium: GeneratorMedium; provider?: string | null; mode?: string | null }): GeneratorTarget {
+  if (input.medium === "image") return "openai-image";
+  if (input.medium === "song") return input.provider === "udio" ? "udio-song" : "suno-song";
+  if (input.medium === "script") return "openai-script";
+  if (input.medium === "voice") return input.provider === "elevenlabs" ? "elevenlabs-voice" : "openai-voice";
+  if (input.provider === "runway") return "runway-video";
+  if (input.provider === "openai") return "openai-video";
+  return "kling-video";
+}

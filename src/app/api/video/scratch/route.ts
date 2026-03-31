@@ -20,6 +20,7 @@ import { submitT2VCandidates, pollT2VCandidate } from "@/lib/media-realism-video
 import { scoreT2VCandidate, shouldRejectT2VCandidate } from "@/lib/media-realism-video/t2vQc";
 import { selectBestT2VCandidate } from "@/lib/media-realism-video/t2vSelector";
 import { postProcessT2V } from "@/lib/media-realism-video/t2vPostProcess";
+import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 import type {
   T2VInput,
   T2VAspectRatio,
@@ -180,7 +181,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `realismMode must be one of: ${[...VALID_REALISM_MODES].join(", ")}` }, { status: 400 });
   }
 
-  const input: T2VInput = { prompt, aspectRatio, duration, quality, realismMode, workspaceId: workspace.id };
+  const compiled = compileGenerationRequest({
+    medium: "video",
+    prompt,
+    provider: "kling",
+    mode: "scratch_t2v",
+    storyBible: typeof body.storyBible === "string" ? body.storyBible : null,
+    sourceKind: typeof body.sourceKind === "string" ? body.sourceKind as "self" | "family_or_friend" | "synthetic" | "mixed" : undefined,
+    referenceSummary: typeof body.referenceSummary === "string" ? body.referenceSummary : null,
+  });
+
+  if (!compiled.storyBibleRequired || !body.storyBible) {
+    return NextResponse.json({ error: "Story Bible is required before scratch video generation." }, { status: 422 });
+  }
+
+  if (compiled.structuralScore && !compiled.structuralScore.isSafeForVideo && typeof body.referenceSummary === "string" && body.referenceSummary.trim()) {
+    return NextResponse.json({
+      error: "References are not safe enough for realism-first video generation.",
+      structuralScore: compiled.structuralScore,
+      repairPlan: compiled.repairPlan,
+    }, { status: 422 });
+  }
+
+  const input: T2VInput = { prompt: compiled.prompt, aspectRatio, duration, quality, realismMode, workspaceId: workspace.id };
 
   // Create DB row immediately — client can track via generations table
   const { data: genRow, error: genErr } = await admin
@@ -194,7 +217,7 @@ export async function POST(request: NextRequest) {
       aspect_ratio: input.aspectRatio,
       duration:     `${input.duration}s`,
       quality:      input.quality,
-      style:        `t2v-realism-${input.realismMode}`,
+      style:        `t2v-realism-${input.realismMode}-${compiled.structuralScore?.realismScore ?? "na"}`,
     })
     .select("id")
     .single();

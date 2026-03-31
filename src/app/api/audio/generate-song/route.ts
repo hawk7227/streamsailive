@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { generateSong, extractVocals } from "@/lib/audio/songPipeline";
 import { enqueueJob } from "@/lib/jobs/queue";
+import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 
 export const maxDuration = 120;
 
@@ -20,6 +21,12 @@ export async function POST(request: Request) {
     provider?:     "suno" | "udio" | "auto";
     extractVocals?: boolean;
     async?:        boolean;
+    storyBible?:   string;
+    voiceDatasetId?: string;
+    referenceAudioUrl?: string;
+    voiceGuideMode?: string;
+    enhanceVocals?: boolean;
+    sourceKind?: "self" | "family_or_friend" | "synthetic" | "mixed";
   };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
@@ -44,8 +51,17 @@ export async function POST(request: Request) {
 
   // Sync mode — generate and return
   try {
+    const compiled = compileGenerationRequest({
+      medium: "song",
+      prompt: body.prompt,
+      provider: body.provider ?? "auto",
+      storyBible: body.storyBible,
+      sourceKind: body.sourceKind ?? "self",
+      referenceSummary: [body.voiceDatasetId ? `voiceDataset:${body.voiceDatasetId}` : null, body.referenceAudioUrl ? `referenceAudio:${body.referenceAudioUrl}` : null, body.voiceGuideMode ? `guide:${body.voiceGuideMode}` : null].filter(Boolean).join(", "),
+    });
+
     const result = await generateSong({
-      prompt:       body.prompt,
+      prompt:       compiled.prompt,
       style:        body.style,
       title:        body.title,
       instrumental: body.instrumental,
@@ -68,7 +84,7 @@ export async function POST(request: Request) {
         name:         result.title,
         mime_type:    "audio/mpeg",
         duration_secs: result.duration,
-        metadata:     { provider: result.provider, stems: result.stems, prompt: body.prompt },
+        metadata:     { provider: result.provider, stems: result.stems, prompt: body.prompt, compiledPrompt: compiled.prompt, voiceDatasetId: body.voiceDatasetId, referenceAudioUrl: body.referenceAudioUrl, voiceGuideMode: body.voiceGuideMode, enhanceVocals: body.enhanceVocals ?? false, sourceKind: body.sourceKind ?? "self" },
         tags:         ["song", "generated", result.provider],
       }).then(() => {});
     }

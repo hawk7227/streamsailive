@@ -32,7 +32,9 @@ interface FullContext {
 const TOOLS = [
   {type:"function",function:{name:"fetch_url",description:"Fetch any URL — returns text, JSON, or base64 for images.",parameters:{type:"object",properties:{url:{type:"string"},method:{type:"string",enum:["GET","POST"]},body:{type:"string"}},required:["url"]}}},
   {type:"function",function:{name:"generate_image",description:"Trigger image generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["openai","fal"]}},required:[]}}},
-  {type:"function",function:{name:"generate_video",description:"Trigger video generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["kling","runway"]},mode:{type:"string",enum:["scratch_t2v","i2v"]}},required:[]}}},
+  {type:"function",function:{name:"generate_video",description:"Trigger video generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["kling","runway","openai"]},mode:{type:"string",enum:["scratch_t2v","i2v"]},storyBible:{type:"string"}},required:[]}}},
+  {type:"function",function:{name:"generate_song",description:"Trigger song generation using available voice references.",parameters:{type:"object",properties:{prompt:{type:"string"},provider:{type:"string",enum:["suno","udio","auto"]},voiceDatasetId:{type:"string"},storyBible:{type:"string"}},required:["prompt"]}}},
+  {type:"function",function:{name:"build_story_bible",description:"Create a locked story bible before story-to-video.",parameters:{type:"object",properties:{title:{type:"string"},storyText:{type:"string"},aiFill:{type:"boolean"},sourceKind:{type:"string",enum:["self","family_or_friend","synthetic","mixed"]}},required:["storyText"]}}},
   {type:"function",function:{name:"run_pipeline",description:"Run full governance pipeline.",parameters:{type:"object",properties:{},required:[]}}},
   {type:"function",function:{name:"run_step",description:"Run single pipeline step.",parameters:{type:"object",properties:{stepId:{type:"string"},data:{type:"object"}},required:["stepId"]}}},
   {type:"function",function:{name:"read_pipeline_state",description:"Read current pipeline state.",parameters:{type:"object",properties:{sessionId:{type:"string"}},required:[]}}},
@@ -67,9 +69,17 @@ async function executeTool(name: string, args: Record<string,unknown>, ctx: Full
         return d.error?`Error: ${d.error}`:JSON.stringify({status:d.data?.status,url:d.data?.output_url,id:d.data?.id});
       }
       case "generate_video": {
-        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"video",prompt:args.prompt??ctx.videoPrompt??"slow natural motion",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:args.provider??ctx.videoProvider??"kling",mode:args.mode??ctx.videoMode??"scratch_t2v"})});
+        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"video",prompt:args.prompt??ctx.videoPrompt??"slow natural motion",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:args.provider??ctx.videoProvider??"kling",mode:args.mode??ctx.videoMode??"scratch_t2v",storyBible:args.storyBible??ctx.settings?.storyBible??null})});
         const d = await r.json() as {data?:{id:string;status:string;output_url?:string};error?:string};
         return d.error?`Error: ${d.error}`:JSON.stringify({status:d.data?.status,url:d.data?.output_url,id:d.data?.id});
+      }
+      case "generate_song": {
+        const r = await fetch(`${base}/api/audio/generate-song`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:args.prompt,provider:args.provider??"auto",voiceDatasetId:args.voiceDatasetId??null,storyBible:args.storyBible??ctx.settings?.storyBible??null,sourceKind:"self"})});
+        return JSON.stringify(await r.json());
+      }
+      case "build_story_bible": {
+        const r = await fetch(`${base}/api/story/generate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:args.title??"Story Bible",storyText:args.storyText,aiFill:args.aiFill??true,sourceKind:args.sourceKind??"mixed"})});
+        return JSON.stringify(await r.json());
       }
       case "run_pipeline": return JSON.stringify({action:"run_pipeline",message:"Triggered via UI callback"});
       case "run_step": {
@@ -167,9 +177,40 @@ PIPELINE STATE:\n${s||"No pipeline loaded"}
 
 MEMORY:\n${mem||"No memory yet"}
 
-GOVERNANCE: No diagnostic claims. Realism-first: no cinematic, no airbrushed. Motion: no face warping, max 5s.
+GOVERNANCE:
+- No diagnostic claims.
+- Realism-first only.
+- No cinematic, glossy, luxury, ad-polished, airbrushed, studio, perfect-composition, or model-like imagery.
+- Motion: no face warping, max 5s unless the user explicitly overrides.
 
-ACTIONS (emit JSON when intent matches): generate_image, generate_video, run_pipeline, run_step, modify_prompt, select_concept, approve_output, open_step_config, set_niche, update_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction
+STORY-TO-VIDEO RULES:
+- Story Generator is mandatory before story-to-video.
+- If the user asks for story recreation, younger-self video, or multi-scene video, build_story_bible first.
+- AI fill-in is allowed, but the result must be summarized as a locked story bible before generation.
+
+GENERATOR INTELLIGENCE RULES:
+- Never send raw user prompts directly to a generator.
+- Always compile provider-aware prompts optimized for the selected generator.
+- Prefer realistic, grounded, ordinary scenes with complete anatomy and stable motion.
+
+IMAGE EXECUTION RULES:
+- Never ask to adjust the concept before generation when normal generation is possible.
+- Convert the request into a realism-safe prompt and generate.
+- No text, logos, UI, or labels inside generated images.
+
+VIDEO EXECUTION RULES:
+- Never generate story video without a story bible.
+- If only one still image exists, reduce motion complexity automatically.
+- Reject blob faces, missing body parts, limb drift, and background warping.
+- Prefer anchor-still prebuild before expensive image-to-video.
+
+QUALITY ENFORCEMENT RULES:
+- Image and video review must happen automatically every time.
+- If anatomy or realism is weak, choose repair, anchor-frame prebuild, or reduced motion instead of pushing forward.
+- Preserve identity packs, continuity locks, and story bible continuity across all related outputs.
+- Surface structured reasons for pass, warn, reject, and repair decisions.
+
+ACTIONS (emit JSON when intent matches): generate_image, generate_video, generate_song, build_story_bible, run_pipeline, run_step, modify_prompt, select_concept, approve_output, open_step_config, set_niche, update_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction
 
 Use tools proactively without asking. Be direct. Tell user what you are doing.
 When emitting actions: {"message":"...","actions":[{"type":"...","payload":{...}}]}`;
@@ -273,6 +314,24 @@ export async function POST(req: Request): Promise<Response> {
             break;
           }
           break;
+        }
+        const lastUserMessage = [...messages].reverse().find((m)=>m.role==="user");
+        const lastText = typeof lastUserMessage?.content === "string" ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content ?? "");
+        const wantsStory = /story|younger|memory|recreate|brother|childhood/i.test(lastText);
+        const wantsImage = /generate|create|make|show|image|photo|picture/i.test(lastText);
+        const wantsVideo = /video|clip|animation|scene/i.test(lastText);
+        const wantsSong = /song|sing|voice|vocals|music/i.test(lastText);
+        if (wantsStory && !acts.some((a)=>a.type==="build_story_bible")) {
+          acts.push({ type: "build_story_bible", payload: { title: "Story Bible", storyText: lastText, aiFill: true, sourceKind: "mixed" } });
+        }
+        if (wantsSong && !acts.some((a)=>a.type==="generate_song")) {
+          acts.push({ type: "generate_song", payload: { prompt: lastText, provider: "auto" } });
+        }
+        if (wantsVideo && !acts.some((a)=>a.type==="generate_video")) {
+          acts.push({ type: "generate_video", payload: { prompt: lastText, provider: "kling", mode: "scratch_t2v", storyBible: typeof context.settings?.storyBible === "string" ? context.settings.storyBible : lastText } });
+        }
+        if (!wantsVideo && wantsImage && !acts.some((a)=>a.type==="generate_image")) {
+          acts.push({ type: "generate_image", payload: { prompt: lastText, provider: "openai" } });
         }
         for(const a of acts) emit("action",{action:a});
         saveMem(context,user.id,sb).catch(()=>{});

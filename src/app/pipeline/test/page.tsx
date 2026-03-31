@@ -19,6 +19,9 @@ import { PlatformViewer } from "@/components/pipeline/PlatformViewer";
 import { PlatformSelector, type PlatformSelection } from "@/components/pipeline/PlatformSelector";
 import { BatchPreviewModal } from "@/components/pipeline/BatchPreviewModal";
 import { DesktopPlatformView } from "@/components/pipeline/DesktopPlatformView";
+import MediaShelf, { type MediaShelfItem } from "@/components/pipeline/MediaShelf";
+import PipelineExperiencePanel from "@/components/pipeline/PipelineExperiencePanel";
+import type { StoryBible } from "@/lib/story/storyBible";
 import type { PlatformId, ViewId } from "@/lib/platform-views/index";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -182,6 +185,16 @@ Accept only if:
     { variantId: "c2", headline: "Care Without the Wait",     body: "Secure intake, licensed review, clear next steps.",  cta: "Begin Intake" },
     { variantId: "c3", headline: "Online Care, Simplified",   body: "Discreet, fast, provider-reviewed.",                cta: "Get Started" },
   ]);
+  const [storyTitle, setStoryTitle] = useState("Story Bible");
+  const [storyText, setStoryText] = useState("Two brothers remember a younger backyard moment together, told like a real home video memory.");
+  const [storyBible, setStoryBible] = useState<StoryBible | null>(null);
+  const [storyAiFill, setStoryAiFill] = useState(true);
+  const [storySourceKind, setStorySourceKind] = useState<"self" | "family_or_friend" | "synthetic" | "mixed">("mixed");
+  const [storyLoading, setStoryLoading] = useState(false);
+  const [mediaShelfVisible, setMediaShelfVisible] = useState(true);
+  const [mediaShelfAutoScroll, setMediaShelfAutoScroll] = useState(false);
+  const [mediaShelfItems, setMediaShelfItems] = useState<MediaShelfItem[]>([]);
+  const [experienceMode, setExperienceMode] = useState<"story" | "technical" | "executive">("story");
 
   // Workspace outputs (approved from preview screens)
   const [approvedOutputs, setApprovedOutputs] = useState<{ image: string | null; video: string | null; script: string | null }>({ image: null, video: null, script: null });
@@ -238,11 +251,60 @@ Accept only if:
   const [engineOpen, setEngineOpen] = useState(false);
   const liveEndRef = React.useRef<HTMLDivElement>(null);
 
+  async function buildStoryBibleRecord(): Promise<StoryBible | null> {
+    setStoryLoading(true);
+    try {
+      const res = await fetch("/api/story/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: storyTitle, storyText, aiFill: storyAiFill, sourceKind: storySourceKind }),
+      });
+      const data = await res.json() as { data?: StoryBible; error?: string };
+      if (!res.ok || !data.data) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setStoryBible(data.data);
+      emit({ type: "summary", stepId: "story", stepName: "Story Generator", message: `Locked story bible: ${data.data!.summary}` });
+      setMediaShelfItems((prev) => [{ id: `story-${Date.now()}`, title: data.data!.title, type: "story", subtitle: data.data!.summary.slice(0, 80), status: "Locked story bible" }, ...prev]);
+      log("✓ Story bible locked");
+      return data.data;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      emit({ type: "error", stepId: "story", stepName: "Story Generator", message: msg });
+      log(`✗ Story build failed: ${msg}`);
+      return null;
+    } finally {
+      setStoryLoading(false);
+    }
+  }
+
+  function pushMediaShelfItem(item: MediaShelfItem) {
+    setMediaShelfItems((prev) => prev.some((existing) => existing.url && item.url && existing.url === item.url) ? prev : [item, ...prev]);
+  }
+
+  function handleShelfDrop(files: FileList) {
+    const dropped = Array.from(files).map((file) => ({
+      id: `drop-${file.name}-${file.size}-${Date.now()}`,
+      title: file.name,
+      type: file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "image",
+      subtitle: "Dropped into shelf",
+      status: `${Math.round(file.size / 1024)} KB`,
+    } as MediaShelfItem));
+    setMediaShelfItems((prev) => [...dropped, ...prev]);
+    log(`✓ Added ${dropped.length} dropped file(s) to Media Shelf`);
+  }
+
   function emit(event: Omit<LiveEvent, "id" | "ts">) {
     const full: LiveEvent = { ...event, id: Math.random().toString(36).slice(2), ts: Date.now() };
     setLiveEvents(prev => [...prev, full]);
     setTimeout(() => liveEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
+
+  React.useEffect(() => {
+    Object.entries(conceptOutputs).forEach(([id, output]) => {
+      if (output.image) pushMediaShelfItem({ id: `img-${id}-${output.image}`, title: `${id.toUpperCase()} Image`, type: "image", url: output.image, subtitle: concepts.find((concept) => concept.variantId === id)?.headline, status: output.status });
+      if (output.video) pushMediaShelfItem({ id: `vid-${id}-${output.video}`, title: `${id.toUpperCase()} Video`, type: "video", url: output.video, subtitle: concepts.find((concept) => concept.variantId === id)?.headline, status: output.status });
+      if (output.script) pushMediaShelfItem({ id: `script-${id}-${output.script}`, title: `${id.toUpperCase()} Script`, type: "story", subtitle: String(output.script).slice(0, 80), status: output.status });
+    });
+  }, [conceptOutputs, concepts]);
 
   const [pipelineResults, setPipelineResults] = useState<{
     strategy?: string;
@@ -732,25 +794,32 @@ Accept only if:
 
   // ── Generate image for concept ────────────────────────────────────────────
   async function generateImage(conceptId: string) {
-    const concept = concepts.find(c => c.variantId === conceptId);
-    // 3 scene variations — subjectAction only, sanitizer builds full locked prompt
     const subjectActions: Record<string, string> = {
       c1: "a Black woman in her early 30s with natural hair, sitting on a couch at home, casually holding her phone and reading something on the screen",
       c2: "a Latina woman in her mid 30s sitting on her bed near a window, looking down at her phone, morning light from the side",
       c3: "a woman in her late 20s sitting at a kitchen table, holding her phone with both hands and looking at the screen, relaxed everyday moment",
     };
     const subjectAction = subjectActions[conceptId] ?? stepPrompts.imagery;
-    // Pass subjectAction in body — server sanitizer builds full locked realism prompt
     const prompt = subjectAction;
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
     log(`Generating image with DALL-E for ${conceptId}...`);
+    emit({ type: "decision", stepId: "imagery", stepName: "Imagery Generation", message: `Compiling realism-first still for ${conceptId}.` });
     try {
-      // Force openai provider — bypasses AI_PROVIDER_IMAGE env var
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ type: "image", prompt, subjectAction, aspectRatio: "16:9", conceptId, provider: imageProvider }),
+        body: JSON.stringify({
+          type: "image",
+          prompt,
+          subjectAction,
+          aspectRatio: "16:9",
+          conceptId,
+          provider: imageProvider,
+          storyBible: storyBible?.summary ?? null,
+          sourceKind: storySourceKind,
+          referenceSummary: storyBible ? `${storyBible.locationCard}; ${storyBible.eraCard}` : null,
+        }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -758,13 +827,13 @@ Accept only if:
       if (!gen) throw new Error("No generation returned");
       if (gen.status === "completed" && gen.output_url) {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: gen.output_url!, status: "completed" } }));
+        pushMediaShelfItem({ id: `img-${conceptId}-${gen.output_url}`, title: `${conceptId.toUpperCase()} Image`, type: "image", url: gen.output_url, subtitle: concepts.find((c) => c.variantId === conceptId)?.headline, status: "completed" });
         log(`✓ Image ready: ${gen.id.slice(0, 8)}`);
       } else if (gen.status === "failed") {
-        const errMsg = data.error ?? "Generation failed — check Vercel logs";
+        const errMsg = data.error ?? "Generation failed — check logs";
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: errMsg } }));
         log(`✗ Image failed: ${errMsg}`);
       } else {
-        // pending — async provider (e.g. Kling), poll for completion
         queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
         log(`Image queued: ${gen.id.slice(0, 8)} — polling...`);
       }
@@ -777,17 +846,37 @@ Accept only if:
 
   // ── Generate video for concept ────────────────────────────────────────────
   async function generateVideo(conceptId: string) {
+    let activeStoryBible = storyBible;
+    if (!activeStoryBible) {
+      activeStoryBible = await buildStoryBibleRecord();
+    }
+    if (!activeStoryBible && !storyText.trim()) {
+      log("✗ Story Generator is required before Story-to-Video.");
+      return;
+    }
+
     const concept = concepts.find(c => c.variantId === conceptId);
     const prompt = stepPrompts.i2v + (concept ? ` Concept: ${concept.headline}.` : "");
     const imageUrl = conceptOutputs[conceptId]?.image;
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "pending" } }));
     log(`Submitting video for ${conceptId}...`);
+    emit({ type: "decision", stepId: "i2v", stepName: "Image to Video", message: imageUrl ? "Using image-to-video with locked story bible and realism guards." : "Using scratch video with locked story bible and realism guards." });
     try {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ type: imageUrl ? "i2v" : "video", prompt, duration: "5", aspectRatio: "16:9", conceptId, imageUrl }),
+        body: JSON.stringify({
+          type: imageUrl ? "i2v" : "video",
+          prompt,
+          duration: "5",
+          aspectRatio: "16:9",
+          conceptId,
+          imageUrl,
+          storyBible: activeStoryBible?.summary ?? storyText,
+          sourceKind: storySourceKind,
+          referenceSummary: activeStoryBible ? `${activeStoryBible.locationCard}; ${activeStoryBible.eraCard}` : null,
+        }),
       });
       const data = await res.json() as { data?: { id: string; status: string; output_url?: string; external_id?: string }; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -795,24 +884,45 @@ Accept only if:
       if (!gen) throw new Error("No generation returned");
       if (gen.status === "completed" && gen.output_url) {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: gen.output_url!, status: "completed" } }));
+        pushMediaShelfItem({ id: `vid-${conceptId}-${gen.output_url}`, title: `${conceptId.toUpperCase()} Video`, type: "video", url: gen.output_url, subtitle: concept?.headline, status: "completed" });
         log(`✓ Video ready: ${gen.id.slice(0, 8)}`);
       } else if (gen.status === "failed") {
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
         log(`✗ Video failed (server): ${gen.id.slice(0, 8)}`);
       } else {
-        // pending — Kling async, poll for completion
         queueAdd({ id: gen.id, type: "video", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.20, error: null });
         log(`Video queued: ${gen.id.slice(0, 8)} — polling...`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
+      setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: msg } }));
       log(`✗ Video failed: ${msg}`);
+    }
+  }
+
+  async function generateSongFromVoice(promptOverride?: string) {
+    const prompt = promptOverride?.trim() || storyBible?.summary || storyText || "Write a grounded, memorable song from the current project story.";
+    log("Submitting song generation...");
+    try {
+      const res = await fetch("/api/audio/generate-song", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, provider: "auto", storyBible: storyBible?.summary ?? null, sourceKind: storySourceKind, voiceGuideMode: "browser_capture" }),
+      });
+      const data = await res.json() as { data?: { audioUrl?: string; status?: string; title?: string }; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      if (data.data?.audioUrl) {
+        pushMediaShelfItem({ id: `audio-${Date.now()}`, title: data.data.title ?? "Generated song", type: "audio", url: data.data.audioUrl, subtitle: "Voice-guided song output", status: data.data.status ?? "completed" });
+        log("✓ Song generated and added to Media Shelf");
+      }
+    } catch (error) {
+      log(`✗ Song generation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   // ── Run full pipeline ─────────────────────────────────────────────────────
   async function runPipeline() {
+    if (!storyBible) await buildStoryBibleRecord();
     log("▶ Running pipeline for all 3 concepts...");
     await Promise.all(["c1", "c2", "c3"].map(async (cid) => {
       await generateImage(cid);
@@ -2777,7 +2887,56 @@ Accept only if:
             </div>
           </div>
 
-          {/* ── ROW 3: 3 Preview Screens ─────────────────────────────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: engineOpen ? "1.15fr 360px" : "1fr", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
+            <div style={P({ padding: 14 })}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#e2e8f0" }}>Story Generator · Required before Story-to-Video</div>
+                  <div style={{ fontSize: 10, color: "#64748b" }}>AI fill supported · story bible lock · generator-aware compilation</div>
+                </div>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => void buildStoryBibleRecord()} style={{ fontSize: 11, borderRadius: 10, padding: "7px 12px", border: "1px solid rgba(103,232,249,0.3)", background: "rgba(103,232,249,0.08)", color: "#67e8f9", cursor: "pointer" }}>{storyLoading ? "Building..." : storyBible ? "Rebuild Story" : "Build Story"}</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr", gap: 12 }}>
+                <div>
+                  <input value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} placeholder="Story title" style={{ width: "100%", marginBottom: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12 }} />
+                  <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} placeholder="Tell the system the real event or the synthetic story you want to recreate." style={{ width: "100%", minHeight: 120, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 12, padding: 12, fontSize: 12, resize: "vertical" }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <label style={{ fontSize: 11, color: "#94a3b8" }}>Source kind</label>
+                  <select value={storySourceKind} onChange={(e) => setStorySourceKind(e.target.value as typeof storySourceKind)} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 10, padding: "9px 10px", fontSize: 12 }}>
+                    <option value="mixed">mixed</option><option value="self">self</option><option value="family_or_friend">family/friend</option><option value="synthetic">synthetic</option>
+                  </select>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: "#cbd5e1" }}>
+                    <input type="checkbox" checked={storyAiFill} onChange={(e) => setStoryAiFill(e.target.checked)} /> Allow AI fill-in
+                  </label>
+                  <div style={{ padding: 10, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Locked Story Bible</div>
+                    <div style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.6 }}>{storyBible?.summary ?? "Build the story bible once, then the generator compiles provider-specific prompts from it."}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <PipelineExperiencePanel
+              open={engineOpen}
+              mode={experienceMode}
+              onModeChange={setExperienceMode}
+              events={liveEvents.map((event) => ({ id: event.id, stepName: event.stepName, type: event.type, message: event.message, ts: event.ts }))}
+              liveStepName={steps.find((step) => step.id === liveStepId)?.name ?? null}
+            />
+          </div>
+
+          <MediaShelf
+            items={mediaShelfItems}
+            visible={mediaShelfVisible}
+            onToggleVisible={() => setMediaShelfVisible((value) => !value)}
+            autoScroll={mediaShelfAutoScroll}
+            onToggleAutoScroll={() => setMediaShelfAutoScroll((value) => !value)}
+            onOpenItem={(item) => { if (item.type === "video" && item.url) setApprovedOutputs((prev) => ({ ...prev, video: item.url ?? null })); if (item.type === "image" && item.url) setApprovedOutputs((prev) => ({ ...prev, image: item.url ?? null })); log(`✓ Opened ${item.title} from Media Shelf`); }}
+            onDropFiles={handleShelfDrop}
+          />
+
+                    {/* ── ROW 3: Saved file previews + quick run cards ───────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             {concepts.map((concept, i) => {
               const cid = concept.variantId;
@@ -2892,10 +3051,12 @@ Accept only if:
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
                       Run Concept Image
                     </button>
-                    <button onClick={() => gatedGeneration(()=>generateVideo(cid))}
+                    <button
+                      onClick={() => storyBible ? gatedGeneration(()=>generateVideo(cid)) : void buildStoryBibleRecord()}
                       disabled={isActive}
-                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      Run Concept Video
+                      title={storyBible ? undefined : "Story Bible required — click to build"}
+                      style={{ background: storyBible ? "rgba(255,255,255,0.04)" : "rgba(251,191,36,0.08)", border: storyBible ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(251,191,36,0.25)", color: storyBible ? "#94a3b8" : "#fbbf24", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
+                      {storyBible ? "Run Concept Video" : "⚠ Story Bible required"}
                     </button>
                     <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); log(`Restarted concept ${i + 1}`); }}
                       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
@@ -3038,7 +3199,18 @@ Accept only if:
         }}
         onGenerateVideo={(conceptId, prompt) => {
           if (prompt) setStepPrompts(p => ({ ...p, i2v: prompt }));
+          // Client-side Story Bible gate — redirect to build if missing
+          if (!storyBible) {
+            log("⚠ Story Bible required before video. Building now...");
+            void buildStoryBibleRecord().then(() => void generateVideo(conceptId ?? selectedConceptId));
+            return;
+          }
           void generateVideo(conceptId ?? selectedConceptId);
+        }}
+        onGenerateSong={(prompt) => { void generateSongFromVoice(prompt); }}
+        onBuildStoryBible={(storyTextFromAssistant) => {
+          if (storyTextFromAssistant) setStoryText(storyTextFromAssistant);
+          void buildStoryBibleRecord();
         }}
         onRunPipeline={() => void runPipeline()}
         onRunStep={(stepId) => {

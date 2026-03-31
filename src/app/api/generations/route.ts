@@ -7,10 +7,7 @@ import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
-import { compileRealismPrompt } from "@/lib/media-realism/promptCompiler";
-import { buildScenePlan } from "@/lib/media-realism/scenePlanner";
-import { buildLayoutPlan } from "@/lib/media-realism/layoutPlanner";
-import type { ConceptDirection, OverlayIntent, ValidatorImagePolicy } from "@/lib/media-realism/types";
+import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -91,47 +88,97 @@ export async function POST(request: Request) {
   let outputUrl = typeof payload?.outputUrl === "string" ? payload.outputUrl : null;
   let externalId = typeof payload?.externalId === "string" ? payload.externalId : null;
   let responseText = null;
+  let compiledRequest = null as ReturnType<typeof compileGenerationRequest> | null;
+
+  // ── bypassCompiler gate ────────────────────────────────────────────────────
+  // Only allowed for admin/dev. Requires x-admin-secret header.
+  const bypassCompiler = payload?.bypassCompiler === true;
+  const bypassReason = typeof payload?.bypassReason === "string" ? payload.bypassReason : "admin_debug";
+  if (bypassCompiler) {
+    const adminSecret = request.headers.get("x-admin-secret");
+    if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+      return NextResponse.json({ error: "bypassCompiler requires admin authorization" }, { status: 403 });
+    }
+    console.warn(`[GeneratorIntelligence] BYPASS active — reason: ${bypassReason} — user: ${user.id} — prompt: ${prompt.slice(0, 80)}`);
+  }
 
   try {
-    // Allow caller to override provider (e.g. force openai for instant DALL-E)
     const providerOverride = typeof payload?.provider === "string" ? payload.provider : null;
+    const storyBible = typeof payload?.storyBible === "string" ? payload.storyBible : null;
+    const sourceKind = typeof payload?.sourceKind === "string" ? payload.sourceKind as "self" | "family_or_friend" | "synthetic" | "mixed" : undefined;
+    const referenceSummary = typeof payload?.referenceSummary === "string" ? payload.referenceSummary : null;
+    const mode = typeof payload?.mode === "string" ? payload.mode : null;
 
-    // For image type: run through the universal realism engine.
-    // scenePlanner → layoutPlanner → promptCompiler — no realism logic in this route.
     let finalPrompt = prompt;
-    if (type === "image") {
-      const subjectAction = typeof payload?.subjectAction === "string" ? payload.subjectAction : prompt;
 
-      const concept: ConceptDirection = {
-        id: typeof payload?.conceptId === "string" ? payload.conceptId : "direct",
-        angle: "direct generation",
-        hook: subjectAction,
-        subjectType: "person",
-        action: subjectAction,
-        environment: "real home environment",
-        realismMode: "home_real",
-        desiredMood: "calm, natural, ordinary",
-        overlayIntent: {
-          headline: "",
-          cta: "",
-          textDensityHint: "low",
-          titleLengthClass: "short",
-          ctaLengthClass: "short",
-        } satisfies OverlayIntent,
-      };
+    if (!bypassCompiler) {
+      // ── All mediums route through the compiler — single mandatory gateway ──
 
-      const validatorPolicy: ValidatorImagePolicy = {
-        allowedVisualClaims: [],
-        forbiddenVisualClaims: [],
-        forbiddenProps: [],
-        forbiddenScenes: [],
-        noTextInImage: true,
-      };
+      if (type === "image") {
+        compiledRequest = compileGenerationRequest({
+          medium: "image",
+          prompt,
+          provider: providerOverride ?? "openai",
+          storyBible,
+          sourceKind,
+          referenceSummary,
+        });
+        finalPrompt = compiledRequest.prompt;
+      }
 
-      const scenePlan = buildScenePlan(concept, { status: "pass", issues: [], imagePolicy: validatorPolicy });
-      const layoutPlan = buildLayoutPlan(scenePlan, concept.overlayIntent, "1:1");
-      finalPrompt = compileRealismPrompt({ scenePlan, layoutPlan, validatorPolicy, overlayIntent: concept.overlayIntent });
-      console.log("[MediaRealism] prompt compiled for direct generation | conceptId:", concept.id);
+      if (type === "video" || type === "i2v") {
+        compiledRequest = compileGenerationRequest({
+          medium: "video",
+          prompt,
+          provider: providerOverride ?? "kling",
+          mode,
+          storyBible,
+          sourceKind,
+          referenceSummary,
+        });
+
+        if (!storyBible) {
+          return NextResponse.json({
+            error: "Story Bible is required before video generation.",
+            code: "STORY_BIBLE_REQUIRED",
+          }, { status: 422 });
+        }
+
+        if (compiledRequest.structuralScore && !compiledRequest.structuralScore.isSafeForVideo && type === "i2v") {
+          return NextResponse.json({
+            error: "Source image is not safe for video yet.",
+            code: "STRUCTURAL_SCORE_BLOCKED",
+            structuralScore: compiledRequest.structuralScore,
+            repairPlan: compiledRequest.repairPlan,
+          }, { status: 422 });
+        }
+
+        finalPrompt = compiledRequest.prompt;
+      }
+
+      if (type === "script") {
+        compiledRequest = compileGenerationRequest({
+          medium: "script",
+          prompt,
+          provider: providerOverride ?? "openai",
+          storyBible,
+          sourceKind,
+          referenceSummary,
+        });
+        finalPrompt = compiledRequest.prompt;
+      }
+
+      if (type === "voice") {
+        compiledRequest = compileGenerationRequest({
+          medium: "voice",
+          prompt,
+          provider: providerOverride ?? "openai",
+          storyBible,
+          sourceKind,
+          referenceSummary,
+        });
+        finalPrompt = compiledRequest.prompt;
+      }
     }
 
     const generationResult = await generateContent(type as GenerationType, {
@@ -187,20 +234,20 @@ export async function POST(request: Request) {
     user_id: user.id,
     workspace_id: selection.current.workspace.id,
     type,
-    prompt: responseText ? responseText : prompt, // Save the generated script text in prompt column if script
-    title: typeof payload?.title === "string" ? payload.title : null,
+    prompt: responseText ? responseText : (compiledRequest?.prompt ?? prompt), // Save compiled prompt for traceability
+    title: typeof payload?.title === "string" ? payload.title : (compiledRequest?.continuityPlan?.continuityRequired ? "Locked continuity generation" : null),
     status: payload.status === "failed" ? "failed" : payload.status === "pending" ? "pending" : "completed",
     aspect_ratio:
       typeof payload?.aspectRatio === "string" ? payload.aspectRatio : null,
     duration: typeof payload?.duration === "string" ? payload.duration : null,
     quality: typeof payload?.quality === "string" ? payload.quality : null,
-    style: typeof payload?.style === "string" ? payload.style : null,
+    style: typeof payload?.style === "string" ? payload.style : (compiledRequest?.realismPolicy?.headline ?? null),
     output_url: outputUrl,
     external_id: externalId,
     is_preview: typeof payload?.isPreview === "boolean" ? payload.isPreview : false,
     concept_id: typeof payload?.conceptId === "string" ? payload.conceptId : null,
     session_id: typeof payload?.sessionId === "string" ? payload.sessionId : null,
-    provider: typeof payload?.provider === "string" ? payload.provider : null,
+    provider: typeof payload?.provider === "string" ? payload.provider : (compiledRequest?.provider ?? null),
     mode: typeof payload?.mode === "string" ? payload.mode : "standard",
     cost_estimate: typeof payload?.costEstimate === "number" ? payload.costEstimate : null,
   };

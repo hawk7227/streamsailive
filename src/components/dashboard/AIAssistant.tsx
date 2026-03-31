@@ -42,6 +42,8 @@ interface AIAssistantProps {
   onUpdateSettings?: (key: string, value: string) => void;
   onGenerateImage?: (conceptId?: string, prompt?: string) => void;
   onGenerateVideo?: (conceptId?: string, prompt?: string) => void;
+  onGenerateSong?: (prompt?: string) => void;
+  onBuildStoryBible?: (storyText?: string) => void;
   onRunPipeline?: () => void;
   onRunStep?: (stepId: string, data?: Record<string, unknown>) => void;
   onSelectConcept?: (conceptId: string) => void;
@@ -253,6 +255,8 @@ export default function AIAssistant(props: AIAssistantProps) {
       case 'update_qa_instruction': props.onUpdateQAInstruction?.(String(action.payload.value ?? '')); break;
       case 'generate_image': props.onGenerateImage?.(action.payload.conceptId as string | undefined, action.payload.prompt as string | undefined); break;
       case 'generate_video': props.onGenerateVideo?.(action.payload.conceptId as string | undefined, action.payload.prompt as string | undefined); break;
+      case 'generate_song': props.onGenerateSong?.(action.payload.prompt as string | undefined); break;
+      case 'build_story_bible': props.onBuildStoryBible?.(action.payload.storyText as string | undefined); break;
       case 'run_pipeline': props.onRunPipeline?.(); break;
       case 'run_step': props.onRunStep?.(String(action.payload.stepId ?? ''), action.payload.data as Record<string, unknown> | undefined); break;
       case 'select_concept': props.onSelectConcept?.(String(action.payload.conceptId ?? '')); break;
