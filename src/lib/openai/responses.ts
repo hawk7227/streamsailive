@@ -20,7 +20,12 @@ export function getProviderConfig(model: string): { url: string; authHeader: (ke
   }
   // Default: OpenAI-compatible endpoint (works for gpt-*, o1-*, and any OpenAI-compatible API)
   return {
-    url: process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1/chat/completions',
+    url: (() => {
+      const custom = process.env.OPENAI_API_BASE_URL;
+      if (!custom) return 'https://api.openai.com/v1/chat/completions';
+      if (custom.includes('ondigitalocean.app') || custom.includes('vercel.app')) return 'https://api.openai.com/v1/chat/completions';
+      return custom;
+    })(),
     authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
   };
 }
