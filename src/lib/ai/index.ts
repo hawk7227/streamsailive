@@ -1,4 +1,4 @@
-import { getSiteConfig } from "../config";
+import { getSiteConfigSync } from "../config";
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "./types";
 import { OpenAIProvider } from "./providers/openai";
 import { ClaudeProvider } from "./providers/claude";
@@ -29,7 +29,7 @@ export async function generateContent(
     options: GenerationOptions,
     providerOverride?: string
 ): Promise<GenerationResult> {
-    const config = getSiteConfig();
+    const config = getSiteConfigSync();
 
     // Allow explicit override (e.g. force "openai" for instant DALL-E)
     const providerKey = providerOverride || config.aiProviders?.[type] || "openai";

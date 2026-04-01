@@ -1,5 +1,5 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
-import { getSiteConfig } from "../../config";
+import { getSiteConfigSync } from "../../config";
 
 export class ClaudeProvider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -12,7 +12,7 @@ export class ClaudeProvider implements AIProvider {
     }
 
     private async generateScript(options: GenerationOptions): Promise<GenerationResult> {
-        const config = getSiteConfig();
+        const config = getSiteConfigSync();
         const apiKey = config.apiKeys?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
         if (!apiKey) {
             throw new Error("ANTHROPIC_API_KEY is not set");

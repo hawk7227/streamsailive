@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 
-import { getSiteConfig } from '@/lib/config';
+import { getSiteConfigSync } from '@/lib/config';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 import { updateHtmlContent } from '@/lib/html-editor';
@@ -80,7 +80,7 @@ const TOOLS = [
 ];
 
 export async function POST(request: Request) {
-    const siteConfig = getSiteConfig();
+    const siteConfig = getSiteConfigSync();
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 

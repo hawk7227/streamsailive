@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { getSiteConfig } from '@/lib/config';
+import { getSiteConfigSync } from '@/lib/config';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
             messages: [
                 {
                     role: 'system',
-                    content: getSiteConfig().marketingCopywriterPrompt
+                    content: getSiteConfigSync().marketingCopywriterPrompt
                 },
                 {
                     role: 'user',

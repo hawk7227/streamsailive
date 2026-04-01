@@ -1,5 +1,5 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
-import { getSiteConfig } from "../../config";
+import { getSiteConfigSync } from "../../config";
 
 export class OpenAIProvider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -17,7 +17,7 @@ export class OpenAIProvider implements AIProvider {
     }
 
     private async generateScript(options: GenerationOptions): Promise<GenerationResult> {
-        const siteConfig = getSiteConfig();
+        const siteConfig = getSiteConfigSync();
         const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
         if (!apiKey) {
             throw new Error("OPENAI_API_KEY is not set");
@@ -52,7 +52,7 @@ export class OpenAIProvider implements AIProvider {
     }
 
     private async generateImage(options: GenerationOptions): Promise<GenerationResult> {
-        const siteConfig = getSiteConfig();
+        const siteConfig = getSiteConfigSync();
         const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY;
         if (!apiKey) {
             throw new Error("OPENAI_API_KEY is not set");
@@ -90,7 +90,7 @@ export class OpenAIProvider implements AIProvider {
     }
 
     private async generateVoice(options: GenerationOptions): Promise<GenerationResult> {
-        const siteConfig = getSiteConfig();
+        const siteConfig = getSiteConfigSync();
         const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY_VOICE || process.env.OPENAI_API_KEY_VOICE;
         if (!apiKey) {
             throw new Error("OPENAI_API_KEY_VOICE is not set");
@@ -127,7 +127,7 @@ export class OpenAIProvider implements AIProvider {
     }
 
     private async generateVideo(options: GenerationOptions): Promise<GenerationResult> {
-        const siteConfig = getSiteConfig();
+        const siteConfig = getSiteConfigSync();
         const apiKey = siteConfig.apiKeys?.OPENAI_API_KEY_SORA || process.env.OPENAI_API_KEY_SORA;
         if (!apiKey) {
             throw new Error("OPENAI_API_KEY_SORA is not set");

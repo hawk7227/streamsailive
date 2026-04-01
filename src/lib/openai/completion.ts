@@ -1,4 +1,4 @@
-import { getSiteConfig } from '@/lib/config';
+import { getSiteConfigSync } from '@/lib/config';
 
 export async function generateCompletion(prompt: string): Promise<string> {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -7,7 +7,7 @@ export async function generateCompletion(prompt: string): Promise<string> {
         throw new Error("Missing OPENAI_API_KEY");
     }
 
-    const config = getSiteConfig();
+    const config = getSiteConfigSync();
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",

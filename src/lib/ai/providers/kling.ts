@@ -1,10 +1,10 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import jwt from "jsonwebtoken";
-import { getSiteConfig } from "../../config";
+import { getSiteConfigSync } from "../../config";
 
 export class KlingProvider implements AIProvider {
     private generateToken(): string {
-        const config = getSiteConfig();
+        const config = getSiteConfigSync();
         const sk = config.apiKeys?.KLING_API_KEY || process.env.KLING_API_KEY;
         const ak = config.apiKeys?.KLING_ASSESS_API_KEY || process.env.KLING_ASSESS_API_KEY;
 
