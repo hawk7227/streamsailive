@@ -186,7 +186,9 @@ Accept only if:
     { variantId: "c1", headline: "", body: "", cta: "" },
     { variantId: "c2", headline: "", body: "", cta: "" },
     { variantId: "c3", headline: "", body: "", cta: "" },
+    { variantId: "c4", headline: "", body: "", cta: "" },
   ]);
+  const [conceptGridRatio, setConceptGridRatio] = useState<"16:9" | "9:16">("16:9");
   const [storyTitle, setStoryTitle] = useState("Story Bible");
   const [storyText, setStoryText] = useState("Two brothers remember a younger backyard moment together, told like a real home video memory.");
   const [storyBible, setStoryBible] = useState<StoryBible | null>(null);
@@ -208,9 +210,10 @@ Accept only if:
     c1: { image: null, video: null, script: null, status: "idle", error: null },
     c2: { image: null, video: null, script: null, status: "idle", error: null },
     c3: { image: null, video: null, script: null, status: "idle", error: null },
+    c4: { image: null, video: null, script: null, status: "idle", error: null },
   });
-  const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image" });
-  const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({ c1: true, c2: true, c3: true });
+  const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image", c4: "Image" });
+  const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({ c1: true, c2: true, c3: true, c4: true });
   const [imageProvider, setImageProvider] = useState<"openai" | "fal">("openai");
 
   // Generation queue — replaces all busy.* flags
@@ -3296,145 +3299,116 @@ Accept only if:
 
           </div>{/* end bottom 3-col */}
 
-                    {/* ── ROW 3: Concept cards ───────────────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-            {concepts.map((concept, i) => {
-              const cid = concept.variantId;
-              const out = conceptOutputs[cid];
-              const tab = previewTabs[cid] ?? "Image";
-              const isActive = out?.status === "pending" || out?.status === "processing";
-              const qItem = [...generationQueue.values()].find(q => q.conceptId === cid && (q.status === "pending" || q.status === "processing"));
+          {/* ── ROW 3: 4-up Concept Grid ─────────────────────────────────────── */}
+          <div style={{ background: "rgba(6,9,18,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
+            {/* Toolbar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em" }}>CONCEPT GRID</span>
+              <span style={{ fontSize: 10, color: "#334155" }}>4 screens</span>
+              <div style={{ flex: 1 }} />
+              {/* Ratio toggle */}
+              {(["16:9", "9:16"] as const).map(r => (
+                <button key={r} onClick={() => setConceptGridRatio(r)}
+                  style={{ padding: "4px 12px", fontSize: 10, fontWeight: 700, borderRadius: 8,
+                    background: conceptGridRatio === r ? "rgba(103,232,249,0.12)" : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${conceptGridRatio === r ? "rgba(103,232,249,0.35)" : "rgba(255,255,255,0.08)"}`,
+                    color: conceptGridRatio === r ? "#67e8f9" : "#475569", cursor: "pointer" }}>
+                  {r === "16:9" ? "⬛ Landscape" : "▬ Portrait"}
+                </button>
+              ))}
+              <button onClick={() => gatedGeneration(() => Promise.all(concepts.map(cv => generateImage(cv.variantId))))}
+                style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#94a3b8", cursor: "pointer" }}>
+                ▶ Run All Images
+              </button>
+              <button onClick={() => gatedGeneration(() => Promise.all(concepts.map(cv => generateVideo(cv.variantId))))}
+                style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, borderRadius: 8, border: `1px solid ${storyBible ? "rgba(255,255,255,0.1)" : "rgba(251,191,36,0.3)"}`, background: storyBible ? "rgba(255,255,255,0.04)" : "rgba(251,191,36,0.06)", color: storyBible ? "#94a3b8" : "#fbbf24", cursor: "pointer" }}>
+                {storyBible ? "▶ Run All Videos" : "⚠ Videos need Story Bible"}
+              </button>
+            </div>
 
-              return (
-                <div key={cid} id={`preview-${cid}`} style={P({ padding: 0 })}>
-                  {/* Header */}
-                  <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>Concept {i + 1}</span>
-                      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? "#67e8f9" : out?.status === "completed" ? "#6ee7b7" : out?.status === "failed" ? "#f87171" : "#334155", display: "inline-block", animation: isActive ? "pulse 1.5s infinite" : "none" }} />
-                        <span style={{ fontSize: 10, color: "#475569" }}>{isActive ? "Processing" : out?.status === "completed" ? "Ready" : out?.status === "failed" ? "Failed" : "Idle"}</span>
+            {/* 2×2 grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, background: "rgba(0,0,0,0.4)" }}>
+              {concepts.map((concept, i) => {
+                const cid = concept.variantId;
+                const out = conceptOutputs[cid];
+                const isActive = out?.status === "pending" || out?.status === "processing";
+                const tab = previewTabs[cid] ?? "Image";
+                const qItem = [...generationQueue.values()].find(q => q.conceptId === cid && (q.status === "pending" || q.status === "processing"));
+                const mediaUrl = tab === "Video" ? out?.video : out?.image;
+                const ar = conceptGridRatio === "16:9" ? "16/9" : "9/16";
+
+                return (
+                  <div key={cid} style={{ position: "relative", aspectRatio: ar, background: "#06080f", overflow: "hidden" }}>
+                    {/* Media */}
+                    {tab === "Video" && out?.video ? (
+                      <video src={out.video} controls muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    ) : tab !== "Video" && out?.image ? (
+                      <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    ) : isActive ? (
+                      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <Spinner size={22} />
+                        <span style={{ fontSize: 10, color: "#475569" }}>{qItem ? `${qItem.provider} · ${qItem.elapsedSeconds}s` : "Generating..."}</span>
                       </div>
+                    ) : out?.status === "failed" ? (
+                      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: 12 }}>
+                        <span style={{ fontSize: 20 }}>⚠️</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#f87171" }}>Failed</span>
+                        <span style={{ fontSize: 9, color: "#64748b", textAlign: "center", wordBreak: "break-word" }}>{out.error?.slice(0, 80)}</span>
+                        <button onClick={() => gatedGeneration(() => generateImage(cid))}
+                          style={{ fontSize: 9, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
+                      </div>
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontSize: 11, color: "#1e293b" }}>Concept {i + 1}</span>
+                      </div>
+                    )}
+
+                    {/* Top-left label */}
+                    <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 5, pointerEvents: "none" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "#67e8f9" : out?.status === "completed" ? "#6ee7b7" : out?.status === "failed" ? "#f87171" : "#334155", display: "inline-block", boxShadow: isActive ? "0 0 6px #67e8f9" : "none" }} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.5)", background: "rgba(0,0,0,0.5)", padding: "1px 5px", borderRadius: 4 }}>C{i + 1}</span>
                     </div>
 
-                    {/* Tabs */}
-                    <div style={{ display: "flex", gap: 0, marginTop: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      {(["Image", "Video", "Script"] as PreviewTab[]).map(t => (
+                    {/* Tab switcher — top right */}
+                    <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 2 }}>
+                      {(["Image", "Video"] as PreviewTab[]).map(t => (
                         <button key={t} onClick={() => setPreviewTabs(p => ({ ...p, [cid]: t }))}
-                          style={{ padding: "5px 12px", fontSize: 11, fontWeight: 600, color: tab === t ? "#67e8f9" : "#475569", background: "none", border: "none", borderBottom: tab === t ? "2px solid #67e8f9" : "2px solid transparent", cursor: "pointer" }}>
+                          style={{ fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 4, cursor: "pointer",
+                            background: tab === t ? "rgba(103,232,249,0.18)" : "rgba(0,0,0,0.55)",
+                            border: `1px solid ${tab === t ? "rgba(103,232,249,0.4)" : "rgba(255,255,255,0.1)"}`,
+                            color: tab === t ? "#67e8f9" : "rgba(255,255,255,0.4)" }}>
                           {t}
                         </button>
                       ))}
                     </div>
-                  </div>
 
-                  {/* Output area */}
-                  <div style={{ padding: 14 }}>
-                    {tab === "Image" && (
-                      out?.image ? (
-                        <div style={{ position: "relative", width: "100%", borderRadius: 10, overflow: "hidden" }}>
-                          <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", objectFit: "contain", display: "block" }} />
-                          {/* UI Overlay — separate layer, never inside AI image */}
-                          {showOverlay[cid] && (
-                            <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                              {/* FAST badge — top left */}
-                              <div style={{ position: "absolute", top: 8, left: 8, background: "#16a34a", color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 7px", borderRadius: 99, letterSpacing: "0.08em" }}>
-                                FAST
-                              </div>
-                              {/* Refill Approved card */}
-                              <div style={{ position: "absolute", top: 24, left: 8, background: "rgba(255,255,255,0.92)", borderRadius: 7, padding: "6px 8px", minWidth: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <span style={{ color: "#fff", fontSize: 7, lineHeight: 1 }}>✓</span>
-                                  </div>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: "#111" }}>Refill Approved</span>
-                                </div>
-                                <div style={{ fontSize: 8, color: "#374151", lineHeight: 1.6, paddingLeft: 2 }}>
-                                  <div>✓ Lisinopril</div>
-                                  <div>✓ Ready for Pickup</div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {/* Overlay toggle */}
-                          <button
-                            onClick={() => setShowOverlay(p => ({ ...p, [cid]: !p[cid] }))}
-                            style={{ position: "absolute", bottom: 4, right: 4, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 8, borderRadius: 4, padding: "2px 5px", cursor: "pointer", pointerEvents: "all" }}>
-                            {showOverlay[cid] ? "Hide UI" : "Show UI"}
-                          </button>
-                        </div>
-                      ) : isActive ? (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
-                          <Spinner size={20} />
-                          <span style={{ fontSize: 11 }}>{qItem ? `${qItem.provider} · ${qItem.elapsedSeconds}s` : "Generating..."}</span>
-                        </div>
-                      ) : out?.status === "failed" && out?.error ? (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 8px" }}>
-                          <span style={{ fontSize: 18 }}>⚠️</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171" }}>Generation Failed</span>
-                          <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", lineHeight: 1.5, wordBreak: "break-word", maxWidth: "100%" }}>{out.error}</span>
-                          <button onClick={() => gatedGeneration(()=>generateImage(cid))} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
-                        </div>
-                      ) : (
-                        <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No image yet</div>
-                      )
-                    )}
-                    {tab === "Video" && (
-                      out?.video ? (
-                        <video src={out.video} controls muted loop style={{ width: "100%", borderRadius: 10 }} />
-                      ) : isActive ? (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
-                          <Spinner size={20} />
-                          <span style={{ fontSize: 11 }}>Video processing...</span>
-                        </div>
-                      ) : out?.status === "failed" ? (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 8px" }}>
-                          <span style={{ fontSize: 18 }}>⚠️</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171" }}>Video Failed</span>
-                          <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", lineHeight: 1.5, wordBreak: "break-word", maxWidth: "100%" }}>{out.error ?? "Generation failed — check provider credentials (KLING_API_KEY)"}</span>
-                          <button onClick={() => gatedGeneration(()=>generateVideo(cid))} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
-                        </div>
-                      ) : (
-                        <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No video yet</div>
-                      )
-                    )}
-                    {tab === "Script" && (
-                      <div style={{ width: "100%", fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
-                        {out?.script ?? "No script generated yet."}
-                      </div>
-                    )}
+                    {/* Bottom action bar */}
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", gap: 4, padding: "6px 8px", background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
+                      <button onClick={() => approveOutput(tab === "Video" ? "video" : "image", mediaUrl ?? "")}
+                        disabled={!mediaUrl}
+                        style={{ flex: 1, padding: "5px 0", fontSize: 9, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#6ee7b7", cursor: mediaUrl ? "pointer" : "not-allowed", opacity: mediaUrl ? 1 : 0.35 }}>
+                        ✓ Approve
+                      </button>
+                      <button onClick={() => gatedGeneration(() => generateImage(cid))} disabled={isActive}
+                        style={{ flex: 1, padding: "5px 0", fontSize: 9, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.06)", color: "#94a3b8", cursor: "pointer" }}>
+                        Image
+                      </button>
+                      <button onClick={() => storyBible ? gatedGeneration(() => generateVideo(cid)) : void buildStoryBibleRecord()} disabled={isActive}
+                        style={{ flex: 1, padding: "5px 0", fontSize: 9, fontWeight: 700, borderRadius: 6, border: `1px solid ${storyBible ? "rgba(255,255,255,0.1)" : "rgba(251,191,36,0.3)"}`, background: storyBible ? "rgba(255,255,255,0.06)" : "rgba(251,191,36,0.08)", color: storyBible ? "#94a3b8" : "#fbbf24", cursor: "pointer" }}>
+                        {storyBible ? "Video" : "⚠ Video"}
+                      </button>
+                      <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); }}
+                        style={{ padding: "5px 7px", fontSize: 9, borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#475569", cursor: "pointer" }}>
+                        ↺
+                      </button>
+                    </div>
                   </div>
-
-                  {/* Process preview + action buttons */}
-                  <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <button onClick={() => approveOutput(tab === "Video" ? "video" : "image", (tab === "Video" ? out?.video : out?.image) ?? "")}
-                      disabled={!((tab === "Video" ? out?.video : out?.image))}
-                      style={{ flex: 1, background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)", color: "#6ee7b7", borderRadius: 8, padding: "6px 0", fontSize: 11, cursor: "pointer", fontWeight: 600, opacity: (tab === "Video" ? out?.video : out?.image) ? 1 : 0.3 }}>
-                      ✓ Approve
-                    </button>
-                    <button onClick={() => gatedGeneration(()=>generateImage(cid))}
-                      disabled={isActive}
-                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      Run Concept Image
-                    </button>
-                    <button
-                      onClick={() => storyBible ? gatedGeneration(()=>generateVideo(cid)) : void buildStoryBibleRecord()}
-                      disabled={isActive}
-                      title={storyBible ? undefined : "Story Bible required — click to build"}
-                      style={{ background: storyBible ? "rgba(255,255,255,0.04)" : "rgba(251,191,36,0.08)", border: storyBible ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(251,191,36,0.25)", color: storyBible ? "#94a3b8" : "#fbbf24", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      {storyBible ? "Run Concept Video" : "⚠ Story Bible required"}
-                    </button>
-                    <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); log(`Restarted concept ${i + 1}`); }}
-                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748b", borderRadius: 8, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>
-                      ↺
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          {/* ── Generation Queue Tray ─────────────────────────────────────── */}
+                    {/* ── Generation Queue Tray ─────────────────────────────────────── */}
           {queueTrayOpen && (
             <div style={{ position: "fixed", bottom: 24, right: 24, width: 360, maxHeight: 480, background: "rgba(8,12,33,0.97)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, boxShadow: "0 18px 60px rgba(0,0,0,.3)", display: "flex", flexDirection: "column", zIndex: 1000 }}>
               <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
