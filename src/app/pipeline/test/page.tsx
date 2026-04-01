@@ -196,6 +196,8 @@ Accept only if:
   const [mediaShelfVisible, setMediaShelfVisible] = useState(true);
   const [mediaShelfAutoScroll, setMediaShelfAutoScroll] = useState(false);
   const [mediaShelfItems, setMediaShelfItems] = useState<MediaShelfItem[]>([]);
+  const [genFilterTab, setGenFilterTab] = useState<"All" | "Images" | "Video" | "Audio">("All");
+  const [storySongVoiceTab, setStorySongVoiceTab] = useState<"story" | "song" | "voice">("story");
   const [experienceMode, setExperienceMode] = useState<"story" | "technical" | "executive">("story");
 
   // Workspace outputs (approved from preview screens)
@@ -753,7 +755,7 @@ Accept only if:
                 setConceptOutputs(p => ({ ...p, [item.conceptId!]: { ...p[item.conceptId!], video: data.output_url!, status: "completed" } }));
               }
               log("✓ Video ready (poll): " + item.id.slice(0, 8));
-              pushProactive(`✓ ${item.conceptId ?? "Video"} video ready. Want me to review or suggest next steps?`, undefined, 'generation_complete');
+              pushProactive(`✓ ${item.conceptId ?? "Video"} video ready.`, undefined, 'generation_complete', data.output_url!, '16:9');
             }
             if (data.type === "image" || item.type === "image") {
               setImageResult(prev => prev ?? data.output_url!);
@@ -1777,20 +1779,20 @@ Accept only if:
     };
   }, []);
 
-  // chatPane is now an absolute overlay from the LEFT — mirrors EditorPro from the right.
-  // Rendered inside the Production Workspace (position:relative) div.
-  // Does NOT occupy a grid column — workspace fills full width underneath.
+  // chatPane is position:fixed from the far LEFT of the viewport.
+  // Overlays the entire page — steps column, config rail, workspace, everything.
+  // Toggle tab moves with the panel edge. Drag right to resize.
   const chatPane = (
     <>
       {/* Cursor overlay during drag — prevents iframe from stealing pointer */}
       {chatDragging && <div style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: "col-resize" }} />}
 
-      {/* Chat panel — absolute left overlay */}
+      {/* Chat panel — fixed left overlay covering full page height */}
       <div style={{
-        position: "absolute", top: 0, left: 0, bottom: 0,
+        position: "fixed", top: 0, left: 0, bottom: 0,
         width: chatOpen ? chatW : 0,
         overflow: "hidden",
-        zIndex: 200,
+        zIndex: 300,
         transition: chatDragging ? "none" : "width 200ms cubic-bezier(.4,0,.2,1)",
         background: "#06080f",
         borderRight: "1px solid rgba(255,255,255,0.1)",
@@ -1818,13 +1820,13 @@ Accept only if:
         </div>
       </div>
 
-      {/* Toggle tab — moves with the panel edge, mirrors EditorPro tab */}
+      {/* Toggle tab — fixed, moves with panel edge */}
       <button
         onClick={() => setChatOpen(v => !v)}
         style={{
-          position: "absolute", top: "50%", left: chatOpen ? chatW : 0,
+          position: "fixed", top: "50%", left: chatOpen ? chatW : 0,
           transform: "translateY(-50%)",
-          zIndex: 201,
+          zIndex: 301,
           width: 28, height: 96,
           background: "linear-gradient(180deg, rgba(34,211,238,0.25), rgba(34,211,238,0.1))",
           border: "1px solid rgba(34,211,238,0.4)",
@@ -2513,8 +2515,6 @@ Accept only if:
 
             {/* Production Workspace */}
             <div style={P({ display: "flex", flexDirection: "column", height: "100%", position: "relative" })}>
-              {/* Chat overlay — absolute left, same pattern as EditorPro on right */}
-              {!isEmbed && chatPane}
               {/* EditorPro drag cursor overlay */}
               {epDragging && <div style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: "col-resize" }} />}
               {/* EditorPro slide-out panel */}
@@ -3161,17 +3161,181 @@ Accept only if:
             />
           </div>
 
-          <MediaShelf
-            items={mediaShelfItems}
-            visible={mediaShelfVisible}
-            onToggleVisible={() => setMediaShelfVisible((value) => !value)}
-            autoScroll={mediaShelfAutoScroll}
-            onToggleAutoScroll={() => setMediaShelfAutoScroll((value) => !value)}
-            onOpenItem={(item) => { if (item.type === "video" && item.url) setApprovedOutputs((prev) => ({ ...prev, video: item.url ?? null })); if (item.type === "image" && item.url) setApprovedOutputs((prev) => ({ ...prev, image: item.url ?? null })); log(`✓ Opened ${item.title} from Media Shelf`); }}
-            onDropFiles={handleShelfDrop}
-          />
+          {/* ── BOTTOM ROW: MediaShelf + Image/Video Generator + Story/Song/Voice ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.65fr", gap: 14, marginBottom: 14, alignItems: "stretch" }}>
 
-                    {/* ── ROW 3: Saved file previews + quick run cards ───────────────────────── */}
+            {/* LEFT: Media Shelf */}
+            <MediaShelf
+              items={mediaShelfItems}
+              visible={mediaShelfVisible}
+              onToggleVisible={() => setMediaShelfVisible((value) => !value)}
+              autoScroll={mediaShelfAutoScroll}
+              onToggleAutoScroll={() => setMediaShelfAutoScroll((value) => !value)}
+              onOpenItem={(item) => { if (item.type === "video" && item.url) setApprovedOutputs((prev) => ({ ...prev, video: item.url ?? null })); if (item.type === "image" && item.url) setApprovedOutputs((prev) => ({ ...prev, image: item.url ?? null })); log(`✓ Opened ${item.title} from Media Shelf`); }}
+              onDropFiles={handleShelfDrop}
+            />
+
+            {/* CENTER: Image / Video Generator */}
+            <div style={P({ padding: 0, display: "flex", flexDirection: "column", minHeight: 320 })}>
+              <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#e2e8f0" }}>IMAGE / VIDEO GENERATOR</div>
+                  <div style={{ fontSize: 10, color: "#64748b" }}>Generate · Upload · Browse</div>
+                </div>
+                <label style={{ fontSize: 11, color: "#67e8f9", border: "1px solid rgba(103,232,249,0.3)", borderRadius: 8, padding: "5px 10px", cursor: "pointer", background: "rgba(103,232,249,0.06)" }}>
+                  ↑ Upload
+                  <input type="file" accept="image/*,video/*" multiple style={{ display: "none" }}
+                    onChange={(e) => { if (e.target.files?.length) handleShelfDrop(e.target.files); e.target.value = ""; }} />
+                </label>
+              </div>
+              {/* Filter tabs */}
+              <div style={{ display: "flex", gap: 0, padding: "0 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                {(["All", "Images", "Video", "Audio"] as const).map(f => (
+                  <button key={f} onClick={() => setGenFilterTab(f)}
+                    style={{ padding: "7px 10px", fontSize: 11, fontWeight: genFilterTab === f ? 700 : 400, color: genFilterTab === f ? "#67e8f9" : "#475569", background: "none", border: "none", borderBottom: genFilterTab === f ? "2px solid #67e8f9" : "2px solid transparent", cursor: "pointer" }}>
+                    {f}
+                  </button>
+                ))}
+                <div style={{ flex: 1 }} />
+                <span style={{ fontSize: 10, color: "#334155", alignSelf: "center" }}>{mediaShelfItems.length} items</span>
+              </div>
+              {/* Asset grid */}
+              <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, alignContent: "start" }}>
+                {mediaShelfItems
+                  .filter(item => {
+                    if (genFilterTab === "Images") return item.type === "image";
+                    if (genFilterTab === "Video") return item.type === "video";
+                    if (genFilterTab === "Audio") return item.type === "audio";
+                    return true;
+                  })
+                  .map(item => (
+                    <div key={item.id}
+                      onClick={() => { if (item.type === "video" && item.url) setApprovedOutputs(p => ({ ...p, video: item.url ?? null })); if (item.type === "image" && item.url) setApprovedOutputs(p => ({ ...p, image: item.url ?? null })); }}
+                      style={{ position: "relative", borderRadius: 8, overflow: "hidden", aspectRatio: "16/9", background: "#0a0f1e", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      {item.type === "video" && item.url ? (
+                        <video src={item.url} muted playsInline
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play()}
+                          onMouseLeave={e => { (e.currentTarget as HTMLVideoElement).pause(); (e.currentTarget as HTMLVideoElement).currentTime = 0; }} />
+                      ) : item.type === "image" && item.url ? (
+                        <img src={item.url} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                          {item.type === "audio" ? "🎵" : item.type === "story" ? "📄" : "📁"}
+                        </div>
+                      )}
+                      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "2px 4px", background: "rgba(0,0,0,0.6)", fontSize: 9, color: "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</div>
+                    </div>
+                  ))}
+                {mediaShelfItems.filter(item => genFilterTab === "All" || (genFilterTab === "Images" && item.type === "image") || (genFilterTab === "Video" && item.type === "video") || (genFilterTab === "Audio" && item.type === "audio")).length === 0 && (
+                  <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#334155", padding: 24, fontSize: 12, textAlign: "center" }}>
+                    <span style={{ fontSize: 28 }}>🖼</span>
+                    Generate an image above,<br />or drag files to upload
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: Story / Song / Voice */}
+            <div style={P({ padding: 0, display: "flex", flexDirection: "column", minHeight: 320 })}>
+              {/* Preview area — shows approved image */}
+              <div style={{ width: "100%", aspectRatio: "4/3", background: "#06080f", overflow: "hidden", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, position: "relative" }}>
+                {approvedOutputs.image ? (
+                  <img src={approvedOutputs.image} alt="Approved" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                ) : approvedOutputs.video ? (
+                  <video src={approvedOutputs.video} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 24, opacity: 0.3 }}>🎬</span>
+                    <span style={{ fontSize: 10, color: "#334155" }}>Approve output to preview</span>
+                  </div>
+                )}
+              </div>
+              {/* STORY / SONG / VOICE tabs */}
+              <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                {([["story", "📖 STORY"], ["song", "🎵 SONG"], ["voice", "🎤 VOICE"]] as const).map(([tab, label]) => (
+                  <button key={tab} onClick={() => setStorySongVoiceTab(tab)}
+                    style={{ flex: 1, padding: "8px 0", fontSize: 10, fontWeight: 700, color: storySongVoiceTab === tab ? "#67e8f9" : "#475569", background: "none", border: "none", borderBottom: storySongVoiceTab === tab ? "2px solid #67e8f9" : "2px solid transparent", cursor: "pointer", letterSpacing: "0.06em" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {/* Quick Generate */}
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Quick Generate</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <button onClick={() => void generateImage(selectedConceptId)}
+                    style={{ padding: "7px 0", fontSize: 10, fontWeight: 600, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#94a3b8", cursor: "pointer" }}>
+                    🖼 Image
+                  </button>
+                  <button onClick={() => { if (!storyBible) { void buildStoryBibleRecord().then(() => void generateVideo(selectedConceptId)); } else { void generateVideo(selectedConceptId); } }}
+                    style={{ padding: "7px 0", fontSize: 10, fontWeight: 600, borderRadius: 8, border: `1px solid ${storyBible ? "rgba(255,255,255,0.1)" : "rgba(251,191,36,0.3)"}`, background: storyBible ? "rgba(255,255,255,0.04)" : "rgba(251,191,36,0.06)", color: storyBible ? "#94a3b8" : "#fbbf24", cursor: "pointer" }}>
+                    {storyBible ? "🎬 Video" : "⚠ Video"}
+                  </button>
+                  <button onClick={() => void generateSongFromVoice()}
+                    style={{ padding: "7px 0", fontSize: 10, fontWeight: 600, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#94a3b8", cursor: "pointer" }}>
+                    🎤 Voice
+                  </button>
+                  <button onClick={() => void generateSongFromVoice()}
+                    style={{ padding: "7px 0", fontSize: 10, fontWeight: 600, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#94a3b8", cursor: "pointer" }}>
+                    🎵 Song
+                  </button>
+                </div>
+              </div>
+              {/* Build & Customize */}
+              <div style={{ padding: "10px 12px", flex: 1, overflowY: "auto" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Build & Customize</div>
+                {storySongVoiceTab === "story" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button onClick={() => void buildStoryBibleRecord()}
+                      style={{ padding: "8px 10px", fontSize: 11, borderRadius: 8, border: "1px solid rgba(103,232,249,0.3)", background: storyBible ? "rgba(16,185,129,0.08)" : "rgba(103,232,249,0.06)", color: storyBible ? "#6ee7b7" : "#67e8f9", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>
+                      {storyLoading ? "⏳ Building..." : storyBible ? "✓ Story Bible Locked · Rebuild" : "📖 Story Builder"}
+                    </button>
+                    {storyBible && (
+                      <div style={{ fontSize: 10, color: "#64748b", lineHeight: 1.6, padding: "6px 8px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.05)" }}>
+                        {storyBible.summary.slice(0, 120)}...
+                      </div>
+                    )}
+                    <button onClick={() => { setStepConfigOpen(true); setSelectedStepId("strategy"); }}
+                      style={{ padding: "7px 10px", fontSize: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#64748b", cursor: "pointer", textAlign: "left" }}>
+                      ⚙ Video Settings
+                    </button>
+                    <button onClick={() => { setStepConfigOpen(true); setSelectedStepId("copy"); }}
+                      style={{ padding: "7px 10px", fontSize: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#64748b", cursor: "pointer", textAlign: "left" }}>
+                      ✍ Story Settings
+                    </button>
+                  </div>
+                )}
+                {storySongVoiceTab === "song" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button onClick={() => void generateSongFromVoice()}
+                      style={{ padding: "8px 10px", fontSize: 11, borderRadius: 8, border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.06)", color: "#c084fc", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>
+                      🎵 Generate Song
+                    </button>
+                    <button onClick={() => { setStepConfigOpen(true); setSelectedStepId("strategy"); }}
+                      style={{ padding: "7px 10px", fontSize: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#64748b", cursor: "pointer", textAlign: "left" }}>
+                      ⚙ Song Settings
+                    </button>
+                  </div>
+                )}
+                {storySongVoiceTab === "voice" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button onClick={() => void generateSongFromVoice()}
+                      style={{ padding: "8px 10px", fontSize: 11, borderRadius: 8, border: "1px solid rgba(34,211,238,0.3)", background: "rgba(34,211,238,0.06)", color: "#67e8f9", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>
+                      🎤 Generate Voice
+                    </button>
+                    <button onClick={() => { setStepConfigOpen(true); setSelectedStepId("copy"); }}
+                      style={{ padding: "7px 10px", fontSize: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#64748b", cursor: "pointer", textAlign: "left" }}>
+                      ⚙ Voice Settings
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>{/* end bottom 3-col */}
+
+                    {/* ── ROW 3: Concept cards ───────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             {concepts.map((concept, i) => {
               const cid = concept.variantId;
@@ -3452,6 +3616,9 @@ Accept only if:
           </div>
         </div>
       )}
+      {/* Chat — fixed overlay */}
+      {!isEmbed && chatPane}
+
     </>
   );
 }
