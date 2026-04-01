@@ -41,5 +41,16 @@ export async function generateContent(
     }
 
     console.log(`[AI Routing] Generating ${type} using provider: ${providerKey}`);
-    return provider.generate(type, options);
+    try {
+        return await provider.generate(type, options);
+    } catch (err) {
+        // Kling failed — try Runway as fallback for video/i2v
+        const isVideoType = type === "video" || type === "i2v";
+        const isKling = providerKey.toLowerCase() === "kling";
+        if (isVideoType && isKling && providers["runway"]) {
+            console.warn(`[AI Routing] Kling failed for ${type}, falling back to Runway:`, err instanceof Error ? err.message : err);
+            return await providers["runway"].generate(type, options);
+        }
+        throw err;
+    }
 }

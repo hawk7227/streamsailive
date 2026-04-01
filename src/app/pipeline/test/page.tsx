@@ -183,9 +183,9 @@ Accept only if:
   }, [nicheId]);
   const [selectedConceptId, setSelectedConceptId] = useState("c1");
   const [concepts, setConcepts] = useState<ConceptVariant[]>([
-    { variantId: "c1", headline: "Private Care, From Home",   body: "Licensed provider review. Next steps after intake.", cta: "Start Your Visit" },
-    { variantId: "c2", headline: "Care Without the Wait",     body: "Secure intake, licensed review, clear next steps.",  cta: "Begin Intake" },
-    { variantId: "c3", headline: "Online Care, Simplified",   body: "Discreet, fast, provider-reviewed.",                cta: "Get Started" },
+    { variantId: "c1", headline: "", body: "", cta: "" },
+    { variantId: "c2", headline: "", body: "", cta: "" },
+    { variantId: "c3", headline: "", body: "", cta: "" },
   ]);
   const [storyTitle, setStoryTitle] = useState("Story Bible");
   const [storyText, setStoryText] = useState("Two brothers remember a younger backyard moment together, told like a real home video memory.");
@@ -3316,8 +3316,7 @@ Accept only if:
                         <span style={{ fontSize: 10, color: "#475569" }}>{isActive ? "Processing" : out?.status === "completed" ? "Ready" : out?.status === "failed" ? "Failed" : "Idle"}</span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0", marginBottom: 2 }}>{concept.headline}</div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>{concept.cta}</div>
+
                     {/* Tabs */}
                     <div style={{ display: "flex", gap: 0, marginTop: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       {(["Image", "Video", "Script"] as PreviewTab[]).map(t => (
