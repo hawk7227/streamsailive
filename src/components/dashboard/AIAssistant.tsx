@@ -16,6 +16,7 @@ import type { ExtractedArtifact } from '@/lib/activity-stream/code-extractor';
 
 
 import { FloatingPreviewPanel } from '@/components/pipeline/FloatingPreviewPanel';
+import { MediaPreviewPanel, type MediaPreviewItem } from '@/components/pipeline/MediaPreviewPanel';
 import { LivePreviewRenderer } from '@/components/pipeline/LivePreviewRenderer';
 interface Action { type: string; payload: Record<string, unknown>; }
 
@@ -33,6 +34,8 @@ export interface ProactiveMessage {
   id: string;
   text: string;
   imageUrl?: string;
+  videoUrl?: string;
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5';
   type: 'generation_complete' | 'pipeline_result' | 'generation_failed';
 }
 
@@ -114,6 +117,7 @@ export default function AIAssistant(props: AIAssistantProps) {
     return localStorage.getItem('streams:autoPreview') !== 'false';
   });
   const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<MediaPreviewItem | null>(null);
   const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: 'iphone1' | 'iphone2' | 'desktop' } | null>(null);
 
   // Register middleware once
@@ -132,6 +136,23 @@ export default function AIAssistant(props: AIAssistantProps) {
     ];
     if (msg.imageUrl) {
       content.push({ type: 'image_url', image_url: { url: msg.imageUrl } });
+      // Open preview panel
+      setMediaPreview({
+        id: msg.id,
+        type: 'image',
+        url: msg.imageUrl,
+        label: msg.text,
+        aspectRatio: msg.aspectRatio ?? '16:9',
+      });
+    }
+    if (msg.videoUrl) {
+      setMediaPreview({
+        id: msg.id,
+        type: 'video',
+        url: msg.videoUrl,
+        label: msg.text,
+        aspectRatio: msg.aspectRatio ?? '16:9',
+      });
     }
     setMessages(prev => [...prev, { role: 'assistant', mode: 'conversation', content }]);
   }, [props.proactiveMessage]);
@@ -684,8 +705,20 @@ export default function AIAssistant(props: AIAssistantProps) {
       {sidebarOpen ? (
         <div
           className={["fixed z-[70] pointer-events-auto flex overflow-hidden bg-[#0A0C10]", isMobile ? "inset-0 border-0 rounded-none shadow-none" : "bottom-6 right-6 border border-white/12 rounded-[28px] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"].join(" ")}
-          style={isMobile ? { touchAction: "none" } : { width: 660, height: 680 }}
+          style={isMobile ? { touchAction: "none" } : { width: 660, height: 680, position: "relative" }}
         >
+          {/* Media preview panel — slides out to the left when generation completes */}
+          <MediaPreviewPanel
+            item={mediaPreview}
+            onClose={() => setMediaPreview(null)}
+            onSendToChat={(item) => {
+              const content: import('@/components/ai-chat/AssistantMessage').MsgContent[] = [
+                { type: 'text', text: `Here is the generated ${item.type}: ${item.label ?? ''}` },
+              ];
+              if (item.type === 'image') content.push({ type: 'image_url', image_url: { url: item.url } });
+              setMessages(prev => [...prev, { role: 'assistant', mode: 'conversation', content }]);
+            }}
+          />
           {!isMobile && <div className="w-48 shrink-0 border-r border-white/8">{sidebarContent}</div>}
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex items-center justify-between border-b border-white/8 px-4 py-3">
@@ -715,9 +748,21 @@ export default function AIAssistant(props: AIAssistantProps) {
           </div>
         </div>
       ) : (
-        <AIAssistantShell
-          title="STREAMS Chat"
-          subtitle="Auto-mode · governed · multimodal"
+        <div style={{ position: "relative" }}>
+          <MediaPreviewPanel
+            item={mediaPreview}
+            onClose={() => setMediaPreview(null)}
+            onSendToChat={(item) => {
+              const content: import('@/components/ai-chat/AssistantMessage').MsgContent[] = [
+                { type: 'text', text: `Here is the generated ${item.type}: ${item.label ?? ''}` },
+              ];
+              if (item.type === 'image') content.push({ type: 'image_url', image_url: { url: item.url } });
+              setMessages(prev => [...prev, { role: 'assistant', mode: 'conversation', content }]);
+            }}
+          />
+          <AIAssistantShell
+            title="STREAMS Chat"
+            subtitle="Auto-mode · governed · multimodal"
           onClose={() => undefined}
           footer={
             <div className="grid gap-2">
@@ -741,6 +786,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         >
           <AssistantMessageList messages={messages} streamingText={streamingText} streamingMode={streamingMode} pending={pending} />
         </AIAssistantShell>
+        </div>
       )}
       {/* Feature 2 — Floating preview panel */}
       {floatingArtifact && (

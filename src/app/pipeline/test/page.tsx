@@ -401,8 +401,8 @@ Accept only if:
   // Proactive assistant messages — injected when generation completes
   const [proactiveMessage, setProactiveMessage] = useState<ProactiveMessage | null>(null);
   const proactiveIdCounter = useRef(0);
-  const pushProactive = useCallback((text: string, imageUrl?: string, type: ProactiveMessage['type'] = 'generation_complete') => {
-    setProactiveMessage({ id: `proactive_${++proactiveIdCounter.current}_${Date.now()}`, text, imageUrl, type });
+  const pushProactive = useCallback((text: string, imageUrl?: string, type: ProactiveMessage['type'] = 'generation_complete', videoUrl?: string, aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5') => {
+    setProactiveMessage({ id: `proactive_${++proactiveIdCounter.current}_${Date.now()}`, text, imageUrl, videoUrl, aspectRatio, type });
   }, []);
 
   // Register activity stream middleware once on mount
@@ -645,12 +645,12 @@ Accept only if:
               if (conceptId && row.type === "image") {
                 setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], image: row.output_url!, status: "completed" } }));
                 setImageResult(prev => prev ?? row.output_url!);
-                pushProactive(`✓ ${conceptId} image ready. Want me to review it or suggest edits?`, row.output_url!, 'generation_complete');
+                pushProactive(`✓ ${conceptId} image ready.`, row.output_url!, 'generation_complete', undefined, '16:9');
               }
               if (conceptId && (row.type === "video" || row.type === "i2v")) {
                 setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], video: row.output_url!, status: "completed" } }));
                 setVideoResult(row.output_url!);
-                pushProactive(`✓ ${conceptId} video ready. Want me to review it or suggest next steps?`, undefined, 'generation_complete');
+                pushProactive(`✓ ${conceptId} video ready.`, undefined, 'generation_complete', row.output_url!, '16:9');
               }
               log("✓ " + row.type + " completed: " + row.id.slice(0, 8));
             }

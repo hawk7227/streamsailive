@@ -235,8 +235,9 @@ export async function POST(request: Request) {
           // If LLM returned empty actions despite action mode being triggered,
           // detect intent from raw text and inject the correct action.
           let actions = finalResponse.actions;
-          const looksExplanatory = /let's create|the image generation logic comes|the process involves|private care/i.test(finalResponse.message);
-          if (actions.length === 0 || (requestLooksLikeDirectGeneration && looksExplanatory)) {
+          // Detect any form of refusal or paraphrase — not just specific phrases
+          const looksLikeRefusal = /isn't part|not part|can't|cannot|i can't|unable to|not able|don't have.*capabilit|not.*capabilit|only.*still image|only generate.*image|let's create|the.*generation.*logic|the process involves|i receive instructions|predefined|feel free to ask/i.test(finalResponse.message);
+          if (actions.length === 0 || (requestLooksLikeDirectGeneration && looksLikeRefusal)) {
             const lower = requestText.toLowerCase();
             const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
             const isVideo = /video|clip|footage|animate/.test(lower);

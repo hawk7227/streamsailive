@@ -91,9 +91,20 @@ export const PROBE_TERMS = [
 const EXECUTION_TERMS = ["return json", "give me schema", "generate a json schema", "schema for", "return valid json"];
 const BUILDER_TERMS = ["build", "implement", "fix", "write code", "refactor", "route", "production", "system architecture"];
 
+// Regex patterns that catch generate/create/make + any words + media type
+// Handles: "generate a sample draft video", "create me an image of...", etc.
+const ACTION_PATTERNS: RegExp[] = [
+  /\b(generate|create|make|produce|show|render)\b.*\b(image|photo|picture|illustration)\b/i,
+  /\b(generate|create|make|produce|show|render)\b.*\b(video|clip|footage|animation|reel)\b/i,
+  /\b(generate|create|make|produce)\b.*\b(song|music|audio|track|beat)\b/i,
+  /\b(run|start|kick off|launch|execute)\b.*\b(pipeline|workflow)\b/i,
+  /\b(run|execute)\b.*\b(step|node)\b/i,
+];
+
 export function detectModeFromText(text: string): AssistantMode {
   const lower = text.toLowerCase();
   if (ACTION_TERMS.some((term) => lower.includes(term))) return "action";
+  if (ACTION_PATTERNS.some((pattern) => pattern.test(lower))) return "action";
   if (VERIFICATION_TERMS.some((term) => lower.includes(term))) return "verification";
   if (EXECUTION_TERMS.some((term) => lower.includes(term))) return "execution";
   if (BUILDER_TERMS.some((term) => lower.includes(term))) return "builder";
