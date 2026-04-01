@@ -326,6 +326,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       let buffer = '';
       let fullText = '';
       let mode: AssistantMode = 'conversation';
+      let actionFired = false;  // track whether any action event was received
 
       while (true) {
         const { value, done } = await reader.read();
@@ -362,6 +363,7 @@ export default function AIAssistant(props: AIAssistantProps) {
                 }
               }
             } else if (evt.type === 'action' && evt.action) {
+              actionFired = true;
               performAction(evt.action);
             } else if (evt.type === 'done') {
               if (evt.conversationId) {
@@ -380,11 +382,45 @@ export default function AIAssistant(props: AIAssistantProps) {
       }
 
       setArtifactStreaming(false);
+
+      // ── Client-side intent fallback ───────────────────────────────────────
+      // If action mode was expected but no action event arrived from server,
+      // detect intent from the raw user message and force-trigger the action.
+      if (!actionFired && mode === 'action') {
+        const lower = message.toLowerCase();
+        const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
+        const isVideo = /video|clip|footage|animate/.test(lower);
+        const isSong  = /song|music|audio|track|beat/.test(lower);
+        const isPipeline = /pipeline/.test(lower);
+        if (isPipeline) {
+          performAction({ type: 'run_pipeline', payload: {} });
+        } else if (isVideo) {
+          performAction({ type: 'generate_video', payload: { prompt: message } });
+        } else if (isSong) {
+          performAction({ type: 'generate_song', payload: { prompt: message } });
+        } else if (isImage) {
+          performAction({ type: 'generate_image', payload: { prompt: message, provider: 'openai' } });
+        }
+      }
+
+      // ── Execution feedback ────────────────────────────────────────────────
+      // After an action fires, replace conversational text with a short status
+      // so the user knows execution happened, not just a description.
+      let displayText = fullText || 'Request completed.';
+      if (actionFired && mode === 'action') {
+        const lower = message.toLowerCase();
+        if (/generate_image|image|photo|picture/.test(lower)) displayText = fullText || 'Image generation started.';
+        else if (/generate_video|video|clip/.test(lower)) displayText = fullText || 'Video generation started.';
+        else if (/generate_song|song|music/.test(lower)) displayText = fullText || 'Song generation started.';
+        else if (/pipeline/.test(lower)) displayText = fullText || 'Pipeline started.';
+        else displayText = fullText || 'Executing now.';
+      }
+
       // Clear streaming text BEFORE pushing final message — prevents one-frame duplicate render
       setStreamingText('');
       setMessages((prev) => [...prev, {
         role: 'assistant', mode,
-        content: [{ type: 'text', text: fullText || 'Request completed.' }, ...detectMedia(fullText)],
+        content: [{ type: 'text', text: displayText }, ...detectMedia(fullText)],
       }]);
       ActivityController.responseCompleted();
       clearAttachments();

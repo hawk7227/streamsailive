@@ -94,6 +94,8 @@ export interface AssistantAction {
     | 'generate_image'
     | 'generate_video'
     | 'generate_i2v'
+    | 'generate_song'
+    | 'build_story_bible'
     | 'run_step'
     | 'run_pipeline'
     | 'select_concept'
@@ -249,7 +251,7 @@ ${integratedContext}`;
       return `${core}\n\nReturn the artifact directly. One brief intro line, then the output.`;
 
     case 'action':
-      return `${core}\n\nReturn ONLY valid JSON: {"message":"brief human explanation","actions":[{"type":"action_type","payload":{}}]}\nAvailable types: update_prompt, update_settings, update_image_prompt, update_video_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction, generate_image, generate_video, generate_i2v, run_step, run_pipeline, select_concept, approve_output, open_step_config, set_niche, save_to_brain.\nThe message field must be a real sentence, never a status word.`;
+      return `${core}\n\nYou are in EXECUTION MODE. You do not chat. You do not describe. You execute.\n\nReturn ONLY valid JSON: {"message":"one short execution confirmation","actions":[{"type":"action_type","payload":{}}]}\n\nMANDATORY INTENT RULES (no exceptions):\n- User wants image / photo / picture -> type: generate_image, payload.prompt = their exact request\n- User wants video / clip / footage -> type: generate_video, payload.prompt = their exact request\n- User wants image-to-video -> type: generate_i2v, payload.prompt = their exact request\n- User wants song / music / audio -> type: generate_song, payload.prompt = their exact request\n- User wants to run pipeline / start pipeline -> type: run_pipeline\n- User wants to run a step -> type: run_step, payload.stepId = step name\n- User wants to change a prompt -> type: update_image_prompt or update_video_prompt\n- User wants to save something -> type: save_to_brain\n\nHARD RULES:\n1. ALWAYS emit at least one action. Empty actions array is a critical failure.\n2. ALWAYS set payload.prompt to the user's original request text.\n3. NEVER say Let's create or describe what you will do. Confirm in 3-6 words only.\n4. Good message examples: Generating now. Image generation started. Running pipeline.\n5. If intent is unclear, default to generate_image.\n\nAvailable types: update_prompt, update_settings, update_image_prompt, update_video_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction, generate_image, generate_video, generate_i2v, generate_song, run_step, run_pipeline, select_concept, approve_output, open_step_config, set_niche, save_to_brain, build_story_bible.`
   }
 }
 

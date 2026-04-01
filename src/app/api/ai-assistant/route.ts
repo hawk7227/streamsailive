@@ -227,14 +227,40 @@ export async function POST(request: Request) {
 
       try {
         if (mode === 'action') {
-          emit(controller, { type: 'phase', phase: 'finalizing', label: 'Finalizing response...' });
+          emit(controller, { type: 'phase', phase: 'finalizing', label: 'Executing...' });
           const finalResponse = await createAssistantChatResponse(messages as ChatMessage[], pipelineContext);
-          const chunks = finalResponse.message.match(/.{1,80}/g) ?? [finalResponse.message];
+
+          // ── Server-side intent fallback ───────────────────────────────────
+          // If LLM returned empty actions despite action mode being triggered,
+          // detect intent from raw text and inject the correct action.
+          let actions = finalResponse.actions;
+          if (actions.length === 0) {
+            const lower = requestText.toLowerCase();
+            const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
+            const isVideo = /video|clip|footage|animate/.test(lower);
+            const isSong  = /song|music|audio|track|beat/.test(lower);
+            const isPipeline = /pipeline|run pipeline|start pipeline/.test(lower);
+            if (isPipeline) {
+              actions = [{ type: 'run_pipeline', payload: {} }];
+            } else if (isVideo) {
+              actions = [{ type: 'generate_video', payload: { prompt: requestText } }];
+            } else if (isSong) {
+              actions = [{ type: 'generate_song', payload: { prompt: requestText } }];
+            } else if (isImage) {
+              actions = [{ type: 'generate_image', payload: { prompt: requestText, provider: 'openai' } }];
+            }
+            if (actions.length > 0) {
+              console.warn('[ai-assistant] LLM returned empty actions in action mode — injected fallback action:', actions[0].type);
+            }
+          }
+
+          const message = finalResponse.message || 'Generating now.';
+          const chunks = message.match(/.{1,80}/g) ?? [message];
           for (const chunk of chunks) emit(controller, { type: 'text', delta: chunk });
-          for (const action of finalResponse.actions) emit(controller, { type: 'action', action });
+          for (const action of actions) emit(controller, { type: 'action', action });
           emit(controller, { type: 'done', mode });
           close();
-          if (conversationId && admin) persistExchange(admin, conversationId, userText, finalResponse.message, activeModel).catch(() => {});
+          if (conversationId && admin) persistExchange(admin, conversationId, userText, message, activeModel).catch(() => {});
           return;
         }
 
