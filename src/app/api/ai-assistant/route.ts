@@ -228,7 +228,7 @@ export async function POST(request: Request) {
       try {
         if (mode === 'action') {
           emit(controller, { type: 'phase', phase: 'finalizing', label: 'Executing...' });
-          const finalResponse = await createAssistantChatResponse(messages as ChatMessage[], pipelineContext);
+          const finalResponse = await createAssistantChatResponse(messages as ChatMessage[], pipelineContext, activeModel);
 
           // ── Server-side intent fallback ───────────────────────────────────
           // If LLM returned empty actions despite action mode being triggered,
@@ -273,7 +273,7 @@ export async function POST(request: Request) {
           headers: { ...provider.authHeader(apiKey), 'Content-Type': 'application/json' },
           // Override model with client selection — createRequestBody uses getSiteConfig() internally
           body: JSON.stringify((() => {
-            const base = createRequestBody(mode, messages as ChatMessage[], pipelineContext, true);
+            const base = createRequestBody(mode, messages as ChatMessage[], pipelineContext, true, activeModel);
             if (activeModel.startsWith('claude-')) {
               // Anthropic format: system is top-level, not inside messages[]
               const msgs = (base.messages as Array<{role:string;content:unknown}>) ?? [];

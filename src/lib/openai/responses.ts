@@ -1,4 +1,3 @@
-import { getSiteConfig } from '@/lib/config';
 import { detectModeFromText } from '@/lib/enforcement/modeEngine';
 import { runValidators } from '@/lib/enforcement/validatorRunner';
 import { validateChatResponse } from '@/lib/enforcement/validators/chat';
@@ -270,9 +269,9 @@ function getModelConfig(mode: AssistantMode) {
   }
 }
 
-export function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean): Record<string, unknown> {
+export function createRequestBody(mode: AssistantMode, messages: ChatMessage[], context: PipelineContext, stream: boolean, model?: string): Record<string, unknown> {
   const config = getModelConfig(mode);
-  const activeModel = getSiteConfig().copilotModel || 'gpt-4o';
+  const activeModel = model || 'gpt-4o';
   const body: Record<string, unknown> = {
     model: activeModel,
     messages: [{ role: 'system', content: buildSystemPrompt(mode, context) }, ...messages],
@@ -296,18 +295,20 @@ function parseActionPayload(raw: string): { message: string; actions: AssistantA
   }
 }
 
-export async function createAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<AssistantResponse> {
-  const activeModel2 = getSiteConfig().copilotModel || 'gpt-4o';
+export async function createAssistantChatResponse(messages: ChatMessage[], context: PipelineContext, model?: string): Promise<AssistantResponse> {
+  const activeModel2 = model || 'gpt-4o';
   const provider = getProviderConfig(activeModel2);
-  const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY or ANTHROPIC_API_KEY)');
+  const apiKey = activeModel2.startsWith('claude-')
+    ? (process.env.ANTHROPIC_API_KEY ?? '')
+    : (process.env.OPENAI_API_KEY ?? '');
+  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY for gpt-* or ANTHROPIC_API_KEY for claude-*)');
 
   const requestText = getLastUserText(messages);
   const mode = detectModeFromText(requestText);
   const response = await fetch(provider.url, {
     method: 'POST',
     headers: { ...provider.authHeader(apiKey), 'Content-Type': 'application/json' },
-    body: JSON.stringify(createRequestBody(mode, messages, context, false)),
+    body: JSON.stringify(createRequestBody(mode, messages, context, false, activeModel2)),
   });
 
   if (!response.ok) {
@@ -342,18 +343,20 @@ export function parseStreamingLine(line: string): string {
   }
 }
 
-export async function streamAssistantChatResponse(messages: ChatMessage[], context: PipelineContext): Promise<ReadableStream<Uint8Array>> {
-  const activeModel3 = getSiteConfig().copilotModel || 'gpt-4o';
+export async function streamAssistantChatResponse(messages: ChatMessage[], context: PipelineContext, model?: string): Promise<ReadableStream<Uint8Array>> {
+  const activeModel3 = model || 'gpt-4o';
   const streamProvider = getProviderConfig(activeModel3);
-  const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY or ANTHROPIC_API_KEY)');
+  const apiKey = activeModel3.startsWith('claude-')
+    ? (process.env.ANTHROPIC_API_KEY ?? '')
+    : (process.env.OPENAI_API_KEY ?? '');
+  if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY for gpt-* or ANTHROPIC_API_KEY for claude-*)');
 
   const requestText = getLastUserText(messages);
   const mode = detectModeFromText(requestText);
   const encoder = new TextEncoder();
 
   if (mode === 'action') {
-    const finalResponse = await createAssistantChatResponse(messages, context);
+    const finalResponse = await createAssistantChatResponse(messages, context, activeModel3);
     return new ReadableStream<Uint8Array>({
       start(controller) {
         const chunks = finalResponse.message.match(/.{1,80}/g) ?? [finalResponse.message];
@@ -367,7 +370,7 @@ export async function streamAssistantChatResponse(messages: ChatMessage[], conte
   const upstream = await fetch(streamProvider.url, {
     method: 'POST',
     headers: { ...streamProvider.authHeader(apiKey), 'Content-Type': 'application/json' },
-    body: JSON.stringify(createRequestBody(mode, messages, context, true)),
+    body: JSON.stringify(createRequestBody(mode, messages, context, true, activeModel3)),
   });
 
   if (!upstream.ok || !upstream.body) {
