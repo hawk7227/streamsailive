@@ -3122,45 +3122,6 @@ Accept only if:
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: engineOpen ? "1.15fr 360px" : "1fr", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
-            <div style={P({ padding: 14 })}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#e2e8f0" }}>Story Generator · Required before Story-to-Video</div>
-                  <div style={{ fontSize: 10, color: "#64748b" }}>AI fill supported · story bible lock · generator-aware compilation</div>
-                </div>
-                <div style={{ flex: 1 }} />
-                <button onClick={() => void buildStoryBibleRecord()} style={{ fontSize: 11, borderRadius: 10, padding: "7px 12px", border: "1px solid rgba(103,232,249,0.3)", background: "rgba(103,232,249,0.08)", color: "#67e8f9", cursor: "pointer" }}>{storyLoading ? "Building..." : storyBible ? "Rebuild Story" : "Build Story"}</button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr", gap: 12 }}>
-                <div>
-                  <input value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} placeholder="Story title" style={{ width: "100%", marginBottom: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 12 }} />
-                  <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} placeholder="Tell the system the real event or the synthetic story you want to recreate." style={{ width: "100%", minHeight: 120, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 12, padding: 12, fontSize: 12, resize: "vertical" }} />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <label style={{ fontSize: 11, color: "#94a3b8" }}>Source kind</label>
-                  <select value={storySourceKind} onChange={(e) => setStorySourceKind(e.target.value as typeof storySourceKind)} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 10, padding: "9px 10px", fontSize: 12 }}>
-                    <option value="mixed">mixed</option><option value="self">self</option><option value="family_or_friend">family/friend</option><option value="synthetic">synthetic</option>
-                  </select>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: "#cbd5e1" }}>
-                    <input type="checkbox" checked={storyAiFill} onChange={(e) => setStoryAiFill(e.target.checked)} /> Allow AI fill-in
-                  </label>
-                  <div style={{ padding: 10, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Locked Story Bible</div>
-                    <div style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.6 }}>{storyBible?.summary ?? "Build the story bible once, then the generator compiles provider-specific prompts from it."}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <PipelineExperiencePanel
-              open={engineOpen}
-              mode={experienceMode}
-              onModeChange={setExperienceMode}
-              events={liveEvents.map((event) => ({ id: event.id, stepName: event.stepName, type: event.type, message: event.message, ts: event.ts }))}
-              liveStepName={steps.find((step) => step.id === liveStepId)?.name ?? null}
-            />
-          </div>
-
           {/* ── BOTTOM ROW: MediaShelf + Image/Video Generator + Story/Song/Voice ── */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.65fr", gap: 14, marginBottom: 14, alignItems: "stretch" }}>
 
