@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 const MediaEditor = dynamic(() => import("@/components/pipeline/MediaEditor"), { ssr: false });
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VoiceBar } from "@/components/ai-chat/VoiceBar";
 import { createClient } from "@/lib/supabase/client";
 
@@ -14,7 +14,7 @@ import { extractArtifactFromBuffer, type ExtractedArtifact } from "@/lib/activit
 import { ArtifactCard, type ArtifactDestination } from "@/components/pipeline/ArtifactCard";
 import { FloatingPreviewPanel } from "@/components/pipeline/FloatingPreviewPanel";
 import { LivePreviewRenderer } from "@/components/pipeline/LivePreviewRenderer";
-import AIAssistant, { type ProactiveMessage } from "@/components/dashboard/AIAssistant";
+import type { ProactiveMessage } from "@/components/dashboard/AIAssistant";
 import { PlatformViewer } from "@/components/pipeline/PlatformViewer";
 import { PlatformSelector, type PlatformSelection } from "@/components/pipeline/PlatformSelector";
 import { BatchPreviewModal } from "@/components/pipeline/BatchPreviewModal";
@@ -41,6 +41,8 @@ type ReferencePriority = "low" | "medium" | "high";
 type VideoGenMode = "scratch_t2v" | "i2v";
 type RefClassification = "usable" | "risky" | "reject";
 interface UploadedRef { id: string; url: string; name: string; kind: "image" | "video"; classification: RefClassification; }
+
+type AssistantIframeAction = { type: string; payload?: Record<string, unknown>; };
 
 // ── Guidance + Conflict types ─────────────────────────────────────────────
 interface GuidanceRule {
@@ -400,6 +402,64 @@ Accept only if:
   const [showSafeZone, setShowSafeZone] = useState(false);
   // Proactive assistant messages — injected when generation completes
   const [proactiveMessage, setProactiveMessage] = useState<ProactiveMessage | null>(null);
+
+  // ── Left chat iframe host ───────────────────────────────────────────────
+  const assistantIframeRef = useRef<HTMLIFrameElement>(null);
+  const [chatDockOpen, setChatDockOpen] = useState(true);
+  const [chatDetached, setChatDetached] = useState(false);
+  const [chatReady, setChatReady] = useState(false);
+  const [chatW, setChatW] = useState(420);
+  const [chatHandleActive, setChatHandleActive] = useState(false);
+  const [chatPos, setChatPos] = useState({ x: 24, y: 110 });
+  const chatResizeState = useRef<{ startX: number; startW: number } | null>(null);
+  const chatMoveState = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
+
+  const assistantContext = useMemo(() => ({
+    type: "pipeline",
+    prompt: stepPrompts[selectedStepId] ?? "",
+    settings: { niche: nicheId, concept: selectedConceptId },
+    nicheId,
+    currentStepId: selectedStepId,
+    selectedConceptId,
+    stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
+    intakeAnalysis: intakeAnalysis ?? undefined,
+    conceptErrors: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])),
+    conceptStatuses: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])),
+    hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
+    imageProvider,
+    allStepPrompts: stepPrompts,
+    conceptOutputs: Object.fromEntries(Object.entries(conceptOutputs).map(([id, o]) => [id, { image: o.image, video: o.video, status: o.status, error: o.error }])),
+    approvedOutputs,
+    pipelineRunning,
+    pipelineLog: pipelineLog.slice(-10),
+    generationQueueSummary: {
+      pending: [...generationQueue.values()].filter(i => i.status === "pending").length,
+      processing: [...generationQueue.values()].filter(i => i.status === "processing").length,
+      completed: [...generationQueue.values()].filter(i => i.status === "completed").length,
+      failed: [...generationQueue.values()].filter(i => i.status === "failed").length,
+    },
+    conceptNames: Object.fromEntries(concepts.map((cv, i) => [`c${i + 1}`, cv.headline ?? `Concept ${i + 1}`])),
+    conceptCount: concepts.length,
+    workspaceTab,
+    viewMode,
+    deviceFrame,
+    editorOpen: epOpen,
+    previewTabs,
+    intakeResult: intakeResult ? {
+      type: intakeResult.type,
+      title: intakeResult.title,
+      brandName: intakeResult.brandName,
+      colorPalette: intakeResult.colorPalette,
+      keyMessages: intakeResult.keyMessages,
+      layoutPattern: intakeResult.layoutPattern,
+      targetAudience: intakeResult.targetAudience,
+      toneOfVoice: intakeResult.toneOfVoice,
+      suggestedCopy: intakeResult.suggestedCopy,
+    } : undefined,
+    liveEventsSummary: liveEvents.slice(-3).map(e => e.message ?? e.stepName ?? '').filter(Boolean).join(' → ') || undefined,
+    strategyOutput: stepPrompts.strategy,
+    copyOutput: stepPrompts.copy,
+  }), [approvedOutputs, conceptOutputs, concepts, deviceFrame, epOpen, generationQueue, imageProvider, intakeAnalysis, intakeResult, liveEvents, nicheId, pipelineLog, pipelineRunning, previewTabs, selectedConceptId, selectedStepId, stepPrompts, steps, viewMode, workspaceTab]);
   const proactiveIdCounter = useRef(0);
   const pushProactive = useCallback((text: string, imageUrl?: string, type: ProactiveMessage['type'] = 'generation_complete', videoUrl?: string, aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5') => {
     setProactiveMessage({ id: `proactive_${++proactiveIdCounter.current}_${Date.now()}`, text, imageUrl, videoUrl, aspectRatio, type });
@@ -1611,6 +1671,186 @@ Accept only if:
     setVideoGenerating(false);
   }
 
+  const postAssistantMessage = useCallback((message: Record<string, unknown>) => {
+    const target = assistantIframeRef.current?.contentWindow;
+    if (!target) return;
+    target.postMessage(message, window.location.origin);
+  }, []);
+
+  const handleAssistantIframeAction = useCallback((action: AssistantIframeAction) => {
+    switch (action.type) {
+      case "update_prompt":
+        setStepPrompts(p => ({ ...p, [selectedStepId]: String(action.payload?.value ?? action.payload?.new_prompt ?? "") }));
+        break;
+      case "update_settings":
+        if (action.payload?.key === "nicheId") setNicheId(String(action.payload?.value ?? ""));
+        if (action.payload?.key === "imageProvider") setImageProvider(String(action.payload?.value ?? "openai") as "openai" | "fal");
+        if (action.payload?.key === "pipelineMode") setPipelineMode(String(action.payload?.value ?? "manual") as "manual" | "auto");
+        break;
+      case "update_image_prompt": setStepPrompts(p => ({ ...p, imagery: String(action.payload?.value ?? "") })); break;
+      case "update_video_prompt": setStepPrompts(p => ({ ...p, i2v: String(action.payload?.value ?? "") })); break;
+      case "update_strategy_prompt": setStepPrompts(p => ({ ...p, strategy: String(action.payload?.value ?? "") })); break;
+      case "update_copy_prompt": setStepPrompts(p => ({ ...p, copy: String(action.payload?.value ?? "") })); break;
+      case "update_i2v_prompt": setStepPrompts(p => ({ ...p, i2v: String(action.payload?.value ?? "") })); break;
+      case "update_qa_instruction": setStepPrompts(p => ({ ...p, qa: String(action.payload?.value ?? "") })); break;
+      case "generate_image": void generateImage((action.payload?.conceptId as string | undefined) ?? selectedConceptId, action.payload?.prompt as string | undefined); break;
+      case "generate_video":
+        if (!storyBible) {
+          log("⚠ Story Bible required before video. Building now...");
+          void buildStoryBibleRecord().then(() => void generateVideo((action.payload?.conceptId as string | undefined) ?? selectedConceptId));
+        } else {
+          void generateVideo((action.payload?.conceptId as string | undefined) ?? selectedConceptId);
+        }
+        break;
+      case "generate_song": void generateSongFromVoice(action.payload?.prompt as string | undefined); break;
+      case "build_story_bible":
+        if (typeof action.payload?.storyText === "string" && action.payload.storyText.trim()) setStoryText(action.payload.storyText);
+        void buildStoryBibleRecord();
+        break;
+      case "run_pipeline": void runPipeline(); break;
+      case "run_step":
+        if (typeof action.payload?.stepId === "string") { setSelectedStepId(action.payload.stepId); setStepConfigOpen(true); }
+        break;
+      case "select_concept":
+        if (typeof action.payload?.conceptId === "string") setSelectedConceptId(action.payload.conceptId);
+        break;
+      case "approve_output":
+        if (typeof action.payload?.type === "string" && typeof action.payload?.url === "string") approveOutput(action.payload.type as "image" | "video" | "script", action.payload.url);
+        break;
+      case "open_step_config":
+        if (typeof action.payload?.stepId === "string") { setSelectedStepId(action.payload.stepId); setStepConfigOpen(true); }
+        break;
+      case "set_niche":
+        if (typeof action.payload?.nicheId === "string") setNicheId(action.payload.nicheId);
+        break;
+      default: break;
+    }
+  }, [approveOutput, buildStoryBibleRecord, generateImage, generateSongFromVoice, generateVideo, log, runPipeline, selectedConceptId, selectedStepId, storyBible]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; action?: string; payload?: Record<string, unknown> };
+      if (!data || typeof data !== "object") return;
+      if (data.type === "PIPELINE_ASSISTANT_READY") {
+        setChatReady(true);
+        postAssistantMessage({ type: "PIPELINE_ASSISTANT_INIT", payload: { context: assistantContext, proactiveMessage } });
+        return;
+      }
+      if (data.type === "PIPELINE_ASSISTANT_ACTION" && typeof data.action === "string") {
+        handleAssistantIframeAction({ type: data.action, payload: data.payload });
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [assistantContext, handleAssistantIframeAction, postAssistantMessage, proactiveMessage]);
+
+  useEffect(() => {
+    if (!chatReady) return;
+    postAssistantMessage({ type: "PIPELINE_ASSISTANT_CONTEXT", payload: { context: assistantContext } });
+  }, [assistantContext, chatReady, postAssistantMessage]);
+
+  useEffect(() => {
+    if (!chatReady) return;
+    postAssistantMessage({ type: "PIPELINE_ASSISTANT_PROACTIVE", payload: { proactiveMessage } });
+  }, [chatReady, proactiveMessage, postAssistantMessage]);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (chatResizeState.current) {
+        const dx = e.clientX - chatResizeState.current.startX;
+        setChatW(Math.max(340, Math.min(760, chatResizeState.current.startW + dx)));
+      }
+      if (chatMoveState.current) {
+        const dx = e.clientX - chatMoveState.current.startX;
+        const dy = e.clientY - chatMoveState.current.startY;
+        setChatPos({ x: Math.max(8, chatMoveState.current.startLeft + dx), y: Math.max(72, chatMoveState.current.startTop + dy) });
+      }
+    };
+    const onUp = () => {
+      chatResizeState.current = null;
+      chatMoveState.current = null;
+      setChatHandleActive(false);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, []);
+
+  const chatPane = (
+    <div style={{
+      position: chatDetached ? "fixed" : "relative",
+      left: chatDetached ? chatPos.x : undefined,
+      top: chatDetached ? chatPos.y : undefined,
+      width: chatDockOpen ? chatW : 40,
+      minWidth: chatDockOpen ? 340 : 40,
+      height: chatDetached ? "calc(100vh - 132px)" : "100%",
+      minHeight: 720,
+      zIndex: chatDetached ? 260 : undefined,
+      boxShadow: chatDetached ? "0 30px 80px rgba(2,8,23,0.55)" : "none",
+      borderRadius: 18,
+      overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.10)",
+      background: "rgba(6,11,24,0.96)",
+      display: "flex",
+      flexDirection: "row",
+    }}>
+      <div
+        onPointerDown={(e) => {
+          if (!chatDetached || !chatDockOpen) return;
+          chatMoveState.current = { startX: e.clientX, startY: e.clientY, startLeft: chatPos.x, startTop: chatPos.y };
+        }}
+        style={{
+          width: chatDockOpen ? undefined : 40,
+          minWidth: chatDockOpen ? undefined : 40,
+          padding: chatDockOpen ? "10px 12px" : "10px 8px",
+          borderRight: chatDockOpen ? "1px solid rgba(255,255,255,0.08)" : "none",
+          background: "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(9,14,26,0.98))",
+          display: "flex",
+          flexDirection: chatDockOpen ? "row" : "column",
+          alignItems: "center",
+          justifyContent: chatDockOpen ? "space-between" : "flex-start",
+          gap: 10,
+          cursor: chatDetached && chatDockOpen ? "grab" : "default",
+          flexShrink: 0,
+        }}
+      >
+        {chatDockOpen ? (
+          <>
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: "0.18em", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Chat Host</div>
+              <div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>STREAMS Chat</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => setChatDetached(v => !v)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>{chatDetached ? "Dock" : "Float"}</button>
+              <button onClick={() => setChatDockOpen(false)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, width: 28, height: 28, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>‹</button>
+            </div>
+          </>
+        ) : (
+          <button onClick={() => setChatDockOpen(true)} title="Open chat" style={{ background: "rgba(45,212,160,0.14)", border: "1px solid rgba(45,212,160,0.28)", color: "#5eead4", borderRadius: 10, width: 24, height: 72, cursor: "pointer", fontSize: 14, fontWeight: 700, writingMode: "vertical-rl" }}>CHAT</button>
+        )}
+      </div>
+      {chatDockOpen && (
+        <>
+          <iframe ref={assistantIframeRef} src="/pipeline/test/assistant-frame" title="STREAMS Chat" style={{ flex: 1, border: "none", display: "block", background: "#050816" }} />
+          <div
+            onPointerDown={(e) => {
+              e.preventDefault();
+              chatResizeState.current = { startX: e.clientX, startW: chatW };
+              setChatHandleActive(true);
+            }}
+            style={{ width: 8, cursor: "col-resize", background: chatHandleActive ? "rgba(34,211,238,0.15)" : "transparent", position: "relative", flexShrink: 0 }}
+          >
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 2, background: chatHandleActive ? "rgba(34,211,238,0.6)" : "rgba(255,255,255,0.08)" }} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   const s = { minHeight: "100vh", background: "#050816", color: "#fff", padding: 20, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
 
   const hardConflicts = conflicts.filter(c=>c.status==="unresolved"&&c.severity==="hard");
@@ -1879,7 +2119,9 @@ Accept only if:
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `${leftOpen ? "clamp(220px,18vw,300px)" : "48px"} ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `${chatDetached ? "0px" : (chatDockOpen ? `${chatW}px` : "40px")} ${leftOpen ? "clamp(220px,18vw,300px)" : "48px"} ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
+
+            {!isEmbed && !chatDetached && chatPane}
 
             {/* Left column: Creative Setup + Pipeline Steps */}
             {!isEmbed && <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
@@ -3134,105 +3376,8 @@ Accept only if:
 
         </div>
       </div>
-      {/* ── AI Assistant — full featured with sidebar, history, search, voice ── */}
-      <AIAssistant
-        context={{
-          type: "pipeline",
-          prompt: stepPrompts[selectedStepId] ?? "",
-          settings: { niche: nicheId, concept: selectedConceptId },
-          nicheId,
-          currentStepId: selectedStepId,
-          selectedConceptId,
-          stepStates: Object.fromEntries(steps.map(s => [s.id, s.state])),
-          intakeAnalysis: intakeAnalysis ?? undefined,
-          conceptErrors: Object.fromEntries(
-            Object.entries(conceptOutputs).map(([id, o]) => [id, o.error ?? null])
-          ),
-          conceptStatuses: Object.fromEntries(
-            Object.entries(conceptOutputs).map(([id, o]) => [id, o.status])
-          ),
-          hasFailedConcepts: Object.values(conceptOutputs).some(o => o.status === "failed"),
-          imageProvider,
-          // ── Previously invisible state — now fully visible to assistant ──
-          allStepPrompts: stepPrompts,
-          conceptOutputs: Object.fromEntries(
-            Object.entries(conceptOutputs).map(([id, o]) => [id, {
-              image: o.image, video: o.video, status: o.status, error: o.error,
-            }])
-          ),
-          approvedOutputs,
-          pipelineRunning,
-          pipelineLog: pipelineLog.slice(-10),
-          generationQueueSummary: {
-            pending: [...generationQueue.values()].filter(i => i.status === "pending").length,
-            processing: [...generationQueue.values()].filter(i => i.status === "processing").length,
-            completed: [...generationQueue.values()].filter(i => i.status === "completed").length,
-            failed: [...generationQueue.values()].filter(i => i.status === "failed").length,
-          },
-          conceptNames: Object.fromEntries(concepts.map((cv, i) => [`c${i + 1}`, cv.headline ?? `Concept ${i + 1}`])),
-          conceptCount: concepts.length,
-          workspaceTab,
-          viewMode,
-          deviceFrame,
-          editorOpen: epOpen,
-          previewTabs,
-          intakeResult: intakeResult ? {
-            type: intakeResult.type,
-            title: intakeResult.title,
-            brandName: intakeResult.brandName,
-            colorPalette: intakeResult.colorPalette,
-            keyMessages: intakeResult.keyMessages,
-            layoutPattern: intakeResult.layoutPattern,
-            targetAudience: intakeResult.targetAudience,
-            toneOfVoice: intakeResult.toneOfVoice,
-            suggestedCopy: intakeResult.suggestedCopy,
-          } : undefined,
-          liveEventsSummary: liveEvents.slice(-3).map(e => e.message ?? e.stepName ?? '').filter(Boolean).join(' → ') || undefined,
-          strategyOutput: stepPrompts.strategy,
-          copyOutput: stepPrompts.copy,
-        }}
-        onApplyPrompt={(prompt) => setStepPrompts(p => ({ ...p, [selectedStepId]: prompt }))}
-        onUpdateSettings={(key, value) => {
-          if (key === "nicheId") setNicheId(value);
-          if (key === "imageProvider") setImageProvider(value as "openai" | "fal");
-          if (key === "pipelineMode") setPipelineMode(value as "manual" | "auto");
-        }}
-        onGenerateImage={(conceptId, prompt) => {
-          if (prompt) setStepPrompts(p => ({ ...p, imagery: prompt }));
-          void generateImage(conceptId ?? selectedConceptId, prompt);
-        }}
-        onGenerateVideo={(conceptId, prompt) => {
-          if (prompt) setStepPrompts(p => ({ ...p, i2v: prompt }));
-          // Client-side Story Bible gate — redirect to build if missing
-          if (!storyBible) {
-            log("⚠ Story Bible required before video. Building now...");
-            void buildStoryBibleRecord().then(() => void generateVideo(conceptId ?? selectedConceptId));
-            return;
-          }
-          void generateVideo(conceptId ?? selectedConceptId);
-        }}
-        onGenerateSong={(prompt) => { void generateSongFromVoice(prompt); }}
-        onBuildStoryBible={(storyTextFromAssistant) => {
-          if (storyTextFromAssistant) setStoryText(storyTextFromAssistant);
-          void buildStoryBibleRecord();
-        }}
-        onRunPipeline={() => void runPipeline()}
-        onRunStep={(stepId) => {
-          setSelectedStepId(stepId);
-          setStepConfigOpen(true);
-        }}
-        onSelectConcept={(conceptId) => setSelectedConceptId(conceptId)}
-        onApproveOutput={(type, url) => approveOutput(type as "image" | "video" | "script", url)}
-        onOpenStepConfig={(stepId) => { setSelectedStepId(stepId); setStepConfigOpen(true); }}
-        onSetNiche={(nicheId) => setNicheId(nicheId)}
-        onUpdateImagePrompt={(v) => setStepPrompts(p => ({ ...p, imagery: v }))}
-        onUpdateVideoPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
-        onUpdateStrategyPrompt={(v) => setStepPrompts(p => ({ ...p, strategy: v }))}
-        onUpdateCopyPrompt={(v) => setStepPrompts(p => ({ ...p, copy: v }))}
-        onUpdateI2VPrompt={(v) => setStepPrompts(p => ({ ...p, i2v: v }))}
-        onUpdateQAInstruction={(v) => setStepPrompts(p => ({ ...p, qa: v }))}
-        proactiveMessage={proactiveMessage}
-      />
+      {chatDetached && chatPane}
+
       {/* ── Batch Preview Modal ─────────────────────────────────────── */}
       <BatchPreviewModal
         open={batchModalOpen}
