@@ -19,6 +19,7 @@ export function buildQaOrchestration(input: {
   structuralScore?: StructuralScore;
   motionPlan?: MotionPlan;
   hasStoryBible: boolean;
+  semanticQaChecks?: Array<{ label: string; expected: string; rejectOnMismatch: boolean }>;
 }): QaOrchestrationResult {
   const passes: QaPass[] = [];
   const reasons: string[] = [];
@@ -37,6 +38,13 @@ export function buildQaOrchestration(input: {
       const safeMotion = input.motionPlan.complexity === "minimal" || input.motionPlan.complexity === "low";
       passes.push({ label: "Motion safety", passed: safeMotion, note: `Motion complexity: ${input.motionPlan.complexity}` });
       if (!safeMotion) reasons.push("Motion complexity is higher than ideal for realism-first generation.");
+    }
+  }
+
+  if (input.semanticQaChecks?.length) {
+    for (const check of input.semanticQaChecks) {
+      passes.push({ label: check.label, passed: false, note: `Pending output review against expected ${check.expected}.` });
+      if (check.rejectOnMismatch) reasons.push(`${check.label} must match ${check.expected}.`);
     }
   }
 

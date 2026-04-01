@@ -164,7 +164,6 @@ function sysPrompt(ctx: FullContext, mem: string): string {
     ctx.steps?.length?`Steps: ${ctx.steps.map(s=>`${s.name}(${s.state})`).join(", ")}`:"",
     ctx.imageProvider?`Image provider: ${ctx.imageProvider}`:"",
     ctx.imagePrompt?`Image prompt: ${ctx.imagePrompt.slice(0,200)}`:"",
-    ctx.conceptOutputs?`Concepts: ${JSON.stringify(ctx.conceptOutputs).slice(0,400)}`:"",
     ctx.approvedOutputs?`Approved: ${JSON.stringify(ctx.approvedOutputs)}`:"",
     ctx.csFields?`Creative Setup: ${JSON.stringify(ctx.csFields).slice(0,300)}`:"",
     ctx.csRealism?`Realism: ${ctx.csRealism.mode}`:"",

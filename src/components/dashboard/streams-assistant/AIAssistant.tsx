@@ -219,9 +219,12 @@ export default function AIAssistant({
     const allMessages = [...messages, userMsg];
 
     try {
+      const controller = new AbortController();
+      const forceTimeout = window.setTimeout(() => controller.abort(), 15000);
       const response = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: allMessages,
           context: { ...context, provider, extraKeys },
@@ -229,11 +232,14 @@ export default function AIAssistant({
         }),
       });
 
+      window.clearTimeout(forceTimeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let actionFired = false;
+      const generationIntent = /generate|create|make|show/.test(text.toLowerCase()) && /image|photo|picture|video|clip|song|music|audio/.test(text.toLowerCase());
       const activeToolCards: ToolCallCard[] = [];
 
       if (reader) {
@@ -253,6 +259,9 @@ export default function AIAssistant({
               if (ev.type === "text" && ev.delta) {
                 fullText += ev.delta;
                 setStreamingText(fullText);
+              } else if (ev.type === "action" && ev.action) {
+                actionFired = true;
+                performAction(ev.action);
               } else if (ev.type === "tool_call" && ev.tool) {
                 activeToolCards.push({ id: ev.id ?? ev.tool, tool: ev.tool, input: ev.input ?? {} });
                 setToolCards([...activeToolCards]);
@@ -274,6 +283,12 @@ export default function AIAssistant({
         }
       }
 
+      if (!actionFired && generationIntent) {
+        const lower = text.toLowerCase();
+        if (/video|clip|animation|scene/.test(lower)) performAction({ type: "generate_video", payload: { prompt: text } });
+        else if (/song|music|audio|voice/.test(lower)) performAction({ type: "generate_song", payload: { prompt: text } } as any);
+        else performAction({ type: "generate_image", payload: { prompt: text, provider: "openai" } });
+      }
       const imgUrlMatch = fullText.match(/https?:\/\/\S+\.(png|jpg|jpeg|webp|gif)/i);
       const vidUrlMatch = fullText.match(/https?:\/\/\S+\.(mp4|webm|mov)/i);
       setMessages((prev) => [
@@ -281,7 +296,7 @@ export default function AIAssistant({
         {
           role: "assistant",
           content: [
-            { type: "text", text: fullText || "(no response)" },
+            { type: "text", text: generationIntent && (/let's create|the image generation logic comes|the process involves|private care/i.test(fullText) || !fullText.trim()) ? (/video|clip/.test(text.toLowerCase()) ? "Video generation started." : /song|music|audio|voice/.test(text.toLowerCase()) ? "Song generation started." : "Image generation started.") : (fullText || "(no response)") },
             ...(imgUrlMatch ? [{ type: "image_url" as const, image_url: { url: imgUrlMatch[0] } }] : []),
             ...(vidUrlMatch ? [{ type: "video_url" as const, image_url: { url: vidUrlMatch[0] } }] : []),
           ] as MsgContent[],

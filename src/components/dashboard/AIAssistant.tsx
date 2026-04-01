@@ -309,6 +309,8 @@ export default function AIAssistant(props: AIAssistantProps) {
     ActivityController.responseStarted();
 
     try {
+      const forceTimeout = window.setTimeout(() => controller.abort(), 15000);
+      const generationIntent = /generate|create|make|show/.test(message.toLowerCase()) && /image|photo|picture|video|clip|song|music|audio/.test(message.toLowerCase());
       const res = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -317,6 +319,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         body: JSON.stringify({ messages: nextMessages, context: { ...props.context, conversationId }, requestContext, conversationId, model }),
       });
 
+      window.clearTimeout(forceTimeout);
       if (!res.ok || !res.body) {
         throw new Error(await res.text().catch(() => 'Assistant failed'));
       }
@@ -386,7 +389,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       // ── Client-side intent fallback ───────────────────────────────────────
       // If action mode was expected but no action event arrived from server,
       // detect intent from the raw user message and force-trigger the action.
-      if (!actionFired && mode === 'action') {
+      if (!actionFired && (mode === 'action' || generationIntent)) {
         const lower = message.toLowerCase();
         const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
         const isVideo = /video|clip|footage|animate/.test(lower);
@@ -407,6 +410,8 @@ export default function AIAssistant(props: AIAssistantProps) {
       // After an action fires, replace conversational text with a short status
       // so the user knows execution happened, not just a description.
       let displayText = fullText || 'Request completed.';
+      const looksExplanatory = /let's create|the image generation logic comes|the process involves|guided the ai|you can view through|private care/i.test(fullText);
+      if (generationIntent && (looksExplanatory || !actionFired)) displayText = /video|clip/.test(message.toLowerCase()) ? 'Video generation started.' : /song|music|audio/.test(message.toLowerCase()) ? 'Song generation started.' : 'Image generation started.';
       if (actionFired && mode === 'action') {
         const lower = message.toLowerCase();
         if (/generate_image|image|photo|picture/.test(lower)) displayText = fullText || 'Image generation started.';

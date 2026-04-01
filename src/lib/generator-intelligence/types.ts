@@ -92,6 +92,20 @@ export interface IdentityLockPlan {
   rules: string[];
 }
 
+export interface SemanticIntent {
+  requestedSubjects: string[];
+  requestedEnvironment: string[];
+  requestedObjects: string[];
+  requestedGender: "man" | "woman" | "boy" | "girl" | "person" | "unknown";
+  requestedDevice: "phone" | "cell phone" | "smartphone" | "unknown";
+}
+
+export interface SemanticQaCheck {
+  label: string;
+  expected: string;
+  rejectOnMismatch: boolean;
+}
+
 export interface QaPass {
   label: string;
   passed: boolean;
@@ -125,6 +139,8 @@ export interface CompiledGenerationRequest {
   continuityPlan?: ContinuityPlan;
   identityLockPlan?: IdentityLockPlan;
   qaOrchestration?: QaOrchestrationResult;
+  semanticIntent?: SemanticIntent;
+  semanticQaChecks?: SemanticQaCheck[];
 }
 
 export interface CompilerInput {

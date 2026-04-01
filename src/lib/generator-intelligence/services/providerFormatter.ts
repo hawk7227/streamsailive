@@ -45,6 +45,8 @@ function buildImagePrompt(input: {
     input.compiled.continuityPlan?.continuityRequired ? `Continuity lock: ${input.compiled.continuityPlan.environmentLock.join(", ")}.` : null,
     input.compiled.structuralScore ? `Structural target: face ${input.compiled.structuralScore.faceIntegrity}/100, body ${input.compiled.structuralScore.bodyIntegrity}/100, background ${input.compiled.structuralScore.backgroundIntegrity}/100.` : null,
     `Provider tuning for ${input.profile.label}: keep wording grounded, direct, and visual without ad-polished framing.`,
+    input.compiled.semanticIntent?.requestedGender !== "unknown" ? `Semantic lock: the visible primary subject must be a ${input.compiled.semanticIntent?.requestedGender}. Do not swap gender or subject.` : null,
+    input.compiled.semanticIntent?.requestedDevice !== "unknown" ? `Semantic lock: include a clearly visible ${input.compiled.semanticIntent?.requestedDevice}; do not substitute a different focal object.` : null,
     `Anatomy rule: preserve facial structure, hands, and body proportions with no hallucinated props or fake text.`,
   ]);
 }
@@ -76,7 +78,8 @@ function buildVideoPrompt(input: {
     `Must include: ${input.realismPolicy.mustInclude.join("; ")}.`,
     `Must avoid: ${input.realismPolicy.mustAvoid.join("; ")}.`,
     `Provider tuning for ${input.profile.label}: keep motion controlled, coherent, and physically plausible.`,
-    `Hard reject: blob faces, missing fingers, extra limbs, rubber motion, identity drift, floating props, or background warping.`,
+    input.compiled.semanticIntent?.requestedGender !== "unknown" ? `Semantic lock: preserve the requested subject as ${input.compiled.semanticIntent?.requestedGender}.` : null,
+    `Hard reject: blob faces, missing fingers, extra limbs, rubber motion, identity drift, floating props, background warping, or subject substitution.`,
     input.compiled.qaOrchestration?.shouldAutoReview ? `Automatic review required after render.` : null,
   ]);
 }

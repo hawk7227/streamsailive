@@ -202,6 +202,7 @@ export async function POST(request: Request) {
       }
 
       // Phase 4: Model call — emit understanding phase BEFORE the blocking fetch
+      const requestLooksLikeDirectGeneration = /generate|create|make|show/.test(userText.toLowerCase()) && /image|photo|picture|video|clip|song|music|audio/.test(userText.toLowerCase());
       emit(controller, { type: 'phase', phase: 'understanding_request', label: 'Understanding your request...' });
 
       // Resolve model: explicit clientModel wins, then provider default, then gpt-4o
@@ -234,7 +235,8 @@ export async function POST(request: Request) {
           // If LLM returned empty actions despite action mode being triggered,
           // detect intent from raw text and inject the correct action.
           let actions = finalResponse.actions;
-          if (actions.length === 0) {
+          const looksExplanatory = /let's create|the image generation logic comes|the process involves|private care/i.test(finalResponse.message);
+          if (actions.length === 0 || (requestLooksLikeDirectGeneration && looksExplanatory)) {
             const lower = requestText.toLowerCase();
             const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
             const isVideo = /video|clip|footage|animate/.test(lower);

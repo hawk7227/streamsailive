@@ -9,6 +9,7 @@ import { buildRepairPlan } from "./services/repairLoop";
 import { buildContinuityPlan } from "./services/continuityEngine";
 import { buildIdentityLockPlan } from "./services/identityLock";
 import { buildQaOrchestration } from "./services/qaOrchestrator";
+import { analyzeSemanticIntent, buildSemanticQaChecks } from "./services/semanticIntent";
 
 const GLOBAL_REALISM_RULES = [
   "ordinary believable people, not models",
@@ -33,6 +34,8 @@ export function compileGenerationRequest(input: CompilerInput): CompiledGenerati
   const rawPrompt = compact(input.prompt);
   const storyBible = compact(input.storyBible);
   const referenceSummary = compact(input.referenceSummary);
+  const semanticIntent = analyzeSemanticIntent(rawPrompt);
+  const semanticQaChecks = buildSemanticQaChecks(semanticIntent);
 
   const referenceAnalysis = analyzeReferenceSummary({
     referenceSummary,
@@ -68,6 +71,7 @@ export function compileGenerationRequest(input: CompilerInput): CompiledGenerati
     structuralScore,
     motionPlan,
     hasStoryBible: Boolean(storyBible),
+    semanticQaChecks,
   });
 
   const warnings = [
@@ -96,6 +100,8 @@ export function compileGenerationRequest(input: CompilerInput): CompiledGenerati
     continuityPlan,
     identityLockPlan,
     qaOrchestration,
+    semanticIntent,
+    semanticQaChecks,
   };
 
   const formatted = formatCompiledPrompt({
@@ -114,6 +120,7 @@ export function compileGenerationRequest(input: CompilerInput): CompiledGenerati
       ...(repairPlan ? [`Repair strategy: ${repairPlan.strategy}`] : []),
       ...(continuityPlan.continuityRequired ? [`Continuity lock: ${continuityPlan.identityLockStrength}`] : []),
       ...(qaOrchestration.shouldAutoReview ? ["Automatic QA review is required after generation."] : []),
+      ...(semanticQaChecks.length ? ["Semantic QA checks: " + semanticQaChecks.map((c) => `${c.label}=${c.expected}`).join(", ")] : []),
     ],
     warnings: [...new Set(warnings)],
   };

@@ -161,7 +161,7 @@ Accept only if:
 - UI feels naturally embedded
 - Would look like a real unposed moment — not advertising, not staged`,
 
-    imagery: `a woman in her early 30s sitting on a couch in her living room, casually holding her smartphone and reading something on the screen`,
+    imagery: `Generate one realism-first still image that matches the user's exact request with no subject substitution, no concept leakage, and no staged stock-photo look.`,
 
     i2v:    "Slow gentle push-in. Natural blink. Soft parallax on background elements. No movement on face. 5 seconds max.",
     assets: "Organise all outputs into a structured asset library.",
@@ -793,14 +793,9 @@ Accept only if:
   }
 
   // ── Generate image for concept ────────────────────────────────────────────
-  async function generateImage(conceptId: string) {
-    const subjectActions: Record<string, string> = {
-      c1: "a Black woman in her early 30s with natural hair, sitting on a couch at home, casually holding her phone and reading something on the screen",
-      c2: "a Latina woman in her mid 30s sitting on her bed near a window, looking down at her phone, morning light from the side",
-      c3: "a woman in her late 20s sitting at a kitchen table, holding her phone with both hands and looking at the screen, relaxed everyday moment",
-    };
-    const subjectAction = subjectActions[conceptId] ?? stepPrompts.imagery;
-    const prompt = subjectAction;
+  async function generateImage(conceptId: string, overridePrompt?: string) {
+    const prompt = (overridePrompt && overridePrompt.trim()) || stepPrompts.imagery;
+    const subjectAction = prompt;
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
     log(`Generating image with DALL-E for ${conceptId}...`);
     emit({ type: "decision", stepId: "imagery", stepName: "Imagery Generation", message: `Compiling realism-first still for ${conceptId}.` });
@@ -3195,7 +3190,7 @@ Accept only if:
         }}
         onGenerateImage={(conceptId, prompt) => {
           if (prompt) setStepPrompts(p => ({ ...p, imagery: prompt }));
-          void generateImage(conceptId ?? selectedConceptId);
+          void generateImage(conceptId ?? selectedConceptId, prompt);
         }}
         onGenerateVideo={(conceptId, prompt) => {
           if (prompt) setStepPrompts(p => ({ ...p, i2v: prompt }));
