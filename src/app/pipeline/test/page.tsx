@@ -403,16 +403,14 @@ Accept only if:
   // Proactive assistant messages — injected when generation completes
   const [proactiveMessage, setProactiveMessage] = useState<ProactiveMessage | null>(null);
 
-  // ── Left chat iframe host ───────────────────────────────────────────────
+  // ── Left chat iframe host (mirrors EditorPro drag pattern exactly) ────────
   const assistantIframeRef = useRef<HTMLIFrameElement>(null);
-  const [chatDockOpen, setChatDockOpen] = useState(true);
-  const [chatDetached, setChatDetached] = useState(false);
+  const [chatOpen, setChatOpen] = React.useState(true);
+  const [chatW, setChatW] = React.useState(300);
+  const [chatDragging, setChatDragging] = React.useState(false);
+  const [chatHandleActive, setChatHandleActive] = React.useState(false);
   const [chatReady, setChatReady] = useState(false);
-  const [chatW, setChatW] = useState(420);
-  const [chatHandleActive, setChatHandleActive] = useState(false);
-  const [chatPos, setChatPos] = useState({ x: 24, y: 110 });
-  const chatResizeState = useRef<{ startX: number; startW: number } | null>(null);
-  const chatMoveState = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
+  const chatDragState = React.useRef<{ startX: number; startW: number } | null>(null);
 
   const assistantContext = useMemo(() => ({
     type: "pipeline",
@@ -1755,100 +1753,98 @@ Accept only if:
     postAssistantMessage({ type: "PIPELINE_ASSISTANT_PROACTIVE", payload: { proactiveMessage } });
   }, [chatReady, proactiveMessage, postAssistantMessage]);
 
-  useEffect(() => {
+  // ── Chat drag (exact mirror of EditorPro drag) ──────────────────────────
+  React.useEffect(() => {
     const onMove = (e: PointerEvent) => {
-      if (chatResizeState.current) {
-        const dx = e.clientX - chatResizeState.current.startX;
-        setChatW(Math.max(340, Math.min(760, chatResizeState.current.startW + dx)));
-      }
-      if (chatMoveState.current) {
-        const dx = e.clientX - chatMoveState.current.startX;
-        const dy = e.clientY - chatMoveState.current.startY;
-        setChatPos({ x: Math.max(8, chatMoveState.current.startLeft + dx), y: Math.max(72, chatMoveState.current.startTop + dy) });
-      }
+      if (!chatDragState.current) return;
+      e.preventDefault();
+      const dx = e.clientX - chatDragState.current.startX; // drag right = grow
+      const maxW = typeof window !== "undefined" ? window.innerWidth - 400 : 1200;
+      setChatW(Math.min(maxW, Math.max(260, chatDragState.current.startW + dx)));
     };
     const onUp = () => {
-      chatResizeState.current = null;
-      chatMoveState.current = null;
+      chatDragState.current = null;
+      setChatDragging(false);
       setChatHandleActive(false);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, []);
 
+  // chatPane is now an absolute overlay from the LEFT — mirrors EditorPro from the right.
+  // Rendered inside the Production Workspace (position:relative) div.
+  // Does NOT occupy a grid column — workspace fills full width underneath.
   const chatPane = (
-    <div style={{
-      position: chatDetached ? "fixed" : "relative",
-      left: chatDetached ? chatPos.x : undefined,
-      top: chatDetached ? chatPos.y : undefined,
-      width: chatDockOpen ? chatW : 40,
-      minWidth: chatDockOpen ? 340 : 40,
-      height: chatDetached ? "calc(100vh - 132px)" : "100%",
-      minHeight: 720,
-      zIndex: chatDetached ? 260 : undefined,
-      boxShadow: chatDetached ? "0 30px 80px rgba(2,8,23,0.55)" : "none",
-      borderRadius: 18,
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.10)",
-      background: "rgba(6,11,24,0.96)",
-      display: "flex",
-      flexDirection: "row",
-    }}>
-      <div
-        onPointerDown={(e) => {
-          if (!chatDetached || !chatDockOpen) return;
-          chatMoveState.current = { startX: e.clientX, startY: e.clientY, startLeft: chatPos.x, startTop: chatPos.y };
-        }}
+    <>
+      {/* Cursor overlay during drag — prevents iframe from stealing pointer */}
+      {chatDragging && <div style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: "col-resize" }} />}
+
+      {/* Chat panel — absolute left overlay */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, bottom: 0,
+        width: chatOpen ? chatW : 0,
+        overflow: "hidden",
+        zIndex: 200,
+        transition: chatDragging ? "none" : "width 200ms cubic-bezier(.4,0,.2,1)",
+        background: "#06080f",
+        borderRight: "1px solid rgba(255,255,255,0.1)",
+        display: "flex",
+        flexDirection: "row",
+      }}>
+        {/* iframe fills the panel — no header bar, AIAssistant has its own */}
+        <iframe
+          ref={assistantIframeRef}
+          src="/pipeline/test/assistant-frame"
+          title="STREAMS Chat"
+          style={{ flex: 1, border: "none", display: "block", background: "#050816", minWidth: 0 }}
+        />
+        {/* Drag handle — right edge, exact copy of EditorPro handle */}
+        <div
+          onPointerDown={(e) => {
+            e.preventDefault();
+            chatDragState.current = { startX: e.clientX, startW: chatW };
+            setChatDragging(true);
+            setChatHandleActive(true);
+          }}
+          style={{ width: 8, cursor: "col-resize", background: chatHandleActive ? "rgba(34,211,238,0.18)" : "transparent", position: "relative", flexShrink: 0 }}
+        >
+          <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 2, background: chatHandleActive ? "rgba(34,211,238,0.65)" : "rgba(255,255,255,0.08)" }} />
+        </div>
+      </div>
+
+      {/* Toggle tab — moves with the panel edge, mirrors EditorPro tab */}
+      <button
+        onClick={() => setChatOpen(v => !v)}
         style={{
-          width: chatDockOpen ? undefined : 40,
-          minWidth: chatDockOpen ? undefined : 40,
-          padding: chatDockOpen ? "10px 12px" : "10px 8px",
-          borderRight: chatDockOpen ? "1px solid rgba(255,255,255,0.08)" : "none",
-          background: "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(9,14,26,0.98))",
-          display: "flex",
-          flexDirection: chatDockOpen ? "row" : "column",
-          alignItems: "center",
-          justifyContent: chatDockOpen ? "space-between" : "flex-start",
-          gap: 10,
-          cursor: chatDetached && chatDockOpen ? "grab" : "default",
+          position: "absolute", top: "50%", left: chatOpen ? chatW : 0,
+          transform: "translateY(-50%)",
+          zIndex: 201,
+          width: 28, height: 96,
+          background: "linear-gradient(180deg, rgba(34,211,238,0.25), rgba(34,211,238,0.1))",
+          border: "1px solid rgba(34,211,238,0.4)",
+          borderLeft: "none",
+          borderRadius: "0 8px 8px 0",
+          color: "#22d3ee",
+          cursor: "pointer",
+          fontSize: 10,
+          fontWeight: 700,
+          writingMode: "vertical-rl",
+          letterSpacing: "0.1em",
+          transition: chatDragging ? "none" : "left 200ms cubic-bezier(.4,0,.2,1)",
+          display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0,
+          boxShadow: "2px 0 12px rgba(34,211,238,0.15)",
         }}
       >
-        {chatDockOpen ? (
-          <>
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: "0.18em", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Chat Host</div>
-              <div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>STREAMS Chat</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button onClick={() => setChatDetached(v => !v)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>{chatDetached ? "Dock" : "Float"}</button>
-              <button onClick={() => setChatDockOpen(false)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#cbd5e1", borderRadius: 10, width: 28, height: 28, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>‹</button>
-            </div>
-          </>
-        ) : (
-          <button onClick={() => setChatDockOpen(true)} title="Open chat" style={{ background: "rgba(45,212,160,0.14)", border: "1px solid rgba(45,212,160,0.28)", color: "#5eead4", borderRadius: 10, width: 24, height: 72, cursor: "pointer", fontSize: 14, fontWeight: 700, writingMode: "vertical-rl" }}>CHAT</button>
-        )}
-      </div>
-      {chatDockOpen && (
-        <>
-          <iframe ref={assistantIframeRef} src="/pipeline/test/assistant-frame" title="STREAMS Chat" style={{ flex: 1, border: "none", display: "block", background: "#050816" }} />
-          <div
-            onPointerDown={(e) => {
-              e.preventDefault();
-              chatResizeState.current = { startX: e.clientX, startW: chatW };
-              setChatHandleActive(true);
-            }}
-            style={{ width: 8, cursor: "col-resize", background: chatHandleActive ? "rgba(34,211,238,0.15)" : "transparent", position: "relative", flexShrink: 0 }}
-          >
-            <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 2, background: chatHandleActive ? "rgba(34,211,238,0.6)" : "rgba(255,255,255,0.08)" }} />
-          </div>
-        </>
-      )}
-    </div>
+        {chatOpen ? "‹ CHAT" : "CHAT ›"}
+      </button>
+    </>
   );
 
   const s = { minHeight: "100vh", background: "#050816", color: "#fff", padding: 20, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
@@ -2119,9 +2115,7 @@ Accept only if:
 
 
           {/* ── ROW 2: Step Builder | Step Config Rail | Production Workspace */}
-          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `${chatDetached ? "0px" : (chatDockOpen ? `${chatW}px` : "40px")} ${leftOpen ? "clamp(220px,18vw,300px)" : "48px"} ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
-
-            {!isEmbed && !chatDetached && chatPane}
+          <div style={{ display: "grid", gridTemplateColumns: isEmbed ? `${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)` : `${leftOpen ? "clamp(220px,18vw,300px)" : "48px"} ${stepConfigOpen ? "320px" : "48px"} minmax(0,1fr)`, gap: 14, marginBottom: 14, transition: "grid-template-columns 200ms ease", minHeight: 720, alignItems: "stretch" }}>
 
             {/* Left column: Creative Setup + Pipeline Steps */}
             {!isEmbed && <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", maxHeight: "calc(100vh - 120px)" }}>
@@ -2519,6 +2513,8 @@ Accept only if:
 
             {/* Production Workspace */}
             <div style={P({ display: "flex", flexDirection: "column", height: "100%", position: "relative" })}>
+              {/* Chat overlay — absolute left, same pattern as EditorPro on right */}
+              {!isEmbed && chatPane}
               {/* EditorPro drag cursor overlay */}
               {epDragging && <div style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: "col-resize" }} />}
               {/* EditorPro slide-out panel */}
@@ -3376,7 +3372,6 @@ Accept only if:
 
         </div>
       </div>
-      {chatDetached && chatPane}
 
       {/* ── Batch Preview Modal ─────────────────────────────────────── */}
       <BatchPreviewModal
