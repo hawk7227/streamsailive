@@ -1,7 +1,25 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const CONFIG_PATH = path.join(process.cwd(), 'site-config.json');
+const SOURCE_CONFIG_PATH = path.join(process.cwd(), 'site-config.json');
+const ACTIVE_CONFIG_PATH = path.join(os.tmpdir(), 'site-config.json');
+
+// Ensure temp config exists - copy from source if needed
+function ensureTempConfig(): void {
+    try {
+        if (!fs.existsSync(ACTIVE_CONFIG_PATH) && fs.existsSync(SOURCE_CONFIG_PATH)) {
+            const content = fs.readFileSync(SOURCE_CONFIG_PATH, 'utf-8');
+            fs.writeFileSync(ACTIVE_CONFIG_PATH, content);
+            console.log(`Copied site-config.json to ${ACTIVE_CONFIG_PATH}`);
+        }
+    } catch (error) {
+        console.error('Error copying config to temp:', error);
+    }
+}
+
+// Initialize on module load
+ensureTempConfig();
 
 export interface SiteConfig {
     appName: string;
@@ -44,14 +62,26 @@ const DEFAULT_CONFIG: SiteConfig = {
 };
 
 export const getSiteConfig = (): SiteConfig => {
+    // Always ensure temp config is initialized
+    ensureTempConfig();
+    
     let fileConfig: Partial<SiteConfig> = {};
     try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
+        if (fs.existsSync(ACTIVE_CONFIG_PATH)) {
+            const fileContent = fs.readFileSync(ACTIVE_CONFIG_PATH, 'utf-8');
             fileConfig = JSON.parse(fileContent);
         }
     } catch (error) {
-        console.error('Error reading site config:', error);
+        console.error('Error reading temp site config:', error);
+        // Fallback to source if temp read fails
+        try {
+            if (fs.existsSync(SOURCE_CONFIG_PATH)) {
+                const fileContent = fs.readFileSync(SOURCE_CONFIG_PATH, 'utf-8');
+                fileConfig = JSON.parse(fileContent);
+            }
+        } catch (fallbackError) {
+            console.error('Error reading source site config:', fallbackError);
+        }
     }
 
     // Allow env vars to override provider routing so production works
@@ -71,11 +101,12 @@ export const updateSiteConfig = (newConfig: Partial<SiteConfig>): SiteConfig => 
     const currentConfig = getSiteConfig();
     const updatedConfig = { ...currentConfig, ...newConfig };
 
+    // Always write to the temp location
     try {
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
+        fs.writeFileSync(ACTIVE_CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
         return updatedConfig;
     } catch (error) {
-        console.error('Error writing site config:', error);
+        console.error('Error writing site config to temp:', error);
         throw new Error('Failed to update site configuration');
     }
 };

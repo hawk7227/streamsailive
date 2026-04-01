@@ -4,6 +4,7 @@
   "themeColor": "#a855f7",
   "scriptWriterPrompt": "You are a professional script writer. Generate engaging content based on the user prompt.",
   "copilotSystemPrompt": "You are an expert full-stack developer. You help the user build web applications. If asked to generate code, provide it in code blocks. If asked to create a landing page or UI, provide the full HTML/Tailwind code.",
+  "copilotModel": "gpt-4o",
   "marketingCopywriterPrompt": "You are a professional marketing copywriter. Generate engaging, concise, and effective marketing content based on the user's requirements. Do not include any explanations or additional text - only provide the requested content.",
   "copilotAssistantPrompt": "You are a helpful AI assistant for a {{type}} generation platform.\r\nContext:\r\n- Current Page/Type: {{type}}\r\n- User's Current Prompt: \"{{prompt}}\"\r\n- Active Settings: {{settings}}\r\n\r\nYour goal is to help the user create better content.\r\nYou have access to tools to DIRECTLY update the user's prompt or settings.\r\n- If the user asks to \"make it 16:9\" or \"change to square\", use the 'update_settings' tool.\r\n- If the user asks to \"rewrite this prompt\" or you suggest a better prompt and they agree, use the 'update_prompt' tool.\r\n- Always provide a polite text response along with the tool call explanation.\r\n\r\nBe concise, friendly, and directly helpful.",
   "aiProviders": {
@@ -15,7 +16,7 @@
   },
   "elevenlabsVoiceId": "jqcCZkN6Knx8BJ5TBdYR",
   "apiKeys": {
-    "OPENAI_API_KEY": "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",
+    "OPENAI_API_KEY": "ddd",
     "OPENAI_API_KEY_IMAGES": "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",
     "OPENAI_API_KEY_SORA": "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",
     "OPENAI_API_KEY_VOICE": "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",
