@@ -882,8 +882,10 @@ Accept only if:
         pushMediaShelfItem({ id: `vid-${conceptId}-${gen.output_url}`, title: `${conceptId.toUpperCase()} Video`, type: "video", url: gen.output_url, subtitle: concept?.headline, status: "completed" });
         log(`✓ Video ready: ${gen.id.slice(0, 8)}`);
       } else if (gen.status === "failed") {
-        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed" } }));
-        log(`✗ Video failed (server): ${gen.id.slice(0, 8)}`);
+        const failErr = data.error ?? "Video generation failed — check provider credentials";
+        setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: failErr } }));
+        log(`✗ Video failed: ${failErr}`);
+        emit({ type: "error", stepId: "i2v", stepName: "Video Generation", message: failErr });
       } else {
         queueAdd({ id: gen.id, type: "video", status: "pending", provider: "kling", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.20, error: null });
         log(`Video queued: ${gen.id.slice(0, 8)} — polling...`);
@@ -3022,6 +3024,13 @@ Accept only if:
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
                           <Spinner size={20} />
                           <span style={{ fontSize: 11 }}>Video processing...</span>
+                        </div>
+                      ) : out?.status === "failed" ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 8px" }}>
+                          <span style={{ fontSize: 18 }}>⚠️</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171" }}>Video Failed</span>
+                          <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", lineHeight: 1.5, wordBreak: "break-word", maxWidth: "100%" }}>{out.error ?? "Generation failed — check provider credentials (KLING_API_KEY)"}</span>
+                          <button onClick={() => gatedGeneration(()=>generateVideo(cid))} style={{ marginTop: 4, fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
                         </div>
                       ) : (
                         <div style={{ color: "#334155", fontSize: 12, textAlign: "center" }}>No video yet</div>
