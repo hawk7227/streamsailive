@@ -3,20 +3,25 @@ import type { GeneratorMedium, RealismPolicy } from "../types";
 export function buildRealismPolicy(medium: GeneratorMedium): RealismPolicy {
   if (medium === "image") {
     return {
-      headline: "ordinary real-life photography only",
+      headline: "ordinary real-life photography — exact subject, no substitution",
       mustInclude: [
+        "the exact subject specified in the prompt — no substitution",
         "natural or motivated household lighting",
         "lived-in environment details",
         "believable skin texture and facial asymmetry",
         "non-staged framing",
       ],
       mustAvoid: [
+        "subject substitution — never swap gender, age, or person type",
         "cinematic glamour",
         "editorial polish",
+        "beauty or lifestyle magazine aesthetic",
+        "soft studio lighting",
+        "polished stock-photo look",
         "perfect showroom backgrounds",
         "baked-in typography or logos",
       ],
-      qaChecklist: ["face integrity", "hand realism", "natural light", "background plausibility", "no typography"],
+      qaChecklist: ["subject match", "gender match", "device match", "face integrity", "hand realism", "natural light", "background plausibility", "no typography"],
     };
   }
 

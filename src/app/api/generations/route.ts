@@ -8,6 +8,7 @@ import { generateContent } from "@/lib/ai";
 import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
 import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
+import { inspectImageSemantics } from "@/lib/generator-intelligence/services/visionInspector";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -210,15 +211,47 @@ export async function POST(request: Request) {
     if (type === "image" && generationResult.status === "completed" && outputUrl) {
       const providerUrl = outputUrl; // capture before async closure
       const workspaceId = selection.current.workspace.id;
-      // Intentionally NOT awaited — background upload
+      const semanticChecksForInspect = compiledRequest?.semanticQaChecks ?? [];
+      // Intentionally NOT awaited — background upload + semantic inspection
       void (async () => {
+        let finalImageUrl = providerUrl;
         try {
           const supabaseUrl = await uploadImageToSupabase(providerUrl, workspaceId);
-          // Update the DB row once upload completes (best-effort)
           await admin.from("generations").update({ output_url: supabaseUrl }).eq("output_url", providerUrl);
           console.log("[Storage] Image uploaded to Supabase:", supabaseUrl);
+          finalImageUrl = supabaseUrl;
         } catch (uploadErr) {
           console.error("[Storage] Background upload failed — provider URL kept:", uploadErr);
+        }
+        // Post-generation semantic inspection — vision model checks subject/device/environment
+        if (semanticChecksForInspect.length > 0) {
+          try {
+            const inspection = await inspectImageSemantics(finalImageUrl, semanticChecksForInspect);
+            if (!inspection.skipped) {
+              await admin.from("generations")
+                .update({
+                  metadata: {
+                    semanticInspection: {
+                      passed: inspection.passed,
+                      flaggedForReview: inspection.flaggedForReview,
+                      rejectReasons: inspection.rejectReasons,
+                      warnReasons: inspection.warnReasons,
+                      checks: inspection.checks,
+                      skipped: false,
+                      inspectedAt: new Date().toISOString(),
+                    },
+                  },
+                })
+                .eq("output_url", finalImageUrl);
+              if (!inspection.passed) {
+                console.warn("[SemanticQA] Image FAILED — reject reasons:", inspection.rejectReasons);
+              } else {
+                console.log("[SemanticQA] Image passed —", inspection.checks.length, "checks ok");
+              }
+            }
+          } catch (inspectErr) {
+            console.error("[SemanticQA] Inspection threw:", inspectErr);
+          }
         }
       })();
     }

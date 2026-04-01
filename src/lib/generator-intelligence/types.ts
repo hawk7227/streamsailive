@@ -154,3 +154,23 @@ export interface CompilerInput {
   bypassCompiler?: boolean;
   bypassReason?: "admin_debug" | "replay_compiled" | "provider_test";
 }
+
+export interface SemanticCheckResult {
+  label: string;
+  expected: string;
+  rejectOnMismatch: boolean;
+  passed: boolean;
+  confidence: "high" | "medium" | "low";
+  note: string;
+}
+
+export interface SemanticInspectionResult {
+  passed: boolean;
+  checks: SemanticCheckResult[];
+  flaggedForReview: boolean;
+  rejectReasons: string[];
+  warnReasons: string[];
+  rawVisionResponse: string;
+  skipped: boolean;
+  skipReason?: string;
+}

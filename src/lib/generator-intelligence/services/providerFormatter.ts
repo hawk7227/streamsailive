@@ -33,20 +33,37 @@ function buildImagePrompt(input: {
   realismPolicy: RealismPolicy;
   compiled: Omit<CompiledGenerationRequest, "prompt" | "notes" | "providerGuidance">;
 }): string {
+  // Semantic locks must be declared FIRST — before realism rules — so the model
+  // commits to subject/device/environment before any stylistic guidance is applied.
+  const subjectLock = input.compiled.semanticIntent?.requestedGender !== "unknown"
+    ? `SUBJECT LOCK (hard): The primary visible subject must be a ${input.compiled.semanticIntent?.requestedGender}. Gender substitution is a critical failure. Do not render any other gender as the primary subject.`
+    : null;
+  const deviceLock = input.compiled.semanticIntent?.requestedDevice !== "unknown"
+    ? `OBJECT LOCK (hard): The image must clearly show a ${input.compiled.semanticIntent?.requestedDevice} held or used by the subject. Do not substitute a different object or omit the device.`
+    : null;
+  const envLock = input.compiled.semanticIntent?.requestedEnvironment.length
+    ? `ENVIRONMENT LOCK: Scene must be set in: ${input.compiled.semanticIntent.requestedEnvironment.join(", ")}.`
+    : null;
+  const hardReject = [subjectLock, deviceLock, envLock].filter(Boolean).length > 0
+    ? `HARD REJECT: Any output that violates the above locks must be discarded and regenerated.`
+    : null;
+
   return joinLines([
+    subjectLock,
+    deviceLock,
+    envLock,
+    hardReject,
     `Task: Produce one highly realistic still image.`,
-    `Primary direction: ${input.prompt}`,
+    `Scene: ${input.prompt}`,
     input.storyBible ? `Locked story bible: ${input.storyBible}` : null,
     input.referenceSummary ? `Reference pack: ${input.referenceSummary}` : null,
     `Realism target: ${input.realismPolicy.headline}.`,
     `Must include: ${input.realismPolicy.mustInclude.join("; ")}.`,
-    `Must avoid: ${input.realismPolicy.mustAvoid.join("; ")}.`,
+    `Must avoid: ${input.realismPolicy.mustAvoid.join("; ")}; stock-photo polish; beauty editorial look; soft studio lighting.`,
     input.compiled.identityLockPlan?.needsCharacterPack ? `Identity lock: preserve ${input.compiled.identityLockPlan.fields.join(", ")}.` : null,
     input.compiled.continuityPlan?.continuityRequired ? `Continuity lock: ${input.compiled.continuityPlan.environmentLock.join(", ")}.` : null,
     input.compiled.structuralScore ? `Structural target: face ${input.compiled.structuralScore.faceIntegrity}/100, body ${input.compiled.structuralScore.bodyIntegrity}/100, background ${input.compiled.structuralScore.backgroundIntegrity}/100.` : null,
-    `Provider tuning for ${input.profile.label}: keep wording grounded, direct, and visual without ad-polished framing.`,
-    input.compiled.semanticIntent?.requestedGender !== "unknown" ? `Semantic lock: the visible primary subject must be a ${input.compiled.semanticIntent?.requestedGender}. Do not swap gender or subject.` : null,
-    input.compiled.semanticIntent?.requestedDevice !== "unknown" ? `Semantic lock: include a clearly visible ${input.compiled.semanticIntent?.requestedDevice}; do not substitute a different focal object.` : null,
+    `Provider tuning for ${input.profile.label}: grounded, direct, and visual. No ad-polished framing. No default lifestyle aesthetic.`,
     `Anatomy rule: preserve facial structure, hands, and body proportions with no hallucinated props or fake text.`,
   ]);
 }

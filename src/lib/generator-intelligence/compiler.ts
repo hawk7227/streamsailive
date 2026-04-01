@@ -27,11 +27,22 @@ function compact(text?: string | null): string {
   return (text ?? "").replace(/\s+/g, " ").trim();
 }
 
+// Strip command-style prefixes before the prompt reaches the image/video model.
+// "GENERATE AN IMAGE OF A MAN ON THE CELL" → "a man on the cell"
+// "CREATE A VIDEO OF..." → "..."
+// The compiler owns the final prompt structure — raw user command words contaminate it.
+function stripCommandPrefix(prompt: string): string {
+  return prompt
+    .replace(/^(generate|create|make|show|produce|render|draw|give me|i want|please)\s+(an?\s+)?(image|photo|picture|video|clip|song|audio|track)\s+(of\s+)?/i, "")
+    .replace(/^(generate|create|make|show)\s+/i, "")
+    .trim() || prompt.trim();
+}
+
 export function compileGenerationRequest(input: CompilerInput): CompiledGenerationRequest {
   const target = resolveGeneratorTarget(input);
   const medium = input.medium;
   const provider = input.provider ?? (medium === "song" ? "suno" : medium === "video" ? "kling" : medium === "voice" ? "openai" : "openai");
-  const rawPrompt = compact(input.prompt);
+  const rawPrompt = stripCommandPrefix(compact(input.prompt));
   const storyBible = compact(input.storyBible);
   const referenceSummary = compact(input.referenceSummary);
   const semanticIntent = analyzeSemanticIntent(rawPrompt);
