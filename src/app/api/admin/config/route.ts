@@ -5,7 +5,7 @@ import path from 'path';
 
 export async function GET(req: NextRequest) {
     try {
-        const config = getSiteConfig();
+        const config = await getSiteConfig();
 
         // Check if the request is from an admin (has secret key)
         const secretKey = req.headers.get('x-admin-secret-key');
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
             const buffer = Buffer.from(bytes);
 
             // Get current config to find old logo
-            const currentConfig = getSiteConfig();
+            const currentConfig = await getSiteConfig();
             const oldLogoUrl = currentConfig.logoUrl;
 
             // Create a unique filename to avoid caching issues
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             newConfig.logoUrl = `/${filename}?v=${Date.now()}`;
         }
 
-        const updatedConfig = updateSiteConfig(newConfig);
+        const updatedConfig = await updateSiteConfig(newConfig);
 
         return NextResponse.json(
             { message: 'Configuration updated successfully', config: updatedConfig },
