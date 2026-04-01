@@ -10,7 +10,7 @@ function ensureTempConfig(): void {
     try {
         if (!fs.existsSync(ACTIVE_CONFIG_PATH) && fs.existsSync(SOURCE_CONFIG_PATH)) {
             const content = fs.readFileSync(SOURCE_CONFIG_PATH, 'utf-8');
-            fs.writeFileSync(ACTIVE_CONFIG_PATH, content);
+            fs.writeFileSync(dsf, content);
             console.log(`Copied site-config.json to ${ACTIVE_CONFIG_PATH}`);
         }
     } catch (error) {
