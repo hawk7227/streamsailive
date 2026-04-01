@@ -9,6 +9,7 @@ import { GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
 import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 import { inspectImageSemantics } from "@/lib/generator-intelligence/services/visionInspector";
+import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
   let externalId = typeof payload?.externalId === "string" ? payload.externalId : null;
   let responseText = null;
   let compiledRequest = null as ReturnType<typeof compileGenerationRequest> | null;
+  let generationStatus: "pending" | "completed" | "failed" | null = null;
 
   // ── bypassCompiler gate ────────────────────────────────────────────────────
   // Only allowed for admin/dev. Requires x-admin-secret header.
@@ -182,33 +184,50 @@ export async function POST(request: Request) {
       }
     }
 
-    const generationResult = await generateContent(type as GenerationType, {
-      prompt: finalPrompt,
-      aspectRatio: payload?.aspectRatio,
-      duration: payload?.duration,
-      quality: payload?.quality,
-      style: providerOverride ?? payload?.style,  // pass provider as style hint
-      imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
-      callBackUrl: typeof payload?.callBackUrl === "string" ? payload.callBackUrl : undefined,
-      mode: typeof payload?.mode === "string" ? payload.mode as "standard" | "pro" : "standard",
-    }, providerOverride ?? undefined);
+    if (type === "image" && !bypassCompiler) {
+      const enforced = await generateEnforcedImage({
+        prompt,
+        apiKey: process.env.OPENAI_API_KEY!,
+        workspaceId: selection.current.workspace.id,
+        mode: "images",
+        realismMode: "strict",
+        aspectRatio: (payload?.aspectRatio ?? "16:9"),
+      });
+      payload.status = "completed";
+      generationStatus = "completed";
+      outputUrl = enforced.outputUrl;
+      responseText = null;
+      finalPrompt = enforced.finalPrompt;
+    } else {
+      const generationResult = await generateContent(type as GenerationType, {
+        prompt: finalPrompt,
+        aspectRatio: payload?.aspectRatio,
+        duration: payload?.duration,
+        quality: payload?.quality,
+        style: providerOverride ?? payload?.style,  // pass provider as style hint
+        imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
+        callBackUrl: typeof payload?.callBackUrl === "string" ? payload.callBackUrl : undefined,
+        mode: typeof payload?.mode === "string" ? payload.mode as "standard" | "pro" : "standard",
+      }, providerOverride ?? undefined);
 
-    payload.status = generationResult.status;
-    if (generationResult.outputUrl) {
-      outputUrl = generationResult.outputUrl;
-    }
-    if (generationResult.externalId) {
-      externalId = generationResult.externalId;
-    }
-    if (generationResult.responseText) {
-      responseText = generationResult.responseText;
+      payload.status = generationResult.status;
+      generationStatus = generationResult.status;
+      if (generationResult.outputUrl) {
+        outputUrl = generationResult.outputUrl;
+      }
+      if (generationResult.externalId) {
+        externalId = generationResult.externalId;
+      }
+      if (generationResult.responseText) {
+        responseText = generationResult.responseText;
+      }
     }
 
     // ── Upload image to Supabase Storage (non-blocking) ───────────────
     // Fire-and-forget: upload runs after response is returned so the client
     // gets status="completed" + provider URL immediately without waiting.
     // The DB row is updated in the background once the upload finishes.
-    if (type === "image" && generationResult.status === "completed" && outputUrl) {
+    if (type === "image" && generationStatus === "completed" && outputUrl) {
       const providerUrl = outputUrl; // capture before async closure
       const workspaceId = selection.current.workspace.id;
       const semanticChecksForInspect = compiledRequest?.semanticQaChecks ?? [];

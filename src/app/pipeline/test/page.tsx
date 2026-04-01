@@ -3300,7 +3300,7 @@ Accept only if:
           </div>{/* end bottom 3-col */}
 
           {/* ── ROW 3: 4-up Concept Grid ─────────────────────────────────────── */}
-          <div style={{ background: "rgba(6,9,18,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ background: "rgba(6,9,18,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, marginBottom: 14 }}>
             {/* Toolbar */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em" }}>CONCEPT GRID</span>
@@ -3327,7 +3327,7 @@ Accept only if:
             </div>
 
             {/* 2×2 grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, background: "rgba(0,0,0,0.4)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, background: "rgba(255,255,255,0.06)", borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
               {concepts.map((concept, i) => {
                 const cid = concept.variantId;
                 const out = conceptOutputs[cid];
@@ -3335,10 +3335,14 @@ Accept only if:
                 const tab = previewTabs[cid] ?? "Image";
                 const qItem = [...generationQueue.values()].find(q => q.conceptId === cid && (q.status === "pending" || q.status === "processing"));
                 const mediaUrl = tab === "Video" ? out?.video : out?.image;
-                const ar = conceptGridRatio === "16:9" ? "16/9" : "9/16";
+                // padding-top trick: forces correct aspect ratio regardless of grid row sizing
+                const paddingTop = conceptGridRatio === "16:9" ? "56.25%" : "177.78%";
 
                 return (
-                  <div key={cid} style={{ position: "relative", aspectRatio: ar, background: "#06080f", overflow: "hidden" }}>
+                  // Outer: sets the aspect ratio via padding-top
+                  <div key={cid} style={{ position: "relative", width: "100%", paddingTop, background: "#06080f", overflow: "hidden" }}>
+                  {/* Inner: fills the padded space absolutely */}
+                  <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
                     {/* Media */}
                     {tab === "Video" && out?.video ? (
                       <video src={out.video} controls muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
@@ -3358,8 +3362,11 @@ Accept only if:
                           style={{ fontSize: 9, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
                       </div>
                     ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: 11, color: "#1e293b" }}>Concept {i + 1}</span>
+                      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.15)" }}>{i + 1}</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.18)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No content yet</span>
                       </div>
                     )}
 
@@ -3399,10 +3406,11 @@ Accept only if:
                       </button>
                       <button onClick={() => { setConceptOutputs(p => ({ ...p, [cid]: { image: null, video: null, script: null, status: "idle", error: null } })); }}
                         style={{ padding: "5px 7px", fontSize: 9, borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#475569", cursor: "pointer" }}>
-                        ↺
+                        Reset
                       </button>
                     </div>
                   </div>
+                </div>
                 );
               })}
             </div>

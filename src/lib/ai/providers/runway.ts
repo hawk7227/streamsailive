@@ -12,7 +12,6 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfig } from "../../config";
 
-const RUNWAY_BASE = "https://api.runwayml.com";
 const RUNWAY_VERSION = "2024-11-06";
 
 function getApiKey(): string {
@@ -20,6 +19,14 @@ function getApiKey(): string {
   const key = config.apiKeys?.RUNWAY_API_KEY ?? process.env.RUNWAY_API_KEY;
   if (!key) throw new Error("RUNWAY_API_KEY is not set");
   return key;
+}
+
+// Runway dev keys (prefixed key_...) use api.dev.runwayml.com
+// Runway prod keys use api.runwayml.com
+// "Incorrect hostname for API key" means wrong base URL for this key type
+function getRunwayBase(apiKey: string): string {
+  const isDevKey = apiKey.startsWith("key_");
+  return isDevKey ? "https://api.dev.runwayml.com" : "https://api.runwayml.com";
 }
 
 function buildHeaders(apiKey: string): Record<string, string> {
@@ -64,7 +71,7 @@ export class RunwayProvider implements AIProvider {
     };
     if (options.callBackUrl) body.callbackUrl = options.callBackUrl;
 
-    const res = await fetch(`${RUNWAY_BASE}/v1/tasks`, {
+    const res = await fetch(`${getRunwayBase(apiKey)}/v1/tasks`, {
       method: "POST",
       headers: buildHeaders(apiKey),
       body: JSON.stringify(body),
@@ -101,7 +108,7 @@ export class RunwayProvider implements AIProvider {
     };
     if (options.callBackUrl) body.callbackUrl = options.callBackUrl;
 
-    const res = await fetch(`${RUNWAY_BASE}/v1/tasks`, {
+    const res = await fetch(`${getRunwayBase(apiKey)}/v1/tasks`, {
       method: "POST",
       headers: buildHeaders(apiKey),
       body: JSON.stringify(body),

@@ -1,6 +1,6 @@
 import type { AspectRatio, RealismMode, SafeZone, TargetPlatform, VideoMotionPolicy } from "./types";
 
-export const REALISM_RULESET_VERSION = "universal-realism-v1";
+export const REALISM_RULESET_VERSION = "universal-realism-v2";
 
 export const FORBIDDEN_IMAGE_TERMS = [
   "cinematic",
@@ -10,6 +10,14 @@ export const FORBIDDEN_IMAGE_TERMS = [
   "editorial",
   "fashion photography",
   "beauty campaign",
+  "beauty shot",
+  "beauty portrait",
+  "glamour",
+  "glamorous",
+  "model-like",
+  "supermodel",
+  "editorial portrait",
+  "studio portrait",
   "luxury",
   "premium look",
   "masterpiece",
@@ -22,10 +30,22 @@ export const FORBIDDEN_IMAGE_TERMS = [
   "bokeh",
   "airbrushed skin",
   "perfect skin",
+  "flawless skin",
+  "symmetrical face",
+  "perfectly symmetrical",
+  "idealized face",
+  "beautified",
+  "retouched",
   "text overlay",
   "ui overlay",
   "floating panel",
   "mockup",
+  "infographic",
+  "annotation",
+  "callout",
+  "label",
+  "caption box",
+  "diagram",
   "render",
   "cgi",
 ];
@@ -37,6 +57,10 @@ export const REQUIRED_REALISM_ANCHORS = [
   "realistic hair strands",
   "flat natural lighting",
   "ordinary camera look",
+  "slight facial asymmetry",
+  "everyday non-model appearance",
+  "slightly imperfect framing",
+  "lived-in believable environment",
   "not staged",
   "no text inside image",
 ];
