@@ -2970,11 +2970,11 @@ Accept only if:
                   </div>
 
                   {/* Output area */}
-                  <div style={{ padding: 14, minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ padding: 14 }}>
                     {tab === "Image" && (
                       out?.image ? (
-                        <div style={{ position: "relative", width: "100%", borderRadius: 10, overflow: "hidden", maxHeight: 140 }}>
-                          <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", objectFit: "cover", maxHeight: 140, display: "block" }} />
+                        <div style={{ position: "relative", width: "100%", borderRadius: 10, overflow: "hidden" }}>
+                          <img src={out.image} alt={`Concept ${i + 1}`} style={{ width: "100%", objectFit: "contain", display: "block" }} />
                           {/* UI Overlay — separate layer, never inside AI image */}
                           {showOverlay[cid] && (
                             <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -3022,7 +3022,7 @@ Accept only if:
                     )}
                     {tab === "Video" && (
                       out?.video ? (
-                        <video src={out.video} controls muted loop style={{ width: "100%", borderRadius: 10, maxHeight: 140 }} />
+                        <video src={out.video} controls muted loop style={{ width: "100%", borderRadius: 10 }} />
                       ) : isActive ? (
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "#475569" }}>
                           <Spinner size={20} />
