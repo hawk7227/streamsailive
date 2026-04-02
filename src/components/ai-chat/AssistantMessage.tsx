@@ -1,279 +1,187 @@
-"use client";
-
 import React from "react";
+import { FileText, Download, ExternalLink, PlayCircle, Music2 } from "lucide-react";
+import { ImageBlock } from "./ImageBlock";
 import { VerificationBlock } from "./VerificationBlock";
 import { AssistantCodeBlock } from "./AssistantCodeBlock";
-import type { AssistantMode } from "@/lib/assistant-brain/contracts";
+import type { AssistantMode } from "@/lib/enforcement/types";
 import { presentResponse } from "@/lib/assistant-ui/responsePresentation";
 
 export interface MsgContent {
-  type: "text" | "image_url" | "video_url" | "audio_url" | "document";
+  type: "text" | "image_url" | "video_url" | "audio_url" | "document_url";
   text?: string;
   image_url?: { url: string };
   video_url?: { url: string };
   audio_url?: { url: string };
-  document?: { url?: string; label?: string };
+  document_url?: { url: string; title?: string };
 }
 
-export interface AssistantMessageShape {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string | MsgContent[];
+export interface AssistantMessageProps {
+  role: "user" | "assistant";
+  content: MsgContent[];
   mode?: AssistantMode;
 }
 
-function InlineText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+function renderDocument(url: string, title?: string): React.ReactNode {
   return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={i} className="font-semibold text-current">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
-          return (
-            <code
-              key={i}
-              className="rounded-md border border-black/8 bg-black/[0.04] px-1.5 py-0.5 font-mono text-[0.84em] text-current/90 dark:border-white/10 dark:bg-white/[0.06]"
-            >
-              {part.slice(1, -1)}
-            </code>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </>
+    <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+      <div className="flex items-center gap-2 text-white/90">
+        <FileText className="h-4 w-4" />
+        <span className="text-sm font-medium">{title || "Document"}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open
+        </a>
+        <a
+          href={url}
+          download
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+        >
+          <Download className="h-4 w-4" />
+          Download
+        </a>
+      </div>
+    </div>
   );
 }
 
-function TextBlock({ text, mode, isUser }: { text: string; mode?: AssistantMode; isUser?: boolean }) {
-  const verificationPattern = /\bVERIFIED:|\bNOT VERIFIED:|\bREQUIRES RUNTIME:|\bRISKS:/i;
-  const hasAnyHeader = verificationPattern.test(text);
-  const isVerification = mode === "verification" || hasAnyHeader;
-
-  if (isVerification) {
-    const sectionStart = text.search(verificationPattern);
-    if (sectionStart === -1) {
-      return <p className="text-[13px] italic text-white/35">Analyzing...</p>;
-    }
-    return <VerificationBlock text={text.slice(sectionStart)} />;
-  }
+export function AssistantMessage({ role, content, mode }: AssistantMessageProps) {
+  const isUser = role === "user";
+  const text = content
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text ?? "")
+    .join("\n\n");
 
   const presentation = presentResponse(text, mode);
   const blocks = presentation.blocks;
-  const prose = isUser ? "text-[#0A0C10]/90" : "text-white/84";
-  const heading = isUser ? "text-[#0A0C10]" : "text-white";
+  const proseClass = isUser ? "text-[#0A0C10]/90" : "text-white/84";
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div
+      className={[
+        "max-w-[85%] rounded-3xl px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.18)]",
+        isUser
+          ? "ml-auto bg-[linear-gradient(180deg,#c9d6ff_0%,#e2e8ff_100%)]"
+          : "mr-auto border border-white/10 bg-white/[0.05]",
+      ].join(" ")}
+    >
       {blocks.map((block, index) => {
-        if (block.type === "code_block") {
-          return (
-            <AssistantCodeBlock
-              key={`code-${index}`}
-              code={block.code}
-              language={block.language}
-            />
-          );
-        }
-
         if (block.type === "heading") {
           return (
-            <p
-              key={`heading-${index}`}
-              className={`text-[14px] ${heading} font-semibold leading-6 tracking-[-0.01em]`}
-            >
-              <InlineText text={block.text} />
-            </p>
+            <h3 key={`heading-${index}`} className="mb-2 text-[15px] font-semibold tracking-[-0.01em] text-white">
+              {block.text}
+            </h3>
           );
         }
 
         if (block.type === "bullet_list") {
           return (
-            <div key={`bullets-${index}`} className="flex flex-col gap-1.5 pl-0.5">
-              {block.items.map((item, bulletIndex) => (
-                <div key={`bullet-${bulletIndex}`} className="flex items-start gap-2">
-                  <span
-                    className={`mt-1.5 min-w-[14px] text-[11px] ${
-                      isUser ? "text-[#0A0C10]/45" : "text-white/35"
-                    }`}
-                  >
-                    •
-                  </span>
-                  <p className={`m-0 text-[14px] leading-7 ${prose}`}>
-                    <InlineText text={item} />
-                  </p>
-                </div>
+            <ul key={`bullets-${index}`} className={`mb-3 ml-5 list-disc space-y-1 text-[15px] leading-7 ${proseClass}`}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`bullet-${index}-${itemIndex}`}>{item}</li>
               ))}
+            </ul>
+          );
+        }
+
+        if (block.type === "code_block") {
+          return <AssistantCodeBlock key={`code-${index}`} code={block.code} language={block.language} />;
+        }
+
+        return (
+          <p key={`paragraph-${index}`} className={`mb-3 text-[15px] leading-7 tracking-[-0.01em] ${proseClass}`}>
+            {block.text}
+          </p>
+        );
+      })}
+
+      {content.map((part, index) => {
+        if (part.type === "image_url" && part.image_url?.url) {
+          return <ImageBlock key={`image-${index}`} src={part.image_url.url} alt="Generated image" />;
+        }
+
+        if (part.type === "video_url" && part.video_url?.url) {
+          return (
+            <div key={`video-${index}`} className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+              <video controls className="w-full" src={part.video_url.url} />
+              <div className="flex gap-2 border-t border-white/10 p-3">
+                <a
+                  href={part.video_url.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  Open
+                </a>
+                <a
+                  href={part.video_url.url}
+                  download
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </a>
+              </div>
             </div>
           );
         }
 
-        return (
-          <p
-            key={`paragraph-${index}`}
-            className={`m-0 text-[14px] leading-7 ${prose} ${
-              presentation.density === "light" ? "max-w-[70ch]" : "max-w-[78ch]"
-            }`}
-          >
-            <InlineText text={block.text} />
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function MediaBlock({ block }: { block: MsgContent }) {
-  if (block.type === "image_url" && block.image_url?.url) {
-    return (
-      <div className="mt-3 overflow-hidden rounded-2xl border border-white/8 bg-black/15">
-        <img src={block.image_url.url} alt="assistant output" className="max-h-[420px] w-full object-cover" />
-        <div className="flex items-center justify-end gap-2 border-t border-white/8 px-3 py-2 text-[11px] text-white/60">
-          <a href={block.image_url.url} target="_blank" rel="noreferrer" className="rounded-full border border-white/12 px-3 py-1 hover:border-white/20 hover:text-white">Open</a>
-          <a href={block.image_url.url} download className="rounded-full border border-white/12 px-3 py-1 hover:border-white/20 hover:text-white">Download</a>
-        </div>
-      </div>
-    );
-  }
-
-  if (block.type === "video_url" && block.video_url?.url) {
-    return (
-      <video
-        src={block.video_url.url}
-        className="mt-3 max-h-[360px] w-full rounded-2xl border border-white/10 bg-black/20"
-        controls
-        playsInline
-        preload="metadata"
-      />
-    );
-  }
-
-  if (block.type === "audio_url" && block.audio_url?.url) {
-    return <audio src={block.audio_url.url} className="mt-3 w-full" controls preload="metadata" />;
-  }
-
-  if (block.type === "document") {
-    const href = block.document?.url;
-    const label = block.document?.label ?? block.text ?? "Open document";
-    return (
-      <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
-        {href ? (
-          <a href={href} target="_blank" rel="noreferrer" className="underline decoration-white/30 underline-offset-4">
-            {label}
-          </a>
-        ) : (
-          label
-        )}
-      </div>
-    );
-  }
-
-  return null;
-}
-
-function ClipboardIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="2" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function CheckIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-export function AssistantMessage({ message }: { message: AssistantMessageShape }) {
-  const isUser = message.role === "user";
-  const isSystem = message.role === "system";
-  const isTool = message.role === "tool";
-  const [copied, setCopied] = React.useState(false);
-  const [hovered, setHovered] = React.useState(false);
-
-  function copyText() {
-    const raw =
-      typeof message.content === "string"
-        ? message.content
-        : message.content
-            .filter((b) => b.type === "text")
-            .map((b) => b.text ?? "")
-            .join("\n");
-    navigator.clipboard
-      .writeText(raw)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      })
-      .catch(() => {});
-  }
-
-  if (isSystem) {
-    return (
-      <div className="flex justify-center">
-        <div className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-medium tracking-[0.14em] text-white/45">
-          {typeof message.content === "string" ? message.content : "System"}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div
-        className={[
-          "max-w-[88%] px-4 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.12)]",
-          isUser
-            ? "rounded-[26px] rounded-br-xl bg-white text-[#0A0C10]"
-            : isTool
-              ? "rounded-[26px] rounded-bl-xl border border-fuchsia-400/18 bg-fuchsia-500/8"
-              : "rounded-[26px] rounded-bl-xl border border-white/8 bg-white/[0.045] backdrop-blur-xl",
-        ].join(" ")}
-      >
-        {typeof message.content === "string" ? (
-          <TextBlock text={message.content} mode={message.mode} isUser={isUser} />
-        ) : (
-          <div className="grid gap-3">
-            {message.content.map((block, index) => (
-              <div key={index}>
-                {block.type === "text" && block.text ? (
-                  <TextBlock text={block.text} mode={message.mode} isUser={isUser} />
-                ) : (
-                  <MediaBlock block={block} />
-                )}
+        if (part.type === "audio_url" && part.audio_url?.url) {
+          return (
+            <div key={`audio-${index}`} className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <div className="mb-3 flex items-center gap-2 text-white/90">
+                <Music2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Audio</span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <audio controls className="w-full" src={part.audio_url.url} />
+              <div className="mt-3 flex gap-2">
+                <a
+                  href={part.audio_url.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open
+                </a>
+                <a
+                  href={part.audio_url.url}
+                  download
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </a>
+              </div>
+            </div>
+          );
+        }
 
-      {!isUser && !isSystem && (
-        <div
-          className="mt-1.5 flex items-center gap-1.5 transition-opacity"
-          style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none" }}
-        >
-          <button
-            type="button"
-            onClick={copyText}
-            title={copied ? "Copied" : "Copy"}
-            className="rounded-full border border-white/8 bg-white/[0.03] p-2 text-white/45 hover:border-white/16 hover:text-white/75"
-          >
-            {copied ? <CheckIcon /> : <ClipboardIcon />}
-          </button>
+        if (part.type === "document_url" && part.document_url?.url) {
+          return (
+            <React.Fragment key={`document-${index}`}>
+              {renderDocument(part.document_url.url, part.document_url.title)}
+            </React.Fragment>
+          );
+        }
+
+        return null;
+      })}
+
+      {!isUser && text && /(?:verified|validation|checks? passed|proof)/i.test(text) ? (
+        <div className="mt-3">
+          <VerificationBlock text={text} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
+
+export default AssistantMessage;
