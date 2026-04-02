@@ -321,7 +321,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       parts.push({ type: 'text' as const, text: `[context attachments: ${attachments.map((a) => `${a.kind}:${a.label}`).join(', ')}]` });
       for (const attachment of attachments) {
         if (attachment.kind === 'image' && attachment.preview?.media?.url) {
-          parts.push({ type: 'image_url' as const, image_url: { url: attachment.preview.media.url, detail: 'auto' as const } });
+          parts.push({ type: 'image_url' as const, image_url: { url: attachment.preview.media.url } });
         }
       }
     }
