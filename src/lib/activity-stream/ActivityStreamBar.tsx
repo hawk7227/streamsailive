@@ -110,71 +110,37 @@ export function useActivityStream() {
 }
 
 // ── ActivityStreamBar component ───────────────────────────────────────────────
-// Mounts inside the assistant panel, above the voice bar.
-// Always visible — idle state shows "Ready", active state shows branded activity.
+// Subtle inline status for the active assistant turn. No console-style panel.
 
 export function ActivityStreamBar() {
   const { current, isActive } = useActivityStream();
 
-  if (!isActive || !current) {
-    return (
-      <div style={{
-        margin: '0 12px 0',
-        padding: '5px 10px',
-        borderRadius: 8,
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-      }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(103,232,249,0.5)', letterSpacing: '0.08em' }}>
-          STREAMS Response Engine
-        </span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Ready</span>
-      </div>
-    );
-  }
+  const label = isActive && current
+    ? current.detail ?? current.label
+    : 'Ready';
 
   return (
     <div style={{
-      margin: '0 12px 0',
-      padding: '5px 10px',
-      borderRadius: 8,
-      background: 'rgba(34,211,238,0.06)',
-      border: '1px solid rgba(34,211,238,0.18)',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between',
       gap: 8,
-      transition: 'all 200ms',
+      minHeight: 18,
+      padding: '0 2px',
+      color: isActive && current ? 'rgba(255,255,255,0.46)' : 'rgba(255,255,255,0.28)',
+      fontSize: 11,
+      lineHeight: 1.4,
     }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#67e8f9', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {current.capability}
-        </div>
-        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-          {current.detail ?? current.label}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        {typeof current.progress === 'number' && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#6ee7b7' }}>
-            {Math.max(0, Math.min(100, Math.round(current.progress)))}%
-          </span>
-        )}
-        {/* Pulsing dot */}
-        <span style={{ position: 'relative', display: 'inline-flex', width: 8, height: 8 }}>
-          <span style={{
-            position: 'absolute', inset: 0, borderRadius: '50%',
-            background: 'rgba(52,211,153,0.75)',
-            animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite',
-          }} />
-          <span style={{ position: 'relative', borderRadius: '50%', width: 8, height: 8, background: '#34d399' }} />
-        </span>
-      </div>
+      <span style={{
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: isActive && current ? '#67e8f9' : 'rgba(255,255,255,0.22)',
+        boxShadow: isActive && current ? '0 0 10px rgba(103,232,249,0.35)' : 'none',
+        flexShrink: 0,
+      }} />
+      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {label}
+      </span>
     </div>
   );
 }

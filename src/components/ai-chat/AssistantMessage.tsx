@@ -4,6 +4,7 @@ import React, { Fragment } from "react";
 import { VerificationBlock } from "./VerificationBlock";
 import { AssistantCodeBlock } from "./AssistantCodeBlock";
 import type { AssistantMode } from "@/lib/enforcement/types";
+import { createPresentationPlan, splitRenderBlocks } from "@/lib/assistant-ui/responsePresentation";
 
 export interface MsgContent {
   type: "text" | "image_url" | "video_url" | "audio_url" | "document";
@@ -19,40 +20,16 @@ export interface AssistantMessageShape {
   mode?: AssistantMode;
 }
 
-function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: string; language?: string }> {
-  const parts: Array<{ type: "text" | "code"; value: string; language?: string }> = [];
-  const regex = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text))) {
-    if (match.index > cursor) parts.push({ type: "text", value: text.slice(cursor, match.index) });
-    parts.push({ type: "code", language: match[1], value: match[2].trimEnd() });
-    cursor = regex.lastIndex;
-  }
-  if (cursor < text.length) parts.push({ type: "text", value: text.slice(cursor) });
-  return parts.length > 0 ? parts : [{ type: "text", value: text }];
-}
-
 function InlineText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="font-semibold text-current">{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
-          return (
-            <code key={i} style={{
-              fontFamily: "ui-monospace, Menlo, Monaco, Consolas, monospace",
-              fontSize: "0.85em",
-              color: "#b91c1c",
-              background: "#fef2f2",
-              borderRadius: 4,
-              padding: "1px 5px",
-              border: "1px solid rgba(185,28,28,0.15)",
-            }}>{part.slice(1, -1)}</code>
-          );
+          return <code key={i} className="rounded-md border border-black/8 bg-black/[0.04] px-1.5 py-0.5 font-mono text-[0.84em] text-current/90 dark:border-white/10 dark:bg-white/[0.06]">{part.slice(1, -1)}</code>;
         }
         return <span key={i}>{part}</span>;
       })}
@@ -60,68 +37,45 @@ function InlineText({ text }: { text: string }) {
   );
 }
 
-function MarkdownLine({ line, isUser }: { line: string; isUser?: boolean }) {
-  const color = isUser ? "rgba(10,12,16,0.9)" : "rgba(255,255,255,0.88)";
-
-  if (/^### /.test(line)) return (
-    <p style={{ fontSize: 14, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 10, marginBottom: 2 }}>
-      <InlineText text={line.slice(4)} />
-    </p>
-  );
-  if (/^## /.test(line)) return (
-    <p style={{ fontSize: 15, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 12, marginBottom: 2 }}>
-      <InlineText text={line.slice(3)} />
-    </p>
-  );
-  if (/^# /.test(line)) return (
-    <p style={{ fontSize: 16, fontWeight: 700, color: isUser ? "#0A0C10" : "#fff", marginTop: 14, marginBottom: 4 }}>
-      <InlineText text={line.slice(2)} />
-    </p>
-  );
-  if (/^[-*] /.test(line)) return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", paddingLeft: 4 }}>
-      <span style={{ color: isUser ? "rgba(10,12,16,0.4)" : "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 3, flexShrink: 0 }}>•</span>
-      <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={line.slice(2)} /></p>
-    </div>
-  );
-  const numMatch = line.match(/^(\d+)\. (.+)/);
-  if (numMatch) return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", paddingLeft: 4 }}>
-      <span style={{ color: isUser ? "rgba(10,12,16,0.4)" : "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 3, flexShrink: 0, minWidth: 16 }}>{numMatch[1]}.</span>
-      <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={numMatch[2]} /></p>
-    </div>
-  );
-  return <p style={{ fontSize: 14, lineHeight: 1.65, color, margin: 0 }}><InlineText text={line} /></p>;
-}
-
 function TextBlock({ text, mode, isUser }: { text: string; mode?: AssistantMode; isUser?: boolean }) {
   const hasAnyHeader = /VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i.test(text);
   const isVerification = mode === "verification" || hasAnyHeader;
 
   if (isVerification) {
-    const sectionStart = text.search(/\bVERIFIED:|\bNOT VERIFIED:|\bREQUIRES RUNTIME:|\bRISKS:/i);
-    if (sectionStart === -1) return <p className="text-[13px] text-white/35 italic">Analyzing...</p>;
+    const sectionStart = text.search(/VERIFIED:|NOT VERIFIED:|REQUIRES RUNTIME:|RISKS:/i);
+    if (sectionStart === -1) return <p className="text-[13px] italic text-white/35">Analyzing...</p>;
     return <VerificationBlock text={text.slice(sectionStart)} />;
   }
 
-  const parts = splitCodeFence(text);
+  const plan = createPresentationPlan(text, mode);
+  const blocks = splitRenderBlocks(text, mode);
+  const prose = isUser ? "text-[#0A0C10]/90" : "text-white/84";
+  const heading = isUser ? "text-[#0A0C10]" : "text-white";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      {parts.map((part, index) => {
-        if (part.type === "code") {
-          return <AssistantCodeBlock key={`code-${index}`} code={part.value} language={part.language} />;
+    <div className="flex flex-col gap-2.5">
+      {blocks.map((block, index) => {
+        if (block.kind === "code") {
+          return <AssistantCodeBlock key={`code-${index}`} code={block.code} language={block.language} />;
         }
-        const cleaned = part.value.trim();
-        if (!cleaned) return null;
-        return (
-          <Fragment key={`text-${index}`}>
-            {cleaned.split("\n").map((line, li) => {
-              const trimmed = line.trim();
-              if (!trimmed) return <div key={li} style={{ height: 5 }} />;
-              return <MarkdownLine key={li} line={trimmed} isUser={isUser} />;
-            })}
-          </Fragment>
-        );
+        if (block.kind === "spacer") {
+          return <div key={`spacer-${index}`} className="h-1.5" />;
+        }
+        if (block.kind === "heading") {
+          const sizes = block.level === 1 ? "text-[15px]" : block.level === 2 ? "text-[14px]" : "text-[13px]";
+          return <p key={`heading-${index}`} className={`${sizes} ${heading} font-semibold leading-6 tracking-[-0.01em]`}><InlineText text={block.text} /></p>;
+        }
+        if (block.kind === "bullet") {
+          return (
+            <div key={`bullet-${index}`} className="flex items-start gap-2 pl-0.5">
+              <span className={`mt-1.5 min-w-[14px] text-[11px] ${isUser ? 'text-[#0A0C10]/45' : 'text-white/35'}`}>
+                {block.ordered ? `${block.ordered}.` : '•'}
+              </span>
+              <p className={`m-0 text-[14px] leading-7 ${prose}`}><InlineText text={block.text} /></p>
+            </div>
+          );
+        }
+        return <p key={`paragraph-${index}`} className={`m-0 text-[14px] leading-7 ${prose} ${plan.density === 'light' ? 'max-w-[70ch]' : 'max-w-[78ch]'}`}><InlineText text={block.text} /></p>;
       })}
     </div>
   );
@@ -129,19 +83,27 @@ function TextBlock({ text, mode, isUser }: { text: string; mode?: AssistantMode;
 
 function MediaBlock({ block }: { block: MsgContent }) {
   if (block.type === "image_url" && block.image_url?.url) {
-    return <img src={block.image_url.url} alt="assistant output" className="mt-3 max-h-[320px] w-full rounded-2xl object-cover" />;
+    return (
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/8 bg-black/15">
+        <img src={block.image_url.url} alt="assistant output" className="max-h-[420px] w-full object-cover" />
+        <div className="flex items-center justify-end gap-2 border-t border-white/8 px-3 py-2 text-[11px] text-white/60">
+          <a href={block.image_url.url} target="_blank" rel="noreferrer" className="rounded-full border border-white/12 px-3 py-1 hover:border-white/20 hover:text-white">Open</a>
+          <a href={block.image_url.url} download className="rounded-full border border-white/12 px-3 py-1 hover:border-white/20 hover:text-white">Download</a>
+        </div>
+      </div>
+    );
   }
   if (block.type === "video_url" && block.image_url?.url) {
-    return <video src={block.image_url.url} className="mt-3 max-h-[320px] w-full rounded-2xl" controls playsInline />;
+    return <video src={block.image_url.url} className="mt-3 max-h-[360px] w-full rounded-2xl border border-white/10 bg-black/20" controls playsInline preload="metadata" />;
   }
   if (block.type === "audio_url" && block.audio_url?.url) {
     return <audio src={block.audio_url.url} className="mt-3 w-full" controls preload="metadata" />;
   }
   if (block.type === "document") {
     const href = block.document?.url;
-    const label = block.document?.label ?? block.text ?? 'Open document';
+    const label = block.document?.label ?? block.text ?? "Open document";
     return (
-      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+      <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
         {href ? <a href={href} target="_blank" rel="noreferrer" className="underline decoration-white/30 underline-offset-4">{label}</a> : label}
       </div>
     );
@@ -186,7 +148,7 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   if (isSystem) {
     return (
       <div className="flex justify-center">
-        <div className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+        <div className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-medium tracking-[0.14em] text-white/45">
           {typeof message.content === "string" ? message.content : "System"}
         </div>
       </div>
@@ -194,30 +156,22 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   }
 
   return (
-    <div
-      className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div
-        className={[
-          "max-w-[88%] rounded-[24px] px-4 py-3 shadow-[0_16px_40px_rgba(0,0,0,0.16)]",
-          isUser
-            ? "rounded-br-lg bg-white text-[#0A0C10]"
-            : isTool
-              ? "rounded-bl-lg border border-fuchsia-400/20 bg-fuchsia-500/10"
-              : "rounded-bl-lg border border-white/10 bg-white/[0.06] backdrop-blur-xl",
-        ].join(" ")}
-      >
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <div className={[
+        "max-w-[88%] px-4 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.12)]",
+        isUser
+          ? "rounded-[26px] rounded-br-xl bg-white text-[#0A0C10]"
+          : isTool
+            ? "rounded-[26px] rounded-bl-xl border border-fuchsia-400/18 bg-fuchsia-500/8"
+            : "rounded-[26px] rounded-bl-xl border border-white/8 bg-white/[0.045] backdrop-blur-xl",
+      ].join(" ")}>
         {typeof message.content === "string" ? (
           <TextBlock text={message.content} mode={message.mode} isUser={isUser} />
         ) : (
           <div className="grid gap-3">
             {message.content.map((block, index) => (
               <div key={index}>
-                {block.type === "text" && block.text
-                  ? <TextBlock text={block.text} mode={message.mode} isUser={isUser} />
-                  : <MediaBlock block={block} />}
+                {block.type === "text" && block.text ? <TextBlock text={block.text} mode={message.mode} isUser={isUser} /> : <MediaBlock block={block} />}
               </div>
             ))}
           </div>
@@ -225,35 +179,8 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
       </div>
 
       {!isUser && !isSystem && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          marginTop: 4,
-          opacity: hovered ? 1 : 0,
-          transition: "opacity 150ms ease",
-          pointerEvents: hovered ? "auto" : "none",
-        }}>
-          <button
-            type="button"
-            onClick={copyText}
-            title={copied ? "Copied!" : "Copy"}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 28,
-              height: 28,
-              borderRadius: 999,
-              border: "none",
-              background: "transparent",
-              color: copied ? "#22c55e" : "rgba(255,255,255,0.42)",
-              cursor: "pointer",
-              transition: "all 150ms ease",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = copied ? "#22c55e" : "rgba(255,255,255,0.72)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = copied ? "#22c55e" : "rgba(255,255,255,0.42)"; }}
-          >
+        <div className="mt-1.5 flex items-center gap-1.5 transition-opacity" style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none' }}>
+          <button type="button" onClick={copyText} title={copied ? "Copied" : "Copy"} className="rounded-full border border-white/8 bg-white/[0.03] p-2 text-white/45 hover:border-white/16 hover:text-white/75">
             {copied ? <CheckIcon /> : <ClipboardIcon />}
           </button>
         </div>
