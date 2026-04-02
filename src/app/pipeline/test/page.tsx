@@ -1,10 +1,8 @@
 // src/app/pipeline/test/page.tsx
-import dynamic from 'next/dynamic'
-
 export const dynamic = 'force-dynamic'
 
-const Client = dynamic(() => import('./PipelineTestClient'), { ssr: false })
+import PipelineTestClient from './PipelineTestClient'
 
 export default function Page() {
-  return <Client />
+  return <PipelineTestClient />
 }
