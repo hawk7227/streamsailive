@@ -19,6 +19,8 @@ export type MediaPreviewItem = {
   url: string;
   label?: string;
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5';
+  conversationId?: string;
+  persisted?: boolean;
 };
 
 interface MediaPreviewPanelProps {
@@ -34,6 +36,7 @@ export function MediaPreviewPanel({ item, onClose, onSendToChat }: MediaPreviewP
   const [visible, setVisible] = useState(false);
   const [entered, setEntered] = useState(false);
   const prevItemId = useRef<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   // Slide in when item changes
   useEffect(() => {
@@ -60,6 +63,25 @@ export function MediaPreviewPanel({ item, onClose, onSendToChat }: MediaPreviewP
   const mediaHeight = Math.min(PANEL_MAX_HEIGHT, Math.round(PANEL_WIDTH * (arH / arW)));
 
   return (
+    <>
+    {expanded && (
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        onClick={() => setExpanded(false)}
+      >
+        <div style={{ position: 'relative', maxWidth: '92vw', maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
+          {isVideo ? (
+            <video src={item.url} controls autoPlay playsInline style={{ maxWidth: '92vw', maxHeight: '92vh', borderRadius: 16, display: 'block' }} />
+          ) : (
+            <img src={item.url} alt={item.label ?? 'Generated image'} style={{ maxWidth: '92vw', maxHeight: '92vh', borderRadius: 16, display: 'block' }} />
+          )}
+          <div style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 8 }}>
+            <a href={item.url} download target='_blank' rel='noreferrer' style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(10,12,16,0.75)', color: '#fff', textDecoration: 'none', fontSize: 12, fontWeight: 700 }}>Download</a>
+            <button type='button' onClick={() => setExpanded(false)} style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(10,12,16,0.75)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Close</button>
+          </div>
+        </div>
+      </div>
+    )}
     <div
       style={{
         position: 'absolute',
@@ -147,7 +169,10 @@ export function MediaPreviewPanel({ item, onClose, onSendToChat }: MediaPreviewP
               {item.label}
             </p>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
+          {item.persisted && (
+            <p style={{ fontSize: 10, color: '#6ee7b7', margin: 0, lineHeight: 1.3 }}>Saved to conversation history</p>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {onSendToChat && (
               <button
                 type="button"
@@ -161,8 +186,35 @@ export function MediaPreviewPanel({ item, onClose, onSendToChat }: MediaPreviewP
                 Send to Chat
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              style={{
+                flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em',
+              }}
+            >
+              Enlarge
+            </button>
             <a
               href={item.url}
+              download
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid rgba(103,232,249,0.18)',
+                background: 'rgba(103,232,249,0.04)', color: '#67e8f9',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                letterSpacing: '0.04em',
+              }}
+            >
+              Save copy
+            </a>
+            <a
+              href={item.url}
+              download
               target="_blank"
               rel="noreferrer"
               style={{
@@ -173,11 +225,12 @@ export function MediaPreviewPanel({ item, onClose, onSendToChat }: MediaPreviewP
                 letterSpacing: '0.04em',
               }}
             >
-              Open ↗
+              Download
             </a>
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 }

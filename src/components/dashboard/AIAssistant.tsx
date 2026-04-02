@@ -18,16 +18,10 @@ import type { ExtractedArtifact } from '@/lib/activity-stream/code-extractor';
 import { FloatingPreviewPanel } from '@/components/pipeline/FloatingPreviewPanel';
 import { MediaPreviewPanel, type MediaPreviewItem } from '@/components/pipeline/MediaPreviewPanel';
 import { LivePreviewRenderer } from '@/components/pipeline/LivePreviewRenderer';
-import { isImageGenerationPrompt, type ImageProviderMode } from '@/lib/assistant-ui/imageIntent';
+import { extractLatestPreviewFromAttachments, isDirectImageRequest, toStoredPreviewAttachment, type StoredAttachmentPayload } from '@/lib/assistant-media/chatImage';
 interface Action { type: string; payload: Record<string, unknown>; }
 
-interface SavedImageArtifact {
-  id: string;
-  url: string;
-  prompt: string;
-  provider: ImageProviderMode;
-  createdAt: string;
-}
+type ImageProviderMode = 'chat' | 'system';
 
 interface ConversationItem {
   id: string;
@@ -52,7 +46,7 @@ interface AIAssistantProps {
   context: Record<string, unknown>;
   onApplyPrompt?: (prompt: string) => void;
   onUpdateSettings?: (key: string, value: string) => void;
-  onGenerateImage?: (conceptId?: string, prompt?: string, options?: { provider?: ImageProviderMode }) => void;
+  onGenerateImage?: (conceptId?: string, prompt?: string) => void;
   onGenerateVideo?: (conceptId?: string, prompt?: string) => void;
   onGenerateSong?: (prompt?: string) => void;
   onBuildStoryBible?: (storyText?: string) => void;
@@ -113,7 +107,8 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [imageProvider, setImageProvider] = useState<ImageProviderMode>(() => {
     if (typeof window === 'undefined') return 'chat';
-    return (localStorage.getItem('streams:imageProvider') as ImageProviderMode | null) ?? 'chat';
+    const stored = window.localStorage.getItem('streams:image-provider');
+    return stored === 'system' ? 'system' : 'chat';
   });
   const [streamingText, setStreamingText] = useState('');
   const [streamingMode, setStreamingMode] = useState<AssistantMode>('conversation');
@@ -136,22 +131,6 @@ export default function AIAssistant(props: AIAssistantProps) {
   const [floatingArtifact, setFloatingArtifact] = useState<ExtractedArtifact | null>(null);
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewItem | null>(null);
   const [livePreviewArtifact, setLivePreviewArtifact] = useState<{ artifact: ExtractedArtifact; dest: 'iphone1' | 'iphone2' | 'desktop' } | null>(null);
-
-  const persistGeneratedImage = useCallback((artifact: SavedImageArtifact) => {
-    if (typeof window === 'undefined') return;
-    const key = conversationId ? `streams:image-history:${conversationId}` : 'streams:image-history:anonymous';
-    const current = (() => {
-      try { return JSON.parse(localStorage.getItem(key) ?? '[]') as SavedImageArtifact[]; }
-      catch { return [] as SavedImageArtifact[]; }
-    })();
-    const next = [artifact, ...current.filter((item) => item.url !== artifact.url)].slice(0, 20);
-    localStorage.setItem(key, JSON.stringify(next));
-  }, [conversationId]);
-
-  const showGeneratedMediaPreview = useCallback((item: MediaPreviewItem) => {
-    if (!autoPreview) return;
-    setMediaPreview(item);
-  }, [autoPreview]);
 
   // Register middleware once
   useEffect(() => registerActivityStreamMiddleware(), []);
@@ -260,20 +239,32 @@ export default function AIAssistant(props: AIAssistantProps) {
     try {
       const res = await fetch(`/api/conversations/${id}`, { credentials: 'include' });
       if (!res.ok) return;
-      const json = await res.json() as { data?: { messages: Array<{ role: string; content: string }> } };
+      const json = await res.json() as { data?: { messages: Array<{ role: string; content: string; attachments?: unknown[] }> } };
       const msgs = json.data?.messages ?? [];
       if (msgs.length === 0) return;
       const shaped: AssistantMessageShape[] = msgs.map((m) => ({
         role: m.role as 'user' | 'assistant',
         mode: 'conversation' as const,
-        content: [{ type: 'text' as const, text: m.content }],
+        content: [
+          { type: 'text' as const, text: m.content },
+          ...((m.attachments ?? []).flatMap((entry) => toStoredPreviewAttachment(entry as StoredAttachmentPayload))),
+        ],
       }));
+      const latestPreview = [...msgs].reverse().map((m) => extractLatestPreviewFromAttachments(m.attachments)).find((value): value is MediaPreviewItem => value !== null) ?? null;
       setMessages(shaped);
+      setMediaPreview(latestPreview);
       setConversationId(id);
       if (typeof window !== 'undefined') localStorage.setItem('streams_conv_id', id);
       setSidebarOpen(false);
     } catch { /* keep current messages */ }
   }, []);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    if (messages.length !== 1) return;
+    if (messages[0]?.role !== INITIAL_MESSAGE.role) return;
+    void loadConversation(conversationId);
+  }, [conversationId, loadConversation, messages]);
 
   // Delete conversation — calls DELETE /api/conversations/[id]
   const deleteConversation = useCallback(async (id: string, e: React.MouseEvent) => {
@@ -307,7 +298,7 @@ export default function AIAssistant(props: AIAssistantProps) {
       case 'update_copy_prompt': props.onUpdateCopyPrompt?.(String(action.payload.value ?? '')); break;
       case 'update_i2v_prompt': props.onUpdateI2VPrompt?.(String(action.payload.value ?? '')); break;
       case 'update_qa_instruction': props.onUpdateQAInstruction?.(String(action.payload.value ?? '')); break;
-      case 'generate_image': props.onGenerateImage?.(action.payload.conceptId as string | undefined, action.payload.prompt as string | undefined, { provider: imageProvider }); break;
+      case 'generate_image': props.onGenerateImage?.(action.payload.conceptId as string | undefined, action.payload.prompt as string | undefined); break;
       case 'generate_video': props.onGenerateVideo?.(action.payload.conceptId as string | undefined, action.payload.prompt as string | undefined); break;
       case 'generate_song': props.onGenerateSong?.(action.payload.prompt as string | undefined); break;
       case 'build_story_bible': props.onBuildStoryBible?.(action.payload.storyText as string | undefined); break;
@@ -334,26 +325,7 @@ export default function AIAssistant(props: AIAssistantProps) {
         break;
       default: break;
     }
-  }, [props, conversationId, imageProvider]);
-
-
-  const sendChatImageRequest = useCallback(async (prompt: string, referenceUrls: string[]) => {
-    const response = await fetch('/api/chat-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        prompt,
-        references: referenceUrls.map((url) => ({ url })),
-      }),
-    });
-
-    const payload = await response.json() as { ok?: boolean; url?: string; error?: string; provider?: string };
-    if (!response.ok || !payload.url) {
-      throw new Error(payload.error ?? 'Image generation failed');
-    }
-    return payload;
-  }, []);
+  }, [props, conversationId]);
 
   const sendMessage = useCallback(async (rawMessage: string) => {
     const message = rawMessage.trim();
@@ -388,48 +360,79 @@ export default function AIAssistant(props: AIAssistantProps) {
     // Emit only the very first local signal — everything else comes from server phase events
     ActivityController.responseStarted();
 
-    const referenceUrls = attachments
-      .filter((attachment) => attachment.kind === 'image' && attachment.preview?.media?.url)
-      .map((attachment) => attachment.preview!.media!.url);
+    const imageAttachments = attachments.filter((attachment) => attachment.kind === 'image');
+    const directChatImage = imageProvider === 'chat' && isDirectImageRequest(message);
 
-    if (imageProvider === 'chat' && isImageGenerationPrompt(message)) {
-      try {
-        setStreamingText('Generating image…');
-        const imageResult = await sendChatImageRequest(message, referenceUrls);
-        const imageUrl = imageResult.url;
-        const assistantContent: import('@/components/ai-chat/AssistantMessage').MsgContent[] = [
-          { type: 'text', text: 'Here is your image.' },
-          { type: 'image_url', image_url: { url: imageUrl } },
-        ];
-        setStreamingText('');
-        setMessages((prev) => [...prev, { role: 'assistant', mode: 'conversation', content: assistantContent }]);
-        const previewItem: MediaPreviewItem = {
-          id: `${Date.now()}`,
-          type: 'image',
-          url: imageUrl,
-          label: message,
+    try {
+      if (directChatImage) {
+        if (imageAttachments.length > 0) {
+          setMessages((prev) => [...prev, {
+            role: 'assistant',
+            mode: 'conversation',
+            content: [{ type: 'text', text: 'Chat Image reference editing is not implemented on this path yet. Send a text-only image request or use System Image for attachment-driven generation.' }],
+          }]);
+          ActivityController.toolFailed('image_generator', 'Reference-image editing is not implemented on the Chat Image path.');
+          return;
+        }
+
+        const generationResponse = await fetch('/api/chat-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          signal: controller.signal,
+          body: JSON.stringify({ prompt: message, conversationId }),
+        });
+
+        if (!generationResponse.ok) {
+          throw new Error(await generationResponse.text().catch(() => 'Image generation failed'));
+        }
+
+        const generationPayload = await generationResponse.json() as {
+          conversationId?: string;
+          artifact?: {
+            id: string;
+            storageUrl: string;
+            originalPrompt: string;
+          };
         };
-        showGeneratedMediaPreview(previewItem);
-        persistGeneratedImage({ id: previewItem.id, url: imageUrl, prompt: message, provider: 'chat', createdAt: new Date().toISOString() });
+
+        const nextConversationId = generationPayload.conversationId ?? conversationId;
+        if (nextConversationId) {
+          setConversationId(nextConversationId);
+          if (typeof window !== 'undefined') localStorage.setItem('streams_conv_id', nextConversationId);
+        }
+
+        const artifact = generationPayload.artifact;
+        if (!artifact?.storageUrl) throw new Error('Image generation completed without a stored artifact');
+
+        setMediaPreview({
+          id: artifact.id,
+          type: 'image',
+          url: artifact.storageUrl,
+          label: artifact.originalPrompt,
+          aspectRatio: '1:1',
+          conversationId: nextConversationId,
+          persisted: true,
+        });
+
+        setStreamingText('');
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          mode: 'conversation',
+          content: [
+            { type: 'text', text: 'Generated image.' },
+            { type: 'image_url', image_url: { url: artifact.storageUrl } },
+            { type: 'document', document: { url: artifact.storageUrl, label: 'Download image' }, text: 'Download image' },
+          ],
+        }]);
         ActivityController.responseCompleted();
         clearAttachments();
         clearVoiceTranscript();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Image generation failed';
-        ActivityController.toolFailed('chat_image', msg);
-        setStreamingText('');
-        setMessages((prev) => [...prev, { role: 'assistant', mode: 'verification', content: [{ type: 'text', text: `Image generation failed.
-
-${msg}` }] }]);
-      } finally {
-        setPending(false);
-        abortRef.current = null;
+        return;
       }
-      return;
-    }
 
-    try {
       const forceTimeout = window.setTimeout(() => controller.abort(), 15000);
+      const generationIntent = /generate|create|make|show/.test(message.toLowerCase()) && /image|photo|picture|video|clip|song|music|audio/.test(message.toLowerCase());
       const res = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -448,6 +451,7 @@ ${msg}` }] }]);
       let buffer = '';
       let fullText = '';
       let mode: AssistantMode = 'conversation';
+      let actionFired = false;  // track whether any action event was received
 
       while (true) {
         const { value, done } = await reader.read();
@@ -484,6 +488,7 @@ ${msg}` }] }]);
                 }
               }
             } else if (evt.type === 'action' && evt.action) {
+              actionFired = true;
               performAction(evt.action);
             } else if (evt.type === 'done') {
               if (evt.conversationId) {
@@ -502,19 +507,27 @@ ${msg}` }] }]);
       }
 
       setArtifactStreaming(false);
-      let displayText = fullText.trim() || 'Request completed.';
 
-      const mediaBlocks = detectMedia(fullText);
-      const imageBlock = mediaBlocks.find((block) => block.type === 'image_url' && block.image_url?.url);
-      if (imageBlock?.image_url?.url) {
-        showGeneratedMediaPreview({ id: `${Date.now()}`, type: 'image', url: imageBlock.image_url.url, label: displayText });
-        persistGeneratedImage({ id: `${Date.now()}`, url: imageBlock.image_url.url, prompt: message, provider: imageProvider, createdAt: new Date().toISOString() });
+      // ── Execution feedback ────────────────────────────────────────────────
+      // After an action fires, replace conversational text with a short status
+      // so the user knows execution happened, not just a description.
+      let displayText = fullText || 'Request completed.';
+      const looksExplanatory = /let's create|the image generation logic comes|the process involves|guided the ai|you can view through|private care/i.test(fullText);
+      if (generationIntent && (looksExplanatory || !actionFired)) displayText = /video|clip/.test(message.toLowerCase()) ? 'Video generation started.' : /song|music|audio/.test(message.toLowerCase()) ? 'Song generation started.' : 'Image generation started.';
+      if (actionFired && mode === 'action') {
+        const lower = message.toLowerCase();
+        if (/generate_image|image|photo|picture/.test(lower)) displayText = fullText || 'Image generation started.';
+        else if (/generate_video|video|clip/.test(lower)) displayText = fullText || 'Video generation started.';
+        else if (/generate_song|song|music/.test(lower)) displayText = fullText || 'Song generation started.';
+        else if (/pipeline/.test(lower)) displayText = fullText || 'Pipeline started.';
+        else displayText = fullText || 'Executing now.';
       }
+
       // Clear streaming text BEFORE pushing final message — prevents one-frame duplicate render
       setStreamingText('');
       setMessages((prev) => [...prev, {
         role: 'assistant', mode,
-        content: [{ type: 'text', text: displayText }, ...mediaBlocks],
+        content: [{ type: 'text', text: displayText }, ...detectMedia(fullText)],
       }]);
       ActivityController.responseCompleted();
       clearAttachments();
@@ -532,7 +545,7 @@ ${msg}` }] }]);
       setPending(false);
       abortRef.current = null;
     }
-  }, [attachments, clearAttachments, clearVoiceTranscript, conversationId, imageProvider, messages, pending, performAction, persistGeneratedImage, props.context, requestContext, sendChatImageRequest, showGeneratedMediaPreview, voiceTranscript]);
+  }, [attachments, clearAttachments, clearVoiceTranscript, conversationId, imageProvider, messages, pending, performAction, props.context, requestContext, voiceTranscript]);
 
   const ConvItem = useCallback(({ conv }: { conv: ConversationItem }) => (
     <div
@@ -682,7 +695,7 @@ ${msg}` }] }]);
 
   const footer = useMemo(() => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* Activity status */}
+      {/* Activity bar — always on */}
       <ActivityStreamBar />
       {/* Artifact chip — only when code detected and done streaming */}
       {currentArtifact && !artifactStreaming && (
@@ -737,6 +750,20 @@ ${msg}` }] }]);
           rows={1}
           style={{ flex: 1, resize: 'none', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', padding: '10px 14px', fontSize: 14, outline: 'none', maxHeight: 120, minHeight: 40 }}
         />
+        {/* Image provider selector */}
+        <select
+          value={imageProvider}
+          onChange={(e) => { const next = e.target.value === 'system' ? 'system' : 'chat'; setImageProvider(next); if (typeof window !== 'undefined') localStorage.setItem('streams:image-provider', next); }}
+          style={{
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+            color: 'rgba(255,255,255,0.78)', borderRadius: 10, padding: '4px 6px',
+            fontSize: 10, cursor: 'pointer', outline: 'none', marginBottom: 4, flexShrink: 0,
+          }}
+          aria-label="Image provider"
+        >
+          <option value="chat">Chat Image</option>
+          <option value="system">System Image</option>
+        </select>
         {/* Model selector */}
           <select
           value={model}
@@ -758,23 +785,6 @@ ${msg}` }] }]);
             <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
           </optgroup>
         </select>
-        <select
-          value={imageProvider}
-          onChange={(e) => {
-            const next = e.target.value as ImageProviderMode;
-            setImageProvider(next);
-            if (typeof window !== 'undefined') localStorage.setItem('streams:imageProvider', next);
-          }}
-          title="Image provider"
-          style={{
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-            color: 'rgba(255,255,255,0.72)', borderRadius: 10, padding: '4px 6px',
-            fontSize: 10, cursor: 'pointer', outline: 'none', marginBottom: 4, flexShrink: 0,
-          }}
-        >
-          <option value="chat">Chat Image</option>
-          <option value="system">System Image</option>
-        </select>
         {/* Send button */}
         <button type="submit"
           disabled={(!input.trim() && !attachments.length && !voiceTranscript?.trim()) || pending}
@@ -783,7 +793,7 @@ ${msg}` }] }]);
         </button>
       </form>
     </div>
-  ), [addAttachment, attachments, attachmentOpen, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, input, model, pending, removeAttachment, sendMessage, setAttachmentOpen, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
+  ), [addAttachment, attachments, attachmentOpen, artifactStreaming, brainSaved, clearVoiceTranscript, currentArtifact, imageProvider, input, model, pending, removeAttachment, sendMessage, setAttachmentOpen, setFloatingArtifact, setVoiceTranscript, streamingText, voiceTranscript]);
 
   return (
     <>
