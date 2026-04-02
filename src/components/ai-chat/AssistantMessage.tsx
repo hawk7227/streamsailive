@@ -14,16 +14,19 @@ export interface MsgContent {
   document_url?: { url: string; title?: string };
 }
 
-export interface AssistantMessageProps {
+export interface AssistantMessageShape {
   role: "user" | "assistant";
   content: MsgContent[];
   mode?: AssistantMode;
 }
 
-export type AssistantMessageShape = AssistantMessageProps;
+export type AssistantMessageProps = AssistantMessageShape;
 
-export interface AssistantMessageComponentProps extends AssistantMessageProps {
+export interface AssistantMessageComponentProps {
   message?: AssistantMessageShape;
+  role?: "user" | "assistant";
+  content?: MsgContent[];
+  mode?: AssistantMode;
 }
 
 function renderDocument(url: string, title?: string): React.ReactNode {
@@ -84,11 +87,19 @@ function renderImage(url: string): React.ReactNode {
 }
 
 export function AssistantMessage(props: AssistantMessageComponentProps) {
-  const resolvedMessage: AssistantMessageShape = props.message ?? {
-    role: props.role,
-    content: props.content,
-    mode: props.mode,
-  };
+  const resolvedMessage: AssistantMessageShape | null = props.message
+    ? props.message
+    : props.role && props.content
+      ? {
+          role: props.role,
+          content: props.content,
+          mode: props.mode,
+        }
+      : null;
+
+  if (!resolvedMessage) {
+    return null;
+  }
 
   const { role, content, mode } = resolvedMessage;
   const isUser = role === "user";
