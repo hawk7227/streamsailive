@@ -164,9 +164,9 @@ function Spinner({ size = 12 }: { size?: number }) {
 function P(style: React.CSSProperties): React.CSSProperties {
   return {
     border: "1px solid rgba(148,163,184,0.16)",
-    background: "linear-gradient(180deg, rgba(18,26,46,0.92), rgba(12,19,35,0.9))",
-    borderRadius: 20,
-    boxShadow: "0 18px 48px rgba(2,6,23,.22)",
+    background: "linear-gradient(180deg, rgba(19,31,56,0.92), rgba(13,23,43,0.9))",
+    borderRadius: 22,
+    boxShadow: "0 24px 60px rgba(2,6,23,.20)",
     backdropFilter: "blur(16px)",
     ...style,
   };
@@ -254,6 +254,60 @@ function AmbientLayer({ tint = "cyan", intensity = 1 }: { tint?: "cyan" | "viole
       <div style={{ position: "absolute", inset: "-8% auto auto -10%", width: `${42 * intensity}%`, height: `${42 * intensity}%`, borderRadius: "50%", background: `radial-gradient(circle, ${a} 0%, transparent 72%)`, filter: "blur(8px)", animation: "ambientFloat 16s ease-in-out infinite" }} />
       <div style={{ position: "absolute", inset: "auto -12% -18% auto", width: `${48 * intensity}%`, height: `${48 * intensity}%`, borderRadius: "50%", background: `radial-gradient(circle, ${b} 0%, transparent 70%)`, filter: "blur(10px)", animation: "ambientFloat 22s ease-in-out infinite reverse" }} />
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0))", mixBlendMode: "screen", animation: "ambientFade 12s ease-in-out infinite" }} />
+    </div>
+  );
+}
+
+function makeAmbientArt(label: string, palette: [string, string, string]) {
+  const [a,b,c] = palette;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="0.58" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="1220" cy="190" r="180" fill="rgba(255,255,255,0.18)"/><circle cx="320" cy="690" r="240" fill="rgba(255,255,255,0.08)"/><path d="M0 720 C 240 580, 470 840, 760 710 S 1180 560, 1600 720 V900 H0 Z" fill="rgba(4,10,25,0.34)"/><rect x="74" y="72" rx="24" ry="24" width="460" height="84" fill="rgba(6,10,22,0.24)" stroke="rgba(255,255,255,0.18)"/><text x="110" y="126" font-size="46" font-family="Arial, sans-serif" fill="white" font-weight="700">${label}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const AMBIENT_GALLERIES = {
+  hero: [
+    makeAmbientArt("Main Output", ["#c7d7e8", "#8da9b7", "#56657b"]),
+    makeAmbientArt("Refined Scene", ["#d7c7b1", "#9d8b77", "#5d4d45"]),
+    makeAmbientArt("Continuity Pass", ["#bdd7ce", "#75968a", "#42515a"]),
+  ],
+  phone: [
+    makeAmbientArt("Source Frame", ["#8a6e62", "#564546", "#241b28"]),
+    makeAmbientArt("Reference", ["#b9bfcb", "#6f7b8e", "#31384e"]),
+    makeAmbientArt("Alt Shot", ["#c4b28b", "#786846", "#342a1c"]),
+  ],
+  generator: [
+    makeAmbientArt("Image Prompt", ["#e0d8ce", "#9aa7b0", "#586b7e"]),
+    makeAmbientArt("Video Motion", ["#ced8df", "#7991a4", "#3c4e62"]),
+    makeAmbientArt("Realism QA", ["#d0e1d2", "#7c9a82", "#405345"]),
+  ],
+  shelf: [
+    makeAmbientArt("Approved Asset", ["#d1c2a6", "#8a7453", "#43331c"]),
+    makeAmbientArt("Living Moment", ["#b9d1cc", "#6b8b88", "#304245"]),
+    makeAmbientArt("Cutaway", ["#d6dce6", "#8f9cad", "#4b5767"]),
+  ],
+  concept: [
+    makeAmbientArt("Scene Preview", ["#c3a58f", "#7f6453", "#2d2230"]),
+    makeAmbientArt("Image to Video", ["#d7cfc4", "#8c9ba6", "#475362"]),
+    makeAmbientArt("Continuity Frame", ["#c0d8cf", "#769189", "#3f4b53"]),
+  ],
+};
+
+function AmbientPreviewTile({ galleryKey, title, subtitle, badge, compact = false }: { galleryKey: keyof typeof AMBIENT_GALLERIES; title: string; subtitle: string; badge?: string; compact?: boolean }) {
+  const images = AMBIENT_GALLERIES[galleryKey];
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "linear-gradient(180deg, rgba(16,26,46,0.96), rgba(10,16,30,0.96))" }}>
+      {images.map((src, index) => (
+        <div key={src} style={{ position: "absolute", inset: 0, opacity: 0, animation: `ambientCycle 18s ease-in-out ${index * 6}s infinite` }}>
+          <img src={src} alt="" aria-hidden style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.04)", animation: `ambientKenBurns 18s ease-in-out ${index * 6}s infinite` }} />
+        </div>
+      ))}
+      <AmbientLayer tint={galleryKey === "generator" ? "gold" : galleryKey === "concept" ? "violet" : "cyan"} intensity={compact ? 0.65 : 1} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(8,13,25,0.1), rgba(8,13,25,0.6))" }} />
+      <div style={{ position: "absolute", left: compact ? 14 : 18, right: compact ? 14 : 18, bottom: compact ? 12 : 18, display: "flex", flexDirection: "column", gap: 5 }}>
+        {badge ? <span style={{ alignSelf: "flex-start", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7dd3fc", background: "rgba(15,23,42,0.55)", border: "1px solid rgba(125,211,252,0.28)", borderRadius: 999, padding: "4px 8px" }}>{badge}</span> : null}
+        <span style={{ fontSize: compact ? 13 : 18, fontWeight: 700, color: "#f8fafc", textShadow: "0 10px 26px rgba(0,0,0,0.35)" }}>{title}</span>
+        <span style={{ fontSize: compact ? 10 : 12, lineHeight: 1.5, color: "rgba(226,232,240,0.82)", maxWidth: compact ? 240 : 360 }}>{subtitle}</span>
+      </div>
     </div>
   );
 }
@@ -2069,7 +2123,7 @@ Accept only if:
     </>
   );
 
-  const s = { minHeight: "100vh", background: "radial-gradient(circle at top, #1a2744 0%, #101827 36%, #0b1220 100%)", color: "#e2e8f0", padding: 18, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
+  const s = { minHeight: "100vh", background: "radial-gradient(circle at top, #24385e 0%, #14233d 32%, #0d172b 100%)", color: "#e2e8f0", padding: 18, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,sans-serif" } as React.CSSProperties;
 
   const hardConflicts = conflicts.filter(c=>c.status==="unresolved"&&c.severity==="hard");
   const unresolvedConflicts = conflicts.filter(c=>c.status==="unresolved");
@@ -2177,6 +2231,8 @@ Accept only if:
         @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
         @keyframes ambientFloat { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(0,-10px,0) scale(1.05); } }
         @keyframes ambientFade { 0%,100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+        @keyframes ambientCycle { 0%,22% { opacity: 0; } 6%,18% { opacity: 1; } 30%,100% { opacity: 0; } }
+        @keyframes ambientKenBurns { 0%,100% { transform: scale(1.01) translate3d(0,0,0); } 50% { transform: scale(1.05) translate3d(0,-8px,0); } }
         .step-running { animation: glowPulse 1.4s ease-in-out infinite; }
         .step-error { animation: shake 0.4s ease; }
         * { box-sizing: border-box; }
@@ -2940,9 +2996,8 @@ Accept only if:
                                   : slot.image
                                     ? <img src={slot.image} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                     : (
-                                      <div style={{ width: "100%", height: "100%", background: "linear-gradient(180deg, #0d0d12 0%, #090912 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 12px", textAlign: "center" }}>
-                                        <div style={{ fontSize: Math.round(22 * S), opacity: 0.15 }}>◻</div>
-                                        <div style={{ fontSize: Math.max(7, Math.round(9 * S)), color: "#334155", lineHeight: 1.4 }}>Approve an output from Preview Screens</div>
+                                      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                                        <AmbientPreviewTile galleryKey="phone" title={frameId === "iphone1" ? "Source / Reference" : "Pipeline / Alternate"} subtitle={frameId === "iphone1" ? "Ambient source references, continuity checks, and alternate frames live here until a real output is approved." : "Long-video status, alternate outputs, and pipeline context appear here as jobs move through planning and render."} badge={frameId === "iphone1" ? "idle preview" : "live monitor"} compact />
                                       </div>
                                     )
                                 }
@@ -3411,9 +3466,8 @@ Accept only if:
                     </div>
                   ))}
                 {mediaShelfItems.filter(item => genFilterTab === "All" || (genFilterTab === "Images" && item.type === "image") || (genFilterTab === "Video" && item.type === "video") || (genFilterTab === "Audio" && item.type === "audio")).length === 0 && (
-                  <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#334155", padding: 24, fontSize: 12, textAlign: "center" }}>
-                    <span style={{ fontSize: 28 }}>🖼</span>
-                    Generate an image above,<br />or drag files to upload
+                  <div style={{ gridColumn: "1 / -1", minHeight: 210, position: "relative", overflow: "hidden", borderRadius: 16 }}>
+                    <AmbientPreviewTile galleryKey="shelf" title="Approved assets live here" subtitle="Images, clips, stitched chapters, and continuity references appear in the shelf automatically after they pass realism and QA." badge="ambient shelf" />
                   </div>
                 )}
               </div>
@@ -3428,9 +3482,8 @@ Accept only if:
                 ) : approvedOutputs.video ? (
                   <video src={approvedOutputs.video} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 ) : (
-                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
-                    <span style={{ fontSize: 24, opacity: 0.3 }}>🎬</span>
-                    <span style={{ fontSize: 10, color: "#334155" }}>Approve output to preview</span>
+                  <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                    <AmbientPreviewTile galleryKey="generator" title="Guided creation preview" subtitle="Story, song, and voice guidance stays visually alive here until approved media, recorded voice, or generated output takes over." badge="creation ready" />
                   </div>
                 )}
               </div>
@@ -3519,7 +3572,7 @@ Accept only if:
           </div>{/* end bottom 3-col */}
 
           {/* ── ROW 3: 4-up Concept Grid ─────────────────────────────────────── */}
-          <div style={{ background: "rgba(6,9,18,0.95)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, marginBottom: 14 }}>
+          <div style={{ background: "linear-gradient(180deg, rgba(15,24,44,0.96), rgba(10,18,34,0.96))", border: "1px solid rgba(148,163,184,0.18)", borderRadius: 18, marginBottom: 14, boxShadow: "0 18px 46px rgba(2,6,23,.18)" }}>
             {/* Toolbar */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em" }}>CONCEPT GRID</span>
@@ -3546,7 +3599,7 @@ Accept only if:
             </div>
 
             {/* 2×2 grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, background: "rgba(255,255,255,0.09)", borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, background: "rgba(148,163,184,0.14)", borderRadius: "0 0 18px 18px", overflow: "hidden" }}>
               {concepts.map((concept, i) => {
                 const cid = concept.variantId;
                 const out = conceptOutputs[cid];
@@ -3559,7 +3612,7 @@ Accept only if:
 
                 return (
                   // Outer: sets the aspect ratio via padding-top
-                  <div key={cid} style={{ position: "relative", width: "100%", paddingTop, background: "#10192d", overflow: "hidden" }}>
+                  <div key={cid} style={{ position: "relative", width: "100%", paddingTop, background: "linear-gradient(180deg, #162746, #0f1b33)", overflow: "hidden" }}>
                   {/* Inner: fills the padded space absolutely */}
                   <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
                     {/* Media */}
@@ -3581,11 +3634,8 @@ Accept only if:
                           style={{ fontSize: 9, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
                       </div>
                     ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.15)" }}>{i + 1}</span>
-                        </div>
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.18)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No content yet</span>
+                      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                        <AmbientPreviewTile galleryKey="concept" title={["Scene Preview","Continuity Frame","Alternate Shot","Image → Video"][i] ?? `Concept ${i+1}`} subtitle={["Passive living visuals show what this tile can become once generation starts.","Keeps identity, environment, and lighting continuity visible before render.","Use this quadrant for alternates, retries, and comparison shots.","Clip-ready ambient state hints at image-to-video and chapter stitching."][i] ?? "Ambient capability layer"} badge={`C${i+1} idle`} compact />
                       </div>
                     )}
 
@@ -3783,4 +3833,6 @@ Accept only if:
     </>
   );
 }
+
+
 
