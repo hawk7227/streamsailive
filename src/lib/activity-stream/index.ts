@@ -11,7 +11,7 @@ export type ActivityPhase =
 export type InternalToolName =
   | 'file_search' | 'repo_reader' | 'web_lookup' | 'code_generator'
   | 'patch_applier' | 'preview_renderer' | 'validator' | 'test_runner'
-  | 'optimizer' | 'unknown';
+  | 'optimizer' | 'image_generator' | 'unknown';
 
 export type StreamsCapability =
   | 'STREAMS Intelligence' | 'STREAMS Build Engine' | 'STREAMS Preview Engine'
@@ -101,6 +101,7 @@ export const TOOL_TO_CAPABILITY: Record<InternalToolName, StreamsCapability> = {
   validator: 'STREAMS Quality Engine',
   test_runner: 'STREAMS Quality Engine',
   optimizer: 'STREAMS Optimization Engine',
+  image_generator: 'STREAMS Preview Engine',
   unknown: 'STREAMS Response Engine',
 };
 
@@ -114,6 +115,7 @@ export const TOOL_TO_PHASE: Partial<Record<InternalToolName, ActivityPhase>> = {
   validator: 'validating',
   test_runner: 'validating',
   optimizer: 'optimizing',
+  image_generator: 'rendering_preview',
 };
 
 export const CAPABILITY_DETAIL_LABELS: Record<StreamsCapability, string[]> = {
