@@ -1,0 +1,24 @@
+STREAMS Chat changed/new files from current working repo compared with original extracted repo.
+
+MODIFIED: .npmrc
+MODIFIED: src/app/api/ai-assistant/route.ts
+NEW: src/app/api/files/[id]/asset/[assetKind]/route.ts
+MODIFIED: src/app/api/files/[id]/preview/route.ts
+MODIFIED: src/app/api/files/intake/route.ts
+MODIFIED: src/app/api/files/upload/route.ts
+MODIFIED: src/components/ai-chat/AssistantMessage.tsx
+MODIFIED: src/components/ai-chat/AttachmentPreviewDialog.tsx
+MODIFIED: src/components/ai-chat/AttachmentRail.tsx
+MODIFIED: src/components/ai-chat/ContextChips.tsx
+MODIFIED: src/components/dashboard/AIAssistant.tsx
+MODIFIED: src/lib/ai-chat/context/buildIntegratedContext.ts
+MODIFIED: src/lib/ai-chat/context/types.ts
+NEW: src/lib/files/__tests__/derivatives.test.ts
+NEW: src/lib/files/__tests__/parser.test.ts
+MODIFIED: src/lib/files/__tests__/preview.test.ts
+NEW: src/lib/files/derivatives.ts
+MODIFIED: src/lib/files/fileClassifier.ts
+MODIFIED: src/lib/files/parser.ts
+MODIFIED: src/lib/files/preview.ts
+MODIFIED: src/lib/files/uploadOrchestrator.ts
+NEW: tsconfig.streams-check.json

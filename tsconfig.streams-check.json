@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/lib/files/preview.ts",
+    "src/lib/files/derivatives.ts",
+    "src/app/api/files/[id]/asset/[assetKind]/route.ts",
+    "src/lib/files/uploadOrchestrator.ts",
+    "src/app/api/files/intake/route.ts",
+    "src/app/api/files/upload/route.ts",
+    "src/app/api/files/[id]/preview/route.ts",
+    "src/components/ai-chat/AttachmentPreviewDialog.tsx",
+    "src/lib/files/fileClassifier.ts",
+    "src/components/ai-chat/AssistantMessage.tsx",
+    "src/components/dashboard/AIAssistant.tsx",
+    "src/lib/files/__tests__/preview.test.ts",
+    "src/lib/files/__tests__/derivatives.test.ts"
+  ]
+}
