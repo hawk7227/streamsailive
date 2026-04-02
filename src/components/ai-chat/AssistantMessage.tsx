@@ -20,6 +20,8 @@ export interface AssistantMessageProps {
   mode?: AssistantMode;
 }
 
+export type AssistantMessageShape = AssistantMessageProps;
+
 function renderDocument(url: string, title?: string): React.ReactNode {
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
