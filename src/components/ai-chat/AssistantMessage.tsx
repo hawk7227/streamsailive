@@ -46,7 +46,7 @@ function renderDocument(url: string, title?: string): React.ReactNode {
           <ExternalLink className="h-4 w-4" />
           Open
         </a>
-        <a
+        
           href={url}
           download
           className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
