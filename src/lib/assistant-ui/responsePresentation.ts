@@ -1,108 +1,123 @@
-import type { AssistantMode } from '@/lib/enforcement/types';
+import type { AssistantMode } from '@/lib/assistant-brain/contracts';
 
 export type ResponseDensity = 'light' | 'medium' | 'heavy';
-export type RenderBlock =
-  | { kind: 'paragraph'; text: string }
-  | { kind: 'bullet'; text: string; ordered?: string }
-  | { kind: 'heading'; level: 1 | 2 | 3; text: string }
-  | { kind: 'spacer' }
-  | { kind: 'code'; language?: string; code: string };
 
-export interface PresentationPlan {
+export type ResponseBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'heading'; text: string }
+  | { type: 'bullet_list'; items: string[] }
+  | { type: 'code_block'; code: string; language?: string };
+
+export interface PresentedResponse {
   density: ResponseDensity;
-  allowHeadings: boolean;
-  allowBullets: boolean;
-  collapseLogs: boolean;
+  blocks: ResponseBlock[];
 }
 
-export function createPresentationPlan(text: string, mode?: AssistantMode): PresentationPlan {
+export function presentResponse(text: string, mode?: AssistantMode): PresentedResponse {
   const lineCount = text.split('\n').length;
   const hasCode = /```/.test(text);
-  const isHeavyMode = mode === 'build' || mode === 'verification';
-  const density: ResponseDensity = isHeavyMode || hasCode || lineCount > 16 ? 'heavy' : lineCount > 8 ? 'medium' : 'light';
+  const isHeavyMode =
+    mode === 'builder' ||
+    mode === 'execution' ||
+    mode === 'verification' ||
+    mode === 'action';
+
+  const density: ResponseDensity =
+    isHeavyMode || hasCode || lineCount > 16
+      ? 'heavy'
+      : lineCount > 8
+        ? 'medium'
+        : 'light';
 
   return {
     density,
-    allowHeadings: density !== 'light',
-    allowBullets: density !== 'light',
-    collapseLogs: density === 'heavy',
+    blocks: parseBlocks(text),
   };
 }
 
-export function splitRenderBlocks(text: string, mode?: AssistantMode): RenderBlock[] {
-  const plan = createPresentationPlan(text, mode);
-  const blocks: RenderBlock[] = [];
-  const codeFenceRegex = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = codeFenceRegex.exec(text))) {
-    const before = text.slice(cursor, match.index);
-    blocks.push(...splitTextBlocks(before, plan));
-    blocks.push({ kind: 'code', language: match[1], code: match[2].trimEnd() });
-    cursor = codeFenceRegex.lastIndex;
-  }
-
-  if (cursor < text.length) {
-    blocks.push(...splitTextBlocks(text.slice(cursor), plan));
-  }
-
-  return blocks.length > 0 ? blocks : [{ kind: 'paragraph', text }];
-}
-
-function splitTextBlocks(text: string, plan: PresentationPlan): RenderBlock[] {
+function parseBlocks(text: string): ResponseBlock[] {
   const lines = text.split('\n');
-  const blocks: RenderBlock[] = [];
+  const blocks: ResponseBlock[] = [];
+  let paragraphBuffer: string[] = [];
+  let bulletBuffer: string[] = [];
+  let inCode = false;
+  let codeLanguage = '';
+  let codeBuffer: string[] = [];
+
+  const flushParagraph = (): void => {
+    if (paragraphBuffer.length === 0) return;
+    const paragraph = paragraphBuffer.join(' ').trim();
+    if (paragraph) blocks.push({ type: 'paragraph', text: paragraph });
+    paragraphBuffer = [];
+  };
+
+  const flushBullets = (): void => {
+    if (bulletBuffer.length === 0) return;
+    blocks.push({ type: 'bullet_list', items: [...bulletBuffer] });
+    bulletBuffer = [];
+  };
+
+  const flushCode = (): void => {
+    if (codeBuffer.length === 0) return;
+    blocks.push({
+      type: 'code_block',
+      code: codeBuffer.join('\n'),
+      language: codeLanguage || undefined,
+    });
+    codeBuffer = [];
+    codeLanguage = '';
+  };
 
   for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      blocks.push({ kind: 'spacer' });
+    const line = rawLine.trimEnd();
+
+    if (line.trim().startsWith('```')) {
+      flushParagraph();
+      flushBullets();
+
+      if (!inCode) {
+        inCode = true;
+        codeLanguage = line.trim().slice(3).trim();
+      } else {
+        inCode = false;
+        flushCode();
+      }
       continue;
     }
 
-    if (plan.allowHeadings) {
-      if (line.startsWith('### ')) {
-        blocks.push({ kind: 'heading', level: 3, text: line.slice(4) });
-        continue;
-      }
-      if (line.startsWith('## ')) {
-        blocks.push({ kind: 'heading', level: 2, text: line.slice(3) });
-        continue;
-      }
-      if (line.startsWith('# ')) {
-        blocks.push({ kind: 'heading', level: 1, text: line.slice(2) });
-        continue;
-      }
-    }
-
-    if (plan.allowBullets) {
-      if (/^[-*] /.test(line)) {
-        blocks.push({ kind: 'bullet', text: line.slice(2) });
-        continue;
-      }
-      const orderedMatch = line.match(/^(\d+)\.\s+(.+)/);
-      if (orderedMatch) {
-        blocks.push({ kind: 'bullet', ordered: orderedMatch[1], text: orderedMatch[2] });
-        continue;
-      }
-    }
-
-    blocks.push({ kind: 'paragraph', text: line });
-  }
-
-  return mergeParagraphs(blocks);
-}
-
-function mergeParagraphs(blocks: RenderBlock[]): RenderBlock[] {
-  const merged: RenderBlock[] = [];
-  for (const block of blocks) {
-    const previous = merged[merged.length - 1];
-    if (block.kind === 'paragraph' && previous?.kind === 'paragraph') {
-      previous.text = `${previous.text} ${block.text}`.trim();
+    if (inCode) {
+      codeBuffer.push(rawLine);
       continue;
     }
-    merged.push(block);
+
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushParagraph();
+      flushBullets();
+      continue;
+    }
+
+    if (trimmed.startsWith('# ')) {
+      flushParagraph();
+      flushBullets();
+      blocks.push({ type: 'heading', text: trimmed.slice(2).trim() });
+      continue;
+    }
+
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      flushParagraph();
+      bulletBuffer.push(trimmed.slice(2).trim());
+      continue;
+    }
+
+    flushBullets();
+    paragraphBuffer.push(trimmed);
   }
-  return merged;
+
+  flushParagraph();
+  flushBullets();
+  flushCode();
+
+  return blocks;
 }
