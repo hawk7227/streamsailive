@@ -4,8 +4,7 @@ import React, { Fragment } from "react";
 import { VerificationBlock } from "./VerificationBlock";
 import { AssistantCodeBlock } from "./AssistantCodeBlock";
 import type { AssistantMode } from "@/lib/enforcement/types";
-import { createPresentationPlan, splitRenderBlocks } from "@/lib/assistant-ui/responsePresentation";
-
+import { presentResponse } from "@/lib/assistant-ui/responsePresentation";
 export interface MsgContent {
   type: "text" | "image_url" | "video_url" | "audio_url" | "document";
   text?: string;
@@ -47,8 +46,9 @@ function TextBlock({ text, mode, isUser }: { text: string; mode?: AssistantMode;
     return <VerificationBlock text={text.slice(sectionStart)} />;
   }
 
-  const plan = createPresentationPlan(text, mode);
-  const blocks = splitRenderBlocks(text, mode);
+  presentResponse(...)
+ const presentation = presentResponse(text, mode);
+ const blocks = presentation.blocks;
   const prose = isUser ? "text-[#0A0C10]/90" : "text-white/84";
   const heading = isUser ? "text-[#0A0C10]" : "text-white";
 
