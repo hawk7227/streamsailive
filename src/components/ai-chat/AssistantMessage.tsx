@@ -6,9 +6,11 @@ import { AssistantCodeBlock } from "./AssistantCodeBlock";
 import type { AssistantMode } from "@/lib/enforcement/types";
 
 export interface MsgContent {
-  type: "text" | "image_url" | "video_url" | "document";
+  type: "text" | "image_url" | "video_url" | "audio_url" | "document";
   text?: string;
   image_url?: { url: string };
+  audio_url?: { url: string };
+  document?: { url?: string; label?: string };
 }
 
 export interface AssistantMessageShape {
@@ -31,7 +33,6 @@ function splitCodeFence(text: string): Array<{ type: "text" | "code"; value: str
   return parts.length > 0 ? parts : [{ type: "text", value: text }];
 }
 
-// Inline: bold + inline code chip
 function InlineText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
@@ -59,7 +60,6 @@ function InlineText({ text }: { text: string }) {
   );
 }
 
-// Single line — heading, bullet, numbered, or plain
 function MarkdownLine({ line, isUser }: { line: string; isUser?: boolean }) {
   const color = isUser ? "rgba(10,12,16,0.9)" : "rgba(255,255,255,0.88)";
 
@@ -134,13 +134,21 @@ function MediaBlock({ block }: { block: MsgContent }) {
   if (block.type === "video_url" && block.image_url?.url) {
     return <video src={block.image_url.url} className="mt-3 max-h-[320px] w-full rounded-2xl" controls playsInline />;
   }
-  if (block.type === "document" && block.text) {
-    return <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">{block.text}</div>;
+  if (block.type === "audio_url" && block.audio_url?.url) {
+    return <audio src={block.audio_url.url} className="mt-3 w-full" controls preload="metadata" />;
+  }
+  if (block.type === "document") {
+    const href = block.document?.url;
+    const label = block.document?.label ?? block.text ?? 'Open document';
+    return (
+      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+        {href ? <a href={href} target="_blank" rel="noreferrer" className="underline decoration-white/30 underline-offset-4">{label}</a> : label}
+      </div>
+    );
   }
   return null;
 }
 
-// Clipboard SVG icon — matches Claude.ai's copy icon
 function ClipboardIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -165,11 +173,10 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
   const [copied, setCopied] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
 
-  // Copy raw markdown (preserves **bold**, ## headings, `code`, etc.)
   function copyText() {
     const raw = typeof message.content === "string"
       ? message.content
-      : message.content.filter(b => b.type === "text").map(b => b.text ?? "").join("\n");
+      : message.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n");
     navigator.clipboard.writeText(raw).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
@@ -217,7 +224,6 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
         )}
       </div>
 
-      {/* Action bar — hover only, assistant messages only, matches Claude.ai */}
       {!isUser && !isSystem && (
         <div style={{
           display: "flex",
@@ -238,21 +244,17 @@ export function AssistantMessage({ message }: { message: AssistantMessageShape }
               justifyContent: "center",
               width: 28,
               height: 28,
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: copied ? "rgba(110,231,183,0.12)" : "rgba(255,255,255,0.05)",
-              color: copied ? "rgba(110,231,183,0.9)" : "rgba(255,255,255,0.5)",
+              borderRadius: 999,
+              border: "none",
+              background: "transparent",
+              color: copied ? "#22c55e" : "rgba(255,255,255,0.42)",
               cursor: "pointer",
               transition: "all 150ms ease",
             }}
-            onMouseEnter={e => {
-              if (!copied) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)";
-            }}
-            onMouseLeave={e => {
-              if (!copied) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.05)";
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = copied ? "#22c55e" : "rgba(255,255,255,0.72)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = copied ? "#22c55e" : "rgba(255,255,255,0.42)"; }}
           >
-            {copied ? <CheckIcon size={13} /> : <ClipboardIcon size={13} />}
+            {copied ? <CheckIcon /> : <ClipboardIcon />}
           </button>
         </div>
       )}

@@ -4,12 +4,14 @@ import { uploadFileWithHash } from '@/lib/supabase/storage';
 import { parseByType } from '@/lib/files/parserRouter';
 import { chunkAndIndexFile } from '@/lib/files/chunker';
 import { enqueueJob } from '@/lib/jobs/queue';
+import { buildFilePreviewManifest } from '@/lib/files/preview';
 
 export interface UploadOrchestrationInput {
   workspaceId: string;
   userId: string;
   file: File;
   source?: 'chat' | 'operator' | 'api';
+  purpose?: 'assistant_context' | 'voice_dataset' | 'knowledge_base';
 }
 
 export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
@@ -18,12 +20,18 @@ export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
   const filename = `${crypto.randomUUID()}-${input.file.name}`;
   const parsed = await parseByType(buffer, input.file.name, input.file.type);
 
+  const effectiveIngestType = input.purpose === 'voice_dataset'
+    ? 'voice_dataset'
+    : parsed.classification.kind === 'audio' || parsed.classification.kind === 'video' || parsed.classification.kind === 'image'
+      ? 'asset'
+      : parsed.classification.ingestType;
+
   const upload = await uploadFileWithHash(buffer, {
     workspaceId: input.workspaceId,
     userId: input.userId,
     filename,
     mimeType: input.file.type,
-    bucket: parsed.classification.ingestType === 'asset' ? 'media-assets' : parsed.classification.ingestType === 'voice_dataset' ? 'voice-datasets' : 'files',
+    bucket: effectiveIngestType === 'asset' ? 'media-assets' : effectiveIngestType === 'voice_dataset' ? 'voice-datasets' : 'files',
     isTemp: false,
   });
 
@@ -44,6 +52,8 @@ export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
       metadata: {
         ...parsed.metadata,
         source: input.source ?? 'chat',
+        ingestType: effectiveIngestType,
+        uploadPurpose: input.purpose ?? 'assistant_context',
       },
     })
     .select('*')
@@ -55,13 +65,23 @@ export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
     await chunkAndIndexFile(fileRecord.id, parsed.text);
   }
 
-  if (parsed.classification.ingestType === 'voice_dataset') {
+  if (effectiveIngestType === 'voice_dataset') {
     await enqueueJob('voice_dataset_process', { fileId: fileRecord.id }, { workspaceId: input.workspaceId, userId: input.userId, priority: 3 });
   }
+
+  const preview = buildFilePreviewManifest({
+    fileName: input.file.name,
+    mimeType: input.file.type,
+    sourceUrl: upload.url,
+    parsed: { text: parsed.text, metadata: parsed.metadata },
+    classification: parsed.classification,
+    fileId: fileRecord.id,
+  });
 
   return {
     file: fileRecord,
     classification: parsed.classification,
+    preview,
     isDuplicate: upload.isDuplicate,
   };
 }

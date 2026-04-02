@@ -14,8 +14,9 @@ ${attachments.map((attachment, index) => {
       `Kind: ${attachment.kind}`,
       attachment.mimeType ? `MIME: ${attachment.mimeType}` : '',
       attachment.fileId ? `File ID: ${attachment.fileId}` : '',
+      attachment.preview ? `Preview kind: ${attachment.preview.kind}` : '',
+      attachment.preview?.inlineText ? `Extracted content: ${truncate(attachment.preview.inlineText, 1800)}` : '',
       attachment.analysis ? `Analysis: ${truncate(JSON.stringify(attachment.analysis), 800)}` : '',
-      attachment.kind !== 'url' && attachment.payload ? `Payload: ${truncate(attachment.payload, 1400)}` : '',
     ].filter(Boolean);
     return lines.join('\n');
   }).join('\n\n---\n\n')}`;
@@ -42,6 +43,7 @@ ${files.map((attachment, index) => [
     `Kind: ${attachment.kind}`,
     attachment.mimeType ? `MIME: ${attachment.mimeType}` : '',
     attachment.metadata ? `Metadata: ${truncate(JSON.stringify(attachment.metadata), 800)}` : '',
+    attachment.preview?.structuredData ? `Structured preview metadata: ${truncate(JSON.stringify(attachment.preview.structuredData), 800)}` : '',
   ].filter(Boolean).join('\n')).join('\n\n---\n\n')}`;
 }
 

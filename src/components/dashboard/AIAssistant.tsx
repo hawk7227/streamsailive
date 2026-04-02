@@ -82,10 +82,14 @@ const STREAMS_APPS = [
 
 function detectMedia(text: string): import('@/components/ai-chat/AssistantMessage').MsgContent[] {
   const blocks: import('@/components/ai-chat/AssistantMessage').MsgContent[] = [];
-  const img = text.match(/https?:\/\/\S+\.(png|jpg|jpeg|webp|gif)/i);
-  const vid = text.match(/https?:\/\/\S+\.(mp4|webm|mov)/i);
+  const img = text.match(/https?:\/\/\S+\.(png|jpg|jpeg|webp|gif|avif)/i);
+  const vid = text.match(/https?:\/\/\S+\.(mp4|webm|mov|mkv|avi|m4v)/i);
+  const audio = text.match(/https?:\/\/\S+\.(mp3|wav|m4a|flac|ogg|opus|weba)/i);
+  const doc = text.match(/https?:\/\/\S+\.(pdf|docx|xlsx|pptx|csv|json|zip)/i);
   if (img) blocks.push({ type: 'image_url', image_url: { url: img[0] } });
   if (vid) blocks.push({ type: 'video_url', image_url: { url: vid[0] } });
+  if (audio) blocks.push({ type: 'audio_url', audio_url: { url: audio[0] } });
+  if (doc) blocks.push({ type: 'document', document: { url: doc[0], label: 'Open attached document' }, text: 'Open attached document' });
   return blocks;
 }
 
@@ -313,7 +317,14 @@ export default function AIAssistant(props: AIAssistantProps) {
 
     const parts: Array<import('@/components/ai-chat/AssistantMessage').MsgContent> = [];
     if (message) parts.push({ type: 'text' as const, text: message });
-    if (attachments.length) parts.push({ type: 'text' as const, text: `[context attachments: ${attachments.map((a) => `${a.kind}:${a.label}`).join(', ')}]` });
+    if (attachments.length) {
+      parts.push({ type: 'text' as const, text: `[context attachments: ${attachments.map((a) => `${a.kind}:${a.label}`).join(', ')}]` });
+      for (const attachment of attachments) {
+        if (attachment.kind === 'image' && attachment.preview?.media?.url) {
+          parts.push({ type: 'image_url' as const, image_url: { url: attachment.preview.media.url, detail: 'auto' as const } });
+        }
+      }
+    }
     if (voiceTranscript.trim()) parts.push({ type: 'text' as const, text: `[voice transcript]\n${voiceTranscript.trim()}` });
 
     const userMessage: AssistantMessageShape = { role: 'user', content: parts };

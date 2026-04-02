@@ -2,34 +2,74 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import type { PendingAttachment } from '@/lib/ai-chat/context/types';
+import type { FilePreviewManifest } from '@/lib/files/preview';
 
 interface AttachmentRailProps {
   onAdd: (attachment: PendingAttachment) => void;
 }
 
-function fileToAttachment(file: File, kind: PendingAttachment['kind'], onAdd: (attachment: PendingAttachment) => void) {
-  const mimeType = file.type || undefined;
-  if (kind === 'image' || kind === 'video' || kind === 'audio') {
-    onAdd({ kind, label: file.name, payload: URL.createObjectURL(file), mimeType, metadata: { size: file.size } });
-    return;
-  }
+interface UploadResponse {
+  ok?: boolean;
+  error?: string;
+  file?: { id: string; name: string; mime_type: string; size: number };
+  preview?: FilePreviewManifest;
+}
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    const result = typeof reader.result === 'string' ? reader.result : '';
-    onAdd({ kind, label: file.name, payload: result, mimeType, metadata: { size: file.size } });
-  };
-  reader.readAsText(file);
+async function uploadAttachment(file: File): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch('/api/files/intake', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  const payload = await response.json() as UploadResponse;
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Upload failed');
+  }
+  return payload;
+}
+
+function mapKind(file: File): PendingAttachment['kind'] {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  return 'document';
 }
 
 export function AttachmentRail({ onAdd }: AttachmentRailProps) {
   const [tab, setTab] = useState<PendingAttachment['kind'] | null>(null);
   const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const documentRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const tabs = useMemo(() => ([['url', 'URL'], ['image', 'Image'], ['video', 'Video'], ['document', 'Document'], ['audio', 'Audio']] as const), []);
+
+  const handleFile = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const uploaded = await uploadAttachment(file);
+      onAdd({
+        kind: mapKind(file),
+        label: file.name,
+        payload: uploaded.preview?.inlineText ?? uploaded.preview?.sourceUrl ?? file.name,
+        fileId: uploaded.file?.id,
+        mimeType: file.type || uploaded.file?.mime_type,
+        metadata: { size: file.size, uploaded: true },
+        preview: uploaded.preview,
+      });
+      setTab(null);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
@@ -48,15 +88,18 @@ export function AttachmentRail({ onAdd }: AttachmentRailProps) {
         </div>
       ) : null}
 
-      {tab === 'image' ? <button type="button" onClick={() => imageRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75">Select image</button> : null}
-      {tab === 'video' ? <button type="button" onClick={() => videoRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75">Select video</button> : null}
-      {tab === 'document' ? <button type="button" onClick={() => documentRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75">Select document</button> : null}
-      {tab === 'audio' ? <button type="button" onClick={() => audioRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75">Select audio</button> : null}
+      {tab === 'image' ? <button disabled={busy} type="button" onClick={() => imageRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select image</button> : null}
+      {tab === 'video' ? <button disabled={busy} type="button" onClick={() => videoRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select video</button> : null}
+      {tab === 'document' ? <button disabled={busy} type="button" onClick={() => documentRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select document</button> : null}
+      {tab === 'audio' ? <button disabled={busy} type="button" onClick={() => audioRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select audio</button> : null}
 
-      <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) fileToAttachment(file, 'image', onAdd); event.currentTarget.value = ''; }} />
-      <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) fileToAttachment(file, 'video', onAdd); event.currentTarget.value = ''; }} />
-      <input ref={documentRef} type="file" accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) fileToAttachment(file, 'document', onAdd); event.currentTarget.value = ''; }} />
-      <input ref={audioRef} type="file" accept="audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) fileToAttachment(file, 'audio', onAdd); event.currentTarget.value = ''; }} />
+      {busy ? <div className="text-xs text-cyan-200">Uploading and indexing attachment…</div> : null}
+      {error ? <div className="text-xs text-rose-300">{error}</div> : null}
+
+      <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
+      <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
+      <input ref={documentRef} type="file" accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.ts,.tsx,.js,.jsx,.py,.sql,.html,.css,.xml,.yaml,.yml" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
+      <input ref={audioRef} type="file" accept="audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
     </div>
   );
 }

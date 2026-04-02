@@ -202,7 +202,6 @@ export async function POST(request: Request) {
       }
 
       // Phase 4: Model call — emit understanding phase BEFORE the blocking fetch
-      const requestLooksLikeDirectGeneration = /generate|create|make|show/.test(userText.toLowerCase()) && /image|photo|picture|video|clip|song|music|audio/.test(userText.toLowerCase());
       emit(controller, { type: 'phase', phase: 'understanding_request', label: 'Understanding your request...' });
 
       // Resolve model: explicit clientModel wins, then provider default, then gpt-4o
@@ -231,33 +230,12 @@ export async function POST(request: Request) {
           emit(controller, { type: 'phase', phase: 'finalizing', label: 'Executing...' });
           const finalResponse = await createAssistantChatResponse(messages as ChatMessage[], pipelineContext, activeModel);
 
-          // ── Server-side intent fallback ───────────────────────────────────
-          // If LLM returned empty actions despite action mode being triggered,
-          // detect intent from raw text and inject the correct action.
-          let actions = finalResponse.actions;
-          // Detect any form of refusal or paraphrase — not just specific phrases
-          const looksLikeRefusal = /isn't part|not part|can't|cannot|i can't|unable to|not able|don't have.*capabilit|not.*capabilit|only.*still image|only generate.*image|let's create|the.*generation.*logic|the process involves|i receive instructions|predefined|feel free to ask/i.test(finalResponse.message);
-          if (actions.length === 0 || (requestLooksLikeDirectGeneration && looksLikeRefusal)) {
-            const lower = requestText.toLowerCase();
-            const isImage = /image|photo|picture|generate|create|make/.test(lower) && !/video|song|music/.test(lower);
-            const isVideo = /video|clip|footage|animate/.test(lower);
-            const isSong  = /song|music|audio|track|beat/.test(lower);
-            const isPipeline = /pipeline|run pipeline|start pipeline/.test(lower);
-            if (isPipeline) {
-              actions = [{ type: 'run_pipeline', payload: {} }];
-            } else if (isVideo) {
-              actions = [{ type: 'generate_video', payload: { prompt: requestText } }];
-            } else if (isSong) {
-              actions = [{ type: 'generate_song', payload: { prompt: requestText } }];
-            } else if (isImage) {
-              actions = [{ type: 'generate_image', payload: { prompt: requestText, provider: 'openai' } }];
-            }
-            if (actions.length > 0) {
-              console.warn('[ai-assistant] LLM returned empty actions in action mode — injected fallback action:', actions[0].type);
-            }
-          }
+          const actions = finalResponse.actions;
+          const message = finalResponse.message || 'Action mode returned no natural-language message.';
 
-          const message = finalResponse.message || 'Generating now.';
+          if (actions.length === 0) {
+            emit(controller, { type: 'operation_skipped', reason: 'action_mode_returned_no_action' });
+          }
           const chunks = message.match(/.{1,80}/g) ?? [message];
           for (const chunk of chunks) emit(controller, { type: 'text', delta: chunk });
           for (const action of actions) emit(controller, { type: 'action', action });

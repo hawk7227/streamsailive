@@ -1,3 +1,5 @@
+import type { FilePreviewManifest } from '@/lib/files/preview';
+
 export type PendingAttachmentKind = 'url' | 'image' | 'video' | 'document' | 'audio';
 
 export interface PendingAttachment {
@@ -8,7 +10,9 @@ export interface PendingAttachment {
   mimeType?: string;
   metadata?: Record<string, unknown>;
   analysis?: Record<string, unknown>;
+  preview?: FilePreviewManifest;
 }
+
 
 export interface IntegratedChatContextParts {
   attachmentSummary: string;

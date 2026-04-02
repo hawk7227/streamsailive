@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       userId: user.id,
       file,
       source: "chat",
+      purpose: "assistant_context",
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {

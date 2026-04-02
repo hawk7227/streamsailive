@@ -44,14 +44,27 @@ const EXT_MAP: Record<string, FileClassification> = {
   jpeg: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
   webp: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
   gif: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
+  avif: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
+  bmp: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
+  tiff: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
+  tif: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
+  svg: { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' },
   mp4: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
   mov: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
   webm: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
-  wav: { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
-  mp3: { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
-  m4a: { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
-  flac: { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
-  aac: { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  mkv: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
+  avi: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
+  m4v: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
+  mpeg: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
+  mpg: { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' },
+  wav: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  mp3: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  m4a: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  flac: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  aac: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  ogg: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  opus: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
+  weba: { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' },
 };
 
 export function classifyFile(filename: string, mimeType = ''): FileClassification {
@@ -60,6 +73,6 @@ export function classifyFile(filename: string, mimeType = ''): FileClassificatio
 
   if (mimeType.startsWith('image/')) return { kind: 'image', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'image' };
   if (mimeType.startsWith('video/')) return { kind: 'video', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'video' };
-  if (mimeType.startsWith('audio/')) return { kind: 'audio', ingestType: 'voice_dataset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' };
+  if (mimeType.startsWith('audio/')) return { kind: 'audio', ingestType: 'asset', duplicateStrategy: 'clone-storage-object', parserKey: 'audio' };
   return { kind: 'unknown', ingestType: 'knowledge', duplicateStrategy: 'copy-record', parserKey: 'generic' };
 }
