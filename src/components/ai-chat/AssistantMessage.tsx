@@ -22,6 +22,10 @@ export interface AssistantMessageProps {
 
 export type AssistantMessageShape = AssistantMessageProps;
 
+export interface AssistantMessageComponentProps extends AssistantMessageProps {
+  message?: AssistantMessageShape;
+}
+
 function renderDocument(url: string, title?: string): React.ReactNode {
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -79,7 +83,14 @@ function renderImage(url: string): React.ReactNode {
   );
 }
 
-export function AssistantMessage({ role, content, mode }: AssistantMessageProps) {
+export function AssistantMessage(props: AssistantMessageComponentProps) {
+  const resolvedMessage: AssistantMessageShape = props.message ?? {
+    role: props.role,
+    content: props.content,
+    mode: props.mode,
+  };
+
+  const { role, content, mode } = resolvedMessage;
   const isUser = role === "user";
   const text = content
     .filter((part) => part.type === "text" && typeof part.text === "string")
