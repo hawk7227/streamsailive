@@ -1,6 +1,5 @@
 import React from "react";
 import { FileText, Download, ExternalLink, PlayCircle, Music2 } from "lucide-react";
-import { ImageBlock } from "./ImageBlock";
 import { VerificationBlock } from "./VerificationBlock";
 import { AssistantCodeBlock } from "./AssistantCodeBlock";
 import type { AssistantMode } from "@/lib/enforcement/types";
@@ -29,6 +28,33 @@ function renderDocument(url: string, title?: string): React.ReactNode {
         <span className="text-sm font-medium">{title || "Document"}</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open
+        </a>
+        <a
+          href={url}
+          download
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
+        >
+          <Download className="h-4 w-4" />
+          Download
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function renderImage(url: string): React.ReactNode {
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+      <img src={url} alt="Generated image" className="block h-auto w-full object-cover" />
+      <div className="flex flex-wrap gap-2 border-t border-white/10 p-3">
         <a
           href={url}
           target="_blank"
@@ -103,7 +129,7 @@ export function AssistantMessage({ role, content, mode }: AssistantMessageProps)
 
       {content.map((part, index) => {
         if (part.type === "image_url" && part.image_url?.url) {
-          return <ImageBlock key={`image-${index}`} src={part.image_url.url} alt="Generated image" />;
+          return <React.Fragment key={`image-${index}`}>{renderImage(part.image_url.url)}</React.Fragment>;
         }
 
         if (part.type === "video_url" && part.video_url?.url) {
