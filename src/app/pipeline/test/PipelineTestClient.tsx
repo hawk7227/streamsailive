@@ -26,46 +26,6 @@ import type { PlatformId, ViewId } from "@/lib/platform-views/index";
 
 import type { IntakeBrief } from "@/lib/media-realism/types";
 
-type PipelineRouteRecord = {
-  image?: { acceptedCandidate?: { url?: string | null } | null } | null;
-  video?: { acceptedCandidate?: { url?: string | null } | null } | null;
-  images?: Array<{ acceptedCandidate?: { url?: string | null } | null }>;
-};
-
-type PipelineRouteResponse = {
-  ok: boolean;
-  result?: PipelineRouteRecord;
-  error?: string;
-};
-
-function buildPipelineIntakeFromPrompt(prompt: string): IntakeBrief {
-  return {
-    targetPlatform: "meta",
-    sceneContext: prompt,
-    audienceSegment: "real people in ordinary situations",
-    brandVoiceStatement: "Grounded, non-staged, realism-first",
-  };
-}
-
-async function runServerPipeline(prompt: string): Promise<PipelineRouteRecord> {
-  const response = await fetch("/api/pipeline/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "runPipeline",
-      payload: buildPipelineIntakeFromPrompt(prompt),
-    }),
-  });
-
-  const data = (await response.json()) as PipelineRouteResponse;
-  if (!response.ok || !data.ok || !data.result) {
-    throw new Error(data.error ?? `Pipeline route failed with status ${response.status}`);
-  }
-
-  return data.result;
-}
-
-
 // ── Types ──────────────────────────────────────────────────────────────────
 type StepState = "complete" | "running" | "review" | "queued" | "blocked" | "error";
 type Step = { id: string; name: string; state: StepState; icon: string; output: unknown; error: string | null; startedAt: number | null; completedAt: number | null; };
@@ -86,6 +46,20 @@ interface UploadedRef { id: string; url: string; name: string; kind: "image" | "
 
 type AssistantIframeAction = { type: string; payload?: Record<string, unknown>; };
 
+async function requestPipelineRun(payload: { prompt: string; mode: string }) {
+  const response = await fetch("/api/pipeline/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Pipeline route failed with status ${response.status}${text ? `: ${text}` : ""}`);
+  }
+
+  return response.json();
+}
 
 type GenerationIntentAction = "PLAN_IMAGE" | "PLAN_VIDEO" | "PLAN_LONG_VIDEO" | "REGENERATE_REALISM" | "SEND_TO_SCREEN" | "SEND_TO_SHELF";
 type DurationMode = "short" | "medium" | "long" | "feature";
@@ -1425,43 +1399,8 @@ Accept only if:
     pushChat("planning");
 
     try {
-      if (action === "PLAN_LONG_VIDEO") {
-        throw new Error("PLAN_LONG_VIDEO is not implemented through the API pipeline route yet.");
-      }
-
-      const result = await runServerPipeline(safePrompt);
-      const imageUrl = result.image?.acceptedCandidate?.url ?? result.images?.find((item) => item.acceptedCandidate?.url)?.acceptedCandidate?.url ?? null;
-      const videoUrl = result.video?.acceptedCandidate?.url ?? null;
-
-      if (imageUrl) {
-        setConceptOutputs((prev) => ({
-          ...prev,
-          [selectedConceptId]: {
-            ...prev[selectedConceptId],
-            image: imageUrl,
-            status: "completed",
-            error: null,
-          },
-        }));
-        if (target === "center") approveOutput("image", imageUrl);
-      }
-
-      if (videoUrl) {
-        setConceptOutputs((prev) => ({
-          ...prev,
-          [selectedConceptId]: {
-            ...prev[selectedConceptId],
-            video: videoUrl,
-            status: "completed",
-            error: null,
-          },
-        }));
-        if (target === "center") approveOutput("video", videoUrl);
-      }
-
-      emit({ type: "log", stepId: "imagery", stepName: "Pipeline Operator", message: "completed" });
-      pushChat("completed");
-      setPipelineRunning(false);
+      const execution = await requestPipelineRun({ prompt: safePrompt, mode: action });
+      bindPipelineEvents(execution, target, safePrompt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({ type: "error", stepId: "qa", stepName: "Pipeline Operator", message });
@@ -1478,6 +1417,21 @@ Accept only if:
     await Promise.all(["c1", "c2", "c3"].map(async (cid) => {
       await generateImage(cid);
     }));
+  }
+
+  async function runImagePipelineRoute() {
+    const safePrompt = storyText || storyTitle || csFields.csPipelinePrompt?.trim() || csFields.csFinalPrompt?.trim() || "ordinary real-life moment";
+    setPipelineRunning(true);
+    try {
+      const result = await requestPipelineRun({ prompt: safePrompt, mode: "PLAN_IMAGE" });
+      bindPipelineEvents(result, "center", safePrompt);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: "error", stepId: "qa", stepName: "Pipeline Operator", message });
+      pushChat(`failed: ${message}`);
+      log(`✗ Pipeline route failed: ${message}`);
+      setPipelineRunning(false);
+    }
   }
 
   // ── Full 7-step governance pipeline test ─────────────────────────────────
@@ -2609,7 +2563,7 @@ Accept only if:
             </button>
             <button style={{ background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.14)", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Save</button>
             <button style={{ background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.14)", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Pause</button>
-            <button onClick={()=>gatedGeneration(()=>runPipelineManual())} disabled={pipelineRunning}
+            <button onClick={()=>gatedGeneration(()=>runImagePipelineRoute())} disabled={pipelineRunning}
               style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)", color: "#94a3b8", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               ▶ Run Image Pipeline
             </button>
