@@ -58,11 +58,14 @@ export async function GET(_request: Request, context: RouteContext) {
     derivative: assetKind,
   });
 
-  return new NextResponse(derivative.bytes, {
+  const body = new Uint8Array(derivative.bytes);
+
+  return new NextResponse(body, {
     headers: {
       'Content-Type': derivative.contentType,
       'Cache-Control': 'private, max-age=3600',
       'Content-Disposition': `inline; filename="${fileRecord.name}.${derivative.extension}"`,
+      'Content-Length': String(body.byteLength),
       'X-Streams-Derivative': derivative.cacheKey,
     },
   });
