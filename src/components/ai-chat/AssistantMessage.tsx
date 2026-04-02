@@ -86,6 +86,27 @@ function renderImage(url: string): React.ReactNode {
   );
 }
 
+function parseEmbeddedMediaBlocks(text: string): MsgContent[] {
+  const blocks: MsgContent[] = [];
+  const image = text.match(/https?:\/\/\S+\.(?:png|jpg|jpeg|webp|gif)/i);
+  const vid = text.match(/https?:\/\/\S+\.(?:mp4|webm|mov|m4v)/i);
+  const audio = text.match(/https?:\/\/\S+\.(?:mp3|wav|m4a|ogg)/i);
+  const doc = text.match(/https?:\/\/\S+\.(?:pdf|doc|docx|ppt|pptx|xls|xlsx|txt|md)/i);
+
+  if (image) blocks.push({ type: "image_url", image_url: { url: image[0] } });
+  if (vid) blocks.push({ type: "video_url", video_url: { url: vid[0] } });
+  if (audio) blocks.push({ type: "audio_url", audio_url: { url: audio[0] } });
+  if (doc) {
+    blocks.push({
+      type: "document_url",
+      document_url: { url: doc[0], title: "Open attached document" },
+      text: "Open attached document",
+    });
+  }
+
+  return blocks;
+}
+
 export function AssistantMessage(props: AssistantMessageComponentProps) {
   const resolvedMessage: AssistantMessageShape | null = props.message
     ? props.message
@@ -111,6 +132,7 @@ export function AssistantMessage(props: AssistantMessageComponentProps) {
   const presentation = presentResponse(text, mode);
   const blocks = presentation.blocks;
   const proseClass = isUser ? "text-[#0A0C10]/90" : "text-white/84";
+  const inferredMedia = parseEmbeddedMediaBlocks(text);
 
   return (
     <div
@@ -151,7 +173,7 @@ export function AssistantMessage(props: AssistantMessageComponentProps) {
         );
       })}
 
-      {content.map((part, index) => {
+      {[...content, ...inferredMedia].map((part, index) => {
         if (part.type === "image_url" && part.image_url?.url) {
           return <React.Fragment key={`image-${index}`}>{renderImage(part.image_url.url)}</React.Fragment>;
         }
