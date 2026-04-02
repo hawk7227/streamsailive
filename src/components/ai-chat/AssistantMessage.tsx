@@ -29,6 +29,22 @@ export interface AssistantMessageComponentProps {
   mode?: AssistantMode;
 }
 
+function resolveMessage(props: AssistantMessageComponentProps): AssistantMessageShape | null {
+  if (props.message) {
+    return props.message;
+  }
+
+  if (props.role && props.content) {
+    return {
+      role: props.role,
+      content: props.content,
+      mode: props.mode,
+    };
+  }
+
+  return null;
+}
+
 function renderDocument(url: string, title?: string): React.ReactNode {
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -46,7 +62,7 @@ function renderDocument(url: string, title?: string): React.ReactNode {
           <ExternalLink className="h-4 w-4" />
           Open
         </a>
-        
+        <a
           href={url}
           download
           className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15"
@@ -89,17 +105,29 @@ function renderImage(url: string): React.ReactNode {
 function parseEmbeddedMediaBlocks(text: string): MsgContent[] {
   const blocks: MsgContent[] = [];
   const image = text.match(/https?:\/\/\S+\.(?:png|jpg|jpeg|webp|gif)/i);
-  const vid = text.match(/https?:\/\/\S+\.(?:mp4|webm|mov|m4v)/i);
+  const video = text.match(/https?:\/\/\S+\.(?:mp4|webm|mov|m4v)/i);
   const audio = text.match(/https?:\/\/\S+\.(?:mp3|wav|m4a|ogg)/i);
-  const doc = text.match(/https?:\/\/\S+\.(?:pdf|doc|docx|ppt|pptx|xls|xlsx|txt|md)/i);
+  const document = text.match(/https?:\/\/\S+\.(?:pdf|doc|docx|ppt|pptx|xls|xlsx|txt|md)/i);
 
-  if (image) blocks.push({ type: "image_url", image_url: { url: image[0] } });
-  if (vid) blocks.push({ type: "video_url", video_url: { url: vid[0] } });
-  if (audio) blocks.push({ type: "audio_url", audio_url: { url: audio[0] } });
-  if (doc) {
+  if (image) {
+    blocks.push({ type: "image_url", image_url: { url: image[0] } });
+  }
+
+  if (video) {
+    blocks.push({ type: "video_url", video_url: { url: video[0] } });
+  }
+
+  if (audio) {
+    blocks.push({ type: "audio_url", audio_url: { url: audio[0] } });
+  }
+
+  if (document) {
     blocks.push({
       type: "document_url",
-      document_url: { url: doc[0], title: "Open attached document" },
+      document_url: {
+        url: document[0],
+        title: "Open attached document",
+      },
       text: "Open attached document",
     });
   }
@@ -108,22 +136,15 @@ function parseEmbeddedMediaBlocks(text: string): MsgContent[] {
 }
 
 export function AssistantMessage(props: AssistantMessageComponentProps) {
-  const resolvedMessage: AssistantMessageShape | null = props.message
-    ? props.message
-    : props.role && props.content
-      ? {
-          role: props.role,
-          content: props.content,
-          mode: props.mode,
-        }
-      : null;
+  const message = resolveMessage(props);
 
-  if (!resolvedMessage) {
+  if (!message) {
     return null;
   }
 
-  const { role, content, mode } = resolvedMessage;
+  const { role, content, mode } = message;
   const isUser = role === "user";
+
   const text = content
     .filter((part) => part.type === "text" && typeof part.text === "string")
     .map((part) => part.text ?? "")
@@ -154,7 +175,10 @@ export function AssistantMessage(props: AssistantMessageComponentProps) {
 
         if (block.type === "bullet_list") {
           return (
-            <ul key={`bullets-${index}`} className={`mb-3 ml-5 list-disc space-y-1 text-[15px] leading-7 ${proseClass}`}>
+            <ul
+              key={`bullets-${index}`}
+              className={`mb-3 ml-5 list-disc space-y-1 text-[15px] leading-7 ${proseClass}`}
+            >
               {block.items.map((item, itemIndex) => (
                 <li key={`bullet-${index}-${itemIndex}`}>{item}</li>
               ))}
@@ -163,7 +187,13 @@ export function AssistantMessage(props: AssistantMessageComponentProps) {
         }
 
         if (block.type === "code_block") {
-          return <AssistantCodeBlock key={`code-${index}`} code={block.code} language={block.language} />;
+          return (
+            <AssistantCodeBlock
+              key={`code-${index}`}
+              code={block.code}
+              language={block.language}
+            />
+          );
         }
 
         return (
