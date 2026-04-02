@@ -67,6 +67,17 @@ export default function PipelineAssistantFramePage() {
   }, []);
 
   const liveState = useMemo(() => {
+    const op = context?.operatorStatus as Record<string, unknown> | undefined;
+    if (op?.stage && typeof op.stage === "string" && op.stage !== "idle") {
+      const scene = typeof op.scene === "number" ? op.scene : 0;
+      const totalScenes = typeof op.totalScenes === "number" ? op.totalScenes : 0;
+      const clip = typeof op.clip === "number" ? op.clip : 0;
+      const totalClips = typeof op.totalClips === "number" ? op.totalClips : 0;
+      if (op.stage === "stitching") return "stitching";
+      if (clip && totalClips) return `rendering clip ${clip}/${totalClips}`;
+      if (scene && totalScenes) return `generating scene ${scene}/${totalScenes}`;
+      return String(op.stage);
+    }
     const summary = context?.liveEventsSummary;
     if (typeof summary === "string" && summary.trim()) return summary;
     return "Watching prompts, screens, shelf, and generation state.";

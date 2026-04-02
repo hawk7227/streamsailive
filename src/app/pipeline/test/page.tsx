@@ -24,6 +24,9 @@ import PipelineExperiencePanel from "@/components/pipeline/PipelineExperiencePan
 import type { StoryBible } from "@/lib/story/storyBible";
 import type { PlatformId, ViewId } from "@/lib/platform-views/index";
 
+import { runPipeline, runPipelineProduction } from "@/lib/pipeline/pipeline-orchestrator";
+import type { IntakeBrief } from "@/lib/media-realism/types";
+
 // ── Types ──────────────────────────────────────────────────────────────────
 type StepState = "complete" | "running" | "review" | "queued" | "blocked" | "error";
 type Step = { id: string; name: string; state: StepState; icon: string; output: unknown; error: string | null; startedAt: number | null; completedAt: number | null; };
@@ -312,6 +315,19 @@ function AmbientPreviewTile({ galleryKey, title, subtitle, badge, compact = fals
   );
 }
 
+
+
+function buildIntakeBriefFromPrompt(prompt: string, nicheId: string, platform: PlatformSelection | null, viewMode: ViewMode): IntakeBrief {
+  const targetPlatform = platform?.platformId === "google" ? "google" : platform?.platformId === "tiktok" ? "tiktok" : platform?.platformId === "instagram" ? "instagram" : "meta";
+  return {
+    targetPlatform,
+    sceneContext: prompt,
+    audienceSegment: "real people in ordinary situations",
+    niche: nicheId || undefined,
+    brandVoiceStatement: "Grounded, non-staged, realism-first",
+  };
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function PipelineTestPage() {
   const searchParams = useSearchParams();
@@ -484,6 +500,9 @@ Accept only if:
   const [liveStepId, setLiveStepId] = useState<string | null>(null);
   const [engineOpen, setEngineOpen] = useState(false);
   const liveEndRef = React.useRef<HTMLDivElement>(null);
+  const [operatorStatus, setOperatorStatus] = useState<{ stage: string; chapter: number; scene: number; clip: number; totalScenes: number; totalClips: number; provider: string; costMode: string; }>(() => ({ stage: "idle", chapter: 0, scene: 0, clip: 0, totalScenes: 0, totalClips: 0, provider: "auto", costMode: "balanced" }));
+  const [pipelineState, setPipelineState] = useState({ stage: "idle", chapter: 0, scene: 0, clip: 0, totalScenes: 0, totalClips: 0 });
+  const [chatEvents, setChatEvents] = useState<string[]>([]);
 
   async function buildStoryBibleRecord(): Promise<StoryBible | null> {
     setStoryLoading(true);
@@ -722,10 +741,13 @@ Accept only if:
       toneOfVoice: intakeResult.toneOfVoice,
       suggestedCopy: intakeResult.suggestedCopy,
     } : undefined,
-    liveEventsSummary: liveEvents.slice(-3).map(e => e.message ?? e.stepName ?? '').filter(Boolean).join(' → ') || undefined,
+    liveEventsSummary: (chatEvents.slice(-3).join(" → ") || liveEvents.slice(-3).map(e => e.message ?? e.stepName ?? '').filter(Boolean).join(' → ')) || undefined,
+    pipelineState,
+    chatEvents,
+    operatorStatus,
     strategyOutput: stepPrompts.strategy,
     copyOutput: stepPrompts.copy,
-  }), [approvedOutputs, conceptOutputs, concepts, deviceFrame, epOpen, generationQueue, imageProvider, intakeAnalysis, intakeResult, liveEvents, nicheId, pipelineLog, pipelineRunning, previewTabs, selectedConceptId, selectedStepId, stepPrompts, steps, viewMode, workspaceTab]);
+  }), [approvedOutputs, conceptOutputs, concepts, deviceFrame, epOpen, generationQueue, imageProvider, intakeAnalysis, intakeResult, liveEvents, nicheId, operatorStatus, pipelineLog, pipelineRunning, previewTabs, selectedConceptId, selectedStepId, stepPrompts, steps, viewMode, workspaceTab]);
   const proactiveIdCounter = useRef(0);
   const pushProactive = useCallback((text: string, imageUrl?: string, type: ProactiveMessage['type'] = 'generation_complete', videoUrl?: string, aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5') => {
     setProactiveMessage({ id: `proactive_${++proactiveIdCounter.current}_${Date.now()}`, text, imageUrl, videoUrl, aspectRatio, type });
@@ -1251,8 +1273,132 @@ Accept only if:
     }
   }
 
+
+  function pushPipelineChat(message: string) {
+    pushProactive(message, undefined, "generation_complete");
+  }
+
+  function pushChat(text: string) {
+    setChatEvents(prev => [...prev.slice(-11), text]);
+    pushPipelineChat(text);
+  }
+
+  function bindPipelineEvents(execution: { on: (event: string, listener: (payload?: Record<string, unknown>) => void) => void }, target: OutputTarget, prompt: string) {
+    execution.on("planning_started", () => {
+      setPipelineState((s) => ({ ...s, stage: "planning" }));
+      pushChat("planning");
+    });
+
+    execution.on("provider_selected", (data) => {
+      setOperatorStatus((prev) => ({ ...prev, provider: String(data?.provider ?? prev.provider) }));
+    });
+
+    execution.on("chapter_started", (data) => {
+      setPipelineState((s) => ({ ...s, chapter: Number(data?.chapterIndex ?? s.chapter) }));
+    });
+
+    execution.on("scene_started", (data) => {
+      setPipelineState((s) => ({
+        ...s,
+        stage: "scene",
+        chapter: Number(data?.chapterIndex ?? s.chapter),
+        scene: Number(data?.sceneIndex ?? s.scene),
+        totalScenes: Number(data?.totalScenes ?? s.totalScenes),
+        totalClips: Number(data?.totalClips ?? s.totalClips),
+      }));
+      const sceneIndex = Number(data?.sceneIndex ?? 0);
+      const totalScenes = Number(data?.totalScenes ?? 0);
+      pushChat(`generating scene ${sceneIndex}/${totalScenes}`);
+      emitOperatorProgress(`generating scene ${sceneIndex}/${totalScenes}`, { chapter: Number(data?.chapterIndex ?? 0), scene: sceneIndex, totalScenes, totalClips: Number(data?.totalClips ?? 0) });
+    });
+
+    execution.on("clip_rendering", (data) => {
+      setPipelineState((s) => ({
+        ...s,
+        stage: "clip",
+        clip: Number(data?.clipIndex ?? s.clip),
+        totalClips: Number(data?.totalClips ?? s.totalClips),
+      }));
+      const clipIndex = Number(data?.clipIndex ?? 0);
+      const totalClips = Number(data?.totalClips ?? 0);
+      pushChat(`rendering clip ${clipIndex}/${totalClips}`);
+      emitOperatorProgress(`rendering clip ${clipIndex}/${totalClips}`, { chapter: Number(data?.chapterIndex ?? 0), scene: Number(data?.sceneIndex ?? 0), clip: clipIndex, totalClips });
+    });
+
+    execution.on("final_stitching", () => {
+      setPipelineState((s) => ({ ...s, stage: "stitching" }));
+      pushChat("stitching");
+      emitOperatorProgress("stitching", { clip: pipelineState.totalClips });
+    });
+
+    execution.on("completed", (data) => {
+      setPipelineState((s) => ({ ...s, stage: "completed" }));
+      if (typeof data?.imageUrl === "string" && data.imageUrl) {
+        setImageResult(data.imageUrl);
+        if (target === "center") setApprovedOutputs((prev) => ({ ...prev, image: data.imageUrl as string }));
+        pushMediaShelfItem({ id: `orchestrated-img-${Date.now()}`, title: "Approved image", type: "image", url: data.imageUrl as string, subtitle: prompt.slice(0, 72), status: "approved" });
+      }
+      if (typeof data?.videoUrl === "string" && data.videoUrl) {
+        setVideoResult(data.videoUrl);
+        if (target === "center") setApprovedOutputs((prev) => ({ ...prev, video: data.videoUrl as string }));
+        pushMediaShelfItem({ id: `orchestrated-vid-${Date.now()}`, title: "Approved video", type: "video", url: data.videoUrl as string, subtitle: prompt.slice(0, 72), status: "approved" });
+      }
+      if (!data?.videoUrl && Array.isArray(data?.sceneVideos) && data.sceneVideos.length) {
+        const finalVideoUrl = String(data.sceneVideos[data.sceneVideos.length - 1]);
+        setVideoResult(finalVideoUrl);
+        if (target === "center") setApprovedOutputs((prev) => ({ ...prev, video: finalVideoUrl }));
+        pushMediaShelfItem({ id: `stitched-${Date.now()}`, title: "Final stitched video", type: "video", url: finalVideoUrl, subtitle: `${pipelineState.totalScenes} scenes`, status: "stitched" });
+      }
+      pushChat("completed");
+      setPipelineRunning(false);
+    });
+
+    execution.on("failed", (data) => {
+      const message = String(data?.error ?? "Pipeline failed");
+      emit({ type: "error", stepId: "qa", stepName: "Pipeline Operator", message });
+      pushChat(`failed: ${message}`);
+      log(`✗ Assistant orchestration failed: ${message}`);
+      setPipelineRunning(false);
+    });
+  }
+
+  function emitOperatorProgress(stage: string, payload?: { chapter?: number; scene?: number; clip?: number; totalScenes?: number; totalClips?: number; provider?: string; }) {
+    setOperatorStatus((prev) => ({
+      ...prev,
+      stage,
+      chapter: payload?.chapter ?? prev.chapter,
+      scene: payload?.scene ?? prev.scene,
+      clip: payload?.clip ?? prev.clip,
+      totalScenes: payload?.totalScenes ?? prev.totalScenes,
+      totalClips: payload?.totalClips ?? prev.totalClips,
+      provider: payload?.provider ?? prev.provider,
+    }));
+    emit({ type: "log", stepId: "imagery", stepName: "Pipeline Operator", message: stage });
+  }
+
+  async function executeAssistantPlan(action: GenerationIntentAction, prompt: string, target: OutputTarget = "center") {
+    const safePrompt = prompt.trim() || storyText || storyTitle || "ordinary real-life moment";
+    setPipelineRunning(true);
+    setEngineOpen(true);
+    setLiveEvents([]);
+    setPipelineState((prev) => ({ ...prev, stage: "planning", chapter: 0, scene: 0, clip: 0 }));
+    emit({ type: "step_start", stepId: "strategy", stepName: "Pipeline Operator", message: "planning" });
+    pushChat("planning");
+
+    try {
+      const execution = await runPipeline({ prompt: safePrompt, mode: action });
+      bindPipelineEvents(execution, target, safePrompt);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: "error", stepId: "qa", stepName: "Pipeline Operator", message });
+      pushChat(`failed: ${message}`);
+      log(`✗ Assistant orchestration failed: ${message}`);
+      setPipelineRunning(false);
+    }
+  }
+
   // ── Run full pipeline ─────────────────────────────────────────────────────
-  async function runPipeline() {
+  async function runPipelineManual() {
     if (!storyBible) await buildStoryBibleRecord();
     log("▶ Running pipeline for all 3 concepts...");
     await Promise.all(["c1", "c2", "c3"].map(async (cid) => {
@@ -1981,7 +2127,13 @@ Accept only if:
         if (typeof action.payload?.storyText === "string" && action.payload.storyText.trim()) setStoryText(action.payload.storyText);
         void buildStoryBibleRecord();
         break;
-      case "run_pipeline": void runPipeline(); break;
+      case "run_pipeline": void runPipelineManual(); break;
+      case "PLAN_IMAGE": void executeAssistantPlan("PLAN_IMAGE", String(action.payload?.prompt ?? stepPrompts.imagery ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
+      case "PLAN_VIDEO": void executeAssistantPlan("PLAN_VIDEO", String(action.payload?.prompt ?? videoPrompt ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
+      case "PLAN_LONG_VIDEO": void executeAssistantPlan("PLAN_LONG_VIDEO", String(action.payload?.prompt ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
+      case "REGENERATE_REALISM": void executeAssistantPlan(generationIntent === "PLAN_IMAGE" ? "PLAN_IMAGE" : "PLAN_VIDEO", String(action.payload?.prompt ?? stepPrompts.imagery ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
+      case "SEND_TO_SCREEN": if (typeof action.payload?.url === "string" && typeof action.payload?.mediaType === "string") sendToDestination(action.payload.url, action.payload.mediaType as "image"|"video", (action.payload?.screen as PreviewDestination | undefined) ?? "desktop"); break;
+      case "SEND_TO_SHELF": if (typeof action.payload?.url === "string" && typeof action.payload?.mediaType === "string") pushMediaShelfItem({ id: `assistant-shelf-${Date.now()}`, title: `Assistant ${String(action.payload.mediaType)}`, type: action.payload.mediaType as any, url: action.payload.url, subtitle: String(action.payload?.prompt ?? "") || undefined, status: "approved" }); break;
       case "run_step":
         if (typeof action.payload?.stepId === "string") { setSelectedStepId(action.payload.stepId); setStepConfigOpen(true); }
         break;
@@ -1999,7 +2151,7 @@ Accept only if:
         break;
       default: break;
     }
-  }, [approveOutput, buildStoryBibleRecord, generateImage, generateSongFromVoice, generateVideo, log, runPipeline, selectedConceptId, selectedStepId, storyBible]);
+  }, [approveOutput, buildStoryBibleRecord, generateImage, generateSongFromVoice, generateVideo, log, runPipelineManual, selectedConceptId, selectedStepId, storyBible]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
