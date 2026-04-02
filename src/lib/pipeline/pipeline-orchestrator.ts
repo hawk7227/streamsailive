@@ -24,6 +24,9 @@ import { scoreVideoCandidate, shouldRejectVideoCandidate } from "../media-realis
 import { selectBestVideoCandidate } from "../media-realism/candidateSelector";
 import { compositeAndUpload } from "../media-realism/typographyProvider";
 import { generateRealVideoCandidate } from "../media-realism/videoProvider";
+import { scoreStructuralIntegrity } from "../generator-intelligence/services/structuralScoring";
+import { buildRepairPlan } from "../generator-intelligence/services/repairLoop";
+import { scoreImageCandidate, shouldRejectImageCandidate } from "../media-realism/imageQc";
 import type {
   AssetLibraryRecord,
   ImageGenerationResult,
@@ -160,3 +163,209 @@ async function runRealVideo(imageUrl: string): Promise<VideoGenerationResult> {
 
 // Single-step execution for individual step testing
 export { executeNode } from "./pipeline-execution";
+
+
+export type PipelineRuntimeEvent =
+  | "planning_started"
+  | "provider_selected"
+  | "chapter_started"
+  | "scene_started"
+  | "clip_rendering"
+  | "clip_completed"
+  | "final_stitching"
+  | "completed"
+  | "failed";
+
+type PipelineListener = (payload?: Record<string, unknown>) => void;
+
+export interface PipelineExecutionHandle {
+  on: (event: PipelineRuntimeEvent, listener: PipelineListener) => void;
+}
+
+function createPipelineExecutionHandle() {
+  const listeners = new Map<PipelineRuntimeEvent, Set<PipelineListener>>();
+  return {
+    emit(event: PipelineRuntimeEvent, payload?: Record<string, unknown>) {
+      listeners.get(event)?.forEach((listener) => {
+        try {
+          listener(payload);
+        } catch {
+          // swallow listener errors to keep pipeline running
+        }
+      });
+    },
+    handle: {
+      on(event: PipelineRuntimeEvent, listener: PipelineListener) {
+        const set = listeners.get(event) ?? new Set<PipelineListener>();
+        set.add(listener);
+        listeners.set(event, set);
+      },
+    } as PipelineExecutionHandle,
+  };
+}
+
+function selectProvider(task: "image" | "video") {
+  const providers = task === "image"
+    ? [
+        { name: "fal", cost: 1, quality: 0.8 },
+        { name: "openai", cost: 2, quality: 0.9 },
+      ]
+    : [
+        { name: "kling", cost: 1, quality: 0.86 },
+        { name: "runway", cost: 3, quality: 0.95 },
+      ];
+  return providers.sort((a, b) => a.cost - b.cost)[0];
+}
+
+function buildIntakeFromPrompt(prompt: string): IntakeBrief {
+  return {
+    targetPlatform: "meta",
+    sceneContext: prompt,
+    audienceSegment: "real people in ordinary situations",
+    brandVoiceStatement: "Grounded, non-staged, realism-first",
+  };
+}
+
+function buildLongVideoPlanFromPrompt(prompt: string) {
+  const hourMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(hour|hr)/i);
+  const minuteMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(minute|min)/i);
+  const requestedMinutes = hourMatch ? Math.max(20, Math.round(parseFloat(hourMatch[1]) * 60)) : minuteMatch ? Math.max(20, Math.round(parseFloat(minuteMatch[1]))) : 20;
+  const chapterCount = requestedMinutes > 60 ? Math.max(6, Math.ceil(requestedMinutes / 12)) : Math.max(3, Math.ceil(requestedMinutes / 10));
+  const chapters = Array.from({ length: chapterCount }, (_, chapterIdx) => {
+    const sceneCount = requestedMinutes > 60 ? 8 : 5;
+    return {
+      chapterIndex: chapterIdx + 1,
+      scenes: Array.from({ length: sceneCount }, (_, sceneIdx) => ({
+        sceneIndex: sceneIdx + 1,
+        clipCount: requestedMinutes > 60 ? 6 : 4,
+        prompt: `${prompt}. Chapter ${chapterIdx + 1}. Scene ${sceneIdx + 1}.`,
+      })),
+    };
+  });
+  const totalScenes = chapters.reduce((sum, chapter) => sum + chapter.scenes.length, 0);
+  const totalClips = chapters.reduce((sum, chapter) => sum + chapter.scenes.reduce((sceneTotal, scene) => sceneTotal + scene.clipCount, 0), 0);
+  return { requestedMinutes, chapters, totalScenes, totalClips };
+}
+
+async function enforceRealism(record: ProductionRecord, prompt: string, mode: string) {
+  const referenceAnalysis = {
+    hasReferences: false,
+    referenceStrength: "low" as const,
+    likelyMultiAngle: false,
+    likelySingleStill: true,
+    identitySensitive: /same person|identity|same subject/i.test(prompt),
+    anatomyRisk: "medium" as const,
+    warnings: [],
+    guidance: [],
+  };
+
+  const score = scoreStructuralIntegrity({
+    referenceSummary: prompt,
+    storyBible: prompt,
+    referenceAnalysis,
+    medium: mode === "PLAN_IMAGE" ? "image" : "video",
+  });
+
+  const repairPlan = buildRepairPlan(score, mode === "PLAN_IMAGE" ? "image" : "video");
+
+  if (record.image?.acceptedCandidate && record.strategy?.conceptDirections?.[0]) {
+    const scenePlan = {
+      conceptId: record.strategy.conceptDirections[0].id,
+      conceptType: "realism",
+      subjectType: record.strategy.conceptDirections[0].subjectType,
+      subjectCount: 1 as const,
+      action: record.strategy.conceptDirections[0].action,
+      environment: record.strategy.conceptDirections[0].environment,
+      mood: record.strategy.conceptDirections[0].desiredMood,
+      realismMode: record.strategy.conceptDirections[0].realismMode,
+      shotType: "medium" as const,
+      orientation: "landscape" as const,
+      requiredProps: [],
+      forbiddenProps: [],
+      forbiddenScenes: [],
+      noTextInImage: true as const,
+    };
+    const layoutPlan = {
+      aspectRatio: "16:9" as const,
+      subjectAnchor: "left" as const,
+      safeZones: ["top_left"] as const,
+      protectedZones: ["center"] as const,
+      faceZone: "center_left" as const,
+      backgroundDensity: "low_on_overlay_side" as const,
+      compositionRules: ["keep subject grounded"],
+      overlaySafeMap: { top_left: "clear" },
+    };
+    const qcScore = scoreImageCandidate(record.image.acceptedCandidate, scenePlan as any, layoutPlan as any);
+    const rejectImage = shouldRejectImageCandidate(qcScore);
+    if (!repairPlan.shouldRetry && !rejectImage) {
+      return { record, score, repairPlan };
+    }
+  }
+
+  if (repairPlan.shouldRetry) {
+    const rerun = await runPipelineProduction(buildIntakeFromPrompt(`${prompt}. ${repairPlan.instructions.join(" ")}`));
+    return { record: rerun, score, repairPlan };
+  }
+
+  return { record, score, repairPlan };
+}
+
+export async function runPipeline(params: { prompt: string; mode: "PLAN_IMAGE" | "PLAN_VIDEO" | "PLAN_LONG_VIDEO" | "REGENERATE_REALISM" | "SEND_TO_SCREEN" | "SEND_TO_SHELF"; }) {
+  const bus = createPipelineExecutionHandle();
+
+  (async () => {
+    try {
+      bus.emit("planning_started", { prompt: params.prompt, mode: params.mode });
+
+      if (params.mode === "PLAN_LONG_VIDEO") {
+        const plan = buildLongVideoPlanFromPrompt(params.prompt);
+        let clipIndex = 0;
+        const sceneVideos: string[] = [];
+
+        for (const chapter of plan.chapters) {
+          bus.emit("chapter_started", { chapterIndex: chapter.chapterIndex, totalChapters: plan.chapters.length });
+          for (let sceneIdx = 0; sceneIdx < chapter.scenes.length; sceneIdx += 1) {
+            const scene = chapter.scenes[sceneIdx];
+            bus.emit("scene_started", { chapterIndex: chapter.chapterIndex, sceneIndex: scene.sceneIndex, totalScenes: plan.totalScenes, totalClips: plan.totalClips });
+            const provider = selectProvider("video");
+            bus.emit("provider_selected", { provider: provider.name, task: "video" });
+            const clipTasks = Array.from({ length: scene.clipCount }, async (_, localClipIdx) => {
+              const nextClip = clipIndex + localClipIdx + 1;
+              bus.emit("clip_rendering", { clipIndex: nextClip, totalClips: plan.totalClips, sceneIndex: scene.sceneIndex, chapterIndex: chapter.chapterIndex });
+              const record = await runPipelineProduction(buildIntakeFromPrompt(scene.prompt));
+              const enforced = await enforceRealism(record, scene.prompt, "PLAN_VIDEO");
+              if (enforced.record.video?.acceptedCandidate?.url) {
+                sceneVideos.push(enforced.record.video.acceptedCandidate.url);
+              }
+              bus.emit("clip_completed", { clipIndex: nextClip, totalClips: plan.totalClips, sceneIndex: scene.sceneIndex, chapterIndex: chapter.chapterIndex, videoUrl: enforced.record.video?.acceptedCandidate?.url ?? null, imageUrl: enforced.record.image?.acceptedCandidate?.url ?? null });
+              return enforced.record;
+            });
+            await Promise.all(clipTasks);
+            clipIndex += scene.clipCount;
+          }
+        }
+
+        bus.emit("final_stitching", { totalClips: plan.totalClips, sceneVideos: sceneVideos.length });
+        bus.emit("completed", { mode: params.mode, finalVideoUrl: sceneVideos[sceneVideos.length - 1] ?? null, sceneVideos });
+        return;
+      }
+
+      const provider = selectProvider(params.mode === "PLAN_IMAGE" ? "image" : "video");
+      bus.emit("provider_selected", { provider: provider.name, task: params.mode === "PLAN_IMAGE" ? "image" : "video" });
+
+      const record = await runPipelineProduction(buildIntakeFromPrompt(params.prompt));
+      const enforced = await enforceRealism(record, params.prompt, params.mode);
+
+      bus.emit("completed", {
+        mode: params.mode,
+        imageUrl: enforced.record.image?.acceptedCandidate?.url ?? null,
+        videoUrl: enforced.record.video?.acceptedCandidate?.url ?? null,
+        record: enforced.record,
+      });
+    } catch (error) {
+      bus.emit("failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+  })();
+
+  return bus.handle;
+}
