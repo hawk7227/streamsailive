@@ -1,4 +1,4 @@
-import type { AssistantMode } from '@/lib/assistant-brain/contracts';
+import type { AssistantMode } from '@/lib/enforcement/types';
 
 export type ResponseDensity = 'light' | 'medium' | 'heavy';
 
