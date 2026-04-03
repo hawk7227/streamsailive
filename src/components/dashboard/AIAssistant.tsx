@@ -90,9 +90,9 @@ function detectMedia(text: string): import('@/components/ai-chat/AssistantMessag
   const audio = text.match(/https?:\/\/\S+\.(mp3|wav|m4a|flac|ogg|opus|weba)/i);
   const doc = text.match(/https?:\/\/\S+\.(pdf|docx|xlsx|pptx|csv|json|zip)/i);
   if (img) blocks.push({ type: 'image_url', image_url: { url: img[0] } });
-  if (vid) blocks.push({ type: 'video_url', image_url: { url: vid[0] } });
+  if (vid) blocks.push({ type: 'video_url', video_url: { url: vid[0] } });
   if (audio) blocks.push({ type: 'audio_url', audio_url: { url: audio[0] } });
-  if (doc) blocks.push({ type: 'document', document: { url: doc[0], label: 'Open attached document' }, text: 'Open attached document' });
+  if (doc) blocks.push({ type: 'document_url', document_url: { url: doc[0], title: 'Open attached document' }, text: 'Open attached document' });
   return blocks;
 }
 
@@ -422,7 +422,7 @@ export default function AIAssistant(props: AIAssistantProps) {
           content: [
             { type: 'text', text: 'Generated image.' },
             { type: 'image_url', image_url: { url: artifact.storageUrl } },
-            { type: 'document', document: { url: artifact.storageUrl, label: 'Download image' }, text: 'Download image' },
+            { type: 'document_url', document_url: { url: artifact.storageUrl, title: 'Download image' }, text: 'Download image' },
           ],
         }]);
         ActivityController.responseCompleted();

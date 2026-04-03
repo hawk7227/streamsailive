@@ -25,7 +25,7 @@ export function toStoredPreviewAttachment(attachment: StoredAttachmentPayload): 
   const blocks: MsgContent[] = [];
   if (attachment.url) {
     blocks.push({ type: 'image_url', image_url: { url: attachment.url } });
-    blocks.push({ type: 'document', document: { url: attachment.url, label: 'Download image' }, text: 'Download image' });
+    blocks.push({ type: 'document_url', document_url: { url: attachment.url, title: 'Download image' }, text: 'Download image' });
   }
   return blocks;
 }
