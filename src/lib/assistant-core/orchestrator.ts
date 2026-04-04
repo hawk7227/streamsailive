@@ -20,21 +20,32 @@ function sse(event: string, data: unknown) {
 }
 
 function getTextFromResponse(response: any): string {
-  if (!response || !Array.isArray(response.output)) return "";
+  if (!response) return "";
+
+  if (typeof response.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
 
   const chunks: string[] = [];
+  const output = Array.isArray(response.output) ? response.output : [];
 
-  for (const item of response.output) {
-    if (!item || !Array.isArray(item.content)) continue;
+  for (const item of output) {
+    if (typeof item?.text === "string" && item.text.trim()) {
+      chunks.push(item.text);
+    }
 
-    for (const part of item.content) {
-      if (part?.type === "output_text" && typeof part?.text === "string") {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      if (typeof part?.text === "string" && part.text.trim()) {
         chunks.push(part.text);
+      }
+      if (typeof part?.output_text === "string" && part.output_text.trim()) {
+        chunks.push(part.output_text);
       }
     }
   }
 
-  return chunks.join("").trim();
+  return chunks.join("\n").trim();
 }
 
 function getFunctionCalls(response: any): Array<{
