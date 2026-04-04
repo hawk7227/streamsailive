@@ -1,11 +1,18 @@
 export type ProactiveMessage = {
   id: string
-  title: string
-  message: string
-  kind?: "info" | "success" | "warning" | "error"
-  ctaLabel?: string
-  ctaAction?: string
+  text: string
+  type:
+    | "generation_complete"
+    | "generation_started"
+    | "generation_failed"
+    | "info"
+    | "warning"
+    | "error"
+  imageUrl?: string
+  videoUrl?: string
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5"
 }
+
 type AssistantContext = {
   type: string
   prompt?: string
