@@ -312,9 +312,9 @@ export default function PipelineAssistantFramePage() {
         }
       }
 
-      if (!streamedText.trim()) {
-        appendAssistantText("Done.");
-      }
+     if (!streamedText.trim()) {
+  appendAssistantText("[no text returned]");
+}
 
       finalizeAssistantMessage();
     } catch (error) {
