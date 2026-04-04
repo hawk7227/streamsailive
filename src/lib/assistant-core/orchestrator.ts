@@ -20,13 +20,13 @@ function sse(event: string, data: unknown) {
 }
 
 function getTextFromResponse(response: any): string {
-  if (typeof response?.output_text === "string") return response.output_text;
+  if (!response || !Array.isArray(response.output)) return "";
 
-  const output = Array.isArray(response?.output) ? response.output : [];
   const chunks: string[] = [];
 
-  for (const item of output) {
-    if (!Array.isArray(item?.content)) continue;
+  for (const item of response.output) {
+    if (!item || !Array.isArray(item.content)) continue;
+
     for (const part of item.content) {
       if (part?.type === "output_text" && typeof part?.text === "string") {
         chunks.push(part.text);
@@ -34,7 +34,7 @@ function getTextFromResponse(response: any): string {
     }
   }
 
-  return chunks.join("");
+  return chunks.join("").trim();
 }
 
 function getFunctionCalls(response: any): Array<{
