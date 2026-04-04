@@ -1,3 +1,11 @@
+export type ProactiveMessage = {
+  id: string
+  title: string
+  message: string
+  kind?: "info" | "success" | "warning" | "error"
+  ctaLabel?: string
+  ctaAction?: string
+}
 type AssistantContext = {
   type: string
   prompt?: string
