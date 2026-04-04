@@ -214,7 +214,7 @@ export async function runOrchestrator(req: NextRequest) {
               input: toolOutputs,
             });
           }
-
+console.log("OPENAI_RESPONSE_DEBUG", JSON.stringify(response, null, 2));
           const finalText = getTextFromResponse(response);
 
           if (finalText) {
