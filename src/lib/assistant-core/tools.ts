@@ -8,6 +8,7 @@ type ToolDefinition = {
   type: "function";
   name: string;
   description: string;
+  strict: boolean;
   parameters: {
     type: "object";
     properties: Record<string, unknown>;
@@ -24,6 +25,7 @@ export function buildAssistantTools(
       type: "function",
       name: "run_verification",
       description: "Run a verification pass for a request.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -37,6 +39,7 @@ export function buildAssistantTools(
       type: "function",
       name: "generate_image",
       description: "Generate an image from a prompt.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -50,6 +53,7 @@ export function buildAssistantTools(
       type: "function",
       name: "list_workspace_files",
       description: "List files in the workspace.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -62,6 +66,7 @@ export function buildAssistantTools(
       type: "function",
       name: "read_workspace_file",
       description: "Read a file from the workspace.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -75,6 +80,7 @@ export function buildAssistantTools(
       type: "function",
       name: "write_workspace_file",
       description: "Write a file in the workspace.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -89,6 +95,7 @@ export function buildAssistantTools(
       type: "function",
       name: "apply_workspace_patch",
       description: "Apply a simple string patch to a workspace file.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -104,6 +111,7 @@ export function buildAssistantTools(
       type: "function",
       name: "run_workspace_command",
       description: "Run an allowed workspace command.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -117,6 +125,7 @@ export function buildAssistantTools(
       type: "function",
       name: "build_workspace",
       description: "Run the default workspace build command.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {},
