@@ -57,16 +57,17 @@ export default function BulkCreativeWorkspace() {
     const interval = window.setInterval(async () => {
       const response = await fetch(`/api/bulk/job-status/${jobId}`);
       const payload = (await response.json()) as BulkStatusResponse | { error: string };
-      if (!response.ok) {
+      if (!response.ok || !("data" in payload)) {
         setError("error" in payload ? payload.error : "Failed to poll bulk job");
         window.clearInterval(interval);
         return;
       }
-      setJob(payload.data);
-      if (!selectedTaskId && payload.data.manifest.outputs[0]) {
-        setSelectedTaskId(payload.data.manifest.outputs[0].taskId);
+      const nextJob = payload.data;
+      setJob(nextJob);
+      if (!selectedTaskId && nextJob.manifest.outputs[0]) {
+        setSelectedTaskId(nextJob.manifest.outputs[0].taskId);
       }
-      if (["completed", "failed", "cancelled"].includes(payload.data.status)) {
+      if (["completed", "failed", "cancelled"].includes(nextJob.status)) {
         window.clearInterval(interval);
       }
     }, 1500);
