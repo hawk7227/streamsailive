@@ -357,7 +357,7 @@ export async function parseFile(buffer: Buffer, filename: string, mimeType?: str
     case 'psd': {
       const { inspectPsd } = await import('@/lib/bulk/psd-engine');
       const parsed = inspectPsd(buffer, filename);
-      return { text: `PSD ${parsed.metadata.width}x${parsed.metadata.height} • ${parsed.metadata.channels}ch • ${parsed.metadata.depth}bit`, metadata: parsed.metadata, error: parsed.reason };
+      return { text: `PSD ${parsed.metadata.width}x${parsed.metadata.height} • ${parsed.metadata.channels}ch • ${parsed.metadata.depth}bit`, metadata: { ...parsed.metadata }, error: parsed.reason };
     }
     case 'video': return parseMediaMeta(buffer, filename, 'video');
     case 'audio': return parseMediaMeta(buffer, filename, 'audio');
