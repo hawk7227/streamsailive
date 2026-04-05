@@ -40,6 +40,26 @@ type BulkStatusResponse = {
   };
 };
 
+const fontLibrary = [
+  { name: "Inter Tight", use: "UI / compact CTA copy" },
+  { name: "Sora", use: "hero headlines / premium launch" },
+  { name: "Manrope", use: "support copy / readable commerce" },
+  { name: "Space Grotesk", use: "campaign accents / modern banners" },
+];
+
+const brandKit = [
+  { label: "Primary CTA", value: "Cyan accent / dark surface" },
+  { label: "Spacing", value: "12 / 14 / 18 card cadence" },
+  { label: "Border", value: "rgba white 6–8%" },
+  { label: "Panel", value: "blue-black glass" },
+];
+
+const offerLibrary = ["Shop now", "Learn more", "Limited offer", "Book now"];
+
+function isErrorPayload(value: unknown): value is { error: string } {
+  return typeof value === "object" && value !== null && "error" in value;
+}
+
 export default function BulkCreativeWorkspace() {
   const [workspaceTab, setWorkspaceTab] = useState<BulkWorkspaceTab>("bulk_jobs");
   const [designTab, setDesignTab] = useState<BulkDesignTab>("templates");
@@ -54,30 +74,95 @@ export default function BulkCreativeWorkspace() {
 
   useEffect(() => {
     if (!jobId) return;
-    const interval = window.setInterval(async () => {
-      const response = await fetch(`/api/bulk/job-status/${jobId}`);
-      const payload = (await response.json()) as BulkStatusResponse | { error: string };
-      if (!response.ok || !("data" in payload)) {
-        setError("error" in payload ? payload.error : "Failed to poll bulk job");
-        window.clearInterval(interval);
-        return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/bulk/job-status/${jobId}`, { cache: "no-store" });
+        const payload = (await response.json()) as BulkStatusResponse | { error: string };
+        if (!response.ok || isErrorPayload(payload) || !("data" in payload)) {
+          if (!cancelled) setError(isErrorPayload(payload) ? payload.error : "Failed to poll bulk job");
+          return;
+        }
+        if (cancelled) return;
+        const nextJob = payload.data;
+        setJob(nextJob);
+        setError(nextJob.error ?? (nextJob.manifest.errors[0]?.message ?? null));
+        if (!selectedTaskId && nextJob.manifest.outputs[0]) {
+          setSelectedTaskId(nextJob.manifest.outputs[0].taskId);
+        }
+        if (["completed", "failed", "cancelled"].includes(nextJob.status)) {
+          return;
+        }
+        window.setTimeout(poll, 1500);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to poll bulk job");
       }
-      const nextJob = payload.data;
-      setJob(nextJob);
-      if (!selectedTaskId && nextJob.manifest.outputs[0]) {
-        setSelectedTaskId(nextJob.manifest.outputs[0].taskId);
-      }
-      if (["completed", "failed", "cancelled"].includes(nextJob.status)) {
-        window.clearInterval(interval);
-      }
-    }, 1500);
-    return () => window.clearInterval(interval);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
   }, [jobId, selectedTaskId]);
 
   const selectedOutput = useMemo(() => {
     if (!job || !selectedTaskId) return null;
     return job.manifest.outputs.find((output) => output.taskId === selectedTaskId) ?? null;
   }, [job, selectedTaskId]);
+
+  const filteredOutputs = useMemo(() => {
+    const outputs = job?.manifest.outputs ?? [];
+    switch (workspaceTab) {
+      case "products":
+        return outputs.filter((output) => output.plan.kind === "product_image" || output.plan.kind === "lifestyle");
+      case "collections":
+        return outputs.filter((output) => output.plan.layoutFamily === "collection" || output.plan.layoutFamily === "comparison");
+      case "seo":
+        return outputs.filter((output) => output.plan.kind === "seo_image");
+      case "landing":
+        return outputs.filter((output) => ["landing_visual", "comparison_graphic", "banner"].includes(output.plan.kind));
+      case "library":
+        return outputs;
+      case "campaigns":
+        return outputs;
+      default:
+        return outputs;
+    }
+  }, [job, workspaceTab]);
+
+  const filteredTemplates = useMemo(() => {
+    switch (designTab) {
+      case "templates":
+        return templates.map((template) => ({
+          title: template.name,
+          subtitle: `${template.kind.replaceAll("_", " ")} • ${template.layoutFamily}`,
+          description: template.guidance,
+        }));
+      case "text":
+        return templates.flatMap((template) => template.textZones.map((zone) => ({
+          title: `${template.name} — ${zone.role}`,
+          subtitle: `${template.layoutFamily} • ${template.supportedAspects.join(", ")}`,
+          description: `Text zone at x:${zone.x}, y:${zone.y}, w:${zone.width}, h:${zone.height}`,
+        })));
+      case "fonts":
+        return fontLibrary.map((font) => ({ title: font.name, subtitle: "Font system", description: font.use }));
+      case "graphics":
+        return templates.flatMap((template) => template.safeZones.map((zone, index) => ({
+          title: `${template.name} — Safe zone ${index + 1}`,
+          subtitle: `${template.layoutFamily} • ${template.kind.replaceAll("_", " ")}`,
+          description: `Crop-safe frame x:${zone.x}, y:${zone.y}, w:${zone.width}, h:${zone.height}`,
+        })));
+      case "layouts":
+        return templates.map((template) => ({ title: template.layoutFamily, subtitle: template.name, description: template.guidance }));
+      case "brand_kits":
+        return brandKit.map((item) => ({ title: item.label, subtitle: "Brand kit", description: item.value }));
+      case "offers":
+        return offerLibrary.map((offer) => ({ title: offer, subtitle: "CTA intent", description: `Used by structured creative plans to reserve CTA-safe zones for ${offer.toLowerCase()}.` }));
+      default:
+        return [];
+    }
+  }, [designTab, templates]);
 
   async function createBulkJob() {
     setBusy(true);
@@ -88,11 +173,12 @@ export default function BulkCreativeWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const payload = await response.json() as { data?: { jobId: string }; error?: string };
+      const payload = (await response.json()) as { data?: { jobId: string }; error?: string };
       if (!response.ok || !payload.data?.jobId) throw new Error(payload.error ?? "Bulk job creation failed");
       setJobId(payload.data.jobId);
       setJob(null);
       setSelectedTaskId(null);
+      setWorkspaceTab("bulk_jobs");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bulk job creation failed");
     } finally {
@@ -153,8 +239,8 @@ export default function BulkCreativeWorkspace() {
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} style={{ width: "100%", background: "rgba(255,255,255,0.04)", color: "#cbd5e1", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, resize: "vertical" }} />
           <div style={{ ...mutedCard, padding: 12 }}>
             <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Current Job</div>
-            <div style={{ fontSize: 11, color: "#cbd5e1" }}>{jobId ?? "Not started"}</div>
-            <div style={{ fontSize: 11, color: "#67e8f9", marginTop: 6 }}>{job?.status ?? "idle"}</div>
+            <div style={{ fontSize: 11, color: "#cbd5e1", wordBreak: "break-all" }}>{jobId ?? "Not started"}</div>
+            <div style={{ fontSize: 11, color: job?.status === "failed" ? "#fca5a5" : "#67e8f9", marginTop: 6 }}>{job?.status ?? "idle"}</div>
           </div>
           <label style={{ ...mutedCard, padding: 12, color: "#94a3b8", fontSize: 11, cursor: "pointer" }}>
             PSD Upload
@@ -184,9 +270,9 @@ export default function BulkCreativeWorkspace() {
       <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.85fr", gap: 14, padding: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ ...mutedCard, padding: 12 }}>
-            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{workspaceTab === "bulk_jobs" ? "Bulk Grid" : workspaceTabs.find((tab) => tab.id === workspaceTab)?.label}</div>
+            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{workspaceTabs.find((tab) => tab.id === workspaceTab)?.label}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {job?.manifest.outputs.map((output) => (
+              {filteredOutputs.map((output) => (
                 <button key={output.taskId} onClick={() => setSelectedTaskId(output.taskId)} style={{ textAlign: "left", padding: 0, background: selectedTaskId === output.taskId ? "rgba(103,232,249,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${selectedTaskId === output.taskId ? "rgba(103,232,249,0.28)" : "rgba(255,255,255,0.06)"}`, borderRadius: 12, overflow: "hidden", cursor: "pointer" }}>
                   <div style={{ aspectRatio: "1 / 1", background: "#0f172a" }}>
                     <img src={output.url} alt={output.plan.kind} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
@@ -197,17 +283,18 @@ export default function BulkCreativeWorkspace() {
                   </div>
                 </button>
               ))}
-              {!job?.manifest.outputs.length && <div style={{ fontSize: 11, color: "#475569", padding: 8 }}>No outputs yet. Start a bulk job to populate the grid.</div>}
+              {!filteredOutputs.length && <div style={{ fontSize: 11, color: "#475569", padding: 8 }}>No items in this workspace tab yet. Generate a bulk job or switch tabs to view templates and task plans.</div>}
             </div>
           </div>
+
           <div style={{ ...mutedCard, padding: 12 }}>
-            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Design Library</div>
+            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{designTabs.find((tab) => tab.id === designTab)?.label}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-              {templates.map((template) => (
-                <div key={template.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 11, color: "#cbd5e1", fontWeight: 700 }}>{template.name}</div>
-                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{template.kind.replaceAll("_", " ")} • {template.layoutFamily}</div>
-                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>{template.guidance}</div>
+              {filteredTemplates.map((entry) => (
+                <div key={`${entry.title}-${entry.subtitle}`} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 11, color: "#cbd5e1", fontWeight: 700 }}>{entry.title}</div>
+                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{entry.subtitle}</div>
+                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>{entry.description}</div>
                 </div>
               ))}
             </div>
@@ -238,13 +325,19 @@ export default function BulkCreativeWorkspace() {
           <div style={{ ...mutedCard, padding: 12 }}>
             <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Task Trace</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto" }}>
-              {job?.tasks.map((task) => (
-                <div key={task.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 11, color: "#cbd5e1", fontWeight: 700 }}>{task.kind.replaceAll("_", " ")} • {task.plan.layoutFamily}</div>
-                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{task.aspectRatio} · {task.provider} · template {task.plan.templateId}</div>
-                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6, lineHeight: 1.6 }}>{task.finalPrompt}</div>
-                </div>
-              ))}
+              {job?.tasks.map((task) => {
+                const taskError = job.manifest.errors.find((entry) => entry.taskId === task.id);
+                const taskOutput = job.manifest.outputs.find((entry) => entry.taskId === task.id);
+                return (
+                  <div key={task.id} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${taskError ? "rgba(252,165,165,0.22)" : "rgba(255,255,255,0.06)"}`, borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: "#cbd5e1", fontWeight: 700 }}>{task.kind.replaceAll("_", " ")} • {task.plan.layoutFamily}</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{task.aspectRatio} · {task.provider} · template {task.plan.templateId}</div>
+                    <div style={{ fontSize: 10, color: "#475569", marginTop: 6, lineHeight: 1.6 }}>{task.finalPrompt}</div>
+                    {taskOutput && <div style={{ fontSize: 10, color: "#67e8f9", marginTop: 6 }}>Completed · {taskOutput.provider}</div>}
+                    {taskError && <div style={{ fontSize: 10, color: "#fca5a5", marginTop: 6 }}>Failed · {taskError.message}</div>}
+                  </div>
+                );
+              })}
               {!job?.tasks.length && <div style={{ fontSize: 11, color: "#475569" }}>Task plans appear here after job creation.</div>}
             </div>
           </div>

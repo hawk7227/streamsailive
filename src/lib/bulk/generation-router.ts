@@ -1,12 +1,19 @@
 import { randomUUID } from "node:crypto";
-import type { BulkTask } from "./job-schema";
+import type { BulkProvider, BulkTask } from "./job-schema";
 import { createManifest } from "./manifest-builder";
 import { parseBulkPrompt } from "./prompt-parser";
 import { buildCreativePlan, buildCreativePrompt } from "./creative-engine";
 
+function resolveBulkProvider(): BulkProvider {
+  if (process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_IMAGES) return "openai";
+  if (process.env.FAL_API_KEY) return "fal";
+  return "openai";
+}
+
 export function buildBulkPayload(prompt: string) {
   const parsed = parseBulkPrompt(prompt);
   const tasks: BulkTask[] = [];
+  const provider = resolveBulkProvider();
 
   const combinations = parsed.kinds.flatMap((kind) => parsed.aspects.map((aspectRatio) => ({ kind, aspectRatio })));
   const count = Math.max(parsed.requestedCount, combinations.length);
@@ -17,7 +24,7 @@ export function buildBulkPayload(prompt: string) {
     tasks.push({
       id: randomUUID(),
       kind: combo.kind,
-      provider: "fal",
+      provider,
       size: parsed.requestedSize,
       aspectRatio: combo.aspectRatio,
       basePrompt: parsed.basePrompt,
