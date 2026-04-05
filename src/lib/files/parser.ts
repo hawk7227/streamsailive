@@ -38,6 +38,7 @@ export function detectFileType(filename: string, mimeType?: string): string {
   if (ext === 'pptx' || mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return 'pptx';
   if (ext === 'csv' || mimeType === 'text/csv') return 'csv';
   if (ext === 'zip' || mimeType === 'application/zip' || mimeType === 'application/x-zip-compressed') return 'zip';
+  if (ext === 'psd' || mimeType === 'image/vnd.adobe.photoshop' || mimeType === 'application/photoshop' || mimeType === 'application/x-photoshop') return 'psd';
   if (IMAGE_EXTS.has(ext) || mimeType?.startsWith('image/')) return 'image';
   if (VIDEO_EXTS.has(ext) || mimeType?.startsWith('video/')) return 'video';
   if (AUDIO_EXTS.has(ext) || mimeType?.startsWith('audio/')) return 'audio';
@@ -52,7 +53,7 @@ const ALLOWED_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml', 'image/bmp', 'image/tiff',
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml', 'image/bmp', 'image/tiff', 'image/vnd.adobe.photoshop', 'application/photoshop', 'application/x-photoshop',
   'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/mpeg',
   'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/flac', 'audio/aac', 'audio/mp4', 'audio/webm', 'audio/opus'
 ]);
@@ -353,6 +354,11 @@ export async function parseFile(buffer: Buffer, filename: string, mimeType?: str
     case 'csv': return parseCsv(buffer);
     case 'zip': return parseZip(buffer);
     case 'image': return parseImageMeta(buffer);
+    case 'psd': {
+      const { inspectPsd } = await import('@/lib/bulk/psd-engine');
+      const parsed = inspectPsd(buffer, filename);
+      return { text: `PSD ${parsed.metadata.width}x${parsed.metadata.height} • ${parsed.metadata.channels}ch • ${parsed.metadata.depth}bit`, metadata: parsed.metadata, error: parsed.reason };
+    }
     case 'video': return parseMediaMeta(buffer, filename, 'video');
     case 'audio': return parseMediaMeta(buffer, filename, 'audio');
     case 'json': return parseJson(buffer);

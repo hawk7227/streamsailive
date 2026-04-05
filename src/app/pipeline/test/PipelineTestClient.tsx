@@ -21,6 +21,7 @@ import { BatchPreviewModal } from "@/components/pipeline/BatchPreviewModal";
 import { DesktopPlatformView } from "@/components/pipeline/DesktopPlatformView";
 import MediaShelf, { type MediaShelfItem } from "@/components/pipeline/MediaShelf";
 import PipelineExperiencePanel from "@/components/pipeline/PipelineExperiencePanel";
+import BulkCreativeWorkspace from "@/components/pipeline/BulkCreativeWorkspace";
 import type { StoryBible } from "@/lib/story/storyBible";
 import type { PlatformId, ViewId } from "@/lib/platform-views/index";
 
@@ -3765,6 +3766,9 @@ Accept only if:
             </div>
 
           </div>{/* end bottom 3-col */}
+
+
+          <BulkCreativeWorkspace />
 
           {/* ── ROW 3: 4-up Concept Grid ─────────────────────────────────────── */}
           <div style={{ background: "linear-gradient(180deg, rgba(15,24,44,0.96), rgba(10,18,34,0.96))", border: "1px solid rgba(148,163,184,0.18)", borderRadius: 18, marginBottom: 14, boxShadow: "0 18px 46px rgba(2,6,23,.18)" }}>

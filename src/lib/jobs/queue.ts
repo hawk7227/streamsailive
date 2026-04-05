@@ -12,7 +12,8 @@ export type JobType =
   | "image_gen" | "video_gen" | "t2v" | "i2v"
   | "tts" | "stt" | "song_gen"
   | "parse_file" | "chunk_file" | "intake_url"
-  | "voice_dataset_process";
+  | "voice_dataset_process"
+  | "bulk_creative" | "psd_edit" | "adobe_edit";
 
 export type JobStatus = "pending" | "claimed" | "running" | "completed" | "failed" | "cancelled";
 
