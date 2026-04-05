@@ -1,23 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
 import AdmZip from "adm-zip";
-
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getJob } from "@/lib/jobs/queue";
-import type { BulkManifest, BulkJobPayload } from "@/lib/bulk/job-schema";
-
-type BulkManifestOutput = BulkManifest["outputs"][number];
+import { getJobStatus } from "@/lib/jobs/queue";
+import type { BulkJobPayload, BulkManifest, BulkOutput } from "@/lib/bulk/job-schema";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isBulkOutput(value: unknown): value is BulkManifestOutput {
+function isBulkOutput(value: unknown): value is BulkOutput {
   if (!isRecord(value)) return false;
   return (
     typeof value.taskId === "string" &&
     typeof value.url === "string" &&
     typeof value.provider === "string" &&
-    typeof value.createdAt === "number"
+    typeof value.createdAt === "string" &&
+    isRecord(value.plan) &&
+    typeof value.plan.kind === "string" &&
+    typeof value.plan.layoutFamily === "string"
   );
 }
 
@@ -26,11 +26,13 @@ function isBulkManifest(value: unknown): value is BulkManifest {
   return (
     typeof value.jobId === "string" &&
     typeof value.prompt === "string" &&
-    typeof value.sourceType === "string" &&
+    (value.sourceType === "prompt" || value.sourceType === "document") &&
     typeof value.total === "number" &&
     typeof value.completed === "number" &&
+    typeof value.failed === "number" &&
     Array.isArray(value.outputs) &&
-    value.outputs.every(isBulkOutput)
+    value.outputs.every(isBulkOutput) &&
+    Array.isArray(value.errors)
   );
 }
 
@@ -38,31 +40,39 @@ function isBulkJobPayload(value: unknown): value is BulkJobPayload {
   if (!isRecord(value)) return false;
   return (
     typeof value.prompt === "string" &&
-    typeof value.sourceType === "string" &&
+    (value.sourceType === "prompt" || value.sourceType === "document") &&
     Array.isArray(value.tasks) &&
-    isBulkManifest(value.manifest)
+    isBulkManifest(value.manifest) &&
+    isRecord(value.options) &&
+    typeof value.options.requestedCount === "number" &&
+    typeof value.options.requestedSize === "string" &&
+    Array.isArray(value.options.selectedKinds) &&
+    Array.isArray(value.options.selectedAspects)
   );
 }
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json()) as { jobId?: string };
-  const jobId = typeof body?.jobId === "string" ? body.jobId : "";
-
-  if (!jobId) {
-    return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
-  }
-
+export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const job = await getJob(jobId);
+  let body: { jobId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body.jobId) {
+    return NextResponse.json({ error: "jobId is required" }, { status: 400 });
+  }
+
+  const job = await getJobStatus(body.jobId);
   if (!job) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
@@ -71,21 +81,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!isBulkJobPayload(job.payload)) {
-    return NextResponse.json(
-      { error: "Invalid bulk job payload shape" },
-      { status: 500 },
-    );
+  const payload = isBulkJobPayload(job.payload) ? job.payload : null;
+  const manifest = isBulkManifest(job.result)
+    ? job.result
+    : payload?.manifest ?? null;
+
+  if (!manifest) {
+    return NextResponse.json({ error: "Bulk manifest unavailable for export" }, { status: 400 });
   }
 
-  const payload = job.payload;
-  const manifest = isBulkManifest(job.result) ? job.result : payload.manifest;
-
-  if (!manifest.outputs.length) {
-    return NextResponse.json(
-      { error: "No outputs available to export" },
-      { status: 400 },
-    );
+  if (manifest.outputs.length === 0) {
+    return NextResponse.json({ error: "No outputs available to export" }, { status: 400 });
   }
 
   const zip = new AdmZip();
@@ -95,28 +101,23 @@ export async function POST(req: NextRequest) {
     const response = await fetch(output.url);
 
     if (!response.ok) {
-      return NextResponse.json(
-        {
-          error: `Failed to fetch output ${i + 1}`,
-          status: response.status,
-        },
-        { status: 502 },
-      );
+      throw new Error(`Failed to download output ${i + 1}`);
     }
 
-    const bytes = Buffer.from(await response.arrayBuffer());
-    zip.addFile(`bulk-output-${i + 1}.png`, bytes);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    zip.addFile(
+      `${String(i + 1).padStart(2, "0")}-${output.plan.kind}-${output.plan.layoutFamily}.png`,
+      buffer,
+    );
   }
 
   const archive = zip.toBuffer();
 
-  return new NextResponse(archive, {
-    status: 200,
+  return new Response(archive, {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="bulk-${jobId}.zip"`,
+      "Content-Disposition": `attachment; filename="bulk-${body.jobId}.zip"`,
       "Content-Length": String(archive.length),
-      "Cache-Control": "no-store",
     },
   });
 }
