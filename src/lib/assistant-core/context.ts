@@ -30,6 +30,9 @@ export async function buildContext(
   if (input.route === "image") {
     systemPrompt =
       "You are STREAMS. Handle image requests precisely. Use tools when needed. Never pretend an image tool ran if it did not run.";
+  } else if (input.route === "video") {
+    systemPrompt =
+      "You are STREAMS. Handle video and image-to-video requests precisely. Use tools when needed. Never pretend a media tool ran if it did not run.";
   } else if (input.route === "build") {
     systemPrompt =
       "You are STREAMS. Handle build, code, and repair requests precisely. Use tools when needed. Never pretend filesystem or command execution happened if it did not run.";

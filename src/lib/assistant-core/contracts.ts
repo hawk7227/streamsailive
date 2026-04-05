@@ -1,4 +1,4 @@
-export type AssistantMode = "chat" | "image" | "build" | "file";
+export type AssistantMode = "chat" | "image" | "video" | "build" | "file";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";

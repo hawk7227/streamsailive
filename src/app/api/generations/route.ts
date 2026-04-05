@@ -10,6 +10,7 @@ import { uploadImageToSupabase } from "@/lib/supabase/storage";
 import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 import { inspectImageSemantics } from "@/lib/generator-intelligence/services/visionInspector";
 import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
+import { planMediaGeneration, type MediaGenerationPlan } from "@/lib/assistant-core/media-generation";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
   let responseText = null;
   let compiledRequest = null as ReturnType<typeof compileGenerationRequest> | null;
   let generationStatus: "pending" | "completed" | "failed" | null = null;
+  let mediaPlan: MediaGenerationPlan | null = null;
 
   // ── bypassCompiler gate ────────────────────────────────────────────────────
   // Only allowed for admin/dev. Requires x-admin-secret header.
@@ -113,6 +115,23 @@ export async function POST(request: Request) {
     const mode = typeof payload?.mode === "string" ? payload.mode : null;
 
     let finalPrompt = prompt;
+
+    if (type === "image" || type === "video" || type === "i2v") {
+      mediaPlan = planMediaGeneration({
+        type,
+        prompt,
+        provider: providerOverride ?? undefined,
+        model: typeof payload?.model === "string" ? payload.model : undefined,
+        duration: typeof payload?.duration === "string" ? payload.duration : undefined,
+        aspectRatio: typeof payload?.aspectRatio === "string" ? payload.aspectRatio : undefined,
+        quality: typeof payload?.quality === "string" ? payload.quality : undefined,
+        imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
+        workspaceId: selection.current.workspace.id,
+        storyBible: storyBible ?? undefined,
+        sourceKind,
+        longVideo: mode === "long_video" || mode === "story" || mode === "feature",
+      });
+    }
 
     if (!bypassCompiler) {
       // ── All mediums route through the compiler — single mandatory gateway ──
@@ -184,10 +203,14 @@ export async function POST(request: Request) {
       }
     }
 
+    const executionPrompt = mediaPlan
+      ? [finalPrompt, mediaPlan.finalPrompt].filter(Boolean).join("\n\n")
+      : finalPrompt;
+
     const imageProvider = providerOverride || "openai";
     if (type === "image" && !bypassCompiler && imageProvider === "openai") {
       const enforced = await generateEnforcedImage({
-        prompt,
+        prompt: executionPrompt,
         apiKey: process.env.OPENAI_API_KEY!,
         workspaceId: selection.current.workspace.id,
         mode: "images",
@@ -201,7 +224,7 @@ export async function POST(request: Request) {
       finalPrompt = enforced.finalPrompt;
     } else {
       const generationResult = await generateContent(type as GenerationType, {
-        prompt: finalPrompt,
+        prompt: executionPrompt,
         aspectRatio: payload?.aspectRatio,
         duration: payload?.duration,
         quality: payload?.quality,
@@ -289,13 +312,13 @@ export async function POST(request: Request) {
     workspace_id: selection.current.workspace.id,
     type,
     prompt: responseText ? responseText : (compiledRequest?.prompt ?? prompt), // Save compiled prompt for traceability
-    title: typeof payload?.title === "string" ? payload.title : (compiledRequest?.continuityPlan?.continuityRequired ? "Locked continuity generation" : null),
+    title: typeof payload?.title === "string" ? payload.title : (compiledRequest?.continuityPlan?.continuityRequired ? "Locked continuity generation" : mediaPlan?.sourceMode === "story_to_video" ? "Story planned generation" : null),
     status: payload.status === "failed" ? "failed" : payload.status === "pending" ? "pending" : "completed",
     aspect_ratio:
       typeof payload?.aspectRatio === "string" ? payload.aspectRatio : null,
     duration: typeof payload?.duration === "string" ? payload.duration : null,
     quality: typeof payload?.quality === "string" ? payload.quality : null,
-    style: typeof payload?.style === "string" ? payload.style : (compiledRequest?.realismPolicy?.headline ?? null),
+    style: typeof payload?.style === "string" ? payload.style : (compiledRequest?.realismPolicy?.headline ?? mediaPlan?.continuityProfile.cameraStyle ?? null),
     output_url: outputUrl,
     external_id: externalId,
     is_preview: typeof payload?.isPreview === "boolean" ? payload.isPreview : false,
@@ -319,7 +342,7 @@ export async function POST(request: Request) {
   }
 
   if (data.status === "failed") {
-    return NextResponse.json({ data, error: payload.generationError ?? "Generation failed" });
+    return NextResponse.json({ data, planning: mediaPlan, error: payload.generationError ?? "Generation failed" });
   }
-  return NextResponse.json({ data });
+  return NextResponse.json({ data, planning: mediaPlan });
 }

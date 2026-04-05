@@ -12,6 +12,12 @@ export function routeRequest(req: NormalizedAssistantRequest): AssistantMode {
   }
 
   if (
+    /\b(video|clip|scene|shot|storyboard|story video|image to video|i2v|animate)\b/i.test(text)
+  ) {
+    return "video";
+  }
+
+  if (
     /\b(build|code|repo|patch|fix|typescript|javascript|react|next|debug|compile|bug)\b/i.test(text)
   ) {
     return "build";

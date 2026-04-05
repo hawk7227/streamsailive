@@ -6,6 +6,7 @@ import type {
   ExecuteAssistantToolInput,
   ToolProgressHandlers,
 } from "./contracts";
+import { executeMediaGeneration } from "./media-generation";
 
 type ToolDefinition = {
   type: "function";
@@ -280,15 +281,24 @@ export function buildAssistantTools(
     },
     {
       type: "function",
-      name: "generate_image",
-      description: "Generate an image from a prompt.",
+      name: "generate_media",
+      description: "Generate an image, video, or image-to-video output using the configured media pipeline.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
+          type: { type: "string", enum: ["image", "video", "i2v"] },
           prompt: { type: "string" },
+          provider: { type: "string" },
+          model: { type: "string" },
+          duration: { type: "string" },
+          aspectRatio: { type: "string" },
+          quality: { type: "string" },
+          imageUrl: { type: "string" },
+          storyBible: { type: "string" },
+          longVideo: { type: "boolean" }
         },
-        required: ["prompt"],
+        required: ["type", "prompt"],
         additionalProperties: false,
       },
     },
@@ -399,13 +409,32 @@ export async function executeAssistantTool(
       };
     }
 
-    case "generate_image": {
-      handlers?.onProgress?.("image generation requested");
-      return {
-        ok: true,
-        action: "PLAN_IMAGE",
-        payload: input.args,
-      };
+    case "generate_media": {
+      const type = safeString(input.args.type, "type") as "image" | "video" | "i2v";
+      const prompt = safeString(input.args.prompt, "prompt");
+      handlers?.onProgress?.(`preparing ${type} generation`);
+
+      const workspaceId =
+        typeof input.context.context?.workspaceId === "string"
+          ? input.context.context.workspaceId
+          : undefined;
+
+      const result = await executeMediaGeneration({
+        type,
+        prompt,
+        provider: typeof input.args.provider === "string" ? input.args.provider : undefined,
+        model: typeof input.args.model === "string" ? input.args.model : undefined,
+        duration: typeof input.args.duration === "string" ? input.args.duration : undefined,
+        aspectRatio: typeof input.args.aspectRatio === "string" ? input.args.aspectRatio : undefined,
+        quality: typeof input.args.quality === "string" ? input.args.quality : undefined,
+        imageUrl: typeof input.args.imageUrl === "string" ? input.args.imageUrl : undefined,
+        storyBible: typeof input.args.storyBible === "string" ? input.args.storyBible : undefined,
+        longVideo: input.args.longVideo === true,
+        workspaceId,
+      });
+
+      handlers?.onProgress?.(`${type} generation ${result.status}`);
+      return result;
     }
 
     case "list_workspace_files": {
