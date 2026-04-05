@@ -18,6 +18,7 @@ export interface GenerationResult {
     outputUrl?: string | null;
     externalId?: string | null;
     responseText?: string | null;
+    costEstimate?: number | null;
 }
 
 export interface AIProvider {

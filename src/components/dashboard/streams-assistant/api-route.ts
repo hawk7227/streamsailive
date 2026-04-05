@@ -31,8 +31,8 @@ interface FullContext {
 
 const TOOLS = [
   {type:"function",function:{name:"fetch_url",description:"Fetch any URL — returns text, JSON, or base64 for images.",parameters:{type:"object",properties:{url:{type:"string"},method:{type:"string",enum:["GET","POST"]},body:{type:"string"}},required:["url"]}}},
-  {type:"function",function:{name:"generate_image",description:"Trigger image generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["openai","fal"]}},required:[]}}},
-  {type:"function",function:{name:"generate_video",description:"Trigger video generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["kling","runway","openai"]},mode:{type:"string",enum:["scratch_t2v","i2v"]},storyBible:{type:"string"}},required:[]}}},
+  {type:"function",function:{name:"generate_image",description:"Trigger image generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["openai","fal","seedream-lite-v5","nano-banana-2","openai-image"]}},required:[]}}},
+  {type:"function",function:{name:"generate_video",description:"Trigger video generation.",parameters:{type:"object",properties:{conceptId:{type:"string"},prompt:{type:"string"},provider:{type:"string",enum:["fal","kling-v3","veo-3.1","runway","openai"]},mode:{type:"string",enum:["scratch_t2v","i2v"]},storyBible:{type:"string"}},required:[]}}},
   {type:"function",function:{name:"generate_song",description:"Trigger song generation using available voice references.",parameters:{type:"object",properties:{prompt:{type:"string"},provider:{type:"string",enum:["suno","udio","auto"]},voiceDatasetId:{type:"string"},storyBible:{type:"string"}},required:["prompt"]}}},
   {type:"function",function:{name:"build_story_bible",description:"Create a locked story bible before story-to-video.",parameters:{type:"object",properties:{title:{type:"string"},storyText:{type:"string"},aiFill:{type:"boolean"},sourceKind:{type:"string",enum:["self","family_or_friend","synthetic","mixed"]}},required:["storyText"]}}},
   {type:"function",function:{name:"run_pipeline",description:"Run full governance pipeline.",parameters:{type:"object",properties:{},required:[]}}},
@@ -64,12 +64,12 @@ async function executeTool(name: string, args: Record<string,unknown>, ctx: Full
         return (await r.text()).slice(0,8000);
       }
       case "generate_image": {
-        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"image",prompt:args.prompt??ctx.imagePrompt??"realistic photo",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:args.provider??ctx.imageProvider??"openai",aspectRatio:"16:9"})});
+        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"image",prompt:args.prompt??ctx.imagePrompt??"realistic photo",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:(args.provider==="seedream-lite-v5"||args.provider==="nano-banana-2")?"fal":(args.provider==="openai-image"?"openai":(args.provider??ctx.imageProvider??"openai")),model:args.provider==="seedream-lite-v5"||args.provider==="nano-banana-2"||args.provider==="openai-image"?args.provider:undefined,aspectRatio:"16:9"})});
         const d = await r.json() as {data?:{id:string;status:string;output_url?:string};error?:string};
         return d.error?`Error: ${d.error}`:JSON.stringify({status:d.data?.status,url:d.data?.output_url,id:d.data?.id});
       }
       case "generate_video": {
-        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"video",prompt:args.prompt??ctx.videoPrompt??"slow natural motion",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:args.provider??ctx.videoProvider??"kling",mode:args.mode??ctx.videoMode??"scratch_t2v",storyBible:args.storyBible??ctx.settings?.storyBible??null})});
+        const r = await fetch(`${base}/api/generations`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"video",prompt:args.prompt??ctx.videoPrompt??"slow natural motion",conceptId:args.conceptId??ctx.selectedConceptId??"concept-1",provider:(args.provider==="kling-v3"||args.provider==="veo-3.1")?"fal":(args.provider??ctx.videoProvider??"kling"),model:args.provider==="kling-v3"||args.provider==="veo-3.1"?args.provider:undefined,mode:args.mode??ctx.videoMode??"scratch_t2v",storyBible:args.storyBible??ctx.settings?.storyBible??null})});
         const d = await r.json() as {data?:{id:string;status:string;output_url?:string};error?:string};
         return d.error?`Error: ${d.error}`:JSON.stringify({status:d.data?.status,url:d.data?.output_url,id:d.data?.id});
       }

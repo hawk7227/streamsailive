@@ -1,5 +1,6 @@
 import { getSiteConfigSync } from "../config";
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "./types";
+import type { FalImageModelKey, FalVideoModelKey } from "./providers/fal";
 import { OpenAIProvider } from "./providers/openai";
 import { ClaudeProvider } from "./providers/claude";
 import { KlingProvider } from "./providers/kling";
@@ -19,20 +20,36 @@ const providers: Record<string, AIProvider> = {
     fal: new FalProvider(),
 };
 
+const FAL_IMAGE_MODELS: FalImageModelKey[] = ["seedream-lite-v5", "nano-banana-2"];
+const FAL_VIDEO_MODELS: FalVideoModelKey[] = ["kling-v3", "veo-3.1"];
+
+function resolveProvider(type: GenerationType, options: GenerationOptions, providerOverride?: string): string {
+    if (providerOverride) return providerOverride;
+    const explicitModel = typeof options.model === "string" ? options.model : "";
+
+    if (type === "image") {
+        if (explicitModel === "openai-image") return "openai";
+        if (FAL_IMAGE_MODELS.includes(explicitModel as FalImageModelKey)) return "fal";
+    }
+
+    if (type === "video" || type === "i2v") {
+        if (FAL_VIDEO_MODELS.includes(explicitModel as FalVideoModelKey)) return "fal";
+    }
+
+    const config = getSiteConfigSync();
+    return config.aiProviders?.[type] || "openai";
+}
+
 /**
  * Main entry point for generating AI content.
- * It reads the desired provider from the site configuration for the given type,
- * and delegates the work to the corresponding initialized provider.
+ * It resolves provider from explicit override first, then model, then site config.
  */
 export async function generateContent(
     type: GenerationType,
     options: GenerationOptions,
     providerOverride?: string
 ): Promise<GenerationResult> {
-    const config = getSiteConfigSync();
-
-    // Allow explicit override (e.g. force "openai" for instant DALL-E)
-    const providerKey = providerOverride || config.aiProviders?.[type] || "openai";
+    const providerKey = resolveProvider(type, options, providerOverride);
 
     const provider = providers[providerKey.toLowerCase()];
 

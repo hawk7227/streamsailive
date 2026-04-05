@@ -13,7 +13,7 @@ export async function GET() {
       { provider: 'elevenlabs',  configured: !!process.env.ELEVENLABS_API_KEY,  scopes: ['tts', 'voices'] },
       { provider: 'kling',       configured: !!process.env.KLING_ACCESS_KEY && !!process.env.KLING_SECRET_KEY, scopes: ['i2v', 'video'] },
       { provider: 'runway',      configured: !!process.env.RUNWAY_API_KEY,      scopes: ['video'] },
-      { provider: 'fal',         configured: !!process.env.FAL_KEY,             scopes: ['image', 'video'] },
+      { provider: 'fal',         configured: !!(process.env.FAL_API_KEY || process.env.FAL_KEY),             scopes: ['image', 'video'] },
       { provider: 'stripe',      configured: !!process.env.STRIPE_SECRET_KEY,   scopes: ['payments', 'webhooks'] },
       { provider: 'resend',      configured: !!process.env.RESEND_API_KEY,      scopes: ['email'] },
       { provider: 'supabase',    configured: !!process.env.NEXT_PUBLIC_SUPABASE_URL, scopes: ['database', 'storage', 'auth'] },

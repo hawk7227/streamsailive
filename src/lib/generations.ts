@@ -12,6 +12,8 @@ export interface GenerationRecord {
   style: string | null;
   output_url: string | null;
   external_id: string | null;
+  provider?: string | null;
+  model?: string | null;
   favorited: boolean;
   progress: number | null;
   is_preview?: boolean | null;
@@ -67,6 +69,8 @@ export async function createGeneration(payload: {
   outputUrl?: string;
   externalId?: string;
   isPreview?: boolean;
+  provider?: string;
+  model?: string;
 }) {
   const response = await fetch("/api/generations", {
     method: "POST",

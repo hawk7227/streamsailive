@@ -470,7 +470,7 @@ Accept only if:
   });
   const [previewTabs, setPreviewTabs] = useState<Record<string, PreviewTab>>({ c1: "Image", c2: "Image", c3: "Image", c4: "Image" });
   const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({ c1: true, c2: true, c3: true, c4: true });
-  const [imageProvider, setImageProvider] = useState<"openai" | "fal">("openai");
+  const [imageProvider, setImageProvider] = useState<"openai-image" | "seedream-lite-v5" | "nano-banana-2">("openai-image");
 
   // Generation queue — replaces all busy.* flags
   const [generationQueue, setGenerationQueue] = useState<Map<string, QueueItem>>(new Map());
@@ -677,7 +677,7 @@ Accept only if:
   const playbackRef2 = React.useRef<HTMLVideoElement>(null);
   const [videoReferencePriority, setVideoReferencePriority] = useState<ReferencePriority>("medium");
   const [selectedVideoTemplate, setSelectedVideoTemplate] = useState("");
-  const [videoProvider, setVideoProvider] = useState<"kling" | "runway">("kling");
+  const [videoProvider, setVideoProvider] = useState<"kling-v3" | "veo-3.1">("kling-v3");
   // AI assistant float
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [navMenuOpen, setNavMenuOpen] = useState(false);
@@ -1161,7 +1161,7 @@ Accept only if:
     setGenerationIntent("PLAN_IMAGE");
     setOutputTarget("center");
     setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "processing", error: null } }));
-    log(`Generating image with DALL-E for ${conceptId}...`);
+    log(`Generating image with ${imageProvider} for ${conceptId}...`);
     emit({ type: "decision", stepId: "imagery", stepName: "Imagery Generation", message: `Compiling realism-first still for ${conceptId}.` });
     try {
       const res = await fetch("/api/generations", {
@@ -1174,7 +1174,8 @@ Accept only if:
           subjectAction,
           aspectRatio: "16:9",
           conceptId,
-          provider: imageProvider,
+          provider: imageProvider === "openai-image" ? "openai" : "fal",
+          model: imageProvider,
           storyBible: storyBible?.summary ?? null,
           sourceKind: storySourceKind,
           referenceSummary: storyBible ? `${storyBible.locationCard}; ${storyBible.eraCard}` : null,
@@ -1193,7 +1194,7 @@ Accept only if:
         setConceptOutputs(p => ({ ...p, [conceptId]: { ...p[conceptId], status: "failed", error: errMsg } }));
         log(`✗ Image failed: ${errMsg}`);
       } else {
-        queueAdd({ id: gen.id, type: "image", status: "pending", provider: gen.external_id ? "kling" : "openai", prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
+        queueAdd({ id: gen.id, type: "image", status: "pending", provider: imageProvider, prompt, conceptId, completedAt: null, outputUrl: null, externalId: gen.external_id ?? null, mode: "standard", costEstimate: 0.04, error: null });
         log(`Image queued: ${gen.id.slice(0, 8)} — polling...`);
       }
     } catch (e) {
@@ -1726,6 +1727,7 @@ Accept only if:
               : finalImagePrompt,
             aspectRatio: "16:9",
             provider: "openai",
+                    model: "openai-image",
             conceptId: "pipeline-test"
           }),
         });
@@ -2094,7 +2096,8 @@ Accept only if:
       const payload: Record<string, unknown> = {
         type: videoMode === "i2v" ? "i2v" : "video",
         prompt: videoPrompt,
-        provider: videoProvider,
+        provider: "fal",
+        model: videoProvider,
         aspectRatio: viewMode,
         duration: "5s",
         mode: videoMode,
@@ -2110,10 +2113,11 @@ Accept only if:
         log("✗ Video failed: " + (data.error ?? data.data?.status ?? "unknown error"));
       } else if (data.data?.id) {
         log("✓ Video job submitted (" + videoProvider + "): " + data.data.id.slice(0, 8));
-        queueAdd({ id: data.data.id, type: "video", status: (data.data.status as QueueStatus) ?? "pending", provider: videoProvider, prompt: videoPrompt, conceptId: "c1", completedAt: null, outputUrl: data.data.output_url ?? null, externalId: null, mode: videoMode, costEstimate: 0.05, error: null });
+        queueAdd({ id: data.data.id, type: "video", status: (data.data.status as QueueStatus) ?? "pending", provider: "fal",
+        model: videoProvider, prompt: videoPrompt, conceptId: "c1", completedAt: null, outputUrl: data.data.output_url ?? null, externalId: null, mode: videoMode, costEstimate: 0.05, error: null });
         if (data.data.output_url) setVideoResult(data.data.output_url);
       } else {
-        log("✗ Video failed: no job ID returned — check Kling/Runway credentials");
+        log("✗ Video failed: no job ID returned — check fal.ai credentials");
       }
     } catch (e) { log("Video generate failed: " + (e instanceof Error ? e.message : String(e))); }
     setVideoGenerating(false);
@@ -2132,7 +2136,7 @@ Accept only if:
         break;
       case "update_settings":
         if (action.payload?.key === "nicheId") setNicheId(String(action.payload?.value ?? ""));
-        if (action.payload?.key === "imageProvider") setImageProvider(String(action.payload?.value ?? "openai") as "openai" | "fal");
+        if (action.payload?.key === "imageProvider") setImageProvider(String(action.payload?.value ?? "openai-image") as "openai-image" | "seedream-lite-v5" | "nano-banana-2");
         if (action.payload?.key === "pipelineMode") setPipelineMode(String(action.payload?.value ?? "manual") as "manual" | "auto");
         break;
       case "update_image_prompt": setStepPrompts(p => ({ ...p, imagery: String(action.payload?.value ?? "") })); break;
@@ -2475,14 +2479,23 @@ Accept only if:
             </select>
             {/* Image provider toggle */}
             <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
-              {(["openai", "fal"] as const).map(p => (
+              {(["openai-image", "seedream-lite-v5", "nano-banana-2"] as const).map(p => (
                 <button key={p} onClick={() => setImageProvider(p)}
-                  style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: imageProvider === p ? "rgba(103,232,249,0.15)" : "transparent", color: imageProvider === p ? "#67e8f9" : "#475569", borderRight: p === "openai" ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
-                  {p === "openai" ? "DALL-E 3" : "Flux (fal.ai)"}
+                  style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: imageProvider === p ? "rgba(103,232,249,0.15)" : "transparent", color: imageProvider === p ? "#67e8f9" : "#475569", borderRight: p !== "nano-banana-2" ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+                  {p === "openai-image" ? "OpenAI Image" : p === "seedream-lite-v5" ? "Seedream Lite v5" : "Nano Banana 2"}
                 </button>
               ))}
             </div>
-            {/* Diagnostic button */}
+
+<div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
+  {(["kling-v3", "veo-3.1"] as const).map(p => (
+    <button key={p} onClick={() => setVideoProvider(p)}
+      style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: videoProvider === p ? "rgba(168,85,247,0.18)" : "transparent", color: videoProvider === p ? "#c4b5fd" : "#475569", borderRight: p === "kling-v3" ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+      {p === "kling-v3" ? "Kling v3" : "Veo 3.1"}
+    </button>
+  ))}
+</div>
+                        {/* Diagnostic button */}
             <button onClick={async () => {
               setDiagRunning(true);
               setDiagResult("Step 1/3: Checking environment…");
@@ -2513,6 +2526,7 @@ Accept only if:
                     prompt: "A real person sitting at a kitchen table looking at their phone, ordinary home lighting, no text, no words, no letters, no watermarks",
                     aspectRatio: "16:9",
                     provider: "openai",
+                    model: "openai-image",
                     conceptId: "diag-test",
                   }),
                 });
@@ -2958,7 +2972,8 @@ Accept only if:
                       if (!res.ok) throw new Error("Run failed");
                       setSteps(p => p.map(s => s.id === selectedStepId ? { ...s, state: "complete" } : s));
                       log(`✓ ${step.name} complete`);
-                      if (data.data?.id) queueAdd({ id: data.data.id, type: "script", status: "pending", provider: "openai", prompt: stepPrompts[selectedStepId], conceptId: null, completedAt: null, outputUrl: null, externalId: null, mode: "standard", costEstimate: 0.001, error: null });
+                      if (data.data?.id) queueAdd({ id: data.data.id, type: "script", status: "pending", provider: "openai",
+                    model: "openai-image", prompt: stepPrompts[selectedStepId], conceptId: null, completedAt: null, outputUrl: null, externalId: null, mode: "standard", costEstimate: 0.001, error: null });
                     } catch (e) {
                       setSteps(p => p.map(s => s.id === selectedStepId ? { ...s, state: "error", error: e instanceof Error ? e.message : "error" } : s));
                       log(`✗ ${step.name} failed`);

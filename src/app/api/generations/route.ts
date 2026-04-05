@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   let query = admin
     .from("generations")
     .select(
-      "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, external_id, progress, is_preview, created_at"
+      "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, external_id, provider, model, progress, is_preview, created_at"
     )
     .eq("workspace_id", selection.current.workspace.id)
     .order("created_at", { ascending: false });
@@ -184,7 +184,8 @@ export async function POST(request: Request) {
       }
     }
 
-    if (type === "image" && !bypassCompiler) {
+    const imageProvider = providerOverride || "openai";
+    if (type === "image" && !bypassCompiler && imageProvider === "openai") {
       const enforced = await generateEnforcedImage({
         prompt,
         apiKey: process.env.OPENAI_API_KEY!,
@@ -208,6 +209,7 @@ export async function POST(request: Request) {
         imageUrl: typeof payload?.imageUrl === "string" ? payload.imageUrl : undefined,
         callBackUrl: typeof payload?.callBackUrl === "string" ? payload.callBackUrl : undefined,
         mode: typeof payload?.mode === "string" ? payload.mode as "standard" | "pro" : "standard",
+        model: typeof payload?.model === "string" ? payload.model : undefined,
       }, providerOverride ?? undefined);
 
       payload.status = generationResult.status;
@@ -299,7 +301,7 @@ export async function POST(request: Request) {
     is_preview: typeof payload?.isPreview === "boolean" ? payload.isPreview : false,
     concept_id: typeof payload?.conceptId === "string" ? payload.conceptId : null,
     session_id: typeof payload?.sessionId === "string" ? payload.sessionId : null,
-    provider: typeof payload?.provider === "string" ? payload.provider : (compiledRequest?.provider ?? null),
+    provider: typeof payload?.provider === "string" ? payload.provider : (compiledRequest?.provider ?? (externalId?.startsWith("fal_queue:") ? "fal" : null)),
     mode: typeof payload?.mode === "string" ? payload.mode : "standard",
     cost_estimate: typeof payload?.costEstimate === "number" ? payload.costEstimate : null,
   };
@@ -308,7 +310,7 @@ export async function POST(request: Request) {
     .from("generations")
     .insert(insertPayload)
     .select(
-      "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, external_id, progress, is_preview, created_at"
+      "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, external_id, provider, model, progress, is_preview, created_at"
     )
     .single();
 

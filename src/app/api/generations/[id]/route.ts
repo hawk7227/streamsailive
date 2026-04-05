@@ -26,7 +26,7 @@ export async function GET(
 
   const { data, error } = await admin
     .from("generations")
-    .select("id, type, status, output_url, progress, provider, external_id, created_at")
+    .select("id, type, status, output_url, progress, provider, model, external_id, created_at")
     .eq("id", id)
     .eq("workspace_id", selection.current.workspace.id)
     .single();
@@ -46,6 +46,7 @@ export async function GET(
     progress: data.progress,
     provider: data.provider,
     external_id: data.external_id,
+    model: (data as { model?: string | null }).model ?? null,
     elapsed_seconds: elapsedSeconds,
   });
 }
@@ -126,7 +127,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("workspace_id", selection.current.workspace.id)
         .select(
-            "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, created_at"
+            "id, type, prompt, title, status, aspect_ratio, duration, quality, style, favorited, output_url, provider, model, created_at"
         )
         .single();
 
