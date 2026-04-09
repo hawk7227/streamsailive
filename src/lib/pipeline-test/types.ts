@@ -1,8 +1,8 @@
 export type ToolMode = "auto" | "cheapest" | "quality" | "manual";
 
 export type ToolSelection = {
-  tool: "flux" | "runway" | "kling" | "seedream" | "demucs" | "speech-to-text";
-  purpose: "image" | "video" | "audio" | "stitch" | "transcript";
+  tool: "flux" | "runway" | "kling" | "seedream";
+  purpose: "image" | "video" | "audio" | "stitch";
 };
 
 export type CostEstimate = {
@@ -18,52 +18,13 @@ export type GenerationPlan = {
   steps: string[];
   costEstimate: CostEstimate;
   prompt: string;
-  analysis?: unknown;
-};
-
-export type ExecutionResult = {
-  images?: { type: "image"; url: string }[];
-  video?: { type: "video"; url: string };
-  audio?: { type: "audio"; url: string };
-};
-
-export type TranscriptWord = {
-  word: string;
-  start: number;
-  end: number;
-};
-
-export type TranscriptSegment = {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  words?: TranscriptWord[];
-};
-
-export type TranscriptResult = {
-  text: string;
-  language?: string;
-  segments: TranscriptSegment[];
-};
-
-export type AudioExtractionResult = {
-  audioUrl: string;
-  silentVideoUrl?: string;
+  analysis?: any;
 };
 
 export type AudioSeparationResult = {
-  vocalsUrl?: string;
-  drumsUrl?: string;
-  bassUrl?: string;
-  otherUrl?: string;
-};
-
-export type StitchRequest = {
-  videoUrls: string[];
-  outputFileName?: string;
-};
-
-export type StitchResult = {
-  stitchedVideoUrl: string;
+  vocalsUrl?: string | null;
+  instrumentalUrl?: string | null;
+  drumsUrl?: string | null;
+  bassUrl?: string | null;
+  otherUrl?: string | null;
 };
