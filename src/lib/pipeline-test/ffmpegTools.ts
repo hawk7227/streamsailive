@@ -22,7 +22,10 @@ export async function assertFfmpegAvailable() {
   await spawnChecked("ffmpeg", ["-version"]);
 }
 
-export async function stitchVideosToPublic(videoUrls: string[]) {
+export async function stitchVideosToPublic(
+  videoUrls: string[],
+  outputFileName?: string
+) {
   if (!videoUrls.length) throw new Error("No videos supplied for stitching");
   await assertFfmpegAvailable();
 
@@ -41,8 +44,8 @@ export async function stitchVideosToPublic(videoUrls: string[]) {
 
   const publicDir = path.join(process.cwd(), "public", "pipeline-test");
   await fs.mkdir(publicDir, { recursive: true });
-  const outputFileName = publicFileName("stitched", "mp4");
-  const outputPath = path.join(publicDir, outputFileName);
+  const resolvedOutputFileName = outputFileName ?? publicFileName("stitched", "mp4");
+  const outputPath = path.join(publicDir, resolvedOutputFileName);
 
   await spawnChecked("ffmpeg", [
     "-y",
@@ -57,7 +60,7 @@ export async function stitchVideosToPublic(videoUrls: string[]) {
     outputPath,
   ]);
 
-  return `/pipeline-test/${outputFileName}`;
+  return `/pipeline-test/${resolvedOutputFileName}`;
 }
 
 export async function extractAudioAndSilentVideoToPublic(videoUrl: string) {
