@@ -40,3 +40,18 @@ yarn-error.log*
 next-env.d.ts
 .env.local
 site-config.json
+
+# Block root-level stray TS/TSX files — all source must live under src/
+/*.ts
+/*.tsx
+!next.config.ts
+!vitest.config.ts
+!middleware.ts
+
+# Block src/ top-level stray files — components/lib must be in subdirs
+/src/*.ts
+/src/*.tsx
+
+# Artifacts / temp files
+*.bak
+*.html
