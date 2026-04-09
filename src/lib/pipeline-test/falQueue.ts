@@ -3,17 +3,17 @@ export type FalRunConfig = {
   input?: Record<string, unknown>;
 };
 
-export type FalRunResult = {
+export type FalRunResult<T = Record<string, unknown>> = {
   success: boolean;
-  data: Record<string, unknown>;
+  data: T;
 };
 
-export async function falRun(config: FalRunConfig): Promise<FalRunResult> {
-  return {
-    success: true,
-    data: {
-      model: config.model ?? null,
-      input: config.input ?? {},
-    },
-  };
+export async function falRun<T = Record<string, unknown>>(
+  endpoint: string,
+  input: Record<string, unknown>
+): Promise<T> {
+  // Stub implementation — replace with real fal.ai SDK call
+  void endpoint;
+  void input;
+  return {} as T;
 }
