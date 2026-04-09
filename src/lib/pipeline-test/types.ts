@@ -1,8 +1,8 @@
 export type ToolMode = "auto" | "cheapest" | "quality" | "manual";
 
 export type ToolSelection = {
-  tool: "flux" | "runway" | "kling" | "seedream";
-  purpose: "image" | "video" | "audio" | "stitch";
+  tool: "flux" | "runway" | "kling" | "seedream" | "speech-to-text" | "demucs";
+  purpose: "image" | "video" | "audio" | "stitch" | "transcript";
 };
 
 export type CostEstimate = {
@@ -29,14 +29,23 @@ export type AudioSeparationResult = {
   otherUrl?: string | null;
 };
 
+export type TranscriptWord = {
+  word: string;
+  start: number;
+  end: number;
+};
+
 export type TranscriptSegment = {
   id: string;
   start: number;
   end: number;
   text: string;
+  words?: TranscriptWord[];
 };
 
 export type TranscriptResult = {
+  text: string;
+  language?: string;
   segments: TranscriptSegment[];
 };
 
