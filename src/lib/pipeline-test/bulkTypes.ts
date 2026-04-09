@@ -1,4 +1,3 @@
-export type BulkJobInput = {
   id: string;
   label: string;
   prompt: string;
