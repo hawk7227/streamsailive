@@ -33,9 +33,3 @@ export type StitchRequest = {
   inputUrls: string[];
   outputFileName?: string;
 };
-
-export type StitchResult = {
-  success: boolean;
-  outputUrl: string | null;
-  error?: string | null;
-};
