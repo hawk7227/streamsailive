@@ -29,6 +29,17 @@ export type AudioSeparationResult = {
   otherUrl?: string | null;
 };
 
+export type TranscriptSegment = {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+};
+
+export type TranscriptResult = {
+  segments: TranscriptSegment[];
+};
+
 export type StitchRequest = {
   inputUrls: string[];
   outputFileName?: string;
