@@ -12,7 +12,6 @@ import {
 // No fallback, no local adapter, no in-memory store.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABLE = 'streams.jobs' as const;
 
 export async function createJob(
   input: CreateJobInput,
