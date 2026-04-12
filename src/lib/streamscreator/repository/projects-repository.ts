@@ -3,7 +3,7 @@ import { type CreateProjectInput, type Project, type RepositoryResult, repoErr, 
 
 export async function createProject(input: CreateProjectInput): Promise<RepositoryResult<Project>> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.schema('streams').from('projects').insert({ name: input.name, mode: input.mode ?? null, status: input.status ?? 'pending' }).select().single<Project>();
+  const { data, error } = await supabase.schema('streams').from('projects').insert({ name: input.name, mode: input.mode ?? 'upload', status: input.status ?? 'idle' }).select().single<Project>();
   if (error !== null) return repoErr('PROJECT_CREATE_FAILED', 'Failed to create project in streams.projects', error.message);
   return repoOk(data);
 }
