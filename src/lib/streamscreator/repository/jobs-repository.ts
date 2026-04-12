@@ -19,7 +19,7 @@ export async function createJob(
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
-    .from(TABLE)
+    .schema('streams').from('jobs')
     .insert({
       project_id: input.project_id,
       type: input.type,
@@ -47,7 +47,7 @@ export async function getJobById(
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
-    .from(TABLE)
+    .schema('streams').from('jobs')
     .select()
     .eq('id', jobId)
     .single<Job>();
@@ -72,7 +72,7 @@ export async function listJobsByProjectId(
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
-    .from(TABLE)
+    .schema('streams').from('jobs')
     .select()
     .eq('project_id', projectId)
     .order('created_at', { ascending: false })
