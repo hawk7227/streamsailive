@@ -3,7 +3,7 @@ import { type CreateJobInput, type Job, type RepositoryResult, repoErr, repoOk }
 
 export async function createJob(input: CreateJobInput): Promise<RepositoryResult<Job>> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.schema('streams').from('jobs').insert({ project_id: input.project_id, type: input.type, phase: input.phase ?? null, progress: input.progress ?? 0 }).select().single<Job>();
+  const { data, error } = await supabase.schema('streams').from('jobs').insert({ project_id: input.project_id, type: input.type, phase: input.phase ?? 'queued', progress: input.progress ?? 0 }).select().single<Job>();
   if (error !== null) return repoErr('JOB_CREATE_FAILED', 'Failed to create job in streams.jobs', error.message);
   return repoOk(data);
 }

@@ -3,7 +3,7 @@ import { type CreateProviderRunInput, type ProviderRun, type RepositoryResult, r
 
 export async function createProviderRun(input: CreateProviderRunInput): Promise<RepositoryResult<ProviderRun>> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.schema('streams').from('provider_runs').insert({ job_id: input.job_id, provider: input.provider, request_ref: input.request_ref ?? null, response_ref: input.response_ref ?? null, status: input.status ?? 'pending' }).select().single<ProviderRun>();
+  const { data, error } = await supabase.schema('streams').from('provider_runs').insert({ job_id: input.job_id, provider: input.provider, status: input.status ?? 'queued', request_ref: input.request_ref ?? null, response_ref: input.response_ref ?? null }).select().single<ProviderRun>();
   if (error !== null) return repoErr('PROVIDER_RUN_CREATE_FAILED', 'Failed to create provider run in streams.provider_runs', error.message);
   return repoOk(data);
 }
