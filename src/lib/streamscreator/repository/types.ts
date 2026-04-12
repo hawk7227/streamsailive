@@ -1,16 +1,73 @@
-export type ProjectStatus = 'pending' | 'active' | 'completed' | 'failed';
-export interface Project { id: string; name: string; description: string | null; status: ProjectStatus; metadata: Record<string, unknown> | null; created_at: string; updated_at: string; }
-export interface CreateProjectInput { name: string; description?: string; status?: ProjectStatus; metadata?: Record<string, unknown>; }
-export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
-export interface Job { id: string; project_id: string; type: string; status: JobStatus; priority: number; payload: Record<string, unknown> | null; result: Record<string, unknown> | null; error_message: string | null; started_at: string | null; completed_at: string | null; created_at: string; updated_at: string; }
-export interface CreateJobInput { project_id: string; type: string; status?: JobStatus; priority?: number; payload?: Record<string, unknown>; }
-export type AssetType = 'video' | 'audio' | 'image' | 'document' | 'other';
-export type AssetStatus = 'pending' | 'uploaded' | 'processed' | 'failed';
-export interface Asset { id: string; project_id: string; job_id: string | null; type: AssetType; status: AssetStatus; filename: string; mime_type: string | null; size_bytes: number | null; storage_key: string | null; public_url: string | null; metadata: Record<string, unknown> | null; created_at: string; updated_at: string; }
-export interface CreateAssetInput { project_id: string; job_id?: string; type: AssetType; status?: AssetStatus; filename: string; mime_type?: string; size_bytes?: number; storage_key?: string; public_url?: string; metadata?: Record<string, unknown>; }
-export type ProviderRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'timed_out';
-export interface ProviderRun { id: string; job_id: string; provider: string; status: ProviderRunStatus; attempt: number; request_payload: Record<string, unknown> | null; response_payload: Record<string, unknown> | null; error_message: string | null; duration_ms: number | null; started_at: string | null; completed_at: string | null; created_at: string; }
-export interface CreateProviderRunInput { job_id: string; provider: string; status?: ProviderRunStatus; attempt?: number; request_payload?: Record<string, unknown>; }
+// streams.* real column shapes
+
+export interface Project {
+  id: string;
+  name: string;
+  mode: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface CreateProjectInput {
+  name: string;
+  mode?: string;
+  status?: string;
+}
+
+export interface Job {
+  id: string;
+  project_id: string;
+  type: string;
+  phase: string | null;
+  progress: number | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface CreateJobInput {
+  project_id: string;
+  type: string;
+  phase?: string;
+  progress?: number;
+}
+
+export interface Asset {
+  id: string;
+  project_id: string;
+  type: string;
+  storage_key: string | null;
+  mime_type: string | null;
+  provider: string | null;
+  status: string;
+  created_at: string;
+}
+export interface CreateAssetInput {
+  project_id: string;
+  type: string;
+  storage_key?: string;
+  mime_type?: string;
+  provider?: string;
+  status?: string;
+}
+
+export interface ProviderRun {
+  id: string;
+  job_id: string;
+  provider: string;
+  request_ref: string | null;
+  response_ref: string | null;
+  output_asset_id: string | null;
+  status: string;
+  created_at: string;
+}
+export interface CreateProviderRunInput {
+  job_id: string;
+  provider: string;
+  request_ref?: string;
+  response_ref?: string;
+  status?: string;
+}
+
 export type RepositoryResult<T> = { data: T; error: null } | { data: null; error: RepositoryError };
 export interface RepositoryError { code: string; message: string; detail?: string; }
 export function repoOk<T>(data: T): RepositoryResult<T> { return { data, error: null }; }
