@@ -17,8 +17,8 @@ import {
   WifiOff,
 } from "lucide-react";
 
-import { useAssistantSession } from "./useAssistantSession.ts";
-import type { AssistantPreviewDescriptor } from "./assistant-protocol.ts";
+import { useAssistantSession } from "./useAssistantSession";
+import type { AssistantPreviewDescriptor } from "@/lib/assistant-core/assistant-protocol";
 
 type AssistantFramePageProps = {
   websocketUrl: string;
