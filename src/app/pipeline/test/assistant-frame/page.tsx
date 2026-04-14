@@ -1,5 +1,4 @@
 "use client";
-
 import { useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -289,4 +288,3 @@ export default function AssistantFramePage(props: AssistantFramePageProps) {
     </div>
   );
 }
-
