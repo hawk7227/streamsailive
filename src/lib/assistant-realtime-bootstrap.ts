@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 class NodeWebSocketAdapter implements RealtimeSocket {
   private readonly socket: WebSocket;
 
