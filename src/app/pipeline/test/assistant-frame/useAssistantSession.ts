@@ -15,7 +15,7 @@ import {
   type AssistantTurnCompletedMessage,
   type AssistantWorkspaceAction,
   isAssistantSessionOutboundMessage,
-} from "./assistant-protocol.ts";
+} from "@/lib/assistant-core/assistant-protocol";
 
 export type AssistantChatMessage = {
   id: string;
@@ -61,9 +61,15 @@ export type UseAssistantSessionOptions = {
 export type UseAssistantSessionApi = AssistantSessionHookState & {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  sendTurn: (message: string, options?: { context?: Record<string, unknown> }) => Promise<string | null>;
+  sendTurn: (
+    message: string,
+    options?: { context?: Record<string, unknown> },
+  ) => Promise<string | null>;
   cancelTurn: (turnId?: string) => Promise<void>;
-  sendWorkspaceAction: (action: AssistantWorkspaceAction, turnId?: string) => Promise<void>;
+  sendWorkspaceAction: (
+    action: AssistantWorkspaceAction,
+    turnId?: string,
+  ) => Promise<void>;
   isConnected: boolean;
   isTurnRunning: boolean;
   activePreview: AssistantPreviewDescriptor | null;
@@ -130,7 +136,10 @@ function updateAssistantStreamingDelta(
 
 function finalizeAssistantTurn(
   messages: AssistantChatMessage[],
-  event: AssistantTurnCompletedMessage | AssistantTurnCancelledMessage | AssistantErrorMessage,
+  event:
+    | AssistantTurnCompletedMessage
+    | AssistantTurnCancelledMessage
+    | AssistantErrorMessage,
 ): AssistantChatMessage[] {
   return messages.map((message) => {
     if (!event.turnId || message.turnId !== event.turnId || message.role !== "assistant") {
@@ -149,13 +158,16 @@ function finalizeAssistantTurn(
   });
 }
 
-export function useAssistantSession(options: UseAssistantSessionOptions): UseAssistantSessionApi {
+export function useAssistantSession(
+  options: UseAssistantSessionOptions,
+): UseAssistantSessionApi {
   const { websocketUrl, initialContext, autoConnect = true, onWorkspaceAction } = options;
 
   const socketRef = useRef<WebSocket | null>(null);
   const pendingConnectRef = useRef<Promise<void> | null>(null);
 
-  const [connectionState, setConnectionState] = useState<AssistantConnectionState>("disconnected");
+  const [connectionState, setConnectionState] =
+    useState<AssistantConnectionState>("disconnected");
   const [session, setSession] = useState<AssistantSessionSnapshot>({
     sessionId: null,
     status: "idle",
@@ -253,7 +265,9 @@ export function useAssistantSession(options: UseAssistantSessionOptions): UseAss
           });
           setPreviewsByTurn((previous) => {
             const next = { ...previous };
-            next[message.turnId] = (next[message.turnId] ?? []).filter((id) => id !== message.previewId);
+            next[message.turnId] = (next[message.turnId] ?? []).filter(
+              (id) => id !== message.previewId,
+            );
             return next;
           });
           return;
