@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@twilio/voice-sdk": "^2.18.0",
+    "lucide-react": "^0.556.0",
+    "twilio": "^5.12.1",
+    "xlsx": "^0.18.5"
+  }
+}
