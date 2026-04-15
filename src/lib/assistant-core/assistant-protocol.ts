@@ -42,27 +42,6 @@ export type AssistantSessionInboundMessage =
       reason?: string;
     };
 
-/* ---------- OUTBOUND ---------- */
-
-export type AssistantSessionOutboundMessage =
-  | AssistantActivityMessage
-  | AssistantTextDeltaMessage
-  | AssistantTurnCompletedMessage
-  | AssistantTurnCancelledMessage
-  | AssistantErrorMessage
-  | {
-      type: "session.ready";
-      sessionId: string;
-      createdAt: string;
-    }
-  | {
-      type: "session.state";
-      sessionId: string;
-      status: "idle" | "running" | "closed";
-      activeTurnId: string | null;
-      previousResponseId: string | null;
-    };
-
 /* ---------- ACTIVITY ---------- */
 
 export type AssistantActivityMessage = {
@@ -81,6 +60,13 @@ export type AssistantTextDeltaMessage = {
 };
 
 /* ---------- TURN ---------- */
+
+export type AssistantTurnStartedMessage = {
+  type: "turn.started";
+  sessionId: string;
+  turnId: string;
+  route?: string;
+};
 
 export type AssistantTurnCompletedMessage = {
   type: "turn.completed";
@@ -121,10 +107,104 @@ export type AssistantWorkspaceAction = {
   payload?: any;
 };
 
+/* ---------- OUTBOUND ---------- */
+
+export type AssistantSessionOutboundMessage =
+  | AssistantActivityMessage
+  | AssistantTextDeltaMessage
+  | AssistantTurnStartedMessage
+  | AssistantTurnCompletedMessage
+  | AssistantTurnCancelledMessage
+  | AssistantErrorMessage
+  | {
+      type: "session.ready";
+      sessionId: string;
+      createdAt: string;
+    }
+  | {
+      type: "session.state";
+      sessionId: string;
+      status: "idle" | "running" | "closed";
+      activeTurnId: string | null;
+      previousResponseId: string | null;
+    }
+  | {
+      type: "preview.created";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.partial";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.ready";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.updated";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.stale";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.superseded";
+      turnId: string;
+      preview: AssistantPreviewDescriptor;
+    }
+  | {
+      type: "preview.closed";
+      turnId: string;
+      previewId: string;
+    }
+  | {
+      type: "workspace.action";
+      action: AssistantWorkspaceAction;
+    }
+  | {
+      type: "tool.call";
+      turnId: string;
+      toolName?: string;
+    }
+  | {
+      type: "tool.progress";
+      turnId: string;
+      toolName?: string;
+      text?: string;
+    }
+  | {
+      type: "tool.result";
+      turnId: string;
+      toolName?: string;
+      result?: unknown;
+    }
+  | {
+      type: "workspace.action.result";
+      ok?: boolean;
+    }
+  | {
+      type: "voice.state";
+      state?: string;
+    }
+  | {
+      type: "presence.state";
+      state?: string;
+    }
+  | {
+      type: "session.closed";
+      sessionId?: string;
+      reason?: string;
+    };
+
 /* ---------- TYPE GUARD ---------- */
 
 export function isAssistantSessionOutboundMessage(
   value: any
 ): value is AssistantSessionOutboundMessage {
   return typeof value === "object" && value !== null && typeof value.type === "string";
-}
