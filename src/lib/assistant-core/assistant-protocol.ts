@@ -108,7 +108,9 @@ export type AssistantErrorMessage = {
 export type AssistantPreviewDescriptor = {
   previewId: string;
   turnId: string;
-  type: string;
+  title?: string;
+  previewType: string;
+  route: string;
   status: string;
 };
 
