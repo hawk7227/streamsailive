@@ -1,33 +1,37 @@
-import {
-  createProtocolVersionMismatchError,
-  isAssistantSessionInboundMessage,
-  type AssistantSessionInboundMessage,
-  type AssistantSessionOutboundMessage,
-} from "./assistant-protocol";
-import {
-  AssistantSessionControlPlane,
-  type AssistantSessionTransport,
-} from "./orchestrator";
+class NodeWebSocketAdapter implements RealtimeSocket {
+  private readonly socket: WebSocket;
 
-/**
- * Real websocket adapter boundary.
- *
- * Purpose:
- * - parse websocket messages
- * - validate protocol framing
- * - bridge transport <-> control plane
- * - never reach into control-plane private methods
- *
- * This file does NOT:
- * - implement auth policy
- * - implement persistence
- * - implement route/runtime bootstrapping
- * - simulate reconnect/resume
- */
+  constructor(socket: WebSocket) {
+    this.socket = socket;
+  }
 
-export interface RealtimeSocket {
-  send(data: string): void | Promise<void>;
-  close(code?: number, reason?: string): void | Promise<void>;
+  async send(data: string): Promise<void> {
+    if (this.socket.readyState !== this.socket.OPEN) {
+      throw new Error("WebSocket is not open");
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      this.socket.send(data, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  async close(code?: number, reason?: string): Promise<void> {
+    if (
+      this.socket.readyState === this.socket.CLOSED ||
+      this.socket.readyState === this.socket.CLOSING
+    ) {
+      return;
+    }
+
+    this.socket.close(code, reason);
+  }
+
   addEventListener(
     type: "message",
     listener: (event: { data: unknown }) => void | Promise<void>,
@@ -40,196 +44,37 @@ export interface RealtimeSocket {
     type: "error",
     listener: (event: unknown) => void | Promise<void>,
   ): void;
-}
-
-export type AssistantWebSocketAdapterOptions = {
-  socket: RealtimeSocket;
-  sessionId?: string;
-  initialContext?: Record<string, unknown>;
-  logger?: {
-    info?: (message: string, meta?: Record<string, unknown>) => void;
-    warn?: (message: string, meta?: Record<string, unknown>) => void;
-    error?: (message: string, meta?: Record<string, unknown>) => void;
-  };
-};
-
-class WebSocketTransport implements AssistantSessionTransport {
-  private readonly socket: RealtimeSocket;
-  private closeHandler: ((code?: number, reason?: string) => Promise<void> | void) | null = null;
-
-  constructor(socket: RealtimeSocket) {
-    this.socket = socket;
-
-    this.socket.addEventListener("close", async (event) => {
-      await this.closeHandler?.(event.code, event.reason);
-    });
-  }
-
-  async send(message: AssistantSessionOutboundMessage): Promise<void> {
-    await this.socket.send(JSON.stringify(message));
-  }
-
-  async close(code?: number, reason?: string): Promise<void> {
-    await this.socket.close(code, reason);
-  }
-
-  onClose(handler: (code?: number, reason?: string) => Promise<void> | void): void {
-    this.closeHandler = handler;
-  }
-}
-
-export class AssistantWebSocketAdapter {
-  private readonly socket: RealtimeSocket;
-  private readonly logger?: AssistantWebSocketAdapterOptions["logger"];
-  private readonly transport: WebSocketTransport;
-  private readonly controlPlane: AssistantSessionControlPlane;
-  private started = false;
-  private closed = false;
-
-  constructor(options: AssistantWebSocketAdapterOptions) {
-    this.socket = options.socket;
-    this.logger = options.logger;
-    this.transport = new WebSocketTransport(this.socket);
-    this.controlPlane = new AssistantSessionControlPlane({
-      transport: this.transport,
-      sessionId: options.sessionId,
-      initialContext: options.initialContext,
-    });
-  }
-
-  async start(): Promise<void> {
-    if (this.started) return;
-
-    await this.controlPlane.start();
-
-    this.socket.addEventListener("message", async (event) => {
-      await this.handleRawMessage(event.data);
-    });
-
-    this.socket.addEventListener("error", async (event) => {
-      this.logger?.error?.("assistant websocket transport error", {
-        event: serializeUnknown(event),
-      });
-
-      const state = this.controlPlane.getState();
-      await this.transport.send({
-        type: "error",
-        sessionId: state.sessionId,
-        scope: "transport",
-        message: "WebSocket transport error",
-        code: "WEBSOCKET_TRANSPORT_ERROR",
-      });
-    });
-
-    this.started = true;
-    this.logger?.info?.("assistant websocket adapter started", {
-      sessionId: this.controlPlane.getState().sessionId,
-    });
-  }
-
-  getSessionId(): string {
-    return this.controlPlane.getState().sessionId;
-  }
-
-  async close(code = 1000, reason = "adapter closed"): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    await this.transport.close(code, reason);
-  }
-
-  private async handleRawMessage(raw: unknown): Promise<void> {
-    if (this.closed) return;
-
-    const state = this.controlPlane.getState();
-
-    let parsed: unknown;
-    try {
-      parsed = parseInboundPayload(raw);
-    } catch (error) {
-      this.logger?.warn?.("assistant websocket invalid json payload", {
-        sessionId: state.sessionId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      await this.transport.send({
-        type: "error",
-        sessionId: state.sessionId,
-        scope: "transport",
-        message: "Malformed websocket JSON payload",
-        code: "MALFORMED_JSON_PAYLOAD",
+  addEventListener(
+    type: "message" | "close" | "error",
+    listener:
+      | ((event: { data: unknown }) => void | Promise<void>)
+      | ((event: { code?: number; reason?: string }) => void | Promise<void>)
+      | ((event: unknown) => void | Promise<void>),
+  ): void {
+    if (type === "message") {
+      this.socket.on("message", async (data: RawData) => {
+        await (listener as (event: { data: unknown }) => void | Promise<void>)({
+          data: normalizeRawData(data),
+        });
       });
       return;
     }
 
-    if (!isAssistantSessionInboundMessage(parsed)) {
-      this.logger?.warn?.("assistant websocket unsupported inbound payload", {
-        sessionId: state.sessionId,
-        payload: serializeUnknown(parsed),
-      });
-
-      await this.transport.send({
-        type: "error",
-        sessionId: state.sessionId,
-        scope: "transport",
-        message: "Unsupported inbound assistant protocol message",
-        code: "INVALID_PROTOCOL_MESSAGE",
+    if (type === "close") {
+      this.socket.on("close", async (code, reason) => {
+        await (listener as (event: {
+          code?: number;
+          reason?: string;
+        }) => void | Promise<void>)({
+          code,
+          reason: reason.toString("utf8"),
+        });
       });
       return;
     }
 
-    if (
-      parsed.type === "session.start" &&
-      typeof parsed.protocolVersion === "string" &&
-      parsed.protocolVersion !== "1"
-    ) {
-      await this.transport.send(
-        createProtocolVersionMismatchError(state.sessionId, parsed.protocolVersion),
-      );
-      await this.controlPlane.close("protocol_error", "protocol version mismatch");
-      return;
-    }
-
-    try {
-      await this.controlPlane.receive(parsed as AssistantSessionInboundMessage);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "adapter receive failed";
-
-      this.logger?.error?.("assistant websocket receive failed", {
-        sessionId: state.sessionId,
-        error: message,
-      });
-
-      await this.transport.send({
-        type: "error",
-        sessionId: state.sessionId,
-        scope: "transport",
-        message,
-        code: "ADAPTER_RECEIVE_FAILED",
-      });
-    }
-  }
-}
-
-function parseInboundPayload(raw: unknown): unknown {
-  if (typeof raw === "string") {
-    return JSON.parse(raw);
-  }
-
-  if (raw instanceof ArrayBuffer) {
-    return JSON.parse(new TextDecoder().decode(new Uint8Array(raw)));
-  }
-
-  if (ArrayBuffer.isView(raw)) {
-    return JSON.parse(new TextDecoder().decode(raw as Uint8Array));
-  }
-
-  throw new Error("Unsupported websocket payload type");
-}
-
-function serializeUnknown(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
+    this.socket.on("error", async (error) => {
+      await (listener as (event: unknown) => void | Promise<void>)(error);
+    });
   }
 }
