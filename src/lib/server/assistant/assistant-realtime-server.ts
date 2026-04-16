@@ -143,8 +143,6 @@ export function attachAssistantRealtimeServer(
 
       const adapter = new AssistantWebSocketAdapter({
         socket: new NodeWebSocketAdapter(socket),
-        sessionId: authResult.sessionId,
-        initialContext,
         logger,
       });
 
@@ -152,7 +150,8 @@ export function attachAssistantRealtimeServer(
 
       logger?.info?.("assistant realtime connection opened", {
         path,
-        sessionId: adapter.getSessionId(),
+        sessionId: authResult.sessionId ?? null,
+        initialContextKeys: Object.keys(initialContext),
       });
     } catch (error) {
       logger?.error?.("assistant realtime connection bootstrap failed", {
