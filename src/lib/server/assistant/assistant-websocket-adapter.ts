@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  isAssistantSessionInboundMessage,
   type AssistantSessionInboundMessage,
   type AssistantSessionOutboundMessage,
 } from "@/lib/assistant-core/assistant-protocol";
@@ -148,7 +147,7 @@ export class AssistantWebSocketAdapter {
       return;
     }
 
-    if (!isAssistantSessionInboundMessage(parsed)) {
+    if (!isAssistantSessionInboundMessageLocal(parsed)) {
       this.logger?.warn?.("assistant websocket unsupported inbound payload", {
         sessionId: state.sessionId,
         payload: serializeUnknown(parsed),
@@ -166,7 +165,7 @@ export class AssistantWebSocketAdapter {
 
     if (
       parsed.type === "session.start" &&
-      typeof parsed.protocolVersion === "string" &&
+      hasStringProperty(parsed, "protocolVersion") &&
       parsed.protocolVersion !== "1.0"
     ) {
       await this.transport.send(
@@ -177,7 +176,7 @@ export class AssistantWebSocketAdapter {
     }
 
     try {
-      await this.controlPlane.receive(parsed as AssistantSessionInboundMessage);
+      await this.controlPlane.receive(parsed);
     } catch (error) {
       const message = error instanceof Error ? error.message : "adapter receive failed";
 
@@ -211,6 +210,24 @@ function parseInboundPayload(raw: unknown): unknown {
   }
 
   throw new Error("Unsupported websocket payload type");
+}
+
+function isAssistantSessionInboundMessageLocal(
+  value: unknown,
+): value is AssistantSessionInboundMessage {
+  if (!isRecord(value)) return false;
+  return typeof value.type === "string";
+}
+
+function hasStringProperty<K extends string>(
+  value: Record<string, unknown>,
+  key: K,
+): value is Record<K, string> & Record<string, unknown> {
+  return typeof value[key] === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function createLocalProtocolVersionMismatchError(
