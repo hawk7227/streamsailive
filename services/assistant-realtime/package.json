@@ -4,16 +4,21 @@
   "version": "0.1.0",
   "type": "commonjs",
   "main": "dist/server.js",
+  "engines": {
+    "node": "22.x",
+    "npm": ">=10"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "typescript": "^5.9.3",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.30",
-    "@types/ws": "^8.18.1",
-    "typescript": "^5.9.3"
+    "@types/ws": "^8.18.1"
   }
 }
