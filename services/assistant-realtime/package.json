@@ -1,9 +1,19 @@
 {
   "name": "@streams/assistant-realtime",
+  "private": true,
   "version": "0.1.0",
+  "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.30",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
   }
 }
