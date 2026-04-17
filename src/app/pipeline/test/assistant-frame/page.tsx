@@ -20,10 +20,13 @@ import {
 import { useAssistantSession } from "./useAssistantSession";
 import type { AssistantPreviewDescriptor } from "@/lib/assistant-core/assistant-protocol";
 
-type AssistantFramePageProps = {
-  websocketUrl: string;
-  initialContext?: Record<string, unknown>;
-};
+// ── WebSocket URL resolution ───────────────────────────────────────────────
+// Priority:
+//   1. NEXT_PUBLIC_ASSISTANT_REALTIME_URL env var (set in DO App Platform)
+//   2. Hard fallback to the live realtime service
+const REALTIME_WS_URL =
+  process.env.NEXT_PUBLIC_ASSISTANT_REALTIME_URL ??
+  "wss://octopus-app-4szwt.ondigitalocean.app/api/assistant/realtime";
 
 type ToolbarItem = {
   id: string;
@@ -79,14 +82,12 @@ function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
   );
 }
 
-export default function AssistantFramePage(props: AssistantFramePageProps) {
-  const { websocketUrl, initialContext } = props;
+export default function AssistantFramePage() {
   const [draft, setDraft] = useState("");
   const [toolbarOpen, setToolbarOpen] = useState(true);
 
   const session = useAssistantSession({
-    websocketUrl,
-    initialContext,
+    websocketUrl: REALTIME_WS_URL,
     autoConnect: true,
   });
 
@@ -207,6 +208,9 @@ export default function AssistantFramePage(props: AssistantFramePageProps) {
                 <div className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
                   Messages, activity, and inline preview attach here from the real session runtime. Heavy previews should promote to the main workspace preview screens.
                 </div>
+                <div className="mt-3 text-[11px] text-zinc-400 font-mono">
+                  {REALTIME_WS_URL}
+                </div>
               </div>
             ) : null}
 
@@ -258,6 +262,12 @@ export default function AssistantFramePage(props: AssistantFramePageProps) {
               <textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
                 placeholder="Ask normally — chat, build, files, or generation requests"
                 rows={1}
                 className="max-h-48 min-h-[28px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400"
