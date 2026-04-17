@@ -164,6 +164,7 @@ export function useAssistantSession(
   const { websocketUrl, initialContext, autoConnect = true, onWorkspaceAction } = options;
 
   const socketRef = useRef<WebSocket | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const pendingConnectRef = useRef<Promise<void> | null>(null);
 
   const [connectionState, setConnectionState] =
@@ -184,6 +185,7 @@ export function useAssistantSession(
     async (message: AssistantSessionOutboundMessage) => {
       switch (message.type) {
         case "session.ready": {
+          sessionIdRef.current = message.sessionId;
           setSession((previous) => ({
             ...previous,
             sessionId: message.sessionId,
@@ -321,7 +323,7 @@ export function useAssistantSession(
         if (!outbound) {
           const transportError: AssistantErrorMessage = {
             type: "error",
-            sessionId: session.sessionId ?? "unknown",
+            sessionId: sessionIdRef.current ?? "unknown",
             scope: "transport",
             message: "Malformed outbound assistant protocol payload",
             code: "MALFORMED_OUTBOUND_PROTOCOL_PAYLOAD",
@@ -347,7 +349,7 @@ export function useAssistantSession(
 
     pendingConnectRef.current = run;
     return run;
-  }, [handleOutboundMessage, initialContext, session.sessionId, websocketUrl]);
+  }, [handleOutboundMessage, initialContext, websocketUrl]);
 
   const disconnect = useCallback(async () => {
     if (!socketRef.current) return;
@@ -458,3 +460,4 @@ export function useAssistantSession(
     activePreview,
   };
 }
+
