@@ -12,7 +12,7 @@ type ToolDefinition = {
   type: "function";
   name: string;
   description: string;
-  strict: boolean;
+  strict?: boolean;
   parameters: {
     type: "object";
     properties: Record<string, unknown>;
@@ -283,7 +283,6 @@ export function buildAssistantTools(
       type: "function",
       name: "generate_media",
       description: "Generate an image, video, or image-to-video output using the configured media pipeline.",
-      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -569,3 +568,4 @@ export async function executeAssistantTool(
     }
   }
 }
+
