@@ -258,6 +258,23 @@ async function executeTurn(
         }
 
         case "tool_result": {
+          // If result contains { action, payload } shape — emit as workspace.action
+          const result = data.result;
+          if (
+            result &&
+            typeof result === "object" &&
+            typeof (result as Record<string, unknown>).action === "string" &&
+            (result as Record<string, unknown>).ok === true
+          ) {
+            const r = result as Record<string, unknown>;
+            await send(socket, {
+              type: "workspace.action",
+              action: {
+                type: String(r.action),
+                payload: (r.payload && typeof r.payload === "object") ? r.payload : {},
+              },
+            });
+          }
           await send(socket, {
             type: "tool.result",
             turnId,
