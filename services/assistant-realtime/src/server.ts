@@ -21,9 +21,14 @@ const HEALTH_PATH = process.env.ASSISTANT_REALTIME_HEALTH_PATH || "/healthz";
 const UPSTREAM_ASSISTANT_URL = process.env.UPSTREAM_ASSISTANT_URL;
 
 if (!UPSTREAM_ASSISTANT_URL || !isValidHttpUrl(UPSTREAM_ASSISTANT_URL)) {
-  throw new Error(
-    "UPSTREAM_ASSISTANT_URL is required and must be a valid http/https URL pointing to /api/ai-assistant",
+  process.stderr.write(
+    JSON.stringify({
+      level: "error",
+      message: "FATAL: UPSTREAM_ASSISTANT_URL is missing or invalid",
+      value: UPSTREAM_ASSISTANT_URL ?? "(not set)",
+    }) + "\n",
   );
+  process.exit(1);
 }
 
 const logger = createLogger();
