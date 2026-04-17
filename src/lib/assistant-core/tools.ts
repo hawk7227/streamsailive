@@ -12,7 +12,7 @@ type ToolDefinition = {
   type: "function";
   name: string;
   description: string;
-  strict?: boolean;
+  strict: boolean | null;
   parameters: {
     type: "object";
     properties: Record<string, unknown>;
@@ -283,6 +283,7 @@ export function buildAssistantTools(
       type: "function",
       name: "generate_media",
       description: "Generate an image, video, or image-to-video output using the configured media pipeline.",
+      strict: null,
       parameters: {
         type: "object",
         properties: {
@@ -305,7 +306,7 @@ export function buildAssistantTools(
       type: "function",
       name: "list_workspace_files",
       description: "List files in the workspace.",
-      strict: true,
+      strict: null,
       parameters: {
         type: "object",
         properties: {
@@ -378,9 +379,31 @@ export function buildAssistantTools(
     },
     {
       type: "function",
+      name: "send_workspace_action",
+      description: "Dispatch a workspace action to control the pipeline, preview, media shelf, editor, or generation from the assistant. Use this to trigger pipeline runs, send outputs to screens or shelf, update prompts, control concepts, open configs, and drive all main-page workspace operations.",
+      strict: null,
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            description: "The workspace action type. Examples: PLAN_IMAGE, PLAN_VIDEO, PLAN_LONG_VIDEO, run_pipeline, generate_image, generate_video, generate_song, build_story_bible, SEND_TO_SCREEN, SEND_TO_SHELF, update_image_prompt, update_video_prompt, update_strategy_prompt, update_copy_prompt, update_i2v_prompt, update_qa_instruction, select_concept, approve_output, open_step_config, set_niche, run_step, REGENERATE_REALISM, EDITORPRO_SET_FILE, EDITORPRO_SET_DEVICE, EDITORPRO_SET_ZOOM, EDITORPRO_PULL_FILE, EDITORPRO_PUSH_FILE, EDITORPRO_SELECT_ELEMENT, EDITORPRO_SET_TEXT, EDITORPRO_SET_STYLE, PREVIEW_SET_ACTIVE, PREVIEW_ESCALATE, PREVIEW_PIN, MEDIA_SHELF_ADD"
+          },
+          payload: {
+            type: "object",
+            description: "Action-specific payload. For PLAN_IMAGE/PLAN_VIDEO: { prompt }. For generate_image/generate_video: { conceptId, prompt }. For SEND_TO_SCREEN: { url, mediaType, screen }. For SEND_TO_SHELF: { url, mediaType, prompt }. For update_*_prompt: { value }. For select_concept: { conceptId }. For approve_output: { type, url }. For set_niche: { nicheId }. For run_step: { stepId }. For build_story_bible: { storyText }. For EDITORPRO actions: { file, device, element, text, style }. For PREVIEW actions: { previewId, route, type }.",
+            additionalProperties: true
+          }
+        },
+        required: ["action"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
       name: "build_workspace",
       description: "Run the workspace build command.",
-      strict: true,
+      strict: null,
       parameters: {
         type: "object",
         properties: {
@@ -405,6 +428,23 @@ export async function executeAssistantTool(
         ok: true,
         action: "RUN_VERIFICATION",
         payload: input.args,
+      };
+    }
+
+    case "send_workspace_action": {
+      const action = typeof input.args.action === "string" ? input.args.action : "";
+      const payload = (input.args.payload && typeof input.args.payload === "object")
+        ? input.args.payload as Record<string, unknown>
+        : {};
+      if (!action) {
+        return { ok: false, error: "send_workspace_action requires a non-empty action field." };
+      }
+      handlers?.onProgress?.(`dispatching workspace action: ${action}`);
+      // Return shape that realtime server translates to workspace.action WS event
+      return {
+        ok: true,
+        action,
+        payload,
       };
     }
 
@@ -568,4 +608,6 @@ export async function executeAssistantTool(
     }
   }
 }
+
+
 
