@@ -14,35 +14,48 @@ type ClientInboundMessage = {
   context?: Record<string, unknown>;
 };
 
-const PORT = Number(process.env.PORT || process.env.ASSISTANT_REALTIME_PORT || 3011);
+const PORT = Number(process.env.PORT || process.env.ASSISTANT_REALTIME_PORT || 8080);
 const HOST = process.env.HOST || process.env.ASSISTANT_REALTIME_HOST || "0.0.0.0";
 const WS_PATH = process.env.ASSISTANT_REALTIME_PATH || "/api/assistant/realtime";
 const HEALTH_PATH = process.env.ASSISTANT_REALTIME_HEALTH_PATH || "/healthz";
-const UPSTREAM_ASSISTANT_URL = process.env.UPSTREAM_ASSISTANT_URL;
-
-if (!UPSTREAM_ASSISTANT_URL || !isValidHttpUrl(UPSTREAM_ASSISTANT_URL)) {
-  process.stderr.write(
-    JSON.stringify({
-      level: "error",
-      message: "FATAL: UPSTREAM_ASSISTANT_URL is missing or invalid",
-      value: UPSTREAM_ASSISTANT_URL ?? "(not set)",
-    }) + "\n",
-  );
-  process.exit(1);
-}
+const UPSTREAM_ASSISTANT_URL = process.env.UPSTREAM_ASSISTANT_URL ?? "";
 
 const logger = createLogger();
 
+const configError = !UPSTREAM_ASSISTANT_URL || !isValidHttpUrl(UPSTREAM_ASSISTANT_URL)
+  ? `UPSTREAM_ASSISTANT_URL is missing or invalid (got: "${UPSTREAM_ASSISTANT_URL || "(not set)"}")`
+  : null;
+
+if (configError) {
+  logger.error("FATAL CONFIG ERROR — service degraded, WebSocket connections will be rejected", {
+    configError,
+    env: {
+      UPSTREAM_ASSISTANT_URL: UPSTREAM_ASSISTANT_URL || "(not set)",
+      PORT,
+      HOST,
+    },
+  });
+}
+
 const server = http.createServer((request, response) => {
-  handleHttpRequest(request, response, logger);
+  handleHttpRequest(request, response, logger, configError);
 });
 
-const wss = new WebSocketServer({
-  server,
-  path: WS_PATH,
-});
+const wss = new WebSocketServer({ server, path: WS_PATH });
 
 wss.on("connection", (socket, request) => {
+  if (configError) {
+    logger.error("rejecting websocket connection due to config error", { configError });
+    socket.send(JSON.stringify({
+      type: "error",
+      scope: "config",
+      code: "SERVICE_MISCONFIGURED",
+      message: configError,
+    }));
+    socket.close(1011, "Service misconfigured");
+    return;
+  }
+
   logger.info("assistant realtime connection opened", {
     path: request.url || WS_PATH,
     remoteAddress: request.socket.remoteAddress || null,
@@ -66,27 +79,9 @@ wss.on("connection", (socket, request) => {
   });
 });
 
-wss.on("listening", () => {
-  logger.info("assistant realtime websocket listening", {
-    host: HOST,
-    port: PORT,
-    wsPath: WS_PATH,
-    upstreamAssistantUrl: UPSTREAM_ASSISTANT_URL,
-  });
-});
-
 wss.on("error", (error) => {
   logger.error("assistant realtime websocket server error", {
     error: error instanceof Error ? error.message : String(error),
-  });
-});
-
-server.on("listening", () => {
-  logger.info("assistant realtime http server listening", {
-    host: HOST,
-    port: PORT,
-    healthPath: HEALTH_PATH,
-    wsPath: WS_PATH,
   });
 });
 
@@ -94,28 +89,39 @@ server.on("error", (error) => {
   logger.error("assistant realtime http server error", {
     error: error instanceof Error ? error.message : String(error),
   });
+  process.exit(1);
 });
 
-server.listen(PORT, HOST);
+server.listen(PORT, HOST, () => {
+  logger.info("assistant realtime http server listening", {
+    host: HOST,
+    port: PORT,
+    healthPath: HEALTH_PATH,
+    wsPath: WS_PATH,
+    upstreamAssistantUrl: UPSTREAM_ASSISTANT_URL || "(not set)",
+    configError: configError ?? null,
+  });
+});
 
 function handleHttpRequest(
   request: IncomingMessage,
   response: ServerResponse,
   log: Logger,
+  cfgError: string | null,
 ): void {
   const requestUrl = request.url || "/";
 
   if (requestUrl === HEALTH_PATH) {
-    response.statusCode = 200;
+    const ok = cfgError === null;
+    response.statusCode = ok ? 200 : 503;
     response.setHeader("Content-Type", "application/json; charset=utf-8");
     response.setHeader("Cache-Control", "no-store");
-    response.end(
-      JSON.stringify({
-        ok: true,
-        service: "assistant-realtime",
-        wsPath: WS_PATH,
-      }),
-    );
+    response.end(JSON.stringify({
+      ok,
+      service: "assistant-realtime",
+      wsPath: WS_PATH,
+      ...(cfgError ? { error: cfgError } : {}),
+    }));
     return;
   }
 
@@ -127,12 +133,7 @@ function handleHttpRequest(
   response.statusCode = 404;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
-  response.end(
-    JSON.stringify({
-      ok: false,
-      error: "Not found",
-    }),
-  );
+  response.end(JSON.stringify({ ok: false, error: "Not found" }));
 }
 
 async function handleSocketMessage(
@@ -165,17 +166,12 @@ async function handleSocketMessage(
   }
 
   const abortController = new AbortController();
-
-  socket.once("close", () => {
-    abortController.abort();
-  });
+  socket.once("close", () => abortController.abort());
 
   try {
-    const upstreamResponse = await fetch(UPSTREAM_ASSISTANT_URL!, {
+    const upstreamResponse = await fetch(UPSTREAM_ASSISTANT_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: parsed.message,
         messages: Array.isArray(parsed.messages) ? parsed.messages : [],
@@ -210,26 +206,17 @@ async function handleSocketMessage(
     while (true) {
       const result = await reader.read();
       if (result.done) break;
-
-      const chunk = decoder.decode(result.value, { stream: true });
-
       await sendJson(socket, {
         type: "stream",
-        data: chunk,
+        data: decoder.decode(result.value, { stream: true }),
       });
     }
 
-    await sendJson(socket, {
-      type: "complete",
-    });
+    await sendJson(socket, { type: "complete" });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Assistant realtime upstream execution failed";
-
-    log.error("assistant realtime upstream execution failed", {
-      error: message,
-    });
-
+    log.error("assistant realtime upstream execution failed", { error: message });
     if (socket.readyState === socket.OPEN) {
       await sendJson(socket, {
         type: "error",
@@ -244,41 +231,25 @@ async function handleSocketMessage(
 function parseInboundMessage(rawData: RawData): ClientInboundMessage {
   const text = normalizeRawData(rawData);
   const value: unknown = JSON.parse(text);
-
   if (!value || typeof value !== "object") {
     throw new Error("Inbound payload must be a JSON object");
   }
-
   return value as ClientInboundMessage;
 }
 
 function normalizeRawData(data: RawData): string {
   if (typeof data === "string") return data;
-
-  if (data instanceof Buffer) {
-    return data.toString("utf8");
-  }
-
-  if (Array.isArray(data)) {
-    return Buffer.concat(data).toString("utf8");
-  }
-
-  if (data instanceof ArrayBuffer) {
-    return Buffer.from(new Uint8Array(data)).toString("utf8");
-  }
-
+  if (data instanceof Buffer) return data.toString("utf8");
+  if (Array.isArray(data)) return Buffer.concat(data).toString("utf8");
+  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data)).toString("utf8");
   return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8");
 }
 
 async function sendJson(socket: WebSocket, payload: Record<string, unknown>): Promise<void> {
   if (socket.readyState !== socket.OPEN) return;
-
   await new Promise<void>((resolve, reject) => {
     socket.send(JSON.stringify(payload), (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+      if (error) { reject(error); return; }
       resolve();
     });
   });
