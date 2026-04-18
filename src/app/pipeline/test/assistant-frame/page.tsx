@@ -147,6 +147,28 @@ function renderInlineText(text: string): React.ReactNode[] {
   return nodes;
 }
 
+
+// ── Activity label mapping — no raw tool names in UI ──────────────────────
+function formatActivityLabel(activity: string, toolName?: string): string {
+  if (activity === "understanding") return "Thinking";
+  if (activity === "executing_tool") {
+    switch (toolName) {
+      case "openai":            return "Reasoning";
+      case "generate_media":    return "Generating";
+      case "send_workspace_action": return "Updating workspace";
+      case "list_workspace_files":  return "Reading files";
+      case "read_workspace_file":   return "Reading file";
+      case "write_workspace_file":  return "Writing file";
+      case "apply_workspace_patch": return "Patching file";
+      case "build_workspace":       return "Building";
+      case "run_workspace_command": return "Running command";
+      case "run_verification":      return "Verifying";
+      default: return "Working";
+    }
+  }
+  return "Working";
+}
+
 export default function AssistantFramePage() {
   const [draft, setDraft] = useState("");
   const [toolbarOpen, setToolbarOpen] = useState(true);
@@ -323,9 +345,8 @@ export default function AssistantFramePage() {
                     </div>
 
                     {activity && !isUser ? (
-                      <div className="mt-3 inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-600">
-                        {activity.activity}
-                        {activity.toolName ? ` · ${activity.toolName}` : ""}
+                      <div className="mt-3 inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium tracking-[0.06em] text-zinc-500">
+                        {formatActivityLabel(activity.activity, activity.toolName)}
                       </div>
                     ) : null}
 
