@@ -536,11 +536,23 @@ wss.on("connection", (socket: WebSocket, request: IncomingMessage) => {
     remoteAddress: request.socket.remoteAddress ?? null,
   });
 
+  // Keepalive: ping every 25s to prevent DO load balancer idle timeout (1006 drops).
+  // Browser WebSocket responds to ping with pong automatically — no client change needed.
+  const PING_INTERVAL_MS = 25_000;
+  const pingTimer = setInterval(() => {
+    if (socket.readyState === socket.OPEN) {
+      socket.ping();
+    } else {
+      clearInterval(pingTimer);
+    }
+  }, PING_INTERVAL_MS);
+
   socket.on("message", async (raw: RawData) => {
     await handleMessage(socket, raw, session, logger);
   });
 
   socket.on("close", (code: number, reason: Buffer) => {
+    clearInterval(pingTimer);
     if (session.activeAbort) session.activeAbort.abort();
     logger.info("connection closed", {
       sessionId: session.sessionId,
@@ -550,6 +562,7 @@ wss.on("connection", (socket: WebSocket, request: IncomingMessage) => {
   });
 
   socket.on("error", (error: Error) => {
+    clearInterval(pingTimer);
     logger.error("socket error", {
       sessionId: session.sessionId,
       error: error.message,
