@@ -146,11 +146,27 @@ export async function deleteFile(fileId: string): Promise<void> {
   await admin.from("files").delete().eq("id", fileId);
 }
 
+export type ImageUploadResult = {
+  publicUrl: string;
+  storagePath: string;
+  bucket: string;
+  mimeType: string;
+};
+
 export async function uploadImageToSupabase(
   imageSource: string,
   workspaceId: string,
   filename?: string
 ): Promise<string> {
+  const result = await uploadImageToSupabaseWithMeta(imageSource, workspaceId, filename);
+  return result.publicUrl;
+}
+
+export async function uploadImageToSupabaseWithMeta(
+  imageSource: string,
+  workspaceId: string,
+  filename?: string
+): Promise<ImageUploadResult> {
   const admin = createAdminClient();
   let buffer: Buffer;
   let mimeType = "image/png";
@@ -173,6 +189,12 @@ export async function uploadImageToSupabase(
   const { error } = await admin.storage
     .from(BUCKET_GENERATIONS)
     .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
-  return admin.storage.from(BUCKET_GENERATIONS).getPublicUrl(storagePath).data.publicUrl;
+  if (error) throw new Error(`STORAGE_FAILED: ${error.message}`);
+  const publicUrl = admin.storage.from(BUCKET_GENERATIONS).getPublicUrl(storagePath).data.publicUrl;
+  return { publicUrl, storagePath, bucket: BUCKET_GENERATIONS, mimeType };
+}
+
+export async function deleteStorageFile(storagePath: string, bucket: string): Promise<void> {
+  const admin = createAdminClient();
+  await admin.storage.from(bucket).remove([storagePath]);
 }
