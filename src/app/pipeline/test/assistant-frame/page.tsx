@@ -82,6 +82,71 @@ function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
   );
 }
 
+// ── Inline markdown renderer ──────────────────────────────────────────────
+// Handles: images ![alt](url), bold **text**, and plain text.
+// No external dependency — only renders patterns the assistant actually emits.
+function renderContent(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  const nodes: React.ReactNode[] = [];
+  // Split on markdown images first
+  const imgPattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = imgPattern.exec(text)) !== null) {
+    // Text before image
+    if (match.index > lastIndex) {
+      nodes.push(...renderInlineText(text.slice(lastIndex, match.index)));
+    }
+    // The image itself
+    nodes.push(
+      <div key={match.index} className="mt-3">
+        <img
+          src={match[2]}
+          alt={match[1]}
+          className="max-w-full rounded-2xl border border-zinc-200 shadow-sm"
+          style={{ maxHeight: 480 }}
+        />
+      </div>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text after last image
+  if (lastIndex < text.length) {
+    nodes.push(...renderInlineText(text.slice(lastIndex)));
+  }
+
+  return nodes;
+}
+
+function renderInlineText(text: string): React.ReactNode[] {
+  if (!text) return [];
+  const nodes: React.ReactNode[] = [];
+  // Split on bold **text**
+  const boldPattern = /\*\*([^*]+)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+
+  while ((match = boldPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(
+        <span key={keyIdx++}>{text.slice(lastIndex, match.index)}</span>
+      );
+    }
+    nodes.push(<strong key={keyIdx++}>{match[1]}</strong>);
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(<span key={keyIdx++}>{text.slice(lastIndex)}</span>);
+  }
+
+  return nodes;
+}
+
 export default function AssistantFramePage() {
   const [draft, setDraft] = useState("");
   const [toolbarOpen, setToolbarOpen] = useState(true);
@@ -233,8 +298,13 @@ export default function AssistantFramePage() {
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
                       {isUser ? "You" : "Assistant"}
                     </div>
-                    <div className={`mt-2 whitespace-pre-wrap text-sm leading-7 ${isUser ? "text-white" : "text-zinc-800"}`}>
-                      {message.content || (!isUser && message.status === "streaming" ? "…" : "")}
+                    <div className={`mt-2 text-sm leading-7 ${isUser ? "text-white" : "text-zinc-800"}`}>
+                      {isUser
+                        ? (message.content || "")
+                        : (message.content
+                            ? renderContent(message.content)
+                            : (message.status === "streaming" ? "…" : ""))
+                      }
                     </div>
 
                     {activity && !isUser ? (
@@ -306,4 +376,5 @@ export default function AssistantFramePage() {
     </div>
   );
 }
+
 
