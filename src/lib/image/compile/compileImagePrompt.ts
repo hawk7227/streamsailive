@@ -108,6 +108,8 @@ export function compileImagePrompt(
   const compiledPrompt = assembleFinalPrompt(stateWithoutPrompt);
 
   assertCompiledPrompt(compiledPrompt, "image");
+  assertNoDuplicates(realismStack, "realismStack");
+  assertNoDuplicates(microDetailStack, "microDetailStack");
   assertNoDuplicates(negativeBank, "negativeBank");
 
   return { ...stateWithoutPrompt, compiledPrompt };
