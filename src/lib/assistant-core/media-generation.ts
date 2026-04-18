@@ -2,6 +2,8 @@ import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
 import { buildStoryBible, type StoryBible } from "@/lib/story/storyBible";
 import { generateContent } from "@/lib/ai";
 import type { GenerationOptions, GenerationResult, GenerationType } from "@/lib/ai/types";
+import { uploadImageToSupabaseWithMeta, deleteStorageFile } from "@/lib/supabase/storage";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type MediaKind = "image" | "video" | "i2v";
 
@@ -249,32 +251,120 @@ function normalizeProvider(args: MediaGenerationArgs): { provider: string; model
   };
 }
 
+// ── Structured error codes per doc spec ──────────────────────────────────────
+export type MediaGenerationErrorCode =
+  | "MISSING_PROVIDER_CREDENTIALS"
+  | "EMPTY_PROVIDER_OUTPUT"
+  | "PROVIDER_REQUEST_FAILED"
+  | "STORAGE_FAILED"
+  | "DB_WRITE_FAILED";
+
+export type MediaGenerationAsset = {
+  assetId: string;
+  storagePath: string;
+  url: string;
+  mimeType: string;
+};
+
+async function persistGenerationRecord(args: {
+  type: MediaKind;
+  prompt: string;
+  provider: string;
+  model: string | null;
+  outputUrl: string;
+  storagePath: string;
+  workspaceId: string;
+}): Promise<string> {
+  const admin = createAdminClient();
+  const id = crypto.randomUUID();
+  const { error } = await admin.from("generations").insert({
+    id,
+    // Service-role insert — user_id uses a sentinel for assistant-generated records
+    // Real user linkage requires passing userId through context (future slice)
+    user_id: "00000000-0000-0000-0000-000000000000",
+    workspace_id: args.workspaceId,
+    type: args.type,
+    prompt: args.prompt,
+    status: "completed",
+    output_url: args.outputUrl,
+    provider: args.provider,
+    model: args.model,
+    mode: "assistant",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(`DB_WRITE_FAILED: ${error.message}`);
+  return id;
+}
+
 export async function executeMediaGeneration(args: MediaGenerationArgs): Promise<MediaGenerationExecution> {
   if (!args.prompt?.trim()) {
-    throw new Error("A non-empty media prompt is required.");
+    throw new Error("MISSING_PROVIDER_CREDENTIALS: A non-empty media prompt is required.");
   }
 
   if (args.type === "i2v" && !args.imageUrl?.trim()) {
-    throw new Error("imageUrl is required for image-to-video generation.");
+    throw new Error("PROVIDER_REQUEST_FAILED: imageUrl is required for image-to-video generation.");
   }
 
   const plan = planMediaGeneration(args);
   const { provider, model } = normalizeProvider(args);
+  const workspaceId = args.workspaceId?.trim() || "assistant-core";
 
   if (args.type === "image" && provider === "openai") {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not configured.");
+      throw new Error("MISSING_PROVIDER_CREDENTIALS: OPENAI_API_KEY is not configured.");
     }
 
+    // Step 1: Generate image via OpenAI Image API
     const image = await generateEnforcedImage({
       prompt: plan.finalPrompt,
       apiKey,
-      workspaceId: args.workspaceId?.trim() || "assistant-core",
+      workspaceId,
       mode: "images",
       realismMode: "strict",
       aspectRatio: (args.aspectRatio as "1:1" | "4:5" | "9:16" | "16:9" | undefined) ?? "16:9",
     });
+
+    if (!image.outputUrl) {
+      throw new Error("EMPTY_PROVIDER_OUTPUT: Image generation returned no usable output URL.");
+    }
+
+    // Step 2: Re-upload to get storagePath for cleanup capability
+    // enforcedImage already uploaded — re-fetch storagePath from the URL
+    // Extract storagePath from the public URL
+    const urlParts = image.outputUrl.split("/generations/");
+    const storagePath = urlParts[1] ?? `${workspaceId}/unknown`;
+
+    // Step 3: DB insert (AFTER storage write is confirmed)
+    // If DB fails → log the orphaned storage path, do not throw to user
+    let assetId: string;
+    try {
+      assetId = await persistGenerationRecord({
+        type: args.type,
+        prompt: args.prompt,
+        provider,
+        model: model ?? "gpt-image-1",
+        outputUrl: image.outputUrl,
+        storagePath,
+        workspaceId,
+      });
+    } catch (dbError) {
+      // DB failed AFTER storage succeeded
+      // Attempt cleanup to prevent orphaned storage file
+      try {
+        await deleteStorageFile(storagePath, "generations");
+      } catch {
+        // Cleanup failed — log orphan for audit (future observability slice)
+        console.error(JSON.stringify({
+          level: "error",
+          event: "ORPHANED_STORAGE",
+          storagePath,
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+        }));
+      }
+      throw new Error(`DB_WRITE_FAILED: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+    }
 
     return {
       ok: true,
@@ -283,12 +373,13 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
       model,
       status: "completed",
       outputUrl: image.outputUrl,
-      externalId: null,
+      externalId: assetId,
       costEstimate: null,
       plan,
     };
   }
 
+  // Non-OpenAI or video path — no DB persistence yet (future slice)
   const options: GenerationOptions = {
     prompt: plan.finalPrompt,
     aspectRatio: args.aspectRatio,
@@ -312,3 +403,4 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     plan,
   };
 }
+
