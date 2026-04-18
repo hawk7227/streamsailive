@@ -7,8 +7,8 @@
 
 export const generationConfig = {
   image: {
-    model: process.env.IMAGE_MODEL ?? "dall-e-3",
-    quality: (process.env.IMAGE_QUALITY ?? "standard") as "standard" | "hd",
+    model: process.env.IMAGE_MODEL ?? "gpt-image-1",
+    quality: (process.env.IMAGE_QUALITY ?? "medium") as "standard" | "hd" | "low" | "medium" | "high",
     candidates: Number(process.env.IMAGE_CANDIDATES ?? "4"),
     maxAttempts: Number(process.env.IMAGE_MAX_ATTEMPTS ?? "3"),
   },
