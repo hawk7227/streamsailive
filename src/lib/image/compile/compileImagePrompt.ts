@@ -11,8 +11,9 @@ import {
   selectNegativeBank,
   selectRealismStack,
 } from "../../media/compile/selectStacks";
-import { assertCompiledPrompt, assertNoDuplicates, assertNonEmptyPrompt } from "../../media/guards";
+import { assertNoDuplicates, validateCompiledPrompt, validateRawPrompt } from "../../media/guards";
 import type { MediaIntent } from "../../media/types";
+import { validateCompileOptions } from "../validate";
 import {
   IMAGE_ASPECT_RATIO_TO_SIZE,
   IMAGE_DEFAULT_FORMAT,
@@ -65,12 +66,13 @@ export function compileImagePrompt(
   rawPrompt: string,
   options: CompileImagePromptOptions = {},
 ): CompiledImagePromptState {
-  assertNonEmptyPrompt(rawPrompt);
+  const validatedPrompt = validateRawPrompt(rawPrompt);
+  const validatedOptions = validateCompileOptions(options);
 
-  const normalized = normalizeMediaPrompt(rawPrompt);
+  const normalized = normalizeMediaPrompt(validatedPrompt);
   const classification = classifyMediaIntent(normalized);
-  const intent: MediaIntent = options.forceIntent ?? classification.intent;
-  const sceneClass: ImageSceneClass = options.forceSceneClass ?? selectSceneClass(intent);
+  const intent: MediaIntent = validatedOptions.forceIntent ?? classification.intent;
+  const sceneClass: ImageSceneClass = validatedOptions.forceSceneClass ?? selectSceneClass(intent);
   const shotSize = IMAGE_SHOT_MAP[intent];
   const camera = selectCamera(intent);
   const framing = selectFraming(intent);
@@ -86,7 +88,7 @@ export function compileImagePrompt(
   ];
 
   const size: ImageSize =
-    IMAGE_ASPECT_RATIO_TO_SIZE[options.aspectRatio ?? "16:9"] ?? "1536x1024";
+    IMAGE_ASPECT_RATIO_TO_SIZE[validatedOptions.aspectRatio ?? "16:9"] ?? "1536x1024";
 
   const stateWithoutPrompt: Omit<CompiledImagePromptState, "compiledPrompt"> = {
     normalized,
@@ -101,13 +103,12 @@ export function compileImagePrompt(
     microDetailStack,
     negativeBank,
     size,
-    quality: options.quality ?? IMAGE_DEFAULT_QUALITY,
-    outputFormat: options.outputFormat ?? IMAGE_DEFAULT_FORMAT,
+    quality: validatedOptions.quality ?? IMAGE_DEFAULT_QUALITY,
+    outputFormat: validatedOptions.outputFormat ?? IMAGE_DEFAULT_FORMAT,
   };
 
-  const compiledPrompt = assembleFinalPrompt(stateWithoutPrompt);
-
-  assertCompiledPrompt(compiledPrompt, "image");
+  const rawCompiledPrompt = assembleFinalPrompt(stateWithoutPrompt);
+  const compiledPrompt = validateCompiledPrompt(rawCompiledPrompt, "image");
   assertNoDuplicates(realismStack, "realismStack");
   assertNoDuplicates(microDetailStack, "microDetailStack");
   assertNoDuplicates(negativeBank, "negativeBank");

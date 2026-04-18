@@ -1,3 +1,4 @@
+import type { ValidatedCompiledPrompt } from "../media/guards";
 import type {
   CameraLogic,
   DepthLogic,
@@ -60,7 +61,7 @@ export type CompiledImagePromptState = {
   realismStack: string[];
   microDetailStack: string[];
   negativeBank: string[];
-  compiledPrompt: string;
+  compiledPrompt: ValidatedCompiledPrompt;  // branded — validation enforced at compile time
   size: ImageSize;
   quality: ImageQuality;
   outputFormat: ImageOutputFormat;
