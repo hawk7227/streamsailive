@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -151,9 +151,24 @@ export default function AssistantFramePage() {
   const [draft, setDraft] = useState("");
   const [toolbarOpen, setToolbarOpen] = useState(true);
 
+  // ── postMessage bridge ────────────────────────────────────────────────────
+  // Forward workspace.action events from WS to parent frame.
+  // Also send PIPELINE_ASSISTANT_READY on mount so parent can init context.
+  const handleWorkspaceAction = useCallback((action: { type: string; payload?: Record<string, unknown> }) => {
+    window.parent.postMessage(
+      { type: "PIPELINE_ASSISTANT_ACTION", action: action.type, payload: action.payload ?? {} },
+      "*",
+    );
+  }, []);
+
+  useEffect(() => {
+    window.parent.postMessage({ type: "PIPELINE_ASSISTANT_READY" }, "*");
+  }, []);
+
   const session = useAssistantSession({
     websocketUrl: REALTIME_WS_URL,
     autoConnect: true,
+    onWorkspaceAction: handleWorkspaceAction,
   });
 
   const activeTurnId = session.session.activeTurnId;
@@ -376,6 +391,7 @@ export default function AssistantFramePage() {
     </div>
   );
 }
+
 
 
 
