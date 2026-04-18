@@ -114,12 +114,13 @@ function extractTextFromContentPart(part: any): string[] {
 function getTextFromResponse(response: any): string {
   if (!response || typeof response !== "object") return "";
 
-  const chunks: string[] = [];
-
+  // Prefer top-level output_text — canonical deduplicated field.
+  // Do not also collect from output items to avoid duplication.
   if (typeof response.output_text === "string" && response.output_text.trim()) {
-    chunks.push(response.output_text);
+    return response.output_text.trim();
   }
 
+  const chunks: string[] = [];
   const output = Array.isArray(response.output) ? response.output : [];
 
   for (const item of output) {
@@ -358,3 +359,4 @@ export async function runOrchestrator(req: NextRequest) {
     },
   );
 }
+
