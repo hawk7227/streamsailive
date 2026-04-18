@@ -1,4 +1,5 @@
 import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
+import { compileImagePrompt } from "@/lib/image";
 import { buildStoryBible, type StoryBible } from "@/lib/story/storyBible";
 import { generateContent } from "@/lib/ai";
 import type { GenerationOptions, GenerationResult, GenerationType } from "@/lib/ai/types";
@@ -316,9 +317,12 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
       throw new Error("MISSING_PROVIDER_CREDENTIALS: OPENAI_API_KEY is not configured.");
     }
 
+    // Compile prompt through structured compiler (replaces planMediaGeneration prompt for images)
+    const compiled = compileImagePrompt(args.prompt);
+
     // Step 1: Generate image via OpenAI Image API
     const image = await generateEnforcedImage({
-      prompt: plan.finalPrompt,
+      prompt: compiled.compiledPrompt,
       apiKey,
       workspaceId,
       mode: "images",
