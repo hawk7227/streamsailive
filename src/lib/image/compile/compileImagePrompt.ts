@@ -86,7 +86,7 @@ export function compileImagePrompt(
   ];
 
   const size: ImageSize =
-    IMAGE_ASPECT_RATIO_TO_SIZE[options.size ?? "16:9"] ?? "1536x1024";
+    IMAGE_ASPECT_RATIO_TO_SIZE[options.aspectRatio ?? "16:9"] ?? "1536x1024";
 
   const stateWithoutPrompt: Omit<CompiledImagePromptState, "compiledPrompt"> = {
     normalized,

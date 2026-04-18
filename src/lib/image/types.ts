@@ -66,10 +66,14 @@ export type CompiledImagePromptState = {
   outputFormat: ImageOutputFormat;
 };
 
+// Aspect ratio strings are the input — ImageSize is the resolved output.
+// These must not be conflated.
+export type ImageAspectRatio = "1:1" | "16:9" | "9:16" | "4:5";
+
 export type CompileImagePromptOptions = {
   forceIntent?: MediaIntent;
   forceSceneClass?: ImageSceneClass;
-  size?: ImageSize;
+  aspectRatio?: ImageAspectRatio;  // input: aspect ratio → resolves to ImageSize internally
   quality?: ImageQuality;
   outputFormat?: ImageOutputFormat;
 };

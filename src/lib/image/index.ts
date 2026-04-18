@@ -2,6 +2,7 @@ export { compileImagePrompt, IMAGE_DEFAULT_MODEL } from "./compile/compileImageP
 export type {
   CompiledImagePromptState,
   CompileImagePromptOptions,
+  ImageAspectRatio,
   ImageGenerationResult,
   ImageIntent,
   ImageOutputFormat,
