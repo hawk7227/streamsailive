@@ -157,9 +157,17 @@ export default function AssistantFramePage() {
                 <WifiOff className="h-4 w-4 text-zinc-400" />
               )}
               {toolbarOpen ? (
-                <div>
+                <div className="flex-1">
                   <div className="text-xs font-medium text-zinc-900">{formatConnectionLabel(session.connectionState)}</div>
                   <div className="text-[11px] text-zinc-500">{session.session.sessionId || "Awaiting session"}</div>
+                  {(session.connectionState === "closed" || session.connectionState === "error") ? (
+                    <button
+                      onClick={() => void session.connect()}
+                      className="mt-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 underline underline-offset-2"
+                    >
+                      Reconnect
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -298,3 +306,4 @@ export default function AssistantFramePage() {
     </div>
   );
 }
+
