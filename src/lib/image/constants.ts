@@ -46,5 +46,4 @@ export const IMAGE_EXTRA_NEGATIVES: string[] = [
   "no stock photo staging",
   "no oversharpening",
   "no artificial reflections",
-  "no plastic skin",
 ];
