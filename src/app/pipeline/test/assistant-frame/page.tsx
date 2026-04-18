@@ -90,7 +90,7 @@ function renderContent(text: string): React.ReactNode[] {
 
   const nodes: React.ReactNode[] = [];
   // Split on markdown images first
-  const imgPattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const imgPattern = /!\[([^\]]*)\][\s\S]*?\(([^)]+)\)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -376,5 +376,6 @@ export default function AssistantFramePage() {
     </div>
   );
 }
+
 
 
