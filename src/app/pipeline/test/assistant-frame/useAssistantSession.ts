@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  loadStoredMessages,
+  writePersistedSession,
+  clearPersistedSession,
+} from "@/lib/utils/session-persistence";
+import {
   ASSISTANT_PROTOCOL_VERSION,
   type AssistantActivityMessage,
   type AssistantConnectionState,
@@ -56,11 +61,14 @@ export type UseAssistantSessionOptions = {
   initialContext?: Record<string, unknown>;
   autoConnect?: boolean;
   onWorkspaceAction?: (action: AssistantWorkspaceAction) => void | Promise<void>;
+  /** Storage key for session persistence. Omit to disable persistence. */
+  storageKey?: string;
 };
 
 export type UseAssistantSessionApi = AssistantSessionHookState & {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  clearHistory: () => void;
   sendTurn: (
     message: string,
     options?: { context?: Record<string, unknown> },
@@ -161,7 +169,7 @@ function finalizeAssistantTurn(
 export function useAssistantSession(
   options: UseAssistantSessionOptions,
 ): UseAssistantSessionApi {
-  const { websocketUrl, initialContext, autoConnect = true, onWorkspaceAction } = options;
+  const { websocketUrl, initialContext, autoConnect = true, onWorkspaceAction, storageKey } = options;
 
   const socketRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -175,7 +183,9 @@ export function useAssistantSession(
     activeTurnId: null,
     previousResponseId: null,
   });
-  const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
+  const [messages, setMessages] = useState<AssistantChatMessage[]>(() =>
+    storageKey ? loadStoredMessages(storageKey) : [],
+  );
   const [activities, setActivities] = useState<Record<string, AssistantTurnActivity>>({});
   const [previews, setPreviews] = useState<Record<string, AssistantPreviewDescriptor>>({});
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
@@ -406,7 +416,7 @@ export function useAssistantSession(
       socketRef.current.send(JSON.stringify(payload));
       return turnId;
     },
-    [],
+    [session.status],
   );
 
   const cancelTurn = useCallback(async (turnId?: string) => {
@@ -439,6 +449,20 @@ export function useAssistantSession(
     };
   }, [autoConnect, connect, disconnect]);
 
+  // Persist messages after each turn completes — not during streaming
+  // to avoid one localStorage write per text delta.
+  useEffect(() => {
+    if (!storageKey) return;
+    const isStreaming = messages.some((m) => m.status === "streaming");
+    if (isStreaming) return;
+    writePersistedSession(storageKey, messages);
+  }, [messages, storageKey]);
+
+  const clearHistory = useCallback(() => {
+    setMessages([]);
+    if (storageKey) clearPersistedSession(storageKey);
+  }, [storageKey]);
+
   const activePreview = useMemo(() => {
     const activeTurnId = session.activeTurnId;
     if (!activeTurnId) return null;
@@ -457,6 +481,7 @@ export function useAssistantSession(
     error,
     connect,
     disconnect,
+    clearHistory,
     sendTurn,
     cancelTurn,
     sendWorkspaceAction,

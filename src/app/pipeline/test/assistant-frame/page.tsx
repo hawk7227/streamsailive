@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { useAssistantSession } from "./useAssistantSession";
+import { usePersistedDraft } from "@/lib/utils/session-persistence";
 import type { AssistantPreviewDescriptor, AssistantPreviewType, AssistantPreviewStatus } from "@/lib/assistant-core/assistant-protocol";
 
 // ── WebSocket URL resolution ───────────────────────────────────────────────
@@ -342,7 +343,7 @@ function formatActivityLabel(activity: string, toolName?: string): string {
 }
 
 export default function AssistantFramePage() {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = usePersistedDraft("assistant-session:default");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [toolbarOpen, setToolbarOpen] = useState(true);
 
@@ -364,6 +365,7 @@ export default function AssistantFramePage() {
     websocketUrl: REALTIME_WS_URL,
     autoConnect: true,
     onWorkspaceAction: handleWorkspaceAction,
+    storageKey: "assistant-session:default",
   });
 
   const activeTurnId = session.session.activeTurnId;
