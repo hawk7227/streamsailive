@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch when a new push arrives
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Required for next build and env validation
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      # Optional — needed for full build report, not required to pass
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+      ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gate 1: Lint — blocks on ESLint errors
+      - name: Lint
+        run: pnpm lint
+
+      # Gate 2: Typecheck — blocks on any TS error (0 errors required)
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Gate 3: Test — blocks on any failing test
+      - name: Test
+        run: pnpm test
+
+      # Gate 4: Build — blocks if next build or build-report generation fails
+      # Requires OPENAI_API_KEY and NEXT_PUBLIC_SUPABASE_URL to be set in secrets
+      - name: Build
+        run: pnpm build
