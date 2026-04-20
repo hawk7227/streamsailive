@@ -19,6 +19,7 @@ import {
 
 import { useAssistantSession } from "./useAssistantSession";
 import { usePersistedDraft } from "@/lib/utils/session-persistence";
+import { useSmartScroll } from "./useSmartScroll";
 import type { AssistantPreviewDescriptor, AssistantPreviewType, AssistantPreviewStatus } from "@/lib/assistant-core/assistant-protocol";
 
 // ── WebSocket URL resolution ───────────────────────────────────────────────
@@ -370,6 +371,8 @@ export default function AssistantFramePage() {
 
   const activeTurnId = session.session.activeTurnId;
 
+  const { scrollRef, isAtBottom, jumpToBottom } = useSmartScroll(session.messages);
+
   const previewsByTurn = useMemo(() => {
     const index = new Map<string, AssistantPreviewDescriptor[]>();
 
@@ -490,7 +493,23 @@ export default function AssistantFramePage() {
       </aside>
 
       <main className="grid h-screen grid-rows-[1fr_auto] bg-white">
-        <div className="overflow-auto px-6 py-6">
+        <div ref={scrollRef} className="relative overflow-auto px-6 py-6">
+          {/* Jump to latest — opacity+transform only, 180ms, motion compliant */}
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center transition-[opacity,transform] duration-[180ms] ease-out ${
+              isAtBottom
+                ? "translate-y-2 opacity-0"
+                : "translate-y-0 opacity-100 pointer-events-auto"
+            }`}
+          >
+            <button
+              onClick={jumpToBottom}
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-4 py-2 text-[11px] font-semibold text-zinc-600 shadow-[0_4px_14px_rgba(0,0,0,0.06)] transition-colors hover:bg-zinc-50"
+            >
+              <span className="text-xs">↓</span>
+              Latest
+            </button>
+          </div>
           <div className="mx-auto flex max-w-4xl flex-col gap-5">
             {session.messages.length === 0 ? (
               <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
