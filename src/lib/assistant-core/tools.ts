@@ -296,7 +296,8 @@ export function buildAssistantTools(
           quality: { type: "string" },
           imageUrl: { type: "string" },
           storyBible: { type: "string" },
-          longVideo: { type: "boolean" }
+          longVideo: { type: "boolean" },
+          realismMode: { type: "string", enum: ["strict", "balanced", "strict_everyday", "premium_commercial"] }
         },
         required: ["type", "prompt"],
         additionalProperties: false,
@@ -469,6 +470,7 @@ export async function executeAssistantTool(
         imageUrl: typeof input.args.imageUrl === "string" ? input.args.imageUrl : undefined,
         storyBible: typeof input.args.storyBible === "string" ? input.args.storyBible : undefined,
         longVideo: input.args.longVideo === true,
+        realismMode: typeof input.args.realismMode === "string" ? input.args.realismMode as "strict" | "balanced" | "strict_everyday" | "premium_commercial" : undefined,
         workspaceId,
       });
 
@@ -608,6 +610,10 @@ export async function executeAssistantTool(
     }
   }
 }
+
+
+
+
 
 
 
