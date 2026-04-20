@@ -32,6 +32,35 @@ type MediaArtifact = {
 
 const encoder = new TextEncoder();
 
+// ── Tool timeout ─────────────────────────────────────────────────────────
+// PRD §19: every tool call must enforce a timeout (5–30s).
+// Long-running tools (generate_media, run_workspace_command) may raise this
+// via STREAMS_TOOL_TIMEOUT_MS env var, capped at 30s per the PRD.
+const TOOL_TIMEOUT_MS = Math.min(
+  Number(process.env.STREAMS_TOOL_TIMEOUT_MS?.trim() ?? "30000") || 30_000,
+  30_000,
+);
+
+function withToolTimeout<T>(
+  promise: Promise<T>,
+  toolName: string,
+  timeoutMs: number,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `TOOL_TIMEOUT: ${toolName} exceeded ${timeoutMs}ms limit`,
+          ),
+        ),
+      timeoutMs,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!));
+}
+
 function sse(event: string, data: unknown): Uint8Array {
   return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
@@ -299,23 +328,27 @@ export async function runOrchestrator(req: NextRequest) {
               }
 
               try {
-                const result = await executeAssistantTool(
-                  {
-                    name: call.name,
-                    args: parsedArgs,
-                    route: route as AssistantMode,
-                    context: assembledContext,
-                  },
-                  {
-                    onProgress: (text: string) => {
-                      if (text && text.trim()) {
-                        send("tool_progress", {
-                          name: call.name,
-                          text,
-                        });
-                      }
+                const result = await withToolTimeout(
+                  executeAssistantTool(
+                    {
+                      name: call.name,
+                      args: parsedArgs,
+                      route: route as AssistantMode,
+                      context: assembledContext,
                     },
-                  },
+                    {
+                      onProgress: (text: string) => {
+                        if (text && text.trim()) {
+                          send("tool_progress", {
+                            name: call.name,
+                            text,
+                          });
+                        }
+                      },
+                    },
+                  ),
+                  call.name,
+                  TOOL_TIMEOUT_MS,
                 );
 
                 send("tool_result", {
