@@ -17,7 +17,7 @@ interface GenerateImageRequest {
   prompt: string;
   mode?: ImageMode;
   references?: ImageReference[];
-  realismMode?: "strict" | "balanced";
+  realismMode?: "strict" | "balanced" | "strict_everyday" | "premium_commercial";
   aspectRatio?: "1:1" | "4:5" | "9:16" | "16:9";
   referencePriority?: ReferencePriority;
 }
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     workspaceId: ctx.workspace.id,
     mode: body.mode ?? "images",
     references: body.references ?? [],
-    realismMode: body.realismMode ?? "strict",
+    realismMode: body.realismMode === "premium_commercial" ? "premium_commercial" : "strict_everyday",
     aspectRatio: body.aspectRatio ?? "16:9",
     referencePriority: body.referencePriority ?? "medium",
   } as const;
@@ -87,3 +87,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
