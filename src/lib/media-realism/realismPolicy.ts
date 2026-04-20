@@ -50,6 +50,33 @@ export const FORBIDDEN_IMAGE_TERMS = [
   "cgi",
 ];
 
+export const PREMIUM_COMMERCIAL_ALLOWED_TERMS = [
+  "cinematic",
+  "editorial",
+  "fashion photography",
+  "beauty campaign",
+  "luxury",
+  "premium look",
+  "8k",
+  "hyper-detailed",
+  "glossy",
+  "studio lighting",
+  "shallow depth of field",
+  "bokeh",
+  "retouched",
+];
+
+export const PREMIUM_COMMERCIAL_FORBIDDEN_TERMS = FORBIDDEN_IMAGE_TERMS.filter(
+  (term) => !PREMIUM_COMMERCIAL_ALLOWED_TERMS.includes(term),
+);
+
+export function resolveForbiddenImageTerms(mode?: string): string[] {
+  if (mode === "premium_commercial") {
+    return PREMIUM_COMMERCIAL_FORBIDDEN_TERMS;
+  }
+  return FORBIDDEN_IMAGE_TERMS;
+}
+
 export const REQUIRED_REALISM_ANCHORS = [
   "visible pores",
   "natural skin texture",
