@@ -1,20 +1,15 @@
+import "@/lib/env"; // validates required env vars at module load
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/env";
 import { createClient } from "@supabase/supabase-js";
 
 export function createAdminClient() {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE;
+  const supabaseUrl = SUPABASE_URL;
+  const serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    const missing: string[] = [];
-    if (!supabaseUrl) {
-      missing.push("NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL)");
-    }
-    if (!serviceRoleKey) {
-      missing.push("SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE)");
-    }
-    throw new Error(`Missing Supabase admin credentials: ${missing.join(", ")}`);
+    throw new Error(
+      "Missing Supabase admin credentials: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.",
+    );
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {

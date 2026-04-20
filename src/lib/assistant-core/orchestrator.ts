@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { env } from "@/lib/env";
+import "@/lib/env";
+import { OPENAI_MODEL } from "@/lib/env";
 import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
@@ -250,7 +251,7 @@ export async function runOrchestrator(req: NextRequest) {
             context: assembledContext,
           });
 
-          const model = env.OPENAI_MODEL;
+          const model = OPENAI_MODEL;
 
           const initialInput = buildInputMessages(
             assembledContext.systemPrompt,
