@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -148,6 +148,91 @@ function renderInlineText(text: string): React.ReactNode[] {
 }
 
 
+
+// ── Neon skeleton loader ───────────────────────────────────────────────────
+// Shown in the assistant message bubble while image generation is in progress.
+// Animated CSS — no JS timers, no layout shift.
+function NeonSkeleton() {
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      style={{ width: "100%", aspectRatio: "16/9", background: "#0a0a0a" }}
+    >
+      <style>{`
+        @keyframes neon-drift {
+          0%   { transform: translate(0px, 0px) rotate(0deg); opacity: 0.9; }
+          25%  { transform: translate(18px, -12px) rotate(8deg); opacity: 0.6; }
+          50%  { transform: translate(-10px, 16px) rotate(-6deg); opacity: 1; }
+          75%  { transform: translate(14px, 8px) rotate(4deg); opacity: 0.7; }
+          100% { transform: translate(0px, 0px) rotate(0deg); opacity: 0.9; }
+        }
+        @keyframes neon-pulse {
+          0%, 100% { filter: brightness(1) blur(0px); }
+          50%       { filter: brightness(1.6) blur(1px); }
+        }
+        .neon-stick {
+          position: absolute;
+          border-radius: 3px;
+          animation: neon-drift var(--dur, 2.4s) ease-in-out infinite,
+                     neon-pulse var(--pulse, 1.8s) ease-in-out infinite;
+          animation-delay: var(--delay, 0s);
+        }
+      `}</style>
+
+      {/* Neon sticks — varied colors, sizes, positions, durations */}
+      {[
+        { left:"8%",  top:"12%", w:48, h:6,  color:"#ff0080", rot:"-20deg", dur:"2.2s", pulse:"1.6s", delay:"0s"    },
+        { left:"22%", top:"8%",  w:36, h:5,  color:"#ffee00", rot:"35deg",  dur:"2.8s", pulse:"2.0s", delay:"0.3s"  },
+        { left:"55%", top:"6%",  w:52, h:7,  color:"#ff6600", rot:"-12deg", dur:"2.4s", pulse:"1.9s", delay:"0.6s"  },
+        { left:"75%", top:"14%", w:40, h:5,  color:"#ff0080", rot:"28deg",  dur:"3.0s", pulse:"2.2s", delay:"0.1s"  },
+        { left:"5%",  top:"40%", w:44, h:6,  color:"#00ff88", rot:"15deg",  dur:"2.6s", pulse:"1.7s", delay:"0.9s"  },
+        { left:"30%", top:"35%", w:38, h:5,  color:"#0080ff", rot:"-30deg", dur:"2.3s", pulse:"2.1s", delay:"0.4s"  },
+        { left:"62%", top:"32%", w:56, h:7,  color:"#aa00ff", rot:"10deg",  dur:"2.9s", pulse:"1.8s", delay:"0.7s"  },
+        { left:"82%", top:"38%", w:34, h:5,  color:"#ff0040", rot:"-22deg", dur:"2.5s", pulse:"2.0s", delay:"0.2s"  },
+        { left:"12%", top:"65%", w:50, h:6,  color:"#ffee00", rot:"38deg",  dur:"2.7s", pulse:"1.6s", delay:"1.1s"  },
+        { left:"40%", top:"60%", w:42, h:6,  color:"#ff6600", rot:"-8deg",  dur:"2.1s", pulse:"2.3s", delay:"0.5s"  },
+        { left:"68%", top:"58%", w:46, h:7,  color:"#00ff88", rot:"25deg",  dur:"3.1s", pulse:"1.9s", delay:"0.8s"  },
+        { left:"88%", top:"62%", w:36, h:5,  color:"#0080ff", rot:"-40deg", dur:"2.4s", pulse:"2.1s", delay:"0.3s"  },
+        { left:"18%", top:"82%", w:54, h:6,  color:"#aa00ff", rot:"18deg",  dur:"2.6s", pulse:"1.7s", delay:"1.3s"  },
+        { left:"50%", top:"78%", w:40, h:5,  color:"#ff0080", rot:"-15deg", dur:"2.2s", pulse:"2.0s", delay:"0.6s"  },
+        { left:"72%", top:"84%", w:48, h:7,  color:"#ffee00", rot:"42deg",  dur:"2.8s", pulse:"1.8s", delay:"0.9s"  },
+        // Cross-sticks (perpendicular pairs)
+        { left:"35%", top:"22%", w:8,  h:32, color:"#ff6600", rot:"0deg",   dur:"2.5s", pulse:"2.2s", delay:"0.4s"  },
+        { left:"33%", top:"24%", w:32, h:8,  color:"#ff6600", rot:"0deg",   dur:"2.5s", pulse:"2.2s", delay:"0.4s"  },
+        { left:"60%", top:"70%", w:8,  h:28, color:"#00ff88", rot:"0deg",   dur:"2.3s", pulse:"1.9s", delay:"1.0s"  },
+        { left:"58%", top:"72%", w:28, h:8,  color:"#00ff88", rot:"0deg",   dur:"2.3s", pulse:"1.9s", delay:"1.0s"  },
+      ].map((stick, i) => (
+        <div
+          key={i}
+          className="neon-stick"
+          style={{
+            left: stick.left,
+            top: stick.top,
+            width: stick.w,
+            height: stick.h,
+            background: stick.color,
+            boxShadow: `0 0 8px 2px ${stick.color}88, 0 0 20px 4px ${stick.color}44`,
+            transform: `rotate(${stick.rot})`,
+            "--dur": stick.dur,
+            "--pulse": stick.pulse,
+            "--delay": stick.delay,
+          } as React.CSSProperties}
+        />
+      ))}
+
+      {/* Subtle scan line */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 4px)",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+}
+
 // ── Activity label mapping — no raw tool names in UI ──────────────────────
 function formatActivityLabel(activity: string, toolName?: string): string {
   if (activity === "understanding") return "Thinking";
@@ -171,6 +256,7 @@ function formatActivityLabel(activity: string, toolName?: string): string {
 
 export default function AssistantFramePage() {
   const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [toolbarOpen, setToolbarOpen] = useState(true);
 
   // ── postMessage bridge ────────────────────────────────────────────────────
@@ -217,6 +303,14 @@ export default function AssistantFramePage() {
     await session.sendTurn(value);
     setDraft("");
   };
+
+  // Auto-resize textarea — PRD §14 input behavior
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
 
   const handleCancel = async () => {
     if (!session.isTurnRunning) return;
@@ -340,7 +434,9 @@ export default function AssistantFramePage() {
                         ? (message.content || "")
                         : (message.content
                             ? renderContent(message.content)
-                            : (message.status === "streaming" ? "…" : ""))
+                            : message.status === "streaming" && activity && formatActivityLabel(activity.activity, activity.toolName) === "Generating"
+                              ? <NeonSkeleton />
+                              : (message.status === "streaming" ? "…" : ""))
                       }
                     </div>
 
@@ -374,6 +470,7 @@ export default function AssistantFramePage() {
           <div className="mx-auto flex max-w-4xl items-end gap-3">
             <div className="flex-1 rounded-3xl border border-zinc-200 bg-zinc-50 px-4 py-3">
               <textarea
+                ref={textareaRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(e) => {
