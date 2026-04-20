@@ -2071,7 +2071,7 @@ Accept only if:
           prompt: imagePrompt,
           mode: imageApiMode,
           references: imageRefs.map(r => ({ kind: "image", fileId: r.url, url: r.url })),
-          realismMode: "strict",
+          realismMode: "strict_everyday",
           aspectRatio: viewMode === "9:16" ? "9:16" : "16:9",
           referencePriority: imageReferencePriority,
         }),
@@ -4032,6 +4032,9 @@ Accept only if:
     </>
   );
 }
+
+
+
 
 
 
