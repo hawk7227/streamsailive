@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 
 interface ImageEditorSidebarProps {
-    node: any;
-    updateNodeData: (key: string, value: any) => void;
+    node: { id: string; data: { generationId?: string; imageUrl?: string; jsonConfig?: unknown; project?: unknown; settings?: Record<string, unknown>; [key: string]: unknown }; [key: string]: unknown };
+    updateNodeData: (key: string, value: unknown) => void;
 }
 
 interface ImageSettings {
@@ -122,15 +122,15 @@ const DynamicControl = ({
 
 export function ImageEditorSidebar({ node, updateNodeData }: ImageEditorSidebarProps) {
     const [imageUrl, setImageUrl] = useState<string>(node.data.imageUrl || "");
-    const [settings, setSettings] = useState<ImageSettings>(node.data.settings || defaultSettings);
+    const [settings, setSettings] = useState<ImageSettings>((node.data.settings as ImageSettings | undefined) || defaultSettings);
     const [activeTab, setActiveTab] = useState<'adjust' | 'transform'>('adjust');
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     
     // Initialize from node data
     useEffect(() => {
-        if (node.data.imageUrl) setImageUrl(node.data.imageUrl);
-        if (node.data.settings) setSettings(node.data.settings);
+        if (node.data.imageUrl) setImageUrl(node.data.imageUrl as string);
+        if (node.data.settings) setSettings(node.data.settings as unknown as ImageSettings);
     }, [node.data.imageUrl, node.data.settings]);
 
     // Update node data when local state changes

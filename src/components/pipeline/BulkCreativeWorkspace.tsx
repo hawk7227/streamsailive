@@ -18,7 +18,7 @@ export default function BulkCreativeWorkspace() {
     <div>
       {job?.manifest?.outputs?.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
-          {job.manifest.outputs.map((o: any) => (
+          {job.manifest.outputs.map((o: { taskId?: string; url?: string }) => (
             <div key={o.taskId} className="border rounded overflow-hidden">
               <img src={o.url} className="w-full" />
             </div>

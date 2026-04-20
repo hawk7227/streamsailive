@@ -1,8 +1,46 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { ViewId, PlatformId } from '@/lib/platform-views/index';
+import type { ViewId, PlatformId, PlatformContentFields } from '@/lib/platform-views/index';
 import { PLATFORM_MAP, getEngagementMetrics, extractContentFields } from '@/lib/platform-views/index';
+
+
+type FrameData = {
+  title?: string;
+  caption?: string;
+  handle?: string;
+  displayName?: string;
+  channelName?: string;
+  subscriberCount?: string | number;
+  hashtags?: string;
+  soundName?: string;
+  price?: string | number;
+  productName?: string;
+};
+
+type EngagementData = {
+  likes?: string | number;
+  comments?: string | number;
+  shares?: string | number;
+  views?: string | number;
+  top?: string | number;
+  bottom?: string | number;
+  right?: string | number;
+  com?: string;
+  myshopify?: string;
+};
+
+type ViewerProps = {
+  f: PlatformContentFields | FrameData;
+  e: { views?: string | number; likes?: string | number; comments?: string | number; shares?: string | number; top?: string | number; bottom?: string | number; right?: string | number };
+  s: number;
+  image?: string | null;
+  video?: string | null;
+  vidRef?: React.RefObject<HTMLVideoElement | null>;
+  w?: number;
+  closeup?: string | boolean;
+  isVideo?: boolean;
+};
 
 export interface PlatformViewerProps {
   platformId: PlatformId;
@@ -61,7 +99,7 @@ function ContentLayer({ imageUrl, videoUrl, vidRef, objectFit = 'cover' }: {
 
 // ── Individual platform views ─────────────────────────────────────────────────
 
-function InstagramFeedView({ f, e, s, image, video, vidRef, w }: any) {
+function InstagramFeedView({ f, e, s, image, video, vidRef, w }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -88,7 +126,7 @@ function InstagramFeedView({ f, e, s, image, video, vidRef, w }: any) {
       </div>
       {/* Image — 4:5 */}
       <div style={{ width: '100%', aspectRatio: '4/5', position: 'relative', flexShrink: 0, overflow: 'hidden', maxHeight: '55%' }}>
-        <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+        <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
       </div>
       {/* Action bar */}
       <div style={{ padding: `${sz(10)}px ${sz(12)}px`, flexShrink: 0 }}>
@@ -116,12 +154,12 @@ function InstagramFeedView({ f, e, s, image, video, vidRef, w }: any) {
   );
 }
 
-function TikTokVideoView({ f, e, s, image, video, vidRef }: any) {
+function TikTokVideoView({ f, e, s, image, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}>
       {/* Full-screen content */}
-      <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+      <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
       {/* Top nav */}
       <div style={{ position: 'absolute', top: sz(40), left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: sz(20), zIndex: 10 }}>
         <span style={{ fontSize: sz(15), color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>Following</span>
@@ -165,11 +203,11 @@ function TikTokVideoView({ f, e, s, image, video, vidRef }: any) {
   );
 }
 
-function YouTubeShortsView({ f, e, s, video, vidRef }: any) {
+function YouTubeShortsView({ f, e, s, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#0f0f0f', overflow: 'hidden' }}>
-      <ContentLayer imageUrl={null} videoUrl={video} vidRef={vidRef} />
+      <ContentLayer imageUrl={null} videoUrl={video ?? null} vidRef={vidRef} />
       {/* Right action bar */}
       <div style={{ position: 'absolute', right: sz(8), bottom: sz(160), display: 'flex', flexDirection: 'column', alignItems: 'center', gap: sz(20), zIndex: 10 }}>
         {[['👍', e.likes], ['👎', ''], ['💬', e.comments], ['↗', e.shares], ['↺', '']].map(([icon, count], i) => (
@@ -208,7 +246,7 @@ function YouTubeShortsView({ f, e, s, video, vidRef }: any) {
   );
 }
 
-function YouTubeMobileWatchView({ f, e, s, video, vidRef }: any) {
+function YouTubeMobileWatchView({ f, e, s, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#0f0f0f', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -225,7 +263,7 @@ function YouTubeMobileWatchView({ f, e, s, video, vidRef }: any) {
       </div>
       {/* 16:9 video player */}
       <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative', flexShrink: 0, background: '#000', overflow: 'hidden' }}>
-        <ContentLayer imageUrl={null} videoUrl={video} vidRef={vidRef} objectFit="contain" />
+        <ContentLayer imageUrl={null} videoUrl={video ?? null} vidRef={vidRef} objectFit="contain" />
         {/* Player controls overlay */}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(transparent 60%,rgba(0,0,0,0.7))', display: 'flex', alignItems: 'flex-end', padding: sz(8) }}>
           <div style={{ width: '100%' }}>
@@ -278,7 +316,7 @@ function YouTubeMobileWatchView({ f, e, s, video, vidRef }: any) {
   );
 }
 
-function FacebookPostView({ f, e, s, image, video, vidRef, isVideo }: any) {
+function FacebookPostView({ f, e, s, image, video, vidRef, isVideo }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#18191A', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -308,7 +346,7 @@ function FacebookPostView({ f, e, s, image, video, vidRef, isVideo }: any) {
       <div style={{ padding: `0 ${sz(12)}px ${sz(8)}px`, fontSize: sz(13), color: '#E4E6EB', lineHeight: 1.4, flexShrink: 0 }}>{f.caption}</div>
       {/* Media */}
       <div style={{ width: '100%', aspectRatio: isVideo ? '16/9' : '4/5', position: 'relative', flexShrink: 0, overflow: 'hidden', maxHeight: '45%' }}>
-        <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+        <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
       </div>
       {/* Reactions count */}
       <div style={{ padding: `${sz(6)}px ${sz(12)}px`, display: 'flex', justifyContent: 'space-between', fontSize: sz(12), color: '#b0b3b8', flexShrink: 0 }}>
@@ -334,7 +372,7 @@ function FacebookPostView({ f, e, s, image, video, vidRef, isVideo }: any) {
   );
 }
 
-function PinterestPinView({ f, e, s, image, closeup }: any) {
+function PinterestPinView({ f, e, s, image, closeup }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#EFEFEF', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -351,7 +389,7 @@ function PinterestPinView({ f, e, s, image, closeup }: any) {
         {closeup ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-              <ContentLayer imageUrl={image} videoUrl={null} />
+              <ContentLayer imageUrl={image ?? null} videoUrl={null} />
               <div style={{ position: 'absolute', top: sz(12), right: sz(12), background: '#E60023', borderRadius: sz(24), padding: `${sz(8)}px ${sz(16)}px`, fontSize: sz(13), fontWeight: 700, color: '#fff' }}>Save</div>
             </div>
             <div style={{ background: '#fff', padding: sz(14), flexShrink: 0 }}>
@@ -388,7 +426,7 @@ function PinterestPinView({ f, e, s, image, closeup }: any) {
   );
 }
 
-function GoogleShoppingView({ f, e, s, image }: any) {
+function GoogleShoppingView({ f, e, s, image }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -429,7 +467,7 @@ function GoogleShoppingView({ f, e, s, image }: any) {
   );
 }
 
-function ShopifyProductView({ f, e, s, image }: any) {
+function ShopifyProductView({ f, e, s, image }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -466,7 +504,7 @@ function ShopifyProductView({ f, e, s, image }: any) {
   );
 }
 
-function TwitterTweetView({ f, e, s, image, video, vidRef }: any) {
+function TwitterTweetView({ f, e, s, image, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -488,7 +526,7 @@ function TwitterTweetView({ f, e, s, image, video, vidRef }: any) {
         <div style={{ fontSize: sz(14), color: '#fff', lineHeight: 1.5, marginBottom: sz(10) }}>{f.caption} {f.hashtags}</div>
         {(image || video) && (
           <div style={{ borderRadius: sz(12), overflow: 'hidden', aspectRatio: '16/9', position: 'relative', marginBottom: sz(10) }}>
-            <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+            <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
           </div>
         )}
         <div style={{ fontSize: sz(12), color: '#71767b', marginBottom: sz(10) }}>9:41 AM · Jan 1, 2025</div>
@@ -512,11 +550,11 @@ function TwitterTweetView({ f, e, s, image, video, vidRef }: any) {
   );
 }
 
-function SnapchatView({ f, s, image, video, vidRef }: any) {
+function SnapchatView({ f, s, image, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}>
-      <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+      <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
       {/* Top header */}
       <div style={{ position: 'absolute', top: sz(44), left: sz(12), right: sz(12), display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
         <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: sz(20), padding: `${sz(6)}px ${sz(10)}px`, display: 'flex', alignItems: 'center', gap: sz(6) }}>
@@ -543,11 +581,11 @@ function SnapchatView({ f, s, image, video, vidRef }: any) {
   );
 }
 
-function InstagramStoryView({ f, s, image, video, vidRef }: any) {
+function InstagramStoryView({ f, s, image, video, vidRef }: ViewerProps) {
   const sz = (n: number) => Math.round(n * s);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}>
-      <ContentLayer imageUrl={image} videoUrl={video} vidRef={vidRef} />
+      <ContentLayer imageUrl={image ?? null} videoUrl={video ?? null} vidRef={vidRef} />
       {/* Story progress bars */}
       <div style={{ position: 'absolute', top: sz(50), left: sz(8), right: sz(8), display: 'flex', gap: sz(3), zIndex: 10 }}>
         {[0,1,2].map(i => (
@@ -578,23 +616,23 @@ function InstagramStoryView({ f, s, image, video, vidRef }: any) {
 }
 
 // ── Safe zone overlay ─────────────────────────────────────────────────────────
-function SafeZoneOverlay({ safeZone, s, wireframe }: { safeZone: any; s: number; wireframe: boolean }) {
+function SafeZoneOverlay({ safeZone, s, wireframe }: { safeZone: { top?: number; bottom?: number; right?: number; left?: number }; s: number; wireframe: boolean }) {
   const sz = (n: number) => Math.round(n * s);
   if (wireframe) return null; // wireframe bars replace safe zone overlay
   return (
     <>
-      {safeZone.top > 0 && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: sz(safeZone.top), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {(safeZone.top ?? 0) > 0 && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: sz(safeZone.top ?? 0), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontSize: 8, color: 'rgba(255,150,0,0.9)', fontWeight: 700, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.5)', padding: '1px 4px', borderRadius: 3 }}>SAFE ZONE</span>
         </div>
       )}
-      {safeZone.bottom > 0 && (
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: sz(safeZone.bottom), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {(safeZone.bottom ?? 0) > 0 && (
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: sz(safeZone.bottom ?? 0), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontSize: 8, color: 'rgba(255,150,0,0.9)', fontWeight: 700, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.5)', padding: '1px 4px', borderRadius: 3 }}>SAFE ZONE</span>
         </div>
       )}
-      {safeZone.right > 0 && (
-        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: sz(safeZone.right), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none' }} />
+      {(safeZone.right ?? 0) > 0 && (
+        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: sz(safeZone.right ?? 0), background: 'rgba(255,100,0,0.15)', border: '1px dashed rgba(255,100,0,0.4)', zIndex: 30, pointerEvents: 'none' }} />
       )}
     </>
   );
@@ -659,8 +697,8 @@ export function PlatformViewer(props: PlatformViewerProps) {
       case 'yt_watch_mobile': return <YouTubeMobileWatchView {...shared} />;
       case 'fb_photo': return <FacebookPostView {...shared} isVideo={false} />;
       case 'fb_video': return <FacebookPostView {...shared} isVideo={true} />;
-      case 'pin_card': return <PinterestPinView {...shared} closeup={false} />;
-      case 'pin_closeup': return <PinterestPinView {...shared} closeup={true} />;
+      case 'pin_card': return <PinterestPinView {...shared} />;
+      case 'pin_closeup': return <PinterestPinView {...shared} />;
       case 'g_shopping_card': case 'g_search_mobile': return <GoogleShoppingView {...shared} />;
       case 'shop_product': case 'shop_collection': return <ShopifyProductView {...shared} />;
       case 'tw_tweet': case 'tw_thread': return <TwitterTweetView {...shared} />;

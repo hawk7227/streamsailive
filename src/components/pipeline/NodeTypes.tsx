@@ -2,7 +2,19 @@ import { Handle, Position } from "reactflow";
 import { MoreVertical, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { JsonViewer } from "./JsonViewer";
 
-export const PipelineNode = ({ data, selected }: any) => {
+export const PipelineNode = ({ data, selected }: {
+  data: {
+    icon?: string;
+    iconBg?: string;
+    label?: string;
+    subLabel?: string;
+    content?: string;
+    output?: string;
+    status?: string;
+    [key: string]: unknown;
+  };
+  selected?: boolean;
+}) => {
   return (
     <div
       className={`w-80 p-5 rounded-2xl relative transition-all bg-[#12121a] ${
@@ -44,7 +56,7 @@ export const PipelineNode = ({ data, selected }: any) => {
                 <span className="text-[10px] font-medium text-indigo-400">Response Data</span>
                 <span className="text-[10px] text-gray-600">JSON</span>
              </div>
-             <JsonViewer data={data.output} nodeLabel={data.label} />
+             <JsonViewer data={data.output} nodeLabel={data.label ?? ""} />
         </div>
       )}
 

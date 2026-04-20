@@ -15,8 +15,8 @@ interface Element {
     y?: number | string;
     width?: number | string;
     height?: number | string;
-    settings?: any;
-    [key: string]: any;
+    settings?: Record<string, unknown>;
+    [key: string]: unknown;
 }
 
 interface Scene {
@@ -25,7 +25,7 @@ interface Scene {
     backgroundColor?: string;
     duration?: number;
     elements: Element[];
-    transition?: any;
+    transition?: Record<string, unknown>;
 }
 
 interface Project {
@@ -36,8 +36,8 @@ interface Project {
 }
 
 interface VideoEditorSidebarProps {
-    node: any;
-    updateNodeData: (key: string, value: any) => void;
+    node: { id: string; data: { generationId?: string; imageUrl?: string; jsonConfig?: unknown; project?: unknown; settings?: Record<string, unknown>; [key: string]: unknown }; [key: string]: unknown };
+    updateNodeData: (key: string, value: unknown) => void;
 }
 
 const defaultProject: Project = {
@@ -61,7 +61,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
         // Fallback: try to parse jsonConfig if it exists and looks like a project
         if (node.data.jsonConfig) {
             try {
-                const parsed = JSON.parse(node.data.jsonConfig);
+                const parsed = JSON.parse(node.data.jsonConfig as string);
                 if (parsed.scenes) return parsed;
             } catch (e) { /* ignore */ }
         }
@@ -206,7 +206,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                         <div>
                              <label className="block text-[10px] text-gray-500">Text Content</label>
                              <textarea 
-                                value={element.text || ""} 
+                                value={(element.text as string) || ""} 
                                 onChange={e => updateElement(sceneId, element.id, { text: e.target.value })}
                                 className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs h-16"
                              />
@@ -217,7 +217,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                                 <label className="block text-[10px] text-gray-500">Font Size</label>
                                 <input 
                                     type="text" 
-                                    value={element.settings?.['font-size'] || ""} 
+                                    value={(element.settings?.['font-size'] as string) || ""} 
                                     onChange={e => updateElement(sceneId, element.id, { settings: { ...element.settings, 'font-size': e.target.value } })}
                                     className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs"
                                 />
@@ -226,7 +226,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                                 <label className="block text-[10px] text-gray-500">Color</label>
                                 <input 
                                     type="text" 
-                                    value={element.settings?.color || ""} 
+                                    value={(element.settings?.color as string) || ""} 
                                     onChange={e => updateElement(sceneId, element.id, { settings: { ...element.settings, color: e.target.value } })}
                                     className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs"
                                 />
@@ -254,7 +254,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                              <label className="block text-[10px] text-gray-500">Trim Start</label>
                              <input 
                                 type="number" 
-                                value={element.trim_start || ""} 
+                                value={(element.trim_start as number | undefined) || ""} 
                                 onChange={e => updateElement(sceneId, element.id, { trim_start: parseFloat(e.target.value) })}
                                 className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs"
                              />
@@ -263,7 +263,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                              <label className="block text-[10px] text-gray-500">Trim End</label>
                              <input 
                                 type="number" 
-                                value={element.trim_end || ""} 
+                                value={(element.trim_end as number | undefined) || ""} 
                                 onChange={e => updateElement(sceneId, element.id, { trim_end: parseFloat(e.target.value) })}
                                 className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs"
                              />
@@ -276,7 +276,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                         <div>
                              <label className="block text-[10px] text-gray-500">Text</label>
                              <textarea 
-                                value={element.text || ""} 
+                                value={(element.text as string) || ""} 
                                 onChange={e => updateElement(sceneId, element.id, { text: e.target.value })}
                                 className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs h-16"
                              />
@@ -285,7 +285,7 @@ export function VideoEditorSidebar({ node, updateNodeData }: VideoEditorSidebarP
                              <label className="block text-[10px] text-gray-500">Voice ID</label>
                              <input 
                                 type="text" 
-                                value={element.voice || ""} 
+                                value={(element.voice as string) || ""} 
                                 onChange={e => updateElement(sceneId, element.id, { voice: e.target.value })}
                                 className="w-full bg-[#12121a] border border-white/10 rounded px-2 py-1 text-xs"
                              />

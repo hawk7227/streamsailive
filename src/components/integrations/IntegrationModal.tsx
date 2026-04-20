@@ -12,7 +12,7 @@ interface IntegrationModalProps {
     description: string;
     existingCredentials?: Record<string, string>;
   };
-  onSave: (config: any) => Promise<void>;
+  onSave: (config: Record<string, unknown>) => Promise<void>;
 }
 
 export default function IntegrationModal({
@@ -49,7 +49,7 @@ export default function IntegrationModal({
   };
 
   const updateField = (key: string, value: string) => {
-    setFormData((prev: any) => ({ ...prev, [key]: value }));
+    setFormData((prev: Record<string, unknown>) => ({ ...prev, [key]: value }));
   };
 
   const renderFormFields = () => {

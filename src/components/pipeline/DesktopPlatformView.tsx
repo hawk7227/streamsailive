@@ -2,7 +2,42 @@
 
 import React from 'react';
 import type { PlatformId, ViewId } from '@/lib/platform-views/index';
-import { PLATFORM_MAP, getEngagementMetrics, extractContentFields } from '@/lib/platform-views/index';
+import { PLATFORM_MAP, getEngagementMetrics, extractContentFields, type PlatformContentFields } from '@/lib/platform-views/index';
+
+
+type FrameData = {
+  title?: string;
+  caption?: string;
+  handle?: string;
+  displayName?: string;
+  channelName?: string;
+  subscriberCount?: string | number;
+  hashtags?: string;
+  soundName?: string;
+  price?: string | number;
+  productName?: string;
+};
+
+type EngagementData = {
+  likes?: string | number;
+  comments?: string | number;
+  shares?: string | number;
+  views?: string | number;
+  top?: string | number;
+  bottom?: string | number;
+  right?: string | number;
+  com?: string;
+  myshopify?: string;
+};
+
+type EngagementMetrics = { views: string; likes: string; comments: string; shares: string };
+
+type DesktopViewerProps = {
+  f: PlatformContentFields | FrameData;
+  e: EngagementMetrics | EngagementData;
+  image?: string | null;
+  video?: string | null;
+};
 
 interface DesktopPlatformViewProps {
   platformId: PlatformId;
@@ -74,7 +109,7 @@ function WireframeDesktopView({ viewId }: { viewId: ViewId }) {
 }
 
 // ── YouTube Watch Desktop ─────────────────────────────────────────────────────
-function YouTubeWatchDesktop({ f, e, video, image }: any) {
+function YouTubeWatchDesktop({ f, e, video, image }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#0f0f0f', display: 'flex', overflow: 'hidden' }}>
       {/* Left: player + info */}
@@ -134,7 +169,7 @@ function YouTubeWatchDesktop({ f, e, video, image }: any) {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', lineHeight: 1.3, marginBottom: 4 }}>{f.title} — Part {i}</div>
               <div style={{ fontSize: 11, color: '#aaa' }}>{f.channelName}</div>
-              <div style={{ fontSize: 11, color: '#aaa' }}>{Math.round(parseInt(e.views) * 0.4 || 12)}K views</div>
+              <div style={{ fontSize: 11, color: '#aaa' }}>{Math.round(parseInt(String(e.views || 0)) * 0.4 || 12)}K views</div>
             </div>
           </div>
         ))}
@@ -144,7 +179,7 @@ function YouTubeWatchDesktop({ f, e, video, image }: any) {
 }
 
 // ── Instagram Desktop Feed ────────────────────────────────────────────────────
-function InstagramFeedDesktop({ f, e, image, video }: any) {
+function InstagramFeedDesktop({ f, e, image, video }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#000', overflow: 'auto', display: 'flex', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: 470, maxWidth: '100%' }}>
@@ -192,7 +227,7 @@ function InstagramFeedDesktop({ f, e, image, video }: any) {
 }
 
 // ── TikTok Desktop Feed ───────────────────────────────────────────────────────
-function TikTokDesktopFeed({ f, e, image, video }: any) {
+function TikTokDesktopFeed({ f, e, image, video }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#121212', display: 'flex', overflow: 'hidden' }}>
       {/* Left sidebar */}
@@ -240,7 +275,7 @@ function TikTokDesktopFeed({ f, e, image, video }: any) {
 }
 
 // ── Facebook Desktop Feed ─────────────────────────────────────────────────────
-function FacebookDesktopFeed({ f, e, image, video }: any) {
+function FacebookDesktopFeed({ f, e, image, video }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#18191A', overflow: 'auto', display: 'flex', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: 500, maxWidth: '100%' }}>
@@ -275,7 +310,7 @@ function FacebookDesktopFeed({ f, e, image, video }: any) {
 }
 
 // ── Google Shopping Desktop ───────────────────────────────────────────────────
-function GoogleShoppingDesktop({ f, image }: any) {
+function GoogleShoppingDesktop({ f, image }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#fff', overflow: 'auto' }}>
       {/* Search bar */}
@@ -319,7 +354,7 @@ function GoogleShoppingDesktop({ f, image }: any) {
 }
 
 // ── Shopify Desktop ───────────────────────────────────────────────────────────
-function ShopifyProductDesktop({ f, image }: any) {
+function ShopifyProductDesktop({ f, image }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#fff', overflow: 'auto' }}>
       {/* Nav */}
@@ -366,7 +401,7 @@ function ShopifyProductDesktop({ f, image }: any) {
 }
 
 // ── Twitter/X Desktop ─────────────────────────────────────────────────────────
-function TwitterDesktopView({ f, e, image, video }: any) {
+function TwitterDesktopView({ f, e, image, video }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#000', display: 'flex', overflow: 'hidden' }}>
       {/* Left sidebar */}
@@ -410,7 +445,7 @@ function TwitterDesktopView({ f, e, image, video }: any) {
 }
 
 // ── Pinterest Desktop ─────────────────────────────────────────────────────────
-function PinterestDesktopView({ f, e, image }: any) {
+function PinterestDesktopView({ f, e, image }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#fff', overflow: 'auto' }}>
       {/* Nav */}
@@ -443,7 +478,7 @@ function PinterestDesktopView({ f, e, image }: any) {
 }
 
 // ── Snapchat Web ──────────────────────────────────────────────────────────────
-function SnapchatWebView({ f, image, video }: any) {
+function SnapchatWebView({ f, image, video }: DesktopViewerProps) {
   return (
     <div style={{ flex: 1, background: '#000', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 380, position: 'relative', aspectRatio: '9/16', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
