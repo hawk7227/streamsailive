@@ -135,6 +135,29 @@ async function* parseSseStream(
 // ── Inbound message parsing ────────────────────────────────────────────────
 type InboundMessage = { type: string; [key: string]: unknown };
 
+// ── Activity event names — must match assistant-protocol.ts ActivityEventName
+// Source of truth: src/lib/assistant-core/assistant-protocol.ts
+// Kept in sync manually until packages/contracts shared layer is built.
+type ActivityEventName =
+  | "understanding"
+  | "reading_files"
+  | "executing_tool"
+  | "validating"
+  | "completed"
+  | "failed"
+  | "operation_skipped";
+
+function sendActivity(
+  socket: WebSocket,
+  turnId: string,
+  activity: ActivityEventName,
+  toolName?: string,
+): Promise<void> {
+  const payload: Record<string, unknown> = { type: "activity", turnId, activity };
+  if (toolName) payload.toolName = toolName;
+  return send(socket, payload);
+}
+
 function parseInbound(raw: RawData): InboundMessage | null {
   let text: string;
   if (typeof raw === "string") {
@@ -192,11 +215,7 @@ async function executeTurn(
   });
 
   // Real event — maps to orchestrator routing phase
-  await send(socket, {
-    type: "activity",
-    turnId,
-    activity: "understanding",
-  });
+  await sendActivity(socket, turnId, "understanding");
 
   try {
     const upstream = await fetch(UPSTREAM_URL, {
@@ -226,12 +245,7 @@ async function executeTurn(
           if (phase === "routing" || phase === "building_context") {
             // Already emitted "understanding" above — no duplicate
           } else if (phase === "calling_openai") {
-            await send(socket, {
-              type: "activity",
-              turnId,
-              activity: "executing_tool",
-              toolName: "openai",
-            });
+            await sendActivity(socket, turnId, "executing_tool", "openai");
           }
           // "finalizing", "continuing_after_tools" — no UI event needed
           break;
@@ -239,12 +253,7 @@ async function executeTurn(
 
         case "tool_call": {
           const name = typeof data.name === "string" ? data.name : "tool";
-          await send(socket, {
-            type: "activity",
-            turnId,
-            activity: "executing_tool",
-            toolName: name,
-          });
+          await sendActivity(socket, turnId, "executing_tool", name);
           await send(socket, { type: "tool.call", turnId, toolName: name });
           break;
         }

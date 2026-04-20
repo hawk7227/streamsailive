@@ -44,10 +44,22 @@ export type AssistantSessionInboundMessage =
 
 /* ---------- ACTIVITY ---------- */
 
+// ── Activity event names — truth-only, per pipeline spec Layer 6 ──────────
+// Every emitted activity must correspond to a real system action.
+// Extending this union requires a matching real backend event.
+export type ActivityEventName =
+  | "understanding"      // model is reasoning / routing
+  | "reading_files"      // file retrieval in progress
+  | "executing_tool"     // tool call dispatched to executor
+  | "validating"         // output validation running
+  | "completed"          // turn finished successfully
+  | "failed"             // turn failed with error
+  | "operation_skipped"; // tool or step intentionally skipped
+
 export type AssistantActivityMessage = {
   type: "activity";
   turnId: string;
-  activity: string;
+  activity: ActivityEventName;
   toolName?: string;
 };
 
