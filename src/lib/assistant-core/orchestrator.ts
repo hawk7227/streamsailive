@@ -21,6 +21,12 @@ type FunctionCallItem = {
   arguments: string;
 };
 
+type MediaArtifact = {
+  kind: "image" | "video" | "i2v";
+  url: string;
+  result: Record<string, unknown>;
+};
+
 const encoder = new TextEncoder();
 
 function sse(event: string, data: unknown): Uint8Array {
@@ -114,8 +120,6 @@ function extractTextFromContentPart(part: any): string[] {
 function getTextFromResponse(response: any): string {
   if (!response || typeof response !== "object") return "";
 
-  // Prefer top-level output_text — canonical deduplicated field.
-  // Do not also collect from output items to avoid duplication.
   if (typeof response.output_text === "string" && response.output_text.trim()) {
     return response.output_text.trim();
   }
@@ -176,6 +180,65 @@ function buildInputMessages(
   return [{ role: "system", content: systemPrompt }, ...base];
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function normalizeMediaKind(value: unknown): "image" | "video" | "i2v" {
+  if (value === "video") return "video";
+  if (value === "i2v") return "i2v";
+  return "image";
+}
+
+function extractMediaArtifact(result: unknown): MediaArtifact | null {
+  const root = asRecord(result);
+  if (!root) return null;
+
+  const payload = asRecord(root.payload);
+  const data = asRecord(root.data);
+
+  const url = firstString(
+    root.outputUrl,
+    root.url,
+    root.assetUrl,
+    root.videoUrl,
+    root.imageUrl,
+    payload?.outputUrl,
+    payload?.url,
+    payload?.assetUrl,
+    payload?.videoUrl,
+    payload?.imageUrl,
+    data?.outputUrl,
+    data?.url,
+    data?.assetUrl,
+    data?.videoUrl,
+    data?.imageUrl,
+  );
+
+  if (!url) return null;
+
+  const kind = normalizeMediaKind(
+    firstString(root.type, payload?.type, data?.type),
+  );
+
+  return {
+    kind,
+    url,
+    result: root,
+  };
+}
+
 export async function runOrchestrator(req: NextRequest) {
   const body = (await req.json()) as RequestBody;
   const normalized = normalizeRequest(body);
@@ -183,8 +246,18 @@ export async function runOrchestrator(req: NextRequest) {
   return new Response(
     new ReadableStream<Uint8Array>({
       async start(controller) {
+        let streamClosed = false;
+
         const send = (event: string, data: unknown) => {
+          if (streamClosed) return;
           controller.enqueue(sse(event, data));
+        };
+
+        const closeStream = (donePayload: Record<string, unknown>) => {
+          if (streamClosed) return;
+          send("done", donePayload);
+          streamClosed = true;
+          controller.close();
         };
 
         try {
@@ -228,8 +301,9 @@ export async function runOrchestrator(req: NextRequest) {
 
           let loopCount = 0;
           const maxLoops = 12;
+          let mediaResolved = false;
 
-          while (loopCount < maxLoops) {
+          while (loopCount < maxLoops && !streamClosed) {
             const calls = getFunctionCalls(response);
             if (calls.length === 0) break;
 
@@ -242,6 +316,8 @@ export async function runOrchestrator(req: NextRequest) {
             }> = [];
 
             for (const call of calls) {
+              if (streamClosed) return;
+
               send("tool_call", {
                 call_id: call.call_id,
                 name: call.name,
@@ -287,6 +363,38 @@ export async function runOrchestrator(req: NextRequest) {
                   send("tool_result", result);
                 }
 
+                const mediaArtifact =
+                  call.name === "generate_media"
+                    ? extractMediaArtifact(result)
+                    : null;
+
+                if (mediaArtifact) {
+                  mediaResolved = true;
+
+                  send("phase", { phase: "media_ready", kind: mediaArtifact.kind });
+
+                  send("media", {
+                    kind: mediaArtifact.kind,
+                    url: mediaArtifact.url,
+                    result: mediaArtifact.result,
+                  });
+
+                  if (mediaArtifact.kind === "image") {
+                    send("image", {
+                      url: mediaArtifact.url,
+                      result: mediaArtifact.result,
+                    });
+                  } else {
+                    send("video", {
+                      url: mediaArtifact.url,
+                      result: mediaArtifact.result,
+                    });
+                  }
+
+                  closeStream({ ok: true, media: true, kind: mediaArtifact.kind });
+                  return;
+                }
+
                 toolOutputs.push({
                   type: "function_call_output",
                   call_id: call.call_id,
@@ -309,6 +417,9 @@ export async function runOrchestrator(req: NextRequest) {
               }
             }
 
+            if (streamClosed) return;
+            if (mediaResolved) return;
+
             send("phase", { phase: "continuing_after_tools" });
 
             response = await client.responses.create({
@@ -317,6 +428,8 @@ export async function runOrchestrator(req: NextRequest) {
               input: toolOutputs,
             });
           }
+
+          if (streamClosed) return;
 
           send("phase", { phase: "finalizing" });
 
@@ -338,15 +451,13 @@ export async function runOrchestrator(req: NextRequest) {
             });
           }
 
-          send("done", { ok: true });
-          controller.close();
+          closeStream({ ok: true });
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "orchestrator failed";
 
           send("tool_error", { error: message });
-          send("done", { ok: false, error: message });
-          controller.close();
+          closeStream({ ok: false, error: message });
         }
       },
     }),
