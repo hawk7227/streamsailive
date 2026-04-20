@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
 import { client } from "./openai";
@@ -93,75 +94,44 @@ function normalizeRequest(body: RequestBody): NormalizedAssistantRequest {
   };
 }
 
-function extractTextFromContentPart(part: any): string[] {
-  const chunks: string[] = [];
-
-  if (!part || typeof part !== "object") return chunks;
-
-  if (typeof part.text === "string" && part.text.trim()) {
-    chunks.push(part.text);
-  }
-
-  if (typeof part.output_text === "string" && part.output_text.trim()) {
-    chunks.push(part.output_text);
-  }
-
-  if (typeof part.input_text === "string" && part.input_text.trim()) {
-    chunks.push(part.input_text);
-  }
-
-  if (typeof part.content === "string" && part.content.trim()) {
-    chunks.push(part.content);
-  }
-
-  return chunks;
+function extractTextFromContent(
+  content: Array<OpenAI.Responses.ResponseOutputText | OpenAI.Responses.ResponseOutputRefusal>,
+): string[] {
+  return content
+    .filter((part): part is OpenAI.Responses.ResponseOutputText => part.type === "output_text")
+    .map((part) => part.text)
+    .filter((text) => text.trim().length > 0);
 }
 
-function getTextFromResponse(response: any): string {
-  if (!response || typeof response !== "object") return "";
-
-  if (typeof response.output_text === "string" && response.output_text.trim()) {
+function getTextFromResponse(response: OpenAI.Responses.Response): string {
+  // Prefer top-level output_text — canonical deduplicated field on Response.
+  if (response.output_text.trim()) {
     return response.output_text.trim();
   }
 
+  // Fallback: walk output items for message content.
   const chunks: string[] = [];
-  const output = Array.isArray(response.output) ? response.output : [];
-
-  for (const item of output) {
-    if (!item || typeof item !== "object") continue;
-
-    if (typeof item.text === "string" && item.text.trim()) {
-      chunks.push(item.text);
-    }
-
-    const content = Array.isArray(item.content) ? item.content : [];
-    for (const part of content) {
-      chunks.push(...extractTextFromContentPart(part));
+  for (const item of response.output) {
+    if (item.type === "message") {
+      chunks.push(...extractTextFromContent(item.content));
     }
   }
 
   return chunks.join("\n").trim();
 }
 
-function getFunctionCalls(response: any): FunctionCallItem[] {
-  const output = Array.isArray(response?.output) ? response.output : [];
-
-  return output
-    .filter((item: any) => item?.type === "function_call")
-    .map((item: any) => ({
-      call_id:
-        typeof item.call_id === "string"
-          ? item.call_id
-          : typeof item.id === "string"
-            ? item.id
-            : "",
-      name: typeof item.name === "string" ? item.name : "",
-      arguments:
-        typeof item.arguments === "string"
-          ? item.arguments
-          : JSON.stringify(item.arguments ?? {}),
+function getFunctionCalls(response: OpenAI.Responses.Response): FunctionCallItem[] {
+  return response.output
+    .filter(
+      (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
+        item.type === "function_call",
+    )
+    .map((item) => ({
+      call_id: item.call_id,
+      name: item.name,
+      arguments: item.arguments,
     }))
-    .filter((item: FunctionCallItem) => item.call_id && item.name);
+    .filter((item) => item.call_id && item.name);
 }
 
 function buildInputMessages(
@@ -293,7 +263,7 @@ export async function runOrchestrator(req: NextRequest) {
 
           send("phase", { phase: "calling_openai", model });
 
-          let response: any = await client.responses.create({
+          let response: OpenAI.Responses.Response = await client.responses.create({
             model,
             input: initialInput,
             tools,
@@ -440,9 +410,7 @@ export async function runOrchestrator(req: NextRequest) {
           } else {
             const outputTypes = Array.isArray(response?.output)
               ? response.output
-                  .map((item: any) =>
-                    typeof item?.type === "string" ? item.type : "unknown",
-                  )
+                  .map((item: OpenAI.Responses.ResponseOutputItem) => item.type)
                   .join(", ")
               : "none";
 
