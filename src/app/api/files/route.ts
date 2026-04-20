@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { toErrorMessage } from "@/lib/utils/error";
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
@@ -16,8 +17,8 @@ export async function GET(request: Request) {
     try {
         const selection = await getCurrentWorkspaceSelection(admin, user);
         workspaceId = selection.current.workspace.id;
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: toErrorMessage(err) }, { status: 500 });
     }
 
     const { searchParams } = new URL(request.url);

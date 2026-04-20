@@ -1,3 +1,4 @@
+import { toErrorMessage } from "@/lib/utils/error";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,16 +46,16 @@ export async function GET(request: Request) {
         // Convert credentials array to object
         const credentialsObj: Record<string, string> = {};
         if (credentials) {
-            credentials.forEach((cred: any) => {
+            credentials.forEach((cred: { credential_key: string; credential_value: string }) => {
                 credentialsObj[cred.credential_key] = cred.credential_value;
             });
         }
 
         return NextResponse.json({ credentials: credentialsObj });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching credentials:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to fetch credentials" },
+            { error: toErrorMessage(error) || "Failed to fetch credentials" },
             { status: 500 }
         );
     }

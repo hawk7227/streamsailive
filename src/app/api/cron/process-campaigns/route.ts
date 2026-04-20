@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { toErrorMessage } from "@/lib/utils/error";
+
+type LeadLike = {
+  email?: string;
+  phone?: string;
+  name?: string;
+  company?: string;
+  [key: string]: unknown;
+};
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { sendMms, sendSms } from "@/lib/sms";
@@ -37,7 +46,7 @@ export async function GET(request: Request) {
 
                 if (leadsError) throw leadsError;
 
-                const leads = campaignLeads.map((cl: any) => cl.leads);
+                const leads = (campaignLeads as unknown as Array<{ lead_id: string; leads: LeadLike }>).map((cl) => cl.leads);
                 let sentCount = 0;
                 let errorCount = 0;
 
@@ -50,7 +59,7 @@ export async function GET(request: Request) {
                         if (campaign.channels?.email) {
                             try {
                                 await sendEmail({
-                                    to: lead.email,
+                                    to: lead.email ?? "",
                                     subject: campaign.email_subject,
                                     body: campaign.email_body,
                                     workspaceId: campaign.workspace_id,
@@ -118,11 +127,11 @@ export async function GET(request: Request) {
                     errors: errorCount
                 });
 
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error(`Error processing campaign ${campaign.id}:`, err);
                 results.push({
                     id: campaign.id,
-                    error: err.message
+                    error: toErrorMessage(err)
                 });
             }
         }
@@ -133,10 +142,10 @@ export async function GET(request: Request) {
             details: results
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in process-campaigns cron:", error);
         return NextResponse.json(
-            { error: error.message || "Internal Server Error" },
+            { error: toErrorMessage(error) || "Internal Server Error" },
             { status: 500 }
         );
     }

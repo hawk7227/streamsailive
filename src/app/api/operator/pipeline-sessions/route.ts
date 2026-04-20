@@ -1,4 +1,17 @@
 import { NextResponse } from 'next/server';
+type PipelineSessionRow = {
+  id?: string;
+  name?: string;
+  status?: string;
+  payload?: {
+    currentStep?: number;
+    step?: string;
+    mode?: string;
+    [key: string]: unknown;
+  } | null;
+  updated_at?: string;
+  [key: string]: unknown;
+};
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
@@ -21,7 +34,7 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({
-    data: (data || []).map((row: any) => ({
+    data: (data || []).map((row: PipelineSessionRow) => ({
       id: row.id,
       status: row.status,
       created_at: row.created_at,

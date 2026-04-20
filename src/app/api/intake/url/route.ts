@@ -19,8 +19,8 @@ export async function POST(request: Request) {
   const result = await ingestUrl(url);
   await logUrlIntake(workspaceId, user.id, {
     url,
-    title: String((result.source as any).title || ''),
-    summary: String((result.analysis as any).summary || ''),
+    title: String((result.source as unknown as Record<string, unknown>).title || ''),
+    summary: String((result.analysis as unknown as Record<string, unknown>).summary || ''),
     type: result.kind,
   });
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toErrorMessage } from "@/lib/utils/error";
 import { createClient } from "@/lib/supabase/server";
 
 // GET - Fetch all integrations for a workflow
@@ -17,10 +18,10 @@ export async function GET(request: Request) {
         if (error) throw error;
 
         return NextResponse.json({ integrations: integrations || [] });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching integrations:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to fetch integrations" },
+            { error: toErrorMessage(error) || "Failed to fetch integrations" },
             { status: 500 }
         );
     }
@@ -118,10 +119,10 @@ export async function POST(request: Request) {
             success: true,
             message: "Integration saved successfully",
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error saving integration:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to save integration" },
+            { error: toErrorMessage(error) || "Failed to save integration" },
             { status: 500 }
         );
     }
@@ -167,10 +168,10 @@ export async function DELETE(request: Request) {
             success: true,
             message: "Integration deleted successfully",
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting integration:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to delete integration" },
+            { error: toErrorMessage(error) || "Failed to delete integration" },
             { status: 500 }
         );
     }

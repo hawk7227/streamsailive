@@ -45,7 +45,7 @@ export async function POST(
         }
 
         // Find the node
-        const nodeIndex = pipeline.nodes.findIndex((n: any) => n.id === nodeId);
+        const nodeIndex = pipeline.nodes.findIndex((n: { id?: string }) => n.id === nodeId);
         if (nodeIndex === -1) {
             return NextResponse.json({ error: "Node not found" }, { status: 404 });
         }

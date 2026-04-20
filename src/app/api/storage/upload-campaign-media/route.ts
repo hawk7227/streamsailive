@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toErrorMessage } from "@/lib/utils/error";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -60,10 +61,10 @@ export async function POST(request: Request) {
 
     const { data } = admin.storage.from("generations").getPublicUrl(storagePath);
     return NextResponse.json({ url: data.publicUrl, path: storagePath });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload campaign media error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to upload file" },
+      { error: toErrorMessage(error) || "Failed to upload file" },
       { status: 500 }
     );
   }

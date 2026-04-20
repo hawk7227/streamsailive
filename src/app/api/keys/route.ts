@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toErrorMessage } from "@/lib/utils/error";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
@@ -43,8 +44,8 @@ export async function GET(request: Request) {
 
         return NextResponse.json({ data: maskedData });
 
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
     }
 }
 
@@ -82,8 +83,8 @@ export async function POST(request: Request) {
         // Return the full key ONLY on creation
         return NextResponse.json({ data });
 
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
     }
 }
 
@@ -114,7 +115,7 @@ export async function DELETE(request: Request) {
         .eq("user_id", user.id);
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

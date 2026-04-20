@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { toErrorMessage } from "@/lib/utils/error";
 import OpenAI from 'openai';
 import { getSiteConfigSync } from '@/lib/config';
 
@@ -43,10 +44,10 @@ export async function POST(request: NextRequest) {
         const content = completion.choices[0]?.message?.content || '';
 
         return NextResponse.json({ content });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('OpenAI API error:', error);
         return NextResponse.json(
-            { error: error.message || 'Failed to generate content' },
+            { error: toErrorMessage(error) || 'Failed to generate content' },
             { status: 500 }
         );
     }

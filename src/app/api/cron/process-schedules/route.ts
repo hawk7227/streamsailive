@@ -1,5 +1,6 @@
 
 import { NextResponse } from "next/server";
+import { toErrorMessage } from "@/lib/utils/error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executePipeline } from "@/lib/pipeline-execution";
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
             const nodes = pipeline.nodes || [];
 
             // Find schedule trigger node
-            const scheduleNode = nodes.find((n: any) =>
+            const scheduleNode = nodes.find((n: { type?: string; id?: string; data?: { type?: string; cron?: string; interval?: string } }) =>
                 n.type === 'schedule' || n.data?.type === 'schedule'
             );
 
