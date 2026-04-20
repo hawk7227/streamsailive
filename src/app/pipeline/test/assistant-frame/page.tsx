@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { useAssistantSession } from "./useAssistantSession";
-import type { AssistantPreviewDescriptor } from "@/lib/assistant-core/assistant-protocol";
+import type { AssistantPreviewDescriptor, AssistantPreviewType, AssistantPreviewStatus } from "@/lib/assistant-core/assistant-protocol";
 
 // ── WebSocket URL resolution ───────────────────────────────────────────────
 // Priority:
@@ -75,7 +75,7 @@ type PreviewTypeConfig = {
   iconBg: string;
 };
 
-const PREVIEW_TYPE_CONFIG: Record<string, PreviewTypeConfig> = {
+const PREVIEW_TYPE_CONFIG: Record<AssistantPreviewType, PreviewTypeConfig> = {
   image:               { icon: "🖼", label: "Image",          bg: "bg-violet-50",  border: "border-violet-200", iconBg: "bg-violet-100" },
   video:               { icon: "🎬", label: "Video",          bg: "bg-rose-50",    border: "border-rose-200",   iconBg: "bg-rose-100"   },
   app_runtime:         { icon: "⚡", label: "App",            bg: "bg-blue-50",    border: "border-blue-200",   iconBg: "bg-blue-100"   },
@@ -91,9 +91,9 @@ const FALLBACK_CONFIG: PreviewTypeConfig = {
   icon: "🔮", label: "Preview", bg: "bg-zinc-50", border: "border-zinc-200", iconBg: "bg-zinc-100",
 };
 
-type PreviewStatus = "created" | "partial" | "ready" | "stale" | "superseded" | string;
+// PreviewStatus is the protocol's AssistantPreviewStatus — imported above.
 
-function PreviewStatusBadge({ status }: { status: PreviewStatus }) {
+function PreviewStatusBadge({ status }: { status: AssistantPreviewStatus }) {
   const map: Record<string, { label: string; className: string }> = {
     created:    { label: "Queued",      className: "bg-zinc-100 text-zinc-500" },
     partial:    { label: "Generating…", className: "bg-amber-100 text-amber-600" },
@@ -140,13 +140,10 @@ function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
         <PreviewStatusBadge status={preview.status} />
       </div>
 
-      {/* Status bar — shows generation progress for partial state */}
+      {/* Indeterminate shimmer — transform-only animation, motion compliant */}
       {preview.status === "partial" && (
         <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-black/5">
-          <div
-            className="h-full animate-pulse rounded-full bg-amber-400"
-            style={{ width: "60%" }}
-          />
+          <div className="h-full w-full origin-left animate-[shimmer_1.6s_ease-in-out_infinite] rounded-full bg-amber-400" />
         </div>
       )}
 

@@ -103,13 +103,34 @@ export type AssistantErrorMessage = {
 
 /* ---------- PREVIEW ---------- */
 
+// Typed union — source of truth for all preview type values.
+// PREVIEW_TYPE_CONFIG in the UI layer must be keyed to this.
+export type AssistantPreviewType =
+  | "image"
+  | "video"
+  | "app_runtime"
+  | "page_editor"
+  | "document"
+  | "code_output"
+  | "diff"
+  | "build_result"
+  | "artifact_collection";
+
+// Closed status lifecycle — any new status must be added here first.
+export type AssistantPreviewStatus =
+  | "created"
+  | "partial"
+  | "ready"
+  | "stale"
+  | "superseded";
+
 export type AssistantPreviewDescriptor = {
   previewId: string;
   turnId: string;
   title?: string;
-  previewType: string;
+  previewType: AssistantPreviewType;
   route: string;
-  status: string;
+  status: AssistantPreviewStatus;
 };
 
 /* ---------- WORKSPACE ---------- */

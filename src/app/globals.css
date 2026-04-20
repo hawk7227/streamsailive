@@ -23,7 +23,13 @@
   --color-accent-red: #ef4444;
   --color-accent-orange: #f97316;
 
-  @keyframes fadeInUp {
+  /* Indeterminate shimmer — transform-only, motion compliant (150–220ms band) */
+  @keyframes shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+    @keyframes fadeInUp {
     from {
       opacity: 0;
       transform: translateY(30px);
