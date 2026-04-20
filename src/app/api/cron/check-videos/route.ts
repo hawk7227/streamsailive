@@ -1,7 +1,9 @@
+import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
 import { CRON_SECRET, KLING_API_KEY, KLING_ASSESS_API_KEY, RUNWAY_API_KEY } from "@/lib/env";
+import { falQueuePoll } from "@/lib/ai/providers/fal";
 
 // GET /api/cron/check-videos
 // Backup poller — Vercel Cron every 2 minutes.
@@ -44,7 +46,6 @@ function makeKlingJWT(): string {
   const payload = Buffer.from(JSON.stringify({ iss: ak, exp: now + 1800, nbf: now - 5 })).toString("base64url");
   const data    = `${header}.${payload}`;
   // Node built-in HMAC-SHA256
-  const { createHmac } = require("crypto") as typeof import("crypto");
   const sig = createHmac("sha256", sk).update(data).digest("base64url");
   return `${data}.${sig}`;
 }
@@ -93,6 +94,23 @@ async function pollRunway(gen: Gen): Promise<PollResult> {
   return { id: gen.id, status: "completed", outputUrl };
 }
 
+async function pollFal(gen: Gen): Promise<PollResult> {
+  // external_id format: "fal_queue:{responseUrl}"
+  const prefix = "fal_queue:";
+  if (!gen.external_id.startsWith(prefix)) {
+    return { id: gen.id, status: "skipped" };
+  }
+  const responseUrl = gen.external_id.slice(prefix.length);
+  const result = await falQueuePoll(responseUrl);
+
+  if (result.status === "processing") return { id: gen.id, status: "processing" };
+  if (result.status === "failed") return { id: gen.id, status: "failed" };
+
+  // Completed — upload video to Supabase storage
+  const outputUrl = await uploadVideoToSupabase(result.videoUrl, gen.workspace_id);
+  return { id: gen.id, status: "completed", outputUrl };
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
@@ -115,7 +133,14 @@ export async function GET(request: Request) {
   for (const batch of chunk(pending as Gen[], CHUNK_SIZE)) {
     const batchResults = await Promise.all(
       batch.map(gen => {
-        const poll = (gen.provider ?? "kling") === "runway" ? pollRunway : pollKling;
+        let poll: (gen: Gen) => Promise<PollResult>;
+        if (gen.external_id?.startsWith("fal_queue:")) {
+          poll = pollFal;
+        } else if ((gen.provider ?? "kling") === "runway") {
+          poll = pollRunway;
+        } else {
+          poll = pollKling;
+        }
         return poll(gen).catch(() => ({ id: gen.id, status: "skipped" as const }));
       })
     );

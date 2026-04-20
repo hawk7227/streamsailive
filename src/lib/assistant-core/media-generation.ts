@@ -300,6 +300,42 @@ async function persistGenerationRecord(args: {
   return id;
 }
 
+async function insertPendingVideoGeneration(args: {
+  type: "video" | "i2v";
+  prompt: string;
+  provider: string;
+  model: string | null;
+  workspaceId: string;
+  externalId: string;
+}): Promise<string> {
+  const admin = createAdminClient();
+  const id = crypto.randomUUID();
+  const { error } = await admin.from("generations").insert({
+    id,
+    user_id: "00000000-0000-0000-0000-000000000000",
+    workspace_id: args.workspaceId,
+    type: args.type,
+    prompt: args.prompt,
+    status: "pending",
+    external_id: args.externalId,
+    provider: args.provider,
+    model: args.model,
+    mode: "assistant",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    // Log and continue — DB failure must not break the user response
+    console.error(JSON.stringify({
+      level: "error",
+      event: "PENDING_VIDEO_INSERT_FAILED",
+      reason: error.message,
+      externalId: args.externalId,
+    }));
+  }
+  return id;
+}
+
 export async function executeMediaGeneration(args: MediaGenerationArgs): Promise<MediaGenerationExecution> {
   if (!args.prompt?.trim()) {
     throw new Error("MISSING_PROVIDER_CREDENTIALS: A non-empty media prompt is required.");
@@ -368,7 +404,7 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     };
   }
 
-  // Non-OpenAI or video path — no DB persistence yet (future slice)
+  // Non-OpenAI / async video path
   const options: GenerationOptions = {
     prompt: plan.finalPrompt,
     aspectRatio: args.aspectRatio,
@@ -379,6 +415,24 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
   };
 
   const result = await generateContent(args.type as GenerationType, options, provider);
+
+  // Persist pending video job to DB so the cron poller can track it.
+  // Uses sentinel user_id (same as image path) until user context flows through.
+  if (
+    result.status === "pending" &&
+    result.externalId &&
+    args.workspaceId &&
+    (args.type === "video" || args.type === "i2v")
+  ) {
+    await insertPendingVideoGeneration({
+      type: args.type,
+      prompt: plan.finalPrompt,
+      provider,
+      model: model ?? null,
+      workspaceId: args.workspaceId,
+      externalId: result.externalId,
+    });
+  }
 
   return {
     ok: result.status !== "failed",
