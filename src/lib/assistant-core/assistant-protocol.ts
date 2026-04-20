@@ -114,9 +114,12 @@ export type AssistantPreviewDescriptor = {
 
 /* ---------- WORKSPACE ---------- */
 
+// Workspace action payloads are heterogeneous by design — each action type
+// has its own shape. Record<string, unknown> enforces object structure
+// without lying about the fields. Callers must narrow per action type.
 export type AssistantWorkspaceAction = {
   type: string;
-  payload?: any;
+  payload?: Record<string, unknown>;
 };
 
 /* ---------- OUTBOUND ---------- */
@@ -217,7 +220,11 @@ export type AssistantSessionOutboundMessage =
 /* ---------- TYPE GUARD ---------- */
 
 export function isAssistantSessionOutboundMessage(
-  value: any,
+  value: unknown,
 ): value is AssistantSessionOutboundMessage {
-  return typeof value === "object" && value !== null && typeof value.type === "string";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).type === "string"
+  );
 }
