@@ -254,8 +254,8 @@ function NeonSkeleton() {
           100% { transform: translate(0px, 0px) rotate(0deg); opacity: 0.9; }
         }
         @keyframes neon-pulse {
-          0%, 100% { filter: brightness(1) blur(0px); }
-          50%       { filter: brightness(1.6) blur(1px); }
+          0%, 100% { opacity: 0.85; }
+          50%       { opacity: 1; }
         }
         .neon-stick {
           position: absolute;
