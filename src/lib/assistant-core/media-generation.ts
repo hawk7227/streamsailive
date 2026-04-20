@@ -6,6 +6,9 @@ import type { GenerationOptions, GenerationResult, GenerationType } from "@/lib/
 import { uploadImageToSupabaseWithMeta, deleteStorageFile } from "@/lib/supabase/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OPENAI_API_KEY } from "@/lib/env";
+import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
+import { submitSceneBatch } from "@/lib/video/scene-batch";
+import type { VideoSceneSpec } from "@/lib/video/types";
 
 export type MediaKind = "image" | "video" | "i2v";
 
@@ -260,7 +263,20 @@ export type MediaGenerationErrorCode =
   | "EMPTY_PROVIDER_OUTPUT"
   | "PROVIDER_REQUEST_FAILED"
   | "STORAGE_FAILED"
-  | "DB_WRITE_FAILED";
+  | "DB_WRITE_FAILED"
+  | "STORY_BIBLE_REQUIRED"
+  | "STRUCTURAL_SCORE_BLOCKED";
+
+export class VideoGovernanceError extends Error {
+  constructor(
+    public readonly code: "STORY_BIBLE_REQUIRED" | "STRUCTURAL_SCORE_BLOCKED",
+    message: string,
+    public readonly detail?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "VideoGovernanceError";
+  }
+}
 
 export type MediaGenerationAsset = {
   assetId: string;
@@ -336,6 +352,42 @@ async function insertPendingVideoGeneration(args: {
   return id;
 }
 
+async function insertParentGenerationRow(args: {
+  id: string;
+  type: "video" | "i2v";
+  prompt: string;
+  provider: string;
+  model: string | null;
+  workspaceId: string;
+}): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("generations").insert({
+    id: args.id,
+    user_id: "00000000-0000-0000-0000-000000000000",
+    workspace_id: args.workspaceId,
+    type: args.type,
+    prompt: args.prompt,
+    // Prefix identifies this as a long-video parent row.
+    // The cron poller skips rows with this prefix — they are
+    // resolved only when all child scenes complete and stitch fires.
+    external_id: `long_video_parent:${args.id}`,
+    status: "pending",
+    provider: args.provider,
+    model: args.model,
+    mode: "assistant",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.error(JSON.stringify({
+      level: "error",
+      event: "PARENT_ROW_INSERT_FAILED",
+      parentId: args.id,
+      reason: error.message,
+    }));
+  }
+}
+
 export async function executeMediaGeneration(args: MediaGenerationArgs): Promise<MediaGenerationExecution> {
   if (!args.prompt?.trim()) {
     throw new Error("MISSING_PROVIDER_CREDENTIALS: A non-empty media prompt is required.");
@@ -345,9 +397,106 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     throw new Error("PROVIDER_REQUEST_FAILED: imageUrl is required for image-to-video generation.");
   }
 
+  // ── Governance gates — parity with /api/generations route ───────────────
+  // Both entrypoints must enforce the same pre-dispatch standards.
+  if (args.type === "video" || args.type === "i2v") {
+    if (!args.storyBible?.trim()) {
+      throw new VideoGovernanceError(
+        "STORY_BIBLE_REQUIRED",
+        "Story Bible is required before video generation. Provide a storyBible describing the scene, subject, and narrative.",
+      );
+    }
+
+    // Run structural score for i2v — block if source image is not safe
+    if (args.type === "i2v" && args.imageUrl?.trim()) {
+      const compiled = compileGenerationRequest({
+        medium: "video",
+        prompt: args.prompt,
+        provider: args.provider ?? "fal",
+        storyBible: args.storyBible,
+        sourceKind: args.sourceKind,
+      });
+
+      if (
+        compiled.structuralScore &&
+        !compiled.structuralScore.isSafeForVideo
+      ) {
+        throw new VideoGovernanceError(
+          "STRUCTURAL_SCORE_BLOCKED",
+          "Source image is not safe for video yet. Structural integrity score is too low.",
+          {
+            structuralScore: compiled.structuralScore,
+            repairPlan: compiled.repairPlan,
+          },
+        );
+      }
+    }
+  }
+
+  // ── Long-video: scene-batch path ──────────────────────────────────────────
+  // When longVideo is true, planning generates multiple scenes.
+  // Each scene is submitted as an independent fal.ai async job.
+  // A parent row tracks completion; the cron stitches clips when all done.
   const plan = planMediaGeneration(args);
   const { provider, model } = normalizeProvider(args);
   const workspaceId = args.workspaceId?.trim() || "assistant-core";
+
+  if (
+    args.longVideo === true &&
+    (args.type === "video" || args.type === "i2v") &&
+    plan.scenes.length > 1 &&
+    args.workspaceId
+  ) {
+    const parentId = crypto.randomUUID();
+
+    // Insert parent row first — scenes reference it via parent_id
+    await insertParentGenerationRow({
+      id: parentId,
+      type: args.type,
+      prompt: plan.finalPrompt,
+      provider,
+      model: model ?? null,
+      workspaceId: args.workspaceId,
+    });
+
+    // Map PlannedScene[] → VideoSceneSpec[]
+    const sceneSpecs: VideoSceneSpec[] = plan.scenes.map((scene, i) => ({
+      sceneIndex: i,
+      prompt: scene.shotPrompt,
+      durationSeconds: scene.targetSeconds,
+      // i2v: all scenes share the same source image
+      imageUrl: args.type === "i2v" ? args.imageUrl : undefined,
+    }));
+
+    const sceneRecords = await submitSceneBatch({
+      parentGenerationId: parentId,
+      workspaceId: args.workspaceId,
+      scenes: sceneSpecs,
+      provider,
+      model: model ?? null,
+      type: args.type,
+    });
+
+    console.log(JSON.stringify({
+      level: "info",
+      event: "LONG_VIDEO_BATCH_SUBMITTED",
+      parentId,
+      sceneCount: plan.scenes.length,
+      submittedCount: sceneRecords.length,
+    }));
+
+    return {
+      ok: true,
+      type: args.type,
+      provider,
+      model,
+      status: "pending",
+      outputUrl: null,
+      externalId: `long_video_parent:${parentId}`,
+      costEstimate: null,
+      plan,
+    };
+  }
 
   if (args.type === "image" && provider === "openai") {
     const apiKey = OPENAI_API_KEY;

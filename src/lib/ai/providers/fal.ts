@@ -79,7 +79,7 @@ interface FalQueueResponse {
  *
  * external_id format: "fal_queue:{response_url}"
  */
-async function falQueueSubmit(modelId: string, body: Record<string, unknown>): Promise<{ requestId: string; responseUrl: string }> {
+export async function falQueueSubmit(modelId: string, body: Record<string, unknown>): Promise<{ requestId: string; responseUrl: string }> {
   const apiKey = getApiKey();
 
   const submitRes = await fetch(`https://queue.fal.run/${modelId}`, {
