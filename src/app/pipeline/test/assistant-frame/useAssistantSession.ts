@@ -375,6 +375,11 @@ export function useAssistantSession(
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
         throw new Error("Assistant session is not connected");
       }
+      // PRD §18: prevent overlapping turns — server also enforces this,
+      // but guard at the client to avoid optimistic UI duplication.
+      if (session.status === "running") {
+        throw new Error("A turn is already in progress. Cancel it before sending a new one.");
+      }
 
       const turnId = createId("turn");
       const createdAt = nowIso();
