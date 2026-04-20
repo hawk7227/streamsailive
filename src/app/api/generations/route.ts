@@ -214,7 +214,7 @@ export async function POST(request: Request) {
         apiKey: process.env.OPENAI_API_KEY!,
         workspaceId: selection.current.workspace.id,
         mode: "images",
-        realismMode: "strict",
+        realismMode: payload?.realismMode === "premium_commercial" ? "premium_commercial" : "strict_everyday",
         aspectRatio: (payload?.aspectRatio ?? "16:9"),
       });
       payload.status = "completed";
