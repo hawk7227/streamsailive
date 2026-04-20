@@ -4,6 +4,7 @@ import { DEFAULT_PLAN_KEY } from "@/lib/plans";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/server";
 import { getPlanKeyFromPriceId } from "@/lib/stripe/prices";
+import { STRIPE_WEBHOOK_SECRET } from "@/lib/env";
 
 export const runtime = "nodejs";
 
@@ -102,7 +103,7 @@ const handleSubscriptionUpdate = async (
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = STRIPE_WEBHOOK_SECRET;
 
   if (!signature || !webhookSecret) {
     console.error("[stripe:webhook] Missing signature or secret", {

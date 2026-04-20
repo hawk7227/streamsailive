@@ -4,6 +4,7 @@ import { validateChatResponse } from '@/lib/enforcement/validators/chat';
 import type { AssistantMode } from '@/lib/enforcement/types';
 import { formatIntegratedContext } from '@/lib/ai-chat/context/buildIntegratedContext';
 import type { IntegratedChatContextParts } from '@/lib/ai-chat/context/types';
+import { ANTHROPIC_API_KEY, OPENAI_API_BASE_URL, OPENAI_API_KEY } from "@/lib/env";
 
 // ── Provider routing ─────────────────────────────────────────────────────────
 // URL and auth header are determined by the active model, not hardcoded.
@@ -20,7 +21,7 @@ export function getProviderConfig(model: string): { url: string; authHeader: (ke
   // Default: OpenAI-compatible endpoint (works for gpt-*, o1-*, and any OpenAI-compatible API)
   return {
     url: (() => {
-      const custom = process.env.OPENAI_API_BASE_URL;
+      const custom = OPENAI_API_BASE_URL;
       if (!custom) return 'https://api.openai.com/v1/chat/completions';
       if (custom.includes('ondigitalocean.app') || custom.includes('vercel.app')) return 'https://api.openai.com/v1/chat/completions';
       return custom;
@@ -305,8 +306,8 @@ export async function createAssistantChatResponse(messages: ChatMessage[], conte
   const activeModel2 = model || 'gpt-4o';
   const provider = getProviderConfig(activeModel2);
   const apiKey = activeModel2.startsWith('claude-')
-    ? (process.env.ANTHROPIC_API_KEY ?? '')
-    : (process.env.OPENAI_API_KEY ?? '');
+    ? (ANTHROPIC_API_KEY ?? '')
+    : (OPENAI_API_KEY ?? '');
   if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY for gpt-* or ANTHROPIC_API_KEY for claude-*)');
 
   const requestText = getLastUserText(messages);
@@ -353,8 +354,8 @@ export async function streamAssistantChatResponse(messages: ChatMessage[], conte
   const activeModel3 = model || 'gpt-4o';
   const streamProvider = getProviderConfig(activeModel3);
   const apiKey = activeModel3.startsWith('claude-')
-    ? (process.env.ANTHROPIC_API_KEY ?? '')
-    : (process.env.OPENAI_API_KEY ?? '');
+    ? (ANTHROPIC_API_KEY ?? '')
+    : (OPENAI_API_KEY ?? '');
   if (!apiKey) throw new Error('Missing API key (OPENAI_API_KEY for gpt-* or ANTHROPIC_API_KEY for claude-*)');
 
   const requestText = getLastUserText(messages);

@@ -1,5 +1,6 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfigSync } from "../../config";
+import { ELEVENLABS_API_KEY } from "@/lib/env";
 
 export class ElevenlabsProvider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -13,7 +14,7 @@ export class ElevenlabsProvider implements AIProvider {
 
     private async generateVoice(options: GenerationOptions): Promise<GenerationResult> {
         const config = getSiteConfigSync();
-        const apiKey = config.apiKeys?.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY;
+        const apiKey = config.apiKeys?.ELEVENLABS_API_KEY || ELEVENLABS_API_KEY;
         if (!apiKey) {
             throw new Error("ELEVENLABS_API_KEY is not set");
         }

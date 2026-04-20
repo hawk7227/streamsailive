@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, OPENAI_API_KEY, RUNWAY_API_KEY } from "@/lib/env";
 
 const PROVIDER_CHECKS: Record<string, { url: string; authHeader?: () => string | null }> = {
-  OpenAI:     { url: "https://api.openai.com/v1/models",         authHeader: () => process.env.OPENAI_API_KEY ? `Bearer ${process.env.OPENAI_API_KEY}` : null },
-  ElevenLabs: { url: "https://api.elevenlabs.io/v1/voices",      authHeader: () => process.env.ELEVENLABS_API_KEY ?? null },
+  OpenAI:     { url: "https://api.openai.com/v1/models",         authHeader: () => OPENAI_API_KEY ? `Bearer ${OPENAI_API_KEY}` : null },
+  ElevenLabs: { url: "https://api.elevenlabs.io/v1/voices",      authHeader: () => ELEVENLABS_API_KEY ?? null },
   Kling:      { url: "https://api-singapore.klingai.com/v1/images/generations", authHeader: () => null },
-  Runway:     { url: "https://api.runwayml.com/v1/tasks",        authHeader: () => process.env.RUNWAY_API_KEY ? `Bearer ${process.env.RUNWAY_API_KEY}` : null },
-  Anthropic:  { url: "https://api.anthropic.com/v1/messages",    authHeader: () => process.env.ANTHROPIC_API_KEY ?? null },
+  Runway:     { url: "https://api.runwayml.com/v1/tasks",        authHeader: () => RUNWAY_API_KEY ? `Bearer ${RUNWAY_API_KEY}` : null },
+  Anthropic:  { url: "https://api.anthropic.com/v1/messages",    authHeader: () => ANTHROPIC_API_KEY ?? null },
   Supabase:   { url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, authHeader: () => null },
 };
 

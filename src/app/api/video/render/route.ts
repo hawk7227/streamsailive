@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { JSON2VIDEO_API_KEY } from "@/lib/env";
 
 // POST /api/video/render
 // Accepts a JSON2Video project object from VideoEditorSidebar.
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "project with at least one scene is required" }, { status: 400 });
   }
 
-  const apiKey = process.env.JSON2VIDEO_API_KEY;
+  const apiKey = JSON2VIDEO_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "JSON2VIDEO_API_KEY not configured" }, { status: 500 });
 
   // Submit render job

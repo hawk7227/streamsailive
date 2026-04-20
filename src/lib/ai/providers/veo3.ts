@@ -1,5 +1,6 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfigSync } from "../../config";
+import { GOOGLE_API_KEY, GOOGLE_PROJECT_ID } from "@/lib/env";
 
 export class Veo3Provider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -17,7 +18,7 @@ export class Veo3Provider implements AIProvider {
 
     private async generateScript(options: GenerationOptions): Promise<GenerationResult> {
         const siteConfig = getSiteConfigSync();
-        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
+        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || GOOGLE_API_KEY;
         if (!apiKey) {
             throw new Error("GEMINI_API_KEY is not set");
         }
@@ -70,7 +71,7 @@ export class Veo3Provider implements AIProvider {
         // I will use an API format typical for Google services here, assuming a generic token.
 
         const siteConfig = getSiteConfigSync();
-        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
+        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || GOOGLE_API_KEY;
         if (!apiKey) {
             throw new Error("GOOGLE_API_KEY is not set. Required for Imagen 3.");
         }
@@ -80,7 +81,7 @@ export class Veo3Provider implements AIProvider {
 
         // Using the Vertex AI Imagen 3 endpoint format (requires project ID and location setup in real-world)
         // Since we don't have those, we'll construct a generic mock attempt that the user must configure properly
-        const projectId = siteConfig.apiKeys?.GOOGLE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID;
+        const projectId = siteConfig.apiKeys?.GOOGLE_PROJECT_ID || GOOGLE_PROJECT_ID;
         const location = "us-central1";
 
         if (!projectId) {
@@ -131,12 +132,12 @@ export class Veo3Provider implements AIProvider {
     private async generateVideo(options: GenerationOptions): Promise<GenerationResult> {
         // Veo 2.0 via Vertex AI
         const siteConfig = getSiteConfigSync();
-        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
+        const apiKey = siteConfig.apiKeys?.GOOGLE_API_KEY || GOOGLE_API_KEY;
         if (!apiKey) {
             throw new Error("GOOGLE_API_KEY is not set. Required for Veo3.");
         }
 
-        const projectId = siteConfig.apiKeys?.GOOGLE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID;
+        const projectId = siteConfig.apiKeys?.GOOGLE_PROJECT_ID || GOOGLE_PROJECT_ID;
         const location = "us-central1";
 
         if (!projectId) {

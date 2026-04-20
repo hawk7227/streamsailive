@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { AI_PROVIDER_I2V, AI_PROVIDER_IMAGE, AI_PROVIDER_SCRIPT, AI_PROVIDER_VIDEO, AI_PROVIDER_VOICE } from "@/lib/env";
 export interface SiteConfig {
     appName: string;
     logoUrl: string;
@@ -41,11 +42,11 @@ const DEFAULT_CONFIG: SiteConfig = {
 
 function getConfigWithEnvOverrides(fileConfig: Partial<SiteConfig>): SiteConfig {
     const envProviders = {
-        script: process.env.AI_PROVIDER_SCRIPT || fileConfig?.aiProviders?.script || DEFAULT_CONFIG.aiProviders!.script,
-        image:  process.env.AI_PROVIDER_IMAGE  || fileConfig?.aiProviders?.image  || DEFAULT_CONFIG.aiProviders!.image,
-        video:  process.env.AI_PROVIDER_VIDEO  || fileConfig?.aiProviders?.video  || DEFAULT_CONFIG.aiProviders!.video,
-        voice:  process.env.AI_PROVIDER_VOICE  || fileConfig?.aiProviders?.voice  || DEFAULT_CONFIG.aiProviders!.voice,
-        i2v:    process.env.AI_PROVIDER_I2V    || fileConfig?.aiProviders?.i2v    || DEFAULT_CONFIG.aiProviders!.i2v,
+        script: AI_PROVIDER_SCRIPT || fileConfig?.aiProviders?.script || DEFAULT_CONFIG.aiProviders!.script,
+        image:  AI_PROVIDER_IMAGE  || fileConfig?.aiProviders?.image  || DEFAULT_CONFIG.aiProviders!.image,
+        video:  AI_PROVIDER_VIDEO  || fileConfig?.aiProviders?.video  || DEFAULT_CONFIG.aiProviders!.video,
+        voice:  AI_PROVIDER_VOICE  || fileConfig?.aiProviders?.voice  || DEFAULT_CONFIG.aiProviders!.voice,
+        i2v:    AI_PROVIDER_I2V    || fileConfig?.aiProviders?.i2v    || DEFAULT_CONFIG.aiProviders!.i2v,
     };
     return { ...DEFAULT_CONFIG, ...fileConfig, aiProviders: envProviders };
 }

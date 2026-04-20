@@ -1,7 +1,8 @@
 import { getSiteConfigSync } from '@/lib/config';
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export async function generateCompletion(prompt: string): Promise<string> {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = OPENAI_API_KEY;
 
     if (!apiKey) {
         throw new Error("Missing OPENAI_API_KEY");

@@ -14,6 +14,7 @@ import type {
   SubjectType,
 } from "../media-realism/types";
 import { REALISM_RULESET_VERSION } from "../media-realism/realismPolicy";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 interface RawConcept {
   angle: string;
@@ -57,7 +58,7 @@ function toSubjectType(raw: string): SubjectType {
 }
 
 export async function generateCreative(intake: IntakeBrief): Promise<StrategyOutput> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
   const prompt = `You are generating descriptions of ordinary real-life moments. Not ads. Not staged. Not visually impressive.

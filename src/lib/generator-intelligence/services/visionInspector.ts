@@ -10,6 +10,7 @@
  */
 
 import type { SemanticQaCheck } from "../types";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export interface SemanticInspectionResult {
   passed: boolean;                    // true only if ALL rejectOnMismatch checks passed
@@ -68,7 +69,7 @@ export async function inspectImageSemantics(
 
   if (!checks.length) return empty;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) {
     return { ...empty, skipReason: "OPENAI_API_KEY not set" };
   }

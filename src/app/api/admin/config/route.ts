@@ -3,6 +3,7 @@ import { toErrorMessage } from "@/lib/utils/error";
 import { getSiteConfig, updateSiteConfig } from '@/lib/config';
 import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
+import { ADMIN_SECRET_KEY } from "@/lib/env";
 
 export async function GET(req: NextRequest) {
     try {
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
 
         // Check if the request is from an admin (has secret key)
         const secretKey = req.headers.get('x-admin-secret-key');
-        const isAdmin = secretKey === process.env.ADMIN_SECRET_KEY;
+        const isAdmin = secretKey === ADMIN_SECRET_KEY;
 
         if (isAdmin) {
             // Admin gets full config with aiProviders transformed for frontend
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     try {
         // Check for Admin Secret Key
         const secretKey = req.headers.get('x-admin-secret-key');
-        if (secretKey !== process.env.ADMIN_SECRET_KEY) {
+        if (secretKey !== ADMIN_SECRET_KEY) {
             return NextResponse.json(
                 { error: 'Unauthorized: Invalid Admin Secret Key' },
                 { status: 401 }

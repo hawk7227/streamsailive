@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { toErrorMessage } from "@/lib/utils/error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executePipeline } from "@/lib/pipeline-execution";
+import { CRON_SECRET } from "@/lib/env";
 
 // Helper to check if cron matches current time
 function isCronMatch(cron: string, date: Date): boolean {
@@ -53,7 +54,7 @@ function isCronMatch(cron: string, date: Date): boolean {
 export async function GET(request: Request) {
     // Basic auth protection (optional: check for a secret header from cron job)
     // const authHeader = request.headers.get('authorization');
-    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    // if (authHeader !== `Bearer ${CRON_SECRET}`) {
     //     return new NextResponse('Unauthorized', { status: 401 });
     // }
 

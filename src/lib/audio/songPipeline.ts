@@ -1,3 +1,4 @@
+import { SUNO_API_KEY, UDIO_API_KEY, VOCAL_EXTRACTOR_URL } from "@/lib/env";
 /**
  * songPipeline.ts — Song generation pipeline
  * Providers: Suno API (primary), Udio API (secondary)
@@ -28,7 +29,7 @@ export interface SongResult {
 // ── Suno API ──────────────────────────────────────────────────────────────
 
 async function generateWithSuno(options: SongGenerationOptions): Promise<SongResult> {
-  const apiKey = process.env.SUNO_API_KEY;
+  const apiKey = SUNO_API_KEY;
   if (!apiKey) throw new Error("SUNO_API_KEY not set. Add it to your environment variables.");
 
   const res = await fetch("https://api.suno.ai/v0/audio/generations", {
@@ -70,7 +71,7 @@ async function generateWithSuno(options: SongGenerationOptions): Promise<SongRes
 // ── Udio API ──────────────────────────────────────────────────────────────
 
 async function generateWithUdio(options: SongGenerationOptions): Promise<SongResult> {
-  const apiKey = process.env.UDIO_API_KEY;
+  const apiKey = UDIO_API_KEY;
   if (!apiKey) throw new Error("UDIO_API_KEY not set. Add it to your environment variables.");
 
   const res = await fetch("https://www.udio.com/api/generations", {
@@ -111,8 +112,8 @@ async function generateWithUdio(options: SongGenerationOptions): Promise<SongRes
 
 export async function generateSong(options: SongGenerationOptions): Promise<SongResult> {
   const provider = options.provider ?? "auto";
-  const hasSuno  = !!process.env.SUNO_API_KEY;
-  const hasUdio  = !!process.env.UDIO_API_KEY;
+  const hasSuno  = !!SUNO_API_KEY;
+  const hasUdio  = !!UDIO_API_KEY;
 
   if (!hasSuno && !hasUdio) {
     throw new Error(
@@ -142,7 +143,7 @@ export async function generateSong(options: SongGenerationOptions): Promise<Song
 export async function extractVocals(
   audioUrl: string
 ): Promise<{ vocals: string; instrumental: string } | null> {
-  const serviceUrl = process.env.VOCAL_EXTRACTOR_URL;
+  const serviceUrl = VOCAL_EXTRACTOR_URL;
   if (!serviceUrl) return null; // Document requirement, don't fail
 
   try {

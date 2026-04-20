@@ -11,10 +11,11 @@ type LeadLike = {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { sendMms, sendSms } from "@/lib/sms";
+import { CRON_SECRET } from "@/lib/env";
 
 export async function GET(request: Request) {
     // const authHeader = request.headers.get("authorization");
-    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { return new Response('Unauthorized', { status: 401 }); }
+    // if (authHeader !== `Bearer ${CRON_SECRET}`) { return new Response('Unauthorized', { status: 401 }); }
 
     try {
         const supabase = createAdminClient();

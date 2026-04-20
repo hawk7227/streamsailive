@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadImageToSupabase } from "@/lib/supabase/storage";
+import { CRON_SECRET, KLING_API_KEY, KLING_ASSESS_API_KEY, RUNWAY_API_KEY } from "@/lib/env";
 
 // GET /api/cron/check-videos
 // Backup poller — Vercel Cron every 2 minutes.
@@ -35,8 +36,8 @@ type PollResult = { id: string; status: "completed"|"failed"|"processing"|"skipp
 
 function makeKlingJWT(): string {
   // Kling requires a signed JWT — raw key is NOT a valid bearer token
-  const ak = process.env.KLING_ASSESS_API_KEY;  // access key (iss)
-  const sk = process.env.KLING_API_KEY;          // secret key (sign)
+  const ak = KLING_ASSESS_API_KEY;  // access key (iss)
+  const sk = KLING_API_KEY;          // secret key (sign)
   if (!ak || !sk) throw new Error("KLING keys not set");
   const header  = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const now     = Math.floor(Date.now() / 1000);
@@ -79,7 +80,7 @@ async function pollKling(gen: Gen): Promise<PollResult> {
 
 async function pollRunway(gen: Gen): Promise<PollResult> {
   const res = await fetch(`https://api.runwayml.com/v1/tasks/${gen.external_id}`, {
-    headers: { Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`, "X-Runway-Version": "2024-11-06" },
+    headers: { Authorization: `Bearer ${RUNWAY_API_KEY}`, "X-Runway-Version": "2024-11-06" },
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) return { id: gen.id, status: "skipped" };
@@ -94,7 +95,7 @@ async function pollRunway(gen: Gen): Promise<PollResult> {
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 

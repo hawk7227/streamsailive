@@ -1,3 +1,4 @@
+import { ADOBE_CLIENT_ID, ADOBE_CLIENT_SECRET, ADOBE_EXPRESS_CLIENT_ID, ADOBE_FIREFLY_API_KEY, ADOBE_ORG_ID } from "@/lib/env";
 export interface AdobeEnvStatus {
   photoshopEnabled: boolean;
   fireflyEnabled: boolean;
@@ -7,9 +8,9 @@ export interface AdobeEnvStatus {
 
 export function getAdobeEnvStatus(): AdobeEnvStatus {
   const missing: string[] = [];
-  const photoshopEnabled = Boolean(process.env.ADOBE_CLIENT_ID && process.env.ADOBE_CLIENT_SECRET && process.env.ADOBE_ORG_ID);
-  const fireflyEnabled = Boolean(process.env.ADOBE_FIREFLY_API_KEY);
-  const expressEnabled = Boolean(process.env.ADOBE_EXPRESS_CLIENT_ID);
+  const photoshopEnabled = Boolean(ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET && ADOBE_ORG_ID);
+  const fireflyEnabled = Boolean(ADOBE_FIREFLY_API_KEY);
+  const expressEnabled = Boolean(ADOBE_EXPRESS_CLIENT_ID);
   if (!photoshopEnabled) missing.push("ADOBE_CLIENT_ID/ADOBE_CLIENT_SECRET/ADOBE_ORG_ID");
   if (!fireflyEnabled) missing.push("ADOBE_FIREFLY_API_KEY");
   if (!expressEnabled) missing.push("ADOBE_EXPRESS_CLIENT_ID");

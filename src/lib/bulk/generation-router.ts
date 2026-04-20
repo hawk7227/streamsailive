@@ -3,10 +3,11 @@ import type { BulkProvider, BulkTask } from "./job-schema";
 import { createManifest } from "./manifest-builder";
 import { parseBulkPrompt } from "./prompt-parser";
 import { buildCreativePlan, buildCreativePrompt } from "./creative-engine";
+import { FAL_API_KEY, OPENAI_API_KEY, OPENAI_API_KEY_IMAGES } from "@/lib/env";
 
 function resolveBulkProvider(): BulkProvider {
-  if (process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_IMAGES) return "openai";
-  if (process.env.FAL_API_KEY) return "fal";
+  if (OPENAI_API_KEY || OPENAI_API_KEY_IMAGES) return "openai";
+  if (FAL_API_KEY) return "fal";
   return "openai";
 }
 

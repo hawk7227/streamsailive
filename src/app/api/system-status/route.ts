@@ -2,6 +2,7 @@ import "@/lib/env";
 import { NextRequest, NextResponse } from "next/server";
 import { client } from "@/lib/assistant-core/openai";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ADMIN_SECRET_KEY, FAL_API_KEY, UPSTREAM_ASSISTANT_URL } from "@/lib/env";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ async function checkSupabase(): Promise<CheckResult> {
 }
 
 function checkFal(): CheckResult {
-  const key = process.env.FAL_API_KEY?.trim();
+  const key = FAL_API_KEY;
   if (!key) {
     return {
       status: "warn",
@@ -144,7 +145,7 @@ function checkFal(): CheckResult {
 async function checkRealtime(): Promise<CheckResult> {
   const start = performance.now();
   const realtimeUrl =
-    process.env.UPSTREAM_ASSISTANT_URL?.trim() ||
+    UPSTREAM_ASSISTANT_URL ||
     "https://octopus-app-4szwt.ondigitalocean.app";
   const healthUrl = realtimeUrl
     .replace("/api/ai-assistant", "")
@@ -178,7 +179,7 @@ async function checkRealtime(): Promise<CheckResult> {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   // Admin-only — same pattern as /api/admin/config
   const secretKey = req.headers.get("x-admin-secret-key");
-  const adminKey = process.env.ADMIN_SECRET_KEY?.trim();
+  const adminKey = ADMIN_SECRET_KEY;
 
   if (!adminKey || secretKey !== adminKey) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

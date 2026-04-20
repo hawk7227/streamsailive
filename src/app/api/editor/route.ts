@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { ANTHROPIC_API_KEY } from "@/lib/env";
 
 
 export const runtime = 'nodejs'
@@ -70,7 +71,7 @@ function extractReturnBlock(src: string): string {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = ANTHROPIC_API_KEY
   if (!apiKey) return err('ANTHROPIC_API_KEY not configured on server', 503)
 
   let body: { action: string; tsx?: string; changes?: { prop: string; value: string; elText: string }[] }

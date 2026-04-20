@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { generateEnforcedImage, prepareEnforcedImagePrompt, type ImageReference } from "@/lib/media-realism/enforcedImage";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export const maxDuration = 120;
 
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   const ctx = await resolveWorkspace();
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 500 });
 
   let body: GenerateImageRequest & { dryRun?: boolean };

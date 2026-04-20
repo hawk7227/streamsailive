@@ -11,12 +11,13 @@
 
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfigSync } from "../../config";
+import { RUNWAY_API_KEY } from "@/lib/env";
 
 const RUNWAY_VERSION = "2024-11-06";
 
 function getApiKey(): string {
   const config = getSiteConfigSync();
-  const key = config.apiKeys?.RUNWAY_API_KEY ?? process.env.RUNWAY_API_KEY;
+  const key = config.apiKeys?.RUNWAY_API_KEY ?? RUNWAY_API_KEY;
   if (!key) throw new Error("RUNWAY_API_KEY is not set");
   return key;
 }

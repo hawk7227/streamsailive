@@ -1,3 +1,4 @@
+import { OPENAI_API_KEY } from "@/lib/env";
 /**
  * stt.ts — Speech-to-Text via OpenAI Whisper
  * Accepts audio buffer, returns transcript text.
@@ -19,7 +20,7 @@ export async function transcribeAudio(
     timestamped?: boolean; // return word-level timestamps
   }
 ): Promise<TranscriptResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
 
   const form = new FormData();

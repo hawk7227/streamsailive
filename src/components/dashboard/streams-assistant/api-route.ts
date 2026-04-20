@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ANTHROPIC_API_KEY, DO_API_TOKEN, DO_APP_ID, GITHUB_TOKEN, OPENAI_API_KEY, VERCEL_EDITOR_PROJECT_ID, VERCEL_PROJECT_ID, VERCEL_TOKEN } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -51,9 +52,9 @@ const TOOLS = [
 ];
 
 async function executeTool(name: string, args: Record<string,unknown>, ctx: FullContext, userId: string, sb: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const gh = ctx.extraKeys?.GITHUB_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
-  const vt = ctx.extraKeys?.VERCEL_TOKEN ?? process.env.VERCEL_TOKEN ?? "";
-  const dt = ctx.extraKeys?.DO_API_TOKEN ?? process.env.DO_API_TOKEN ?? "";
+  const gh = ctx.extraKeys?.GITHUB_TOKEN ?? GITHUB_TOKEN ?? "";
+  const vt = ctx.extraKeys?.VERCEL_TOKEN ?? VERCEL_TOKEN ?? "";
+  const dt = ctx.extraKeys?.DO_API_TOKEN ?? DO_API_TOKEN ?? "";
   const base = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "http://localhost:3000";
   try {
     switch(name) {
@@ -137,7 +138,7 @@ async function executeTool(name: string, args: Record<string,unknown>, ctx: Full
       }
       case "deploy_vercel": {
         if(!vt) return "Error: VERCEL_TOKEN not set — add to DO environment variables";
-        const pid=args.project==="streamsailive"?process.env.VERCEL_PROJECT_ID:process.env.VERCEL_EDITOR_PROJECT_ID;
+        const pid=args.project==="streamsailive"?VERCEL_PROJECT_ID:VERCEL_EDITOR_PROJECT_ID;
         if(!pid) return `Error: VERCEL_PROJECT_ID not set for ${args.project}`;
         const r=await fetch("https://api.vercel.com/v13/deployments",{method:"POST",headers:{Authorization:`Bearer ${vt}`,"Content-Type":"application/json"},body:JSON.stringify({name:args.project,target:"production"})});
         const d=await r.json() as {id?:string;url?:string;error?:{message:string}};
@@ -145,7 +146,7 @@ async function executeTool(name: string, args: Record<string,unknown>, ctx: Full
       }
       case "deploy_do_app": {
         if(!dt) return "Error: DO_API_TOKEN not set — add to DO environment variables";
-        const aid=process.env.DO_APP_ID??"";
+        const aid=DO_APP_ID??"";
         if(!aid) return "Error: DO_APP_ID not set";
         const r=await fetch(`https://api.digitalocean.com/v2/apps/${aid}/deployments`,{method:"POST",headers:{Authorization:`Bearer ${dt}`,"Content-Type":"application/json"},body:JSON.stringify({force_build:args.force_rebuild??false})});
         const d=await r.json() as {deployment?:{id:string;phase:string};message?:string};
@@ -261,8 +262,8 @@ export async function POST(req: Request): Promise<Response> {
     async start(ctrl){
       const emit=(t:string,d:Record<string,unknown>|string)=>ctrl.enqueue(enc.encode(sse(t,d)));
       try{
-        const ok=context.extraKeys?.OPENAI_API_KEY??process.env.OPENAI_API_KEY;
-        const ak=context.extraKeys?.ANTHROPIC_API_KEY??process.env.ANTHROPIC_API_KEY;
+        const ok=context.extraKeys?.OPENAI_API_KEY??OPENAI_API_KEY;
+        const ak=context.extraKeys?.ANTHROPIC_API_KEY??ANTHROPIC_API_KEY;
         if(prov==="openai"&&!ok){emit("error",{message:"OPENAI_API_KEY not set"});ctrl.close();return;}
         if(prov==="anthropic"&&!ak){emit("error",{message:"ANTHROPIC_API_KEY not set"});ctrl.close();return;}
         const loop:AssistantMessage[]=[{role:"system",content:sys},...messages];

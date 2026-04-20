@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES } from "@/lib/env";
 
 export async function GET() {
   const supabase = await createClient();
@@ -29,7 +30,7 @@ export async function GET() {
 
   // Live DALL-E test
   let dalleTest = "skipped";
-  const apiKey = process.env.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY_IMAGES || OPENAI_API_KEY;
   if (apiKey) {
     try {
       const res = await fetch("https://api.openai.com/v1/images/generations", {

@@ -7,6 +7,7 @@ import type {
   ToolProgressHandlers,
 } from "./contracts";
 import { executeMediaGeneration } from "./media-generation";
+import { STREAMS_ALLOWED_COMMANDS, STREAMS_BUILD_COMMAND, STREAMS_COMMAND_TIMEOUT_MS, STREAMS_PERSISTENT_WORKSPACE_ROOT } from "@/lib/env";
 
 type ToolDefinition = {
   type: "function";
@@ -26,7 +27,7 @@ type JsonObject = Record<string, unknown>;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 
 function getPersistentWorkspaceRoot(): string | null {
-  const configured = process.env.STREAMS_PERSISTENT_WORKSPACE_ROOT?.trim();
+  const configured = STREAMS_PERSISTENT_WORKSPACE_ROOT;
   if (!configured) return null;
   return path.resolve(configured);
 }
@@ -136,7 +137,7 @@ function parsePositiveInt(value: unknown, fallback: number): number {
 
 function getAllowedCommands(): Set<string> {
   const raw =
-    process.env.STREAMS_ALLOWED_COMMANDS ??
+    STREAMS_ALLOWED_COMMANDS ??
     "pnpm,pnpm.cmd,npm,npm.cmd,node,node.exe,tsc,tsc.cmd,next,next.cmd";
   return new Set(
     raw
@@ -181,7 +182,7 @@ async function runCommand(
 
   const cwd = getReadableWorkspaceRoot();
   const timeoutMs = parsePositiveInt(
-    process.env.STREAMS_COMMAND_TIMEOUT_MS,
+    STREAMS_COMMAND_TIMEOUT_MS,
     DEFAULT_COMMAND_TIMEOUT_MS,
   );
 
@@ -596,7 +597,7 @@ export async function executeAssistantTool(
       const command =
         typeof input.args.command === "string" && input.args.command.trim()
           ? input.args.command
-          : process.env.STREAMS_BUILD_COMMAND?.trim() || "pnpm run build";
+          : STREAMS_BUILD_COMMAND || "pnpm run build";
 
       return await runCommand(command, handlers);
     }

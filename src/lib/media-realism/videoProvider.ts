@@ -14,10 +14,11 @@
 import jwt from "jsonwebtoken";
 import type { VideoCandidate } from "./types";
 import { getVideoMotionPolicy } from "./realismPolicy";
+import { KLING_API_KEY, KLING_ASSESS_API_KEY } from "@/lib/env";
 
 function klingToken(): string {
-  const sk = process.env.KLING_API_KEY;
-  const ak = process.env.KLING_ASSESS_API_KEY;
+  const sk = KLING_API_KEY;
+  const ak = KLING_ASSESS_API_KEY;
   if (!sk || !ak) throw new Error("KLING_API_KEY or KLING_ASSESS_API_KEY is not set");
   return jwt.sign(
     { iss: ak, exp: Math.floor(Date.now() / 1000) + 1800, nbf: Math.floor(Date.now() / 1000) - 5 },

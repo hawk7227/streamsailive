@@ -1,3 +1,4 @@
+import { OPENAI_API_KEY } from "@/lib/env";
 export interface DerivativeAnalysisInput {
   url: string;
   kind: 'website' | 'youtube' | 'document';
@@ -6,7 +7,7 @@ export interface DerivativeAnalysisInput {
 
 export async function analyzeIntakeContent(input: DerivativeAnalysisInput) {
   const content = JSON.stringify(input.source).slice(0, 12000);
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) {
     return {
       summary: 'OPENAI_API_KEY not set',

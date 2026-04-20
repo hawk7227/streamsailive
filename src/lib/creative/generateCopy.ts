@@ -6,6 +6,7 @@
  */
 
 import type { ConceptDirection, CopyGenerationOutput, CopyVariant } from "../media-realism/types";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 function safeParseJson<T>(text: string): T {
   const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
@@ -13,7 +14,7 @@ function safeParseJson<T>(text: string): T {
 }
 
 export async function generateCopy(conceptDirections: ConceptDirection[]): Promise<CopyGenerationOutput> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
   const variants = await Promise.all(

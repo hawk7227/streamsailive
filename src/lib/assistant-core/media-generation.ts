@@ -5,6 +5,7 @@ import { generateContent } from "@/lib/ai";
 import type { GenerationOptions, GenerationResult, GenerationType } from "@/lib/ai/types";
 import { uploadImageToSupabaseWithMeta, deleteStorageFile } from "@/lib/supabase/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export type MediaKind = "image" | "video" | "i2v";
 
@@ -313,7 +314,7 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
   const workspaceId = args.workspaceId?.trim() || "assistant-core";
 
   if (args.type === "image" && provider === "openai") {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error("MISSING_PROVIDER_CREDENTIALS: OPENAI_API_KEY is not configured.");
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 // Provider knowledge base — injected into every prompt rewrite call
 const PROVIDER_KNOWLEDGE_BASE = `
@@ -94,7 +95,7 @@ Rules:
 
   const userMessage = `Raw intent: "${rawPrompt}"\nTarget provider: ${providerTarget}`;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "OpenAI not configured" }, { status: 500 });
 
   const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {

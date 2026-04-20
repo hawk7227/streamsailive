@@ -1,4 +1,5 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from '../types';
+import { FAL_API_KEY } from "@/lib/env";
 
 // ── fal.ai Model Registry ────────────────────────────────────────────────────
 // Images:  Seedream Lite v5, Nano Banana 2
@@ -41,7 +42,7 @@ const DEFAULT_VIDEO_MODEL: FalVideoModelKey = 'kling-v3';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getApiKey(): string {
-  const key = process.env.FAL_API_KEY;
+  const key = FAL_API_KEY;
   if (!key) throw new Error('FAL_API_KEY is not set');
   return key;
 }

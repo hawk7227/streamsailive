@@ -1,3 +1,4 @@
+import { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEY } from "@/lib/env";
 /**
  * tts.ts — Text-to-Speech (ElevenLabs + OpenAI fallback)
  * Supports: voice listing, streaming audio, voice selection, stop signal.
@@ -22,7 +23,7 @@ export interface TtsOptions {
 // ── ElevenLabs voice list ─────────────────────────────────────────────────
 
 export async function listVoices(): Promise<Voice[]> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const apiKey = ELEVENLABS_API_KEY;
   if (!apiKey) return [];
 
   try {
@@ -47,10 +48,10 @@ export async function textToSpeechElevenLabs(
   text: string,
   options?: TtsOptions
 ): Promise<Buffer> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const apiKey = ELEVENLABS_API_KEY;
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY not set");
 
-  const voiceId = options?.voiceId ?? process.env.ELEVENLABS_VOICE_ID ?? "jqcCZkN6Knx8BJ5TBdYR";
+  const voiceId = options?.voiceId ?? ELEVENLABS_VOICE_ID ?? "jqcCZkN6Knx8BJ5TBdYR";
   const model   = options?.model   ?? "eleven_turbo_v2_5";
 
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -83,7 +84,7 @@ export async function textToSpeechOpenAI(
   text: string,
   options?: { voice?: string; speed?: number }
 ): Promise<Buffer> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
 
   const res = await fetch("https://api.openai.com/v1/audio/speech", {
@@ -109,7 +110,7 @@ export async function textToSpeech(
   options?: TtsOptions & { provider?: "elevenlabs" | "openai" | "auto" }
 ): Promise<{ audio: Buffer; provider: string; mimeType: string }> {
   const provider = options?.provider ?? "auto";
-  const hasEL    = !!process.env.ELEVENLABS_API_KEY;
+  const hasEL    = !!ELEVENLABS_API_KEY;
 
   if (provider === "elevenlabs" || (provider === "auto" && hasEL)) {
     try {

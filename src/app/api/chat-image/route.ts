@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 import { uploadImageToSupabase } from '@/lib/supabase/storage';
 import { buildStoredImageAttachment } from '@/lib/assistant-media/chatImage';
+import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_IMAGE_MODEL } from "@/lib/env";
 
 export const maxDuration = 120;
 export const runtime = 'nodejs';
@@ -72,10 +73,10 @@ export async function POST(request: NextRequest) {
   const selection = await getCurrentWorkspaceSelection(admin, user);
   const workspaceId = selection.current.workspace.id;
   const conversationId = await ensureConversation(admin, user.id, body.conversationId, prompt);
-  const imageApiKey = process.env.OPENAI_API_KEY_IMAGES || process.env.OPENAI_API_KEY;
+  const imageApiKey = OPENAI_API_KEY_IMAGES || OPENAI_API_KEY;
   if (!imageApiKey) return NextResponse.json({ error: 'OPENAI_API_KEY is not set' }, { status: 500 });
 
-  const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+  const model = OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: {

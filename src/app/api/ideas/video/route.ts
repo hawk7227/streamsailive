@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as { context?: string; template?: string; mode?: "t2v" | "i2v" };
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 500 });
 
   const isI2V = body.mode === "i2v";

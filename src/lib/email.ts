@@ -1,6 +1,7 @@
 import { toErrorMessage } from "@/lib/utils/error";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SMTP_FROM, SMTP_HOST, SMTP_PASS, SMTP_SECURE, SMTP_USER } from "@/lib/env";
 
 interface SendEmailParams {
     to: string;
@@ -96,14 +97,14 @@ export async function sendEmail({
 
         // Fallback to Env Vars
         if (!transporter) {
-            if (process.env.SMTP_HOST) {
+            if (SMTP_HOST) {
                 transporter = nodemailer.createTransport({
-                    host: process.env.SMTP_HOST,
+                    host: SMTP_HOST,
                     port: parseInt(process.env.SMTP_PORT || "587"),
-                    secure: process.env.SMTP_SECURE === "true",
+                    secure: SMTP_SECURE === "true",
                     auth: {
-                        user: process.env.SMTP_USER,
-                        pass: process.env.SMTP_PASS,
+                        user: SMTP_USER,
+                        pass: SMTP_PASS,
                     },
                 });
             } else {
@@ -113,7 +114,7 @@ export async function sendEmail({
         }
 
         const info = await transporter.sendMail({
-            from: `"${fromName || "StreamsAI"}" <${fromEmail || process.env.SMTP_FROM || "no-reply@streamsai.com"}>`,
+            from: `"${fromName || "StreamsAI"}" <${fromEmail || SMTP_FROM || "no-reply@streamsai.com"}>`,
             to,
             subject: finalSubject,
             text: finalBody,

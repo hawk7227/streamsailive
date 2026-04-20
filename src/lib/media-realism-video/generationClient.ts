@@ -8,12 +8,13 @@
 
 import jwt from "jsonwebtoken";
 import type { ExpandedPrompt, T2VAspectRatio, T2VCandidate, T2VInput } from "./types";
+import { KLING_API_KEY, KLING_ASSESS_API_KEY } from "@/lib/env";
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 
 function klingToken(): string {
-  const sk = process.env.KLING_API_KEY;
-  const ak = process.env.KLING_ASSESS_API_KEY;
+  const sk = KLING_API_KEY;
+  const ak = KLING_ASSESS_API_KEY;
   if (!sk || !ak) throw new Error("KLING_API_KEY or KLING_ASSESS_API_KEY is not set");
   return jwt.sign(
     {

@@ -11,6 +11,7 @@ import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler"
 import { inspectImageSemantics } from "@/lib/generator-intelligence/services/visionInspector";
 import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
 import { planMediaGeneration, type MediaGenerationPlan } from "@/lib/assistant-core/media-generation";
+import { ADMIN_SECRET, OPENAI_API_KEY } from "@/lib/env";
 
 const allowedTypes: GenerationType[] = ["video", "image", "script", "voice", "i2v"];
 
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
   const bypassReason = typeof payload?.bypassReason === "string" ? payload.bypassReason : "admin_debug";
   if (bypassCompiler) {
     const adminSecret = request.headers.get("x-admin-secret");
-    if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    if (!adminSecret || adminSecret !== ADMIN_SECRET) {
       return NextResponse.json({ error: "bypassCompiler requires admin authorization" }, { status: 403 });
     }
     console.warn(`[GeneratorIntelligence] BYPASS active — reason: ${bypassReason} — user: ${user.id} — prompt: ${prompt.slice(0, 80)}`);
@@ -211,7 +212,7 @@ export async function POST(request: Request) {
     if (type === "image" && !bypassCompiler && imageProvider === "openai") {
       const enforced = await generateEnforcedImage({
         prompt: executionPrompt,
-        apiKey: process.env.OPENAI_API_KEY!,
+        apiKey: OPENAI_API_KEY!,
         workspaceId: selection.current.workspace.id,
         mode: "images",
         realismMode: payload?.realismMode === "premium_commercial" ? "premium_commercial" : "strict_everyday",

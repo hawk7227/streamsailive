@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { OPENAI_API_KEY } from "@/lib/env";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   const { url, content } = body;
   if (!url && !content) return NextResponse.json({ error: "url or content required" }, { status: 400 });
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 500 });
 
   const toAnalyze = content ?? `URL: ${url}`;

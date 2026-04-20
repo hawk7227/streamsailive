@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import "@/lib/env";
-import { OPENAI_MODEL } from "@/lib/env";
+import { OPENAI_MODEL, STREAMS_TOOL_TIMEOUT_MS } from "@/lib/env";
 import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
@@ -37,7 +37,7 @@ const encoder = new TextEncoder();
 // Long-running tools (generate_media, run_workspace_command) may raise this
 // via STREAMS_TOOL_TIMEOUT_MS env var, capped at 30s per the PRD.
 const TOOL_TIMEOUT_MS = Math.min(
-  Number(process.env.STREAMS_TOOL_TIMEOUT_MS?.trim() ?? "30000") || 30_000,
+  Number(STREAMS_TOOL_TIMEOUT_MS ?? "30000") || 30_000,
   30_000,
 );
 

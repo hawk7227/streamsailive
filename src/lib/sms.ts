@@ -1,3 +1,4 @@
+import { CLICKSEND_API_KEY, CLICKSEND_FROM_NUMBER, CLICKSEND_PASSWORD, CLICKSEND_SENDER_ID, CLICKSEND_USERNAME } from "@/lib/env";
 type LeadLike = {
   name?: string;
   email?: string;
@@ -32,8 +33,8 @@ function getClickSendAuthHeader() {
   // ClickSend REST API v3 uses Basic Auth where:
   // - username: your ClickSend API username
   // - password: your ClickSend unique key (API key)
-  const username = process.env.CLICKSEND_USERNAME;
-  const password = process.env.CLICKSEND_PASSWORD || process.env.CLICKSEND_API_KEY;
+  const username = CLICKSEND_USERNAME;
+  const password = CLICKSEND_PASSWORD || CLICKSEND_API_KEY;
   if (!username || !password) return null;
 
   const token = Buffer.from(`${username}:${password}`).toString("base64");
@@ -43,7 +44,7 @@ function getClickSendAuthHeader() {
 function getClickSendFrom() {
   // Sender ID can be a number (recommended) or alpha tag depending on your ClickSend config.
   // We keep it configurable via env to match the existing `from` concept.
-  return process.env.CLICKSEND_FROM_NUMBER || process.env.CLICKSEND_SENDER_ID || null;
+  return CLICKSEND_FROM_NUMBER || CLICKSEND_SENDER_ID || null;
 }
 
 function deriveMmsSubjectFromBody(body: string) {

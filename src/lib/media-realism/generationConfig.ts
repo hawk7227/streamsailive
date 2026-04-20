@@ -1,3 +1,4 @@
+import { IMAGE_CANDIDATES, IMAGE_MAX_ATTEMPTS, IMAGE_MODEL, IMAGE_QUALITY, VIDEO_MAX_SECONDS, VIDEO_PROVIDER } from "@/lib/env";
 /**
  * generationConfig.ts
  *
@@ -7,14 +8,14 @@
 
 export const generationConfig = {
   image: {
-    model: process.env.IMAGE_MODEL ?? "gpt-image-1",
-    quality: (process.env.IMAGE_QUALITY ?? "medium") as "standard" | "hd" | "low" | "medium" | "high",
-    candidates: Number(process.env.IMAGE_CANDIDATES ?? "4"),
-    maxAttempts: Number(process.env.IMAGE_MAX_ATTEMPTS ?? "3"),
+    model: IMAGE_MODEL ?? "gpt-image-1",
+    quality: (IMAGE_QUALITY ?? "medium") as "standard" | "hd" | "low" | "medium" | "high",
+    candidates: Number(IMAGE_CANDIDATES ?? "4"),
+    maxAttempts: Number(IMAGE_MAX_ATTEMPTS ?? "3"),
   },
   video: {
-    maxDurationSeconds: Number(process.env.VIDEO_MAX_SECONDS ?? "5"),
-    provider: process.env.VIDEO_PROVIDER ?? "kling",
+    maxDurationSeconds: Number(VIDEO_MAX_SECONDS ?? "5"),
+    provider: VIDEO_PROVIDER ?? "kling",
   },
 } as const;
 

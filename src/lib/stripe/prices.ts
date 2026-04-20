@@ -1,4 +1,5 @@
 import type { PlanKey } from "@/lib/plans";
+import { STRIPE_PRICE_PROFESSIONAL_MONTHLY, STRIPE_PRICE_PROFESSIONAL_YEARLY, STRIPE_PRICE_STARTER_MONTHLY, STRIPE_PRICE_STARTER_YEARLY } from "@/lib/env";
 
 export type BillingInterval = "monthly" | "yearly";
 
@@ -13,12 +14,12 @@ export const STRIPE_PRICE_IDS: StripePriceIds = {
     yearly: null,
   },
   starter: {
-    monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY ?? null,
-    yearly: process.env.STRIPE_PRICE_STARTER_YEARLY ?? null,
+    monthly: STRIPE_PRICE_STARTER_MONTHLY ?? null,
+    yearly: STRIPE_PRICE_STARTER_YEARLY ?? null,
   },
   professional: {
-    monthly: process.env.STRIPE_PRICE_PROFESSIONAL_MONTHLY ?? null,
-    yearly: process.env.STRIPE_PRICE_PROFESSIONAL_YEARLY ?? null,
+    monthly: STRIPE_PRICE_PROFESSIONAL_MONTHLY ?? null,
+    yearly: STRIPE_PRICE_PROFESSIONAL_YEARLY ?? null,
   },
   enterprise: {
     monthly: null,
