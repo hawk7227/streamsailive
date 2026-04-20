@@ -61,22 +61,112 @@ function formatConnectionLabel(state: ReturnType<typeof useAssistantSession>["co
   }
 }
 
-function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
+// ── Preview card ──────────────────────────────────────────────────────────
+// Renders a typed preview descriptor from the assistant protocol.
+// The descriptor is metadata only — actual artifact content arrives via
+// text.delta in the message body and is rendered by renderContent().
+// This card shows type, status lifecycle, and route — no fake placeholders.
+
+type PreviewTypeConfig = {
+  icon: string;
+  label: string;
+  bg: string;
+  border: string;
+  iconBg: string;
+};
+
+const PREVIEW_TYPE_CONFIG: Record<string, PreviewTypeConfig> = {
+  image:               { icon: "🖼", label: "Image",          bg: "bg-violet-50",  border: "border-violet-200", iconBg: "bg-violet-100" },
+  video:               { icon: "🎬", label: "Video",          bg: "bg-rose-50",    border: "border-rose-200",   iconBg: "bg-rose-100"   },
+  app_runtime:         { icon: "⚡", label: "App",            bg: "bg-blue-50",    border: "border-blue-200",   iconBg: "bg-blue-100"   },
+  page_editor:         { icon: "📄", label: "Page",           bg: "bg-sky-50",     border: "border-sky-200",    iconBg: "bg-sky-100"    },
+  document:            { icon: "📝", label: "Document",       bg: "bg-amber-50",   border: "border-amber-200",  iconBg: "bg-amber-100"  },
+  code_output:         { icon: "💻", label: "Code",           bg: "bg-zinc-100",   border: "border-zinc-300",   iconBg: "bg-zinc-200"   },
+  diff:                { icon: "🔀", label: "Diff",           bg: "bg-green-50",   border: "border-green-200",  iconBg: "bg-green-100"  },
+  build_result:        { icon: "🏗", label: "Build",          bg: "bg-orange-50",  border: "border-orange-200", iconBg: "bg-orange-100" },
+  artifact_collection: { icon: "📦", label: "Collection",     bg: "bg-purple-50",  border: "border-purple-200", iconBg: "bg-purple-100" },
+};
+
+const FALLBACK_CONFIG: PreviewTypeConfig = {
+  icon: "🔮", label: "Preview", bg: "bg-zinc-50", border: "border-zinc-200", iconBg: "bg-zinc-100",
+};
+
+type PreviewStatus = "created" | "partial" | "ready" | "stale" | "superseded" | string;
+
+function PreviewStatusBadge({ status }: { status: PreviewStatus }) {
+  const map: Record<string, { label: string; className: string }> = {
+    created:    { label: "Queued",      className: "bg-zinc-100 text-zinc-500" },
+    partial:    { label: "Generating…", className: "bg-amber-100 text-amber-600" },
+    ready:      { label: "Ready",       className: "bg-emerald-100 text-emerald-700" },
+    stale:      { label: "Stale",       className: "bg-zinc-100 text-zinc-400" },
+    superseded: { label: "Superseded",  className: "bg-zinc-100 text-zinc-400" },
+  };
+  const cfg = map[status] ?? { label: status, className: "bg-zinc-100 text-zinc-500" };
   return (
-    <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm font-semibold text-zinc-900">{preview.title || "Preview"}</div>
-          <div className="mt-1 text-xs text-zinc-500">
-            {preview.previewType} · {preview.route} · {preview.status}
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${cfg.className}`}>
+      {status === "partial" && (
+        <span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+      )}
+      {cfg.label}
+    </span>
+  );
+}
+
+function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
+  const cfg = PREVIEW_TYPE_CONFIG[preview.previewType] ?? FALLBACK_CONFIG;
+  const isSuperseded = preview.status === "superseded" || preview.status === "stale";
+
+  return (
+    <div
+      className={`mt-3 rounded-2xl border p-4 transition-opacity ${cfg.bg} ${cfg.border} ${
+        isSuperseded ? "opacity-40" : ""
+      }`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-base ${cfg.iconBg}`}>
+            {cfg.icon}
+          </span>
+          <div>
+            <div className="text-sm font-semibold text-zinc-900">
+              {preview.title || cfg.label}
+            </div>
+            <div className="mt-0.5 font-mono text-[10px] text-zinc-400">
+              {preview.route}
+            </div>
           </div>
         </div>
-        <div className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-          Inline preview
-        </div>
+        <PreviewStatusBadge status={preview.status} />
       </div>
-      <div className="mt-3 rounded-xl border border-dashed border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-500">
-        Real preview target attached for this turn. Heavy or interactive previews should promote to the main preview screen.
+
+      {/* Status bar — shows generation progress for partial state */}
+      {preview.status === "partial" && (
+        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-black/5">
+          <div
+            className="h-full animate-pulse rounded-full bg-amber-400"
+            style={{ width: "60%" }}
+          />
+        </div>
+      )}
+
+      {/* Ready state — artifact is in message content above this card */}
+      {preview.status === "ready" && (
+        <div className="mt-3 flex items-center gap-1.5 text-[11px] text-emerald-600">
+          <span>✓</span>
+          <span>Artifact delivered in message above</span>
+        </div>
+      )}
+
+      {/* Type label */}
+      <div className="mt-3 flex items-center gap-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+          {cfg.label}
+        </span>
+        <span className="text-[10px] text-zinc-300">·</span>
+        <span className="font-mono text-[10px] text-zinc-400">
+          {preview.previewId.slice(0, 8)}
+        </span>
       </div>
     </div>
   );
