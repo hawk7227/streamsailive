@@ -21,6 +21,7 @@ export type MediaGenerationArgs = {
   storyBible?: string;
   sourceKind?: "self" | "family_or_friend" | "synthetic" | "mixed";
   longVideo?: boolean;
+  realismMode?: "strict" | "balanced" | "strict_everyday" | "premium_commercial";
 };
 
 export type PlannedScene = {
@@ -326,7 +327,7 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
       apiKey,
       workspaceId,
       mode: "images",
-      realismMode: "strict",
+      realismMode: args.realismMode === "premium_commercial" ? "premium_commercial" : "strict_everyday",
       aspectRatio: (args.aspectRatio as "1:1" | "4:5" | "9:16" | "16:9" | undefined) ?? "16:9",
     });
 
