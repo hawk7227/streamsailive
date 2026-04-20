@@ -11,6 +11,80 @@ import { validateVideoUrl } from "@/lib/pipeline/qc/deterministicChecks";
 import type { IntakeBrief } from "@/lib/media-realism/types";
 
 type PipelineNiche = "telehealth" | "ecommerce" | "google_ads" | string;
+type GovernanceData = {
+  pipelineType?: string;
+  imageToVideo?: unknown;
+  strategyPrompt?: string;
+  copyPrompt?: string;
+  validatorPrompt?: string;
+  imagePrompt?: unknown;
+  templatePrompt?: unknown;
+  qaInstruction?: string;
+  approvedFacts?: unknown;
+  brandTone?: unknown;
+  styleGuide?: unknown;
+  bannedPhrases?: unknown;
+  imageMode?: string;
+  [key: string]: unknown;
+};
+
+// All fields accessed on node.data throughout executeNode
+type PipelineNodeData = {
+  type?: string;
+  label?: string;
+  content?: unknown;
+  pipelineType?: string;
+  imageMode?: string;
+  bodyMode?: string;
+  automationMode?: string;
+  outputMode?: string;
+  scheduleType?: string;
+  interval?: string;
+  cron?: string;
+  aspectRatio?: string;
+  duration?: string;
+  quality?: string;
+  style?: string;
+  speaker?: string;
+  url?: string;
+  method?: string;
+  headers?: unknown;
+  body?: unknown;
+  bodyFields?: Array<{ key?: string; value?: unknown }>;
+  webhookUrl?: string;
+  callBackUrl?: string;
+  authType?: string;
+  authToken?: string;
+  authKey?: string;
+  authValue?: string;
+  authUsername?: string;
+  authPassword?: string;
+  authHeader?: string;
+  motionSource?: string;
+  motionPlan?: {
+    validation?: { warnings?: string[] };
+    perception?: { riskProfile?: { motionRisk?: string } };
+    shouldUseImageToVideo?: boolean;
+    cameraSystem?: unknown;
+    [key: string]: unknown;
+  };
+  motionIntensity?: string;
+  imageToVideoPrompt?: string;
+  intakeAnalysis?: string;
+  strategyPrompt?: string;
+  copyPrompt?: string;
+  qaInstruction?: string;
+  validatorPrompt?: string;
+  timelinePreference?: string;
+  governance?: GovernanceData;
+  [key: string]: unknown;
+};
+
+type PipelineNode = { id: string; type?: string; data: PipelineNodeData; [key: string]: unknown };
+type PipelineEdge = { id: string; source: string; target: string; [key: string]: unknown };
+type ExecutionContext = Record<string, unknown>;
+type NodeOutput = unknown;
+
 type AutomationMode =
   | "manual_mode"
   | "hybrid_mode"
@@ -132,15 +206,16 @@ type MotionPlanV2 = {
   };
 };
 
-const replaceVariables = (text: string, context: any) => {
+const replaceVariables = (text: string, context: ExecutionContext) => {
   if (!text) return "";
   if (typeof text !== "string") return text;
   return text.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, path) => {
     const parts = path.split(".");
-    let current = context;
+    let current: unknown = context;
     for (const part of parts) {
       if (current === undefined || current === null) return match;
-      current = current[part];
+      if (typeof current !== "object") return match;
+      current = (current as Record<string, unknown>)[part];
     }
     return current !== undefined ? String(current) : match;
   });
@@ -156,8 +231,8 @@ const normalizeString = (value: unknown): string => {
   }
 };
 
-const getGovernance = (data: Record<string, any>) => {
-  const governance = data?.governance || {};
+const getGovernance = (data: Record<string, unknown>) => {
+  const governance = (data?.governance && typeof data.governance === "object" ? data.governance : {}) as Record<string, unknown>;
   return {
     pipelineType: (governance.pipelineType || data.pipelineType || "general") as PipelineNiche,
     imageToVideo: normalizeString(governance.imageToVideo),
@@ -476,13 +551,13 @@ const buildImageToVideoMotionPlan = (params: {
   };
 };
 
-export async function executeNode(node: any, context: any) {
+export async function executeNode(node: PipelineNode, context: ExecutionContext) {
   const type = (node.type === "pipelineNode" ? node.data?.type : node.type) || "unknown";
   const data = node.data || {};
   const generationId = crypto.randomUUID();
 
   if (type === "scriptWriter") {
-    const prompt = replaceVariables(data.content || "", context);
+    const prompt = replaceVariables(normalizeString(data.content), context);
     const output = await generateContent("script" as GenerationType, {
       prompt,
       style: data?.governance?.pipelineType || data?.pipelineType || "general",
@@ -496,7 +571,7 @@ export async function executeNode(node: any, context: any) {
   }
 
   if (type === "imageGenerator") {
-    const prompt = replaceVariables(data.content || "", context);
+    const prompt = replaceVariables(normalizeString(data.content), context);
     const output = await generateContent("image" as GenerationType, {
       prompt,
       aspectRatio: data.aspectRatio || "16:9",
@@ -541,17 +616,19 @@ export async function executeNode(node: any, context: any) {
   if (type === "videoGenerator") {
     const governance = getGovernance(data);
 
-    const motionPlan =
-      data.motionPlan ||
-      context?.motion_plan ||
-      context?.image_motion_analysis ||
-      null;
+    type MotionPlan = typeof data.motionPlan;
+    const motionPlan = (
+      data.motionPlan ??
+      (context?.motion_plan as MotionPlan | null | undefined) ??
+      (context?.image_motion_analysis as MotionPlan | null | undefined) ??
+      null
+    );
 
     const motionSource = data.motionSource || "auto";
     const motionIntensity = data.motionIntensity || "controlled";
     const timelinePreference = data.timelinePreference || "governed";
 
-    const basePrompt = replaceVariables(data.content || "", context);
+    const basePrompt = replaceVariables(normalizeString(data.content), context);
 
     const unsafeForMotion =
       motionPlan?.validation?.warnings?.includes?.("high_face_distortion_risk") ||
@@ -639,7 +716,7 @@ export async function executeNode(node: any, context: any) {
   }
 
   if (type === "voiceGenerator") {
-    const prompt = replaceVariables(data.content || "", context);
+    const prompt = replaceVariables(normalizeString(data.content), context);
     const output = await generateContent("voice" as GenerationType, {
       prompt,
       style: data.speaker || "Rachel",
@@ -683,12 +760,12 @@ export async function executeNode(node: any, context: any) {
       if (data.bodyMode === "fields" && Array.isArray(data.bodyFields)) {
         const obj: Record<string, string> = {};
         for (const field of data.bodyFields) {
-          if (field?.key) obj[field.key] = replaceVariables(field.value || "", context);
+          if (field?.key) obj[field.key] = replaceVariables(normalizeString(field.value), context);
         }
         body = JSON.stringify(obj);
         if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
       } else if (data.body) {
-        body = replaceVariables(data.body, context);
+        body = replaceVariables(normalizeString(data.body), context);
       }
     }
 
@@ -698,7 +775,7 @@ export async function executeNode(node: any, context: any) {
       body,
     });
 
-    let output: any;
+    let output: NodeOutput;
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       output = await res.json();
@@ -716,10 +793,10 @@ export async function executeNode(node: any, context: any) {
   if (type === "zapierWebhook") {
     const webhookUrl = replaceVariables(data.webhookUrl || "", context);
 
-    const payload: Record<string, any> = {};
+    const payload: Record<string, unknown> = {};
     if (Array.isArray(data.bodyFields)) {
       for (const field of data.bodyFields) {
-        if (field?.key) payload[field.key] = replaceVariables(field.value || "", context);
+        if (field?.key) payload[field.key] = replaceVariables(normalizeString(field.value), context);
       }
     }
 
@@ -745,18 +822,18 @@ export async function executeNode(node: any, context: any) {
   }
 
   if (type === "webhookResponse") {
-    let output: any = null;
+    let output: NodeOutput = null;
 
     if (data.bodyMode === "fields" && Array.isArray(data.bodyFields)) {
-      const body: Record<string, any> = {};
+      const body: Record<string, unknown> = {};
       for (const field of data.bodyFields) {
-        if (field?.key) body[field.key] = replaceVariables(field.value || "", context);
+        if (field?.key) body[field.key] = replaceVariables(normalizeString(field.value), context);
       }
       output = body;
     } else {
-      output = replaceVariables(data.output || "", context);
+      output = replaceVariables(normalizeString(data.output), context);
       try {
-        output = JSON.parse(output);
+        output = JSON.parse(output as string);
       } catch {
         // leave as string
       }
@@ -775,7 +852,7 @@ export async function executeNode(node: any, context: any) {
       output: {
         scheduleType: data.scheduleType || "hourly",
         cron: data.cron || data.interval || "0 * * * *",
-        content: data.content || "Scheduled pipeline trigger",
+        content: normalizeString(data.content) || "Scheduled pipeline trigger",
       },
       generationId,
     };
@@ -1209,9 +1286,9 @@ export async function executeNode(node: any, context: any) {
   };
 }
 
-export async function executePipeline(nodes: any[], edges: any[]) {
+export async function executePipeline(nodes: PipelineNode[], edges: PipelineEdge[]) {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-  const results = new Map<string, any>();
+  const results = new Map<string, NodeOutput>();
 
   const incomingCount = new Map<string, number>();
   for (const node of nodes) incomingCount.set(node.id, 0);
@@ -1225,7 +1302,7 @@ export async function executePipeline(nodes: any[], edges: any[]) {
     const currentNode = queue.shift();
     if (!currentNode) continue;
 
-    const context: Record<string, any> = {};
+    const context: ExecutionContext = {};
 for (const [nodeId, result] of results.entries()) {
   const sourceNode = nodeMap.get(nodeId);
   if (!sourceNode) continue;
