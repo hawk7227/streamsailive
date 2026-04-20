@@ -24,10 +24,17 @@ import type { IntakeBrief } from "@/lib/media-realism/types";
 type Pipeline = {
   id: string;
   name: string;
-  nodes: any[];
-  edges: any[];
+  nodes: PipelineNode[];
+  edges: PipelineEdge[];
   status: string;
 };
+// Pipeline node/edge shared types — consistent with lib/pipeline-execution.ts
+type PipelineNodeData = { type?: string; label?: string; content?: string; [key: string]: unknown };
+type PipelineNode = { id: string; type?: string; data: PipelineNodeData; [key: string]: unknown };
+type PipelineEdge = { id: string; source: string; target: string; [key: string]: unknown };
+type ExecutionContext = Record<string, unknown>;
+
+
 
 const nodeTypesList = [
   { type: "scriptWriter", label: "Script Writer", subLabel: "", icon: "📝", content: "Input: Product description<br>Output: Video script", iconBg: "bg-blue-500/15", category: "Content Generation" },
@@ -43,8 +50,8 @@ const nodeTypesList = [
   { type: "schedule", label: "Schedule", subLabel: "Run periodically", icon: "📅", content: "Runs every 1 hour", iconBg: "bg-green-500/15", category: "Triggers" },
 ];
 
-const SidebarItem = ({ item, onDragStart }: any) => (
-  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl cursor-grab hover:bg-white/10 transition-colors group" draggable onDragStart={(event) => onDragStart(event, item)}>
+const SidebarItem = ({ item, onDragStart }: { item: { type: string; label: string; icon: string; subLabel?: string; [key: string]: unknown }; onDragStart: (e: React.DragEvent, type: string) => void }) => (
+  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl cursor-grab hover:bg-white/10 transition-colors group" draggable onDragStart={(event) => onDragStart(event, item.type)}>
     <span className="text-xl group-hover:scale-110 transition-transform">{item.icon}</span>
     <div>
       <p className="text-sm font-medium text-white">{item.label}</p>
@@ -83,7 +90,7 @@ function PipelineTopControlPanel({ niche,setNiche,automationMode,setAutomationMo
   const fileRef = useRef<HTMLInputElement|null>(null);
 
   const handleRefClick = (t:ReferenceType) => { setActiveRef(t); if(t!=="youtube_url"&&t!=="web_url") fileRef.current?.click(); };
-  const handleFile = async (e:React.ChangeEvent<HTMLInputElement>) => { const f=e.target.files?.[0]; if(!f)return; await onAnalyzeReference({type:activeRef as any,file:f}); e.target.value=""; };
+  const handleFile = async (e:React.ChangeEvent<HTMLInputElement>) => { const f=e.target.files?.[0]; if(!f)return; await onAnalyzeReference({type:activeRef as "image_upload"|"video_upload"|"document_upload"|"audio_upload",file:f}); e.target.value=""; };
   const handleLink = async () => { if(!linkInput.trim())return; await onAnalyzeReference({type:activeRef==="web_url"?"web_url":"youtube_url",value:linkInput.trim()}); };
 
   const modeOpts = [{v:"manual_mode",l:"Manual"},{v:"hybrid_mode",l:"Hybrid"},{v:"full_ai_ideas",l:"Full AI Ideas"},{v:"full_ai_ideas_with_rules",l:"Full AI + Rules"},{v:"full_auto_production",l:"Full Auto"}];
@@ -256,7 +263,7 @@ export default function PipelineBuilder() {
     });
   }, [outputMode, setNodes]);
 
-  const onDragStart = (event: React.DragEvent, nodeType: any) => {
+  const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", JSON.stringify(nodeType));
     event.dataTransfer.effectAllowed = "move";
   };
@@ -295,8 +302,8 @@ export default function PipelineBuilder() {
     setIsDirty(true);
   }, [setEdges]);
 
-  const handleSelectIdea = (idea: any) => {
-    setSelectedIdeaId(idea.id);
+  const handleSelectIdea = (idea: Record<string, unknown>) => {
+    setSelectedIdeaId(idea.id as string | null);
     setNodes((nds) =>
       nds.map((node) => {
         if (node.data?.type === "scriptWriter") {
@@ -315,7 +322,7 @@ export default function PipelineBuilder() {
     setIsDirty(true);
   };
 
-  const handleAnalyzeReference = async (payload: any) => {
+  const handleAnalyzeReference = async (payload: ReferencePayload) => {
     if ("value" in payload) {
       setIdeaCards([
         { id: "concept-1", title: "Reference-led concept", subtitle: "link analysis", angle: "trust-led adaptation" },
@@ -343,7 +350,7 @@ export default function PipelineBuilder() {
     console.log("AI request:", message);
   };
 
-  const internalSave = async (nodesToSave: any[]) => {
+  const internalSave = async (nodesToSave: PipelineNode[]) => {
     setSaving(true);
     try {
       const { error } = await supabase
@@ -365,7 +372,7 @@ export default function PipelineBuilder() {
     }
   };
 
-  const runNode = async (node: any, context: any = {}) => {
+  const runNode = async (node: PipelineNode, context: ExecutionContext = {}) => {
     if (node.data.type === "imageMotionAnalyzer") {
       const imageInput = context?.image_generator || context?.image || context?.image_output || node.data.content || "";
       const motionPlan = buildImageToVideoMotionPlan({
@@ -500,7 +507,7 @@ export default function PipelineBuilder() {
         setStep(step, "running");
 
         // Find the matching node in the canvas, or use a minimal synthetic node
-        const node = nodes.find((n: any) => n.data?.type === type) ?? {
+        const node = nodes.find((n: PipelineNode) => n.data?.type === type) ?? {
           id: `synthetic-${step}`,
           type: "pipelineNode",
           data: {
@@ -594,9 +601,9 @@ export default function PipelineBuilder() {
       const nodeOutputs = new Map<string, any>();
 
       if (outputMode === "image_to_video") {
-        const imageNode = nodes.find((n: any) => n.data?.type === "imageGenerator");
-        const motionNode = nodes.find((n: any) => n.data?.type === "imageMotionAnalyzer");
-        const videoNode = nodes.find((n: any) => n.data?.type === "videoGenerator");
+        const imageNode = nodes.find((n: PipelineNode) => n.data?.type === "imageGenerator");
+        const motionNode = nodes.find((n: PipelineNode) => n.data?.type === "imageMotionAnalyzer");
+        const videoNode = nodes.find((n: PipelineNode) => n.data?.type === "videoGenerator");
 
         if (imageNode) {
           const out = await runNode(imageNode, {});
@@ -604,22 +611,22 @@ export default function PipelineBuilder() {
         }
 
         if (motionNode) {
-          const context: any = {};
+          const context: ExecutionContext = {};
           nodeOutputs.forEach((val, key) => {
-            const n = nodes.find((nd: any) => nd.id === key);
-            if (n) context[n.data.label.toLowerCase().replace(/\s+/g, "_")] = val;
+            const n = nodes.find((nd: PipelineNode) => nd.id === key);
+            if (n) context[(n.data.label ?? n.id).toLowerCase().replace(/\s+/g, "_")] = val;
           });
           const out = await runNode(motionNode, context);
           nodeOutputs.set(motionNode.id, out);
         }
 
         if (videoNode) {
-          const context: any = {};
+          const context: ExecutionContext = {};
           nodeOutputs.forEach((val, key) => {
-            const n = nodes.find((nd: any) => nd.id === key);
-            if (n) context[n.data.label.toLowerCase().replace(/\s+/g, "_")] = val;
+            const n = nodes.find((nd: PipelineNode) => nd.id === key);
+            if (n) context[(n.data.label ?? n.id).toLowerCase().replace(/\s+/g, "_")] = val;
           });
-          const motionNodeLocal = nodes.find((n: any) => n.data?.type === "imageMotionAnalyzer");
+          const motionNodeLocal = nodes.find((n: PipelineNode) => n.data?.type === "imageMotionAnalyzer");
           if (motionNodeLocal && nodeOutputs.has(motionNodeLocal.id)) {
             context.motion_plan = nodeOutputs.get(motionNodeLocal.id);
             context.image_motion_analysis = nodeOutputs.get(motionNodeLocal.id);
@@ -631,17 +638,18 @@ export default function PipelineBuilder() {
         return;
       }
 
-      const executionQueue: any[] = nodes.filter((n) => !edges.some((e) => e.target === n.id));
+      const executionQueue: PipelineNode[] = nodes.filter((n) => !edges.some((e) => e.target === n.id));
       while (executionQueue.length > 0) {
         const currentNode = executionQueue.shift();
-        const context: any = {};
+        const context: ExecutionContext = {};
         nodeOutputs.forEach((val, key) => {
           const n = nodes.find((nd) => nd.id === key);
-          if (n) context[n.data.label.toLowerCase().replace(/\s+/g, "_")] = val;
+          if (n) context[(n.data.label ?? n.id).toLowerCase().replace(/\s+/g, "_")] = val;
         });
+        if (!currentNode) continue;
         const out = await runNode(currentNode, context);
         nodeOutputs.set(currentNode.id, out);
-        const children = getOutgoers(currentNode, nodes, edges);
+        const children = getOutgoers(currentNode as unknown as import("reactflow").Node, nodes, edges);
         for (const child of children) {
           if (!executionQueue.find((n) => n.id === child.id)) executionQueue.push(child);
         }
@@ -654,8 +662,8 @@ export default function PipelineBuilder() {
   };
 
   // Detect whether the canvas has 7-step governance nodes
-  const has7StepNodes = nodes.some((n: any) =>
-    ["creativeStrategy","copyGeneration","validator","imageryGeneration","imageToVideoStep","assetLibrary","qualityAssurance"].includes(n.data?.type)
+  const has7StepNodes = nodes.some((n: PipelineNode) =>
+    ["creativeStrategy","copyGeneration","validator","imageryGeneration","imageToVideoStep","assetLibrary","qualityAssurance"].includes(n.data?.type ?? "")
   );
 
   const handleRunStep = async (step: string) => {
@@ -678,7 +686,7 @@ export default function PipelineBuilder() {
     };
 
     const allowed = map[step] || [];
-    const candidates = nodes.filter((n: any) => allowed.includes(n.data?.type));
+    const candidates = nodes.filter((n: PipelineNode) => allowed.includes(n.data?.type ?? ""));
     for (const node of candidates) {
       await runNode(node, {
         niche,
@@ -1094,7 +1102,7 @@ export default function PipelineBuilder() {
                       value={selectedNode.data.label}
                       onChange={(e) => {
                         const nodeId = selectedNode.id;
-                        setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, label: e.target.value } }));
+                        setSelectedNode((curr: PipelineNode | null) => curr ? { ...curr, data: { ...curr.data, label: e.target.value } } : curr);
                         setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, label: e.target.value } } : n));
                         setIsDirty(true);
                       }}
@@ -1109,7 +1117,7 @@ export default function PipelineBuilder() {
                       onChange={(e) => {
                         const value = e.target.value.replace(/\n/g, "<br>");
                         const nodeId = selectedNode.id;
-                        setSelectedNode((curr: any) => ({ ...curr, data: { ...curr.data, content: value } }));
+                        setSelectedNode((curr: PipelineNode | null) => curr ? { ...curr, data: { ...curr.data, content: value } } : curr);
                         setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, content: value } } : n));
                         setIsDirty(true);
                       }}
