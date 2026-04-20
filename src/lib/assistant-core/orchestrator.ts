@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { env } from "@/lib/env";
 import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
@@ -249,11 +250,7 @@ export async function runOrchestrator(req: NextRequest) {
             context: assembledContext,
           });
 
-          const model =
-            typeof process.env.OPENAI_MODEL === "string" &&
-            process.env.OPENAI_MODEL.trim()
-              ? process.env.OPENAI_MODEL.trim()
-              : "gpt-4.1";
+          const model = env.OPENAI_MODEL;
 
           const initialInput = buildInputMessages(
             assembledContext.systemPrompt,

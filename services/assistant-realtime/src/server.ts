@@ -4,11 +4,13 @@ import { WebSocketServer, type RawData, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 
 // ── Config ─────────────────────────────────────────────────────────────────
-const PORT = Number(process.env.PORT ?? process.env.ASSISTANT_REALTIME_PORT ?? 8080);
-const HOST = process.env.HOST ?? process.env.ASSISTANT_REALTIME_HOST ?? "0.0.0.0";
-const WS_PATH = process.env.ASSISTANT_REALTIME_PATH ?? "/api/assistant/realtime";
-const HEALTH_PATH = process.env.ASSISTANT_REALTIME_HEALTH_PATH ?? "/healthz";
-const UPSTREAM_URL = process.env.UPSTREAM_ASSISTANT_URL ?? "";
+import { realtimeEnv } from "./env";
+
+const PORT = realtimeEnv.PORT;
+const HOST = realtimeEnv.HOST;
+const WS_PATH = realtimeEnv.WS_PATH;
+const HEALTH_PATH = realtimeEnv.HEALTH_PATH;
+const UPSTREAM_URL = realtimeEnv.UPSTREAM_ASSISTANT_URL;
 
 // ── Logger ─────────────────────────────────────────────────────────────────
 type Logger = {

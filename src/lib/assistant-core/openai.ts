@@ -1,3 +1,4 @@
+import OpenAI from "openai";
+import { env } from "@/lib/env";
 
-import OpenAI from 'openai'
-export const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
+export const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
