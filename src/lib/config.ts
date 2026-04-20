@@ -17,7 +17,7 @@ export interface SiteConfig {
     };
     apiKeys?: Record<string, string>;
     elevenlabsVoiceId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 const DEFAULT_CONFIG: SiteConfig = {

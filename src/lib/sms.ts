@@ -3,7 +3,7 @@ type LeadLike = {
   email?: string;
   phone?: string;
   company?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 function substitute(text: string, lead?: LeadLike) {
@@ -79,7 +79,7 @@ export async function sendSms(params: {
     }),
   });
 
-  const data = (await response.json().catch(() => null)) as any;
+  const data = (await response.json().catch(() => null)) as { response_msg?: string; data?: { messages?: Array<{ status?: string; message_id?: string }> } };
   if (!response.ok) {
     const msg =
       data?.response_msg || data?.data?.messages?.[0]?.status || `ClickSend SMS HTTP ${response.status}`;
@@ -132,7 +132,7 @@ export async function sendMms(params: {
     }),
   });
 
-  const data = (await response.json().catch(() => null)) as any;
+  const data = (await response.json().catch(() => null)) as { response_msg?: string; data?: { messages?: Array<{ status?: string; message_id?: string }> } };
   if (!response.ok) {
     const msg =
       data?.response_msg || data?.data?.messages?.[0]?.status || `ClickSend MMS HTTP ${response.status}`;

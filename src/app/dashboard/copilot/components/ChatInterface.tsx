@@ -20,7 +20,7 @@ interface ChatResponse {
 }
 
 interface AttachmentChip {
-    id: string;
+    id: string | number;
     name: string;
     icon?: React.ReactNode;
     preview?: string;
@@ -317,7 +317,7 @@ export default function ChatInterface({ chatId, onChatCreated, previewOpen, setP
                                      <div className={`max-w-[85%] min-w-0 ${msg.role === 'user' ? 'bg-zinc-800 rounded-2xl rounded-tr-sm px-4 py-3' : 'w-full'}`}>
                                          {msg.attachments && msg.attachments.length > 0 && (
                                              <div className="flex flex-wrap gap-2 mb-2">
-                                                 {msg.attachments.map((att: AttachmentChip) => (
+                                                 {(msg.attachments as AttachmentChip[]).map((att) => (
                                                      <div key={att.id} className="flex items-center gap-2 px-2 py-1 bg-zinc-700 rounded-lg text-xs text-zinc-300">
                                                          {att.preview ? <img src={att.preview} className="w-6 h-6 rounded object-cover" alt="" /> : <span>{att.icon}</span>}
                                                          <span>{att.name}</span>

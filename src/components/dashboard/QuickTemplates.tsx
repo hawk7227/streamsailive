@@ -8,7 +8,7 @@ export type Template = {
   icon: string;
   uses: string;
   isDefault?: boolean;
-  [key: string]: any; // Allow flexible properties for different template types
+  [key: string]: unknown; // Allow flexible properties for different template types
 };
 
 interface QuickTemplatesProps {

@@ -116,8 +116,8 @@ export function useFileUpload() {
 export interface Message {
     role: 'user' | 'assistant' | 'system';
     content: string;
-    attachments?: any[];
-    tool_calls?: any[];
+    attachments?: { id: string | number; name: string; icon?: unknown; preview?: string | null; [key: string]: unknown }[];
+    tool_calls?: Record<string, unknown>[];
     tool_call_id?: string;
     isCompactionSummary?: boolean;
 }

@@ -22,7 +22,7 @@ export default function PreviewPage() {
                              setCode(data.data.landingPage.html_content);
                          } else if (data.data.messages) {
                              // Fallback to extracting from last assistant message
-                             const lastMsg = data.data.messages.filter((m: any) => m.role === 'assistant').pop();
+                             const lastMsg = data.data.messages.filter((m: { role?: string }) => m.role === 'assistant').pop();
                              if (lastMsg) {
                                  const extracted = extractCodeFromContent(lastMsg.content);
                                  if (extracted) {

@@ -91,7 +91,7 @@ export default function LibraryPage() {
     },
     // Keep data fresh longer for library
     staleTime: 5 * 60 * 1000, 
-    refetchInterval: (query: any) => {
+    refetchInterval: (query: { state?: { data?: LibraryFile[] } }) => {
       const data = query.state?.data as LibraryFile[] | undefined;
       return data?.some((f) => f.status === "pending" || f.status === "processing") ? 5000 : false;
     },
@@ -218,7 +218,7 @@ export default function LibraryPage() {
     e.stopPropagation();
     
     // Optimistic cache update
-    queryClient.setQueryData(['generations'], (oldData: any[]) => {
+    queryClient.setQueryData(['generations'], (oldData: Record<string, unknown>[]) => {
       return oldData?.map((f) => (f.id === id ? { ...f, favorited: !currentStatus } : f));
     });
 
@@ -226,7 +226,7 @@ export default function LibraryPage() {
       await updateGeneration(id, { favorited: !currentStatus });
     } catch (err) {
       // Revert on error
-      queryClient.setQueryData(['generations'], (oldData: any[]) => {
+      queryClient.setQueryData(['generations'], (oldData: Record<string, unknown>[]) => {
         return oldData?.map((f) => (f.id === id ? { ...f, favorited: currentStatus } : f));
       });
       console.error("Failed to update favorite status:", err);
@@ -236,7 +236,7 @@ export default function LibraryPage() {
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
     // Optimistic removal from cache
-    queryClient.setQueryData(['generations'], (oldData: any[]) =>
+    queryClient.setQueryData(['generations'], (oldData: Record<string, unknown>[]) =>
       oldData?.filter((f) => f.id !== id)
     );
     try {

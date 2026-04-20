@@ -23,11 +23,11 @@ export async function searchWorkspaceFiles(workspaceId: string, query: string, l
   if (error || !data) return [];
 
   return data
-    .filter((row: any) => row.files?.workspace_id === workspaceId)
-    .map((row: any, idx: number) => ({
+    .filter((row) => (row.files as { workspace_id?: string } | null)?.workspace_id === workspaceId)
+    .map((row, idx) => ({
       fileId: row.file_id,
-      fileName: row.files.name,
-      mimeType: row.files.mime_type,
+      fileName: (Array.isArray(row.files) ? row.files[0]?.name : (row.files as { name?: string } | null)?.name),
+      mimeType: (Array.isArray(row.files) ? row.files[0]?.mime_type : (row.files as { mime_type?: string } | null)?.mime_type),
       chunkIndex: row.chunk_index,
       content: row.content,
       rank: Math.max(0, 1 - idx / Math.max(1, data.length)),

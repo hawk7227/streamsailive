@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 declare global {
   interface Window {
-    webkitSpeechRecognition?: any;
-    SpeechRecognition?: any;
+    webkitSpeechRecognition?: unknown;
+    SpeechRecognition?: unknown;
   }
 }
 
@@ -26,16 +26,31 @@ export function useVoiceConversation() {
     setError(null);
     setTranscript('');
     setIsTranscribing(true);
-    const recognition = new Recognition();
+    interface SpeechRecognitionResultList {
+      length: number;
+      [key: number]: { [key: number]: { transcript: string } };
+    }
+    interface SpeechRecognitionInstance {
+      lang: string;
+      interimResults: boolean;
+      continuous: boolean;
+      onresult: ((e: { results: SpeechRecognitionResultList }) => void) | null;
+      onerror: ((e: { error?: string }) => void) | null;
+      onstart: (() => void) | null;
+      onend: (() => void) | null;
+      start: () => void;
+      stop: () => void;
+    }
+    const recognition = new (Recognition as { new(): SpeechRecognitionInstance })();
     recognition.lang = 'en-US';
     recognition.interimResults = true;
     recognition.continuous = true;
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: { results: SpeechRecognitionResultList }) => {
       let next = '';
       for (let i = 0; i < event.results.length; i += 1) next += event.results[i][0].transcript;
       setTranscript(next.trim());
     };
-    recognition.onerror = (event: any) => setError(event.error || 'Voice recognition failed');
+    recognition.onerror = (event: { error?: string }) => setError(event.error || 'Voice recognition failed');
     recognition.onstart = () => { setIsRecording(true); setIsTranscribing(false); };
     recognition.onend = () => setIsRecording(false);
     recognitionRef.current = recognition;

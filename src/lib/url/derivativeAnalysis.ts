@@ -35,7 +35,7 @@ Source: ${content}`,
   });
 
   if (!response.ok) throw new Error(`Derivative analysis failed (${response.status})`);
-  const data = await response.json() as any;
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const raw = data.choices?.[0]?.message?.content || '{}';
   return JSON.parse(raw);
 }

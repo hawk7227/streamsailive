@@ -9,12 +9,12 @@ export const COMPRESSION_STRATEGIES = {
     archive: 'Archive to memory & start fresh'
 };
 
-export function CompressionModal({ isOpen, onClose, onApply, currentTokens }: any) {
+export function CompressionModal({ isOpen, onClose, onApply, currentTokens }: { isOpen: boolean; onClose: () => void; onApply: (level: string) => void; currentTokens: number }) {
   const [strategy, setStrategy] = useState('summarize');
   const [estimatedSavings, setEstimatedSavings] = useState(0);
 
   useEffect(() => {
-    const savings: any = {
+    const savings: Record<string, number> = {
       summarize: 0.6,
       removeCode: 0.4,
       keepRecent: 0.7,

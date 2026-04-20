@@ -1,3 +1,4 @@
+import { toErrorMessage } from "@/lib/utils/error";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -11,7 +12,7 @@ interface SendEmailParams {
         email?: string;
         phone?: string;
         company?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     };
     fromName?: string;
     fromEmail?: string;
@@ -73,7 +74,7 @@ export async function sendEmail({
 
             if (credentials && credentials.length > 0) {
                 const credentialsObj: Record<string, string> = {};
-                credentials.forEach((cred: any) => {
+                credentials.forEach((cred: Record<string, string>) => {
                     credentialsObj[cred.credential_key] = cred.credential_value;
                 });
                 const { host, port, username, password, from_name, use_tls } = credentialsObj;
@@ -122,8 +123,8 @@ export async function sendEmail({
         console.log("Email sent:", info.messageId);
         return { success: true, messageId: info.messageId };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in sendEmail:", error);
-        throw new Error(error.message || "Failed to send email");
+        throw new Error(toErrorMessage(error) || "Failed to send email");
     }
 }

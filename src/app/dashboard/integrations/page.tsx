@@ -58,8 +58,8 @@ export default function IntegrationsPage() {
       if (data.integrations) {
         const connected = new Set<string>(
           data.integrations
-            .filter((i: any) => i.is_active)
-            .map((i: any) => i.integration_type as string)
+            .filter((i: { is_active?: boolean; integration_type?: string }) => i.is_active)
+            .map((i: { is_active?: boolean; integration_type?: string }) => i.integration_type as string)
         );
         setConnectedIntegrations(connected);
       }
@@ -70,16 +70,16 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleConnect = async (item: any) => {
+  const handleConnect = async (item: Record<string, unknown>) => {
     setSelectedIntegration(item);
     
     // If integration is already connected, fetch existing credentials
-    if (workflowId && connectedIntegrations.has(item.id)) {
+    if (workflowId && connectedIntegrations.has(item.id as string)) {
       try {
         const response = await fetch(
           `/api/integrations/credentials?workflow_id=${encodeURIComponent(
             workflowId
-          )}&integration_type=${encodeURIComponent(item.id)}`
+          )}&integration_type=${encodeURIComponent(item.id as string)}`
         );
         const data = await response.json();
         
@@ -120,7 +120,7 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleSaveIntegration = async (formData: any) => {
+  const handleSaveIntegration = async (formData: Record<string, unknown>) => {
     if (!workflowId) {
       alert("No active workflow selected.");
       return;
@@ -214,7 +214,7 @@ export default function IntegrationsPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {section.items.map((item) => {
-                const isConnected = connectedIntegrations.has(item.id);
+                const isConnected = connectedIntegrations.has(item.id as string);
                 
                 return (
                   <div

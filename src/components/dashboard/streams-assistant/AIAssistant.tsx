@@ -12,7 +12,7 @@ interface ToolCallCard { id: string; tool: string; input: Record<string,unknown>
 
 interface Action {
   type: "update_prompt" | "update_settings";
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 interface AIAssistantProps {
@@ -286,7 +286,7 @@ export default function AIAssistant({
       if (!actionFired && generationIntent) {
         const lower = text.toLowerCase();
         if (/video|clip|animation|scene/.test(lower)) performAction({ type: "generate_video", payload: { prompt: text } });
-        else if (/song|music|audio|voice/.test(lower)) performAction({ type: "generate_song", payload: { prompt: text } } as any);
+        else if (/song|music|audio|voice/.test(lower)) performAction({ type: "generate_song", payload: { prompt: text } } as { type: string; payload: Record<string, unknown> });
         else performAction({ type: "generate_image", payload: { prompt: text, provider: "openai" } });
       }
       const imgUrlMatch = fullText.match(/https?:\/\/\S+\.(png|jpg|jpeg|webp|gif)/i);

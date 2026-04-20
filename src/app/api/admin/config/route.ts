@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const newConfig: any = {};
+        const newConfig: Record<string, unknown> = {};
         if (appName) newConfig.appName = appName;
         if (themeColor) newConfig.themeColor = themeColor;
         if (scriptWriterPrompt) newConfig.scriptWriterPrompt = scriptWriterPrompt;

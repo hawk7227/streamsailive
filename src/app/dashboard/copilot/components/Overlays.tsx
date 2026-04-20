@@ -2,15 +2,15 @@ import React from 'react';
 import { Icons } from './Icons';
 
 // --- Simple Button Replacement if not available ---
-const SimpleButton = ({ children, variant = 'primary', size = 'md', className = '', ...props }: any) => {
-  const variants: any = {
+const SimpleButton = ({ children, variant = 'primary', size = 'md', className = '', ...props }: { children?: React.ReactNode; variant?: string; size?: string; className?: string; [key: string]: unknown }) => {
+  const variants: Record<string, string> = {
     primary: 'bg-white text-zinc-900 hover:bg-zinc-100',
     secondary: 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700',
     ghost: 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800',
     danger: 'bg-red-600 text-white hover:bg-red-700',
     outline: 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
   };
-  const sizes: any = { sm: 'h-7 px-2.5 text-xs', md: 'h-9 px-3 text-sm', lg: 'h-11 px-5 text-base', icon: 'h-9 w-9', 'icon-sm': 'h-7 w-7' };
+  const sizes: Record<string, string> = { sm: 'h-7 px-2.5 text-xs', md: 'h-9 px-3 text-sm', lg: 'h-11 px-5 text-base', icon: 'h-9 w-9', 'icon-sm': 'h-7 w-7' };
   
   return (
     <button className={`inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
@@ -25,7 +25,7 @@ const CONTEXT_LIMITS = {
   max: 150000
 };
 
-export function ContextWarning({ tokens, onCompress, onNewChat }: any) {
+export function ContextWarning({ tokens, onCompress, onNewChat }: { tokens: number; onCompress: () => void; onNewChat: () => void }) {
   const percentage = Math.min((tokens / CONTEXT_LIMITS.max) * 100, 100);
   const isDanger = tokens >= CONTEXT_LIMITS.danger;
   const isWarning = tokens >= CONTEXT_LIMITS.warning;
@@ -77,7 +77,7 @@ export function ContextWarning({ tokens, onCompress, onNewChat }: any) {
   );
 }
 
-export function CompactingOverlay({ isVisible, progress, stage }: any) {
+export function CompactingOverlay({ isVisible, progress, stage }: { isVisible: boolean; progress: number; stage: string }) {
   if (!isVisible) return null;
 
   const stages = [
