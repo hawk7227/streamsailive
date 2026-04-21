@@ -22,6 +22,7 @@ import type {
 } from "@/lib/assistant-core/assistant-protocol";
 import type { ArtifactDescriptor, FileWriteDescriptor } from "./useAssistantSession";
 import type { ArtifactRow } from "@/app/api/artifacts/route";
+import type { ProjectRow } from "@/app/api/projects/route";
 
 // ── WebSocket URL ────────────────────────────────────────────────────────────
 const REALTIME_WS_URL =
@@ -35,6 +36,19 @@ function loadStoredConversationId(): string | null {
 }
 function persistConversationId(id: string): void {
   try { localStorage.setItem(CONV_KEY, id); } catch { /* ignore */ }
+}
+
+// ── projectId localStorage helpers ──────────────────────────────────────────
+const PROJ_KEY = "assistant-frame:projectId";
+const PROJ_NAME_KEY = "assistant-frame:projectName";
+function loadStoredProjectId(): string | null {
+  try { return localStorage.getItem(PROJ_KEY); } catch { return null; }
+}
+function persistProject(id: string, name: string): void {
+  try { localStorage.setItem(PROJ_KEY, id); localStorage.setItem(PROJ_NAME_KEY, name); } catch { /* ignore */ }
+}
+function clearStoredProject(): void {
+  try { localStorage.removeItem(PROJ_KEY); localStorage.removeItem(PROJ_NAME_KEY); } catch { /* ignore */ }
 }
 
 // ── Connection label ─────────────────────────────────────────────────────────
@@ -399,7 +413,7 @@ const CAPABILITIES = [
 ] as const;
 
 // ── Sidebar panel type ────────────────────────────────────────────────────────
-type SidebarPanel = "nav" | "library" | "sessions" | "artifacts";
+type SidebarPanel = "nav" | "library" | "sessions" | "artifacts" | "projects";
 
 type LibraryFile = {
   id: string;
@@ -438,6 +452,13 @@ export default function AssistantFramePage() {
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [artifactRows, setArtifactRows] = useState<ArtifactRow[]>([]);
   const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => loadStoredProjectId());
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(() => {
+    try { return localStorage.getItem(PROJ_NAME_KEY); } catch { return null; }
+  });
+  const [newProjectName, setNewProjectName] = useState("");
   const [sessionIndex, setSessionIndex] = useState<SessionSummary[]>([]);
 
   // ── Workspace + conversation identity ─────────────────────────────────────
@@ -533,7 +554,9 @@ export default function AssistantFramePage() {
     ...requestContext,
     workspaceId,
     conversationId: conversationId ?? undefined,
-  }), [requestContext, workspaceId, conversationId]);
+    projectId: currentProjectId ?? undefined,
+    projectName: currentProjectName ?? undefined,
+  }), [requestContext, workspaceId, conversationId, currentProjectId, currentProjectName]);
 
   const handleSend = useCallback(async () => {
     const value = draft.trim();
@@ -642,6 +665,48 @@ export default function AssistantFramePage() {
     }
   }, [artifactsLoading]);
 
+  // ── Load projects panel ──────────────────────────────────────────────────
+  const loadProjects = useCallback(async () => {
+    if (projectsLoading) return;
+    setProjectsLoading(true);
+    try {
+      const res = await fetch("/api/projects", { credentials: "include" });
+      if (res.ok) {
+        const json = await res.json() as { data?: ProjectRow[] };
+        setProjects(json.data ?? []);
+      }
+    } catch { /* show empty state */ } finally {
+      setProjectsLoading(false);
+    }
+  }, [projectsLoading]);
+
+  const assignConversationToProject = useCallback(async (projectId: string, projectName: string) => {
+    if (!conversationId) return;
+    setCurrentProjectId(projectId);
+    setCurrentProjectName(projectName);
+    persistProject(projectId, projectName);
+    await fetch(`/api/projects/${projectId}/conversations`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId }),
+    }).catch(() => { /* non-fatal */ });
+  }, [conversationId]);
+
+  const createProject = useCallback(async (name: string) => {
+    if (!name.trim()) return;
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (res.ok) {
+      const json = await res.json() as { data?: ProjectRow };
+      if (json.data) setProjects((prev) => [json.data!, ...prev]);
+    }
+  }, []);
+
   // ── Sidebar item click ────────────────────────────────────────────────────
   const handleSidebarItem = useCallback(
     (id: string) => {
@@ -659,11 +724,15 @@ export default function AssistantFramePage() {
           void loadArtifacts(conversationId);
           setSidebarPanel("artifacts");
           break;
+        case "projects":
+          void loadProjects();
+          setSidebarPanel("projects");
+          break;
         default:
           break;
       }
     },
-    [handleNewChat, loadLibrary, loadArtifacts, conversationId],
+    [handleNewChat, loadLibrary, loadArtifacts, loadProjects, conversationId],
   );
 
   // ── Cancel ────────────────────────────────────────────────────────────────
@@ -748,7 +817,8 @@ export default function AssistantFramePage() {
                 const Icon = item.icon;
                 const isActive = (item.id === "search" && sidebarPanel === "sessions") ||
                                  (item.id === "library" && sidebarPanel === "library") ||
-                                 (item.id === "images" && sidebarPanel === "artifacts");
+                                 (item.id === "images" && sidebarPanel === "artifacts") ||
+                                 (item.id === "projects" && sidebarPanel === "projects");
                 return (
                   <button key={item.id} type="button" onClick={() => handleSidebarItem(item.id)}
                     className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-700 hover:bg-white"}`}>
@@ -890,6 +960,78 @@ export default function AssistantFramePage() {
                       );
                     })}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Projects panel */}
+            {toolbarOpen && sidebarPanel === "projects" && (
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between px-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Projects</span>
+                  <button onClick={() => void loadProjects()} className="text-[11px] text-zinc-400 hover:text-zinc-600">Refresh</button>
+                </div>
+
+                {/* New project input */}
+                <div className="mb-3 flex gap-2 px-1">
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newProjectName.trim()) {
+                        void createProject(newProjectName);
+                        setNewProjectName("");
+                      }
+                    }}
+                    placeholder="New project name…"
+                    className="min-w-0 flex-1 rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-[12px] text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { if (newProjectName.trim()) { void createProject(newProjectName); setNewProjectName(""); } }}
+                    className="shrink-0 rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {projectsLoading ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">Loading…</div>
+                ) : projects.length === 0 ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                    No projects yet. Type a name above to create one.
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {projects.map((p) => {
+                      const isCurrentProject = p.id === currentProjectId;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => void assignConversationToProject(p.id, p.name)}
+                          className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left text-sm transition-colors hover:bg-white ${isCurrentProject ? "border-zinc-300 bg-white font-medium text-zinc-900" : "border-transparent text-zinc-600"}`}
+                        >
+                          <span className="shrink-0 text-base">📁</span>
+                          <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                          {isCurrentProject && (
+                            <span className="shrink-0 rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-medium text-white">Active</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {currentProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentProjectId(null); setCurrentProjectName(null); clearStoredProject(); }}
+                    className="mt-3 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-center text-[11px] text-zinc-400 hover:text-zinc-600"
+                  >
+                    Leave project
+                  </button>
                 )}
               </div>
             )}

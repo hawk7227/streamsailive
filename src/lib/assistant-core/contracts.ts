@@ -20,6 +20,12 @@ export type BuildContextInput = {
   workspaceId?: string;
   /** Present when the request is tied to a specific conversation. */
   conversationId?: string;
+  /** Present when the conversation belongs to a project. Injected into system prompt. */
+  projectId?: string;
+  /** Human-readable project name — injected into system prompt when present. */
+  projectName?: string;
+  /** Optional project description — appended to system prompt when present. */
+  projectDescription?: string;
 };
 
 export type AssembledAssistantContext = {
@@ -32,6 +38,8 @@ export type AssembledAssistantContext = {
   fileContext?: string;
   workspaceId?: string;
   conversationId?: string;
+  projectId?: string;
+  projectName?: string;
 };
 
 export type BuildAssistantToolsInput = {

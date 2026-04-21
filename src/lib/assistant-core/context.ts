@@ -91,6 +91,18 @@ function appendFileContext(systemPrompt: string, fileContext: string): string {
   );
 }
 
+function appendProjectContext(
+  systemPrompt: string,
+  projectName: string,
+  projectDescription?: string,
+): string {
+  const desc = projectDescription?.trim();
+  const block = desc
+    ? `--- Active project: ${projectName} ---\n${desc}\n--- End of project context ---`
+    : `--- Active project: ${projectName} ---`;
+  return systemPrompt + "\n\n" + block;
+}
+
 export async function buildContext(
   input: BuildContextInput,
 ): Promise<AssembledAssistantContext> {
@@ -141,8 +153,24 @@ export async function buildContext(
 
   const systemPrompt = appendFileContext(basePrompt, fileContext);
 
+  // Project context — passed by client in buildTurnContext(), no DB call on hot path.
+  const projectId =
+    input.projectId ??
+    (typeof safeContext.projectId === "string" ? safeContext.projectId : undefined);
+  const projectName =
+    input.projectName ??
+    (typeof safeContext.projectName === "string" ? safeContext.projectName : undefined);
+  const projectDescription =
+    input.projectDescription ??
+    (typeof safeContext.projectDescription === "string" ? safeContext.projectDescription : undefined);
+
+  let finalPrompt = systemPrompt;
+  if (projectName) {
+    finalPrompt = appendProjectContext(systemPrompt, projectName, projectDescription);
+  }
+
   return {
-    systemPrompt,
+    systemPrompt: finalPrompt,
     route: input.route,
     userText: input.userText,
     messages: safeMessages,
@@ -150,5 +178,7 @@ export async function buildContext(
     fileContext: fileContext || undefined,
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
+    projectId,
+    projectName,
   };
 }
