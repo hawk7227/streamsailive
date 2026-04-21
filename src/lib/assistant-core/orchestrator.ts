@@ -38,10 +38,13 @@ type MediaArtifact = {
 const encoder = new TextEncoder();
 
 // ── Tool timeout ──────────────────────────────────────────────────────────
+// Tool timeout: env var STREAMS_TOOL_TIMEOUT_MS, default 30s, capped at 90s.
+// generate_media gets its own extended timeout — gpt-image-1/1.5 takes 20-60s.
 const TOOL_TIMEOUT_MS = Math.min(
   Number(STREAMS_TOOL_TIMEOUT_MS ?? "30000") || 30_000,
-  30_000,
+  90_000,
 );
+const MEDIA_TOOL_TIMEOUT_MS = 90_000; // gpt-image-1/1.5 can take up to 60s
 
 function withToolTimeout<T>(
   promise: Promise<T>,
@@ -494,6 +497,11 @@ export async function runOrchestrator(req: NextRequest) {
               let parsedArgs: Record<string, unknown> = {};
               try { parsedArgs = JSON.parse(call.arguments || "{}"); } catch { parsedArgs = {}; }
 
+              // generate_media gets extended timeout — gpt-image-1/1.5 takes 20-60s
+              const toolTimeoutMs = call.name === "generate_media"
+                ? MEDIA_TOOL_TIMEOUT_MS
+                : TOOL_TIMEOUT_MS;
+
               try {
                 const result = await withToolTimeout(
                   executeAssistantTool(
@@ -505,7 +513,7 @@ export async function runOrchestrator(req: NextRequest) {
                     },
                   ),
                   call.name,
-                  TOOL_TIMEOUT_MS,
+                  toolTimeoutMs,
                 );
 
                 send("tool_result", { name: call.name, result });
