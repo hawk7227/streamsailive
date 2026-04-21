@@ -1,4 +1,5 @@
 import { ASPECT_RATIO_TO_SIZE, getVideoMotionPolicy } from "./realismPolicy";
+import { resolveImageQuality } from "./resolveImageQuality";
 import { generationConfig } from "./generationConfig";
 import type { AspectRatio, GeneratedImageCandidate, VideoCandidate } from "./types";
 
@@ -18,11 +19,11 @@ export async function generateImageCandidatesFromProvider(params: {
   const apiKey = requiredEnv("OPENAI_API_KEY");
   const size = ASPECT_RATIO_TO_SIZE[params.aspectRatio];
   const model = generationConfig.image.model;
-  const quality = generationConfig.image.quality;
+  const quality = resolveImageQuality(model, generationConfig.image.quality, "medium");
 
-  // Single log point for all image generation paths.
-  // chat-image, assistant tool, and /api/generate-image all converge here.
-  console.log(JSON.stringify({ level: "info", event: "IMAGE_MODEL_USED", model }));
+  // Safety log — catches silent config drift before it reaches the provider.
+  // If quality ever shows an unexpected value here, the env var is wrong.
+  console.log(JSON.stringify({ level: "info", event: "IMAGE_REQUEST", model, quality }));
 
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",

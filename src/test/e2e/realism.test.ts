@@ -239,15 +239,16 @@ describe("ScenePlannerV2 — orientation and shotType from context", () => {
 // ── UNIT: Generation config ──────────────────────────────────────────────────
 
 describe("GenerationConfig — env var driven", () => {
-  it("defaults to gpt-image-1 when IMAGE_MODEL not set", async () => {
+  it("defaults to gpt-image-1.5 when IMAGE_MODEL not set", async () => {
     const { generationConfig } = await import("@/lib/media-realism/generationConfig");
-    // In test env IMAGE_MODEL is unset, should fall back to gpt-image-1
-    expect(["gpt-image-1", process.env.IMAGE_MODEL].filter(Boolean)).toContain(generationConfig.image.model);
+    // Upgraded default: gpt-image-1.5. Override via IMAGE_MODEL env var.
+    expect(["gpt-image-1.5", process.env.IMAGE_MODEL].filter(Boolean)).toContain(generationConfig.image.model);
   });
 
-  it("defaults to standard quality when IMAGE_QUALITY not set", async () => {
+  it("defaults to high quality when IMAGE_QUALITY not set", async () => {
     const { generationConfig } = await import("@/lib/media-realism/generationConfig");
-    expect(["standard", "hd", process.env.IMAGE_QUALITY].filter(Boolean)).toContain(generationConfig.image.quality);
+    // GPT-image contract: auto | low | medium | high. "standard" is dall-e-3 only.
+    expect(["auto", "low", "medium", "high", process.env.IMAGE_QUALITY].filter(Boolean)).toContain(generationConfig.image.quality);
   });
 
   it("candidate count is a number", async () => {

@@ -9,7 +9,7 @@ import { IMAGE_CANDIDATES, IMAGE_MAX_ATTEMPTS, IMAGE_MODEL, IMAGE_QUALITY, VIDEO
 export const generationConfig = {
   image: {
     model: IMAGE_MODEL ?? "gpt-image-1",
-    quality: (IMAGE_QUALITY ?? "medium") as "standard" | "hd" | "low" | "medium" | "high",
+    quality: (IMAGE_QUALITY ?? "medium") as "auto" | "low" | "medium" | "high",
     candidates: Number(IMAGE_CANDIDATES ?? "4"),
     maxAttempts: Number(IMAGE_MAX_ATTEMPTS ?? "3"),
   },
