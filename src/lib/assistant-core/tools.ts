@@ -642,10 +642,20 @@ export async function executeAssistantTool(
       await fs.mkdir(path.dirname(resolved), { recursive: true });
       await fs.writeFile(resolved, content, "utf8");
 
+      // Include a preview so the realtime server can emit a file.written event
+      // with content visible to the client at write time.
+      // Serverless filesystems are ephemeral — the file cannot be fetched later.
+      const lines = content.split("\n");
+      const contentPreview = lines.slice(0, 100).join("\n");
+      const ext = requestedPath.split(".").pop()?.toLowerCase() ?? "";
+
       return {
         ok: true,
         path: requestedPath,
+        operation: "write",
         bytesWritten: Buffer.byteLength(content, "utf8"),
+        contentPreview,
+        language: ext || null,
         persistentRoot: getWritableWorkspaceRoot(),
       };
     }
@@ -667,10 +677,18 @@ export async function executeAssistantTool(
       const updated = current.replace(find, replace);
       await fs.writeFile(resolved, updated, "utf8");
 
+      const lines = updated.split("\n");
+      const contentPreview = lines.slice(0, 100).join("\n");
+      const ext = requestedPath.split(".").pop()?.toLowerCase() ?? "";
+
       return {
         ok: true,
         path: requestedPath,
+        operation: "patch",
         replaced: true,
+        bytesWritten: Buffer.byteLength(updated, "utf8"),
+        contentPreview,
+        language: ext || null,
       };
     }
 

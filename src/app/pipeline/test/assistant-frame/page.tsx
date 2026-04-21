@@ -20,7 +20,7 @@ import type {
   AssistantPreviewType,
   AssistantPreviewStatus,
 } from "@/lib/assistant-core/assistant-protocol";
-import type { ArtifactDescriptor } from "./useAssistantSession";
+import type { ArtifactDescriptor, FileWriteDescriptor } from "./useAssistantSession";
 import type { ArtifactRow } from "@/app/api/artifacts/route";
 
 // ── WebSocket URL ────────────────────────────────────────────────────────────
@@ -305,6 +305,72 @@ function ArtifactCard({ artifact, onRegenerate }: { artifact: ArtifactDescriptor
           </a>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── FileWriteCard ─────────────────────────────────────────────────────────────
+// Renders a file written by the assistant inline in the chat bubble.
+// Shows path, operation, byte size, and a syntax-highlighted content preview.
+// Content comes from the file_written SSE event — available even on serverless
+// where the filesystem is ephemeral and cannot be re-fetched.
+function FileWriteCard({ file }: { file: FileWriteDescriptor }) {
+  const lines = file.contentPreview.split("\n");
+  const truncated = lines.length >= 100;
+  const label = file.operation === "patch" ? "Patched" : "Written";
+  const sizeLabel =
+    file.bytesWritten < 1024
+      ? `${file.bytesWritten} B`
+      : `${(file.bytesWritten / 1024).toFixed(1)} KB`;
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(file.contentPreview);
+  };
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-[11px] font-semibold text-zinc-800">
+            {file.path}
+          </p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-400">
+            {label} · {sizeLabel}
+            {file.language ? ` · ${file.language}` : ""}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            Copy
+          </button>
+          <a
+            href={`data:text/plain;charset=utf-8,${encodeURIComponent(file.contentPreview)}`}
+            download={file.path.split("/").pop() ?? "file.txt"}
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            Download
+          </a>
+        </div>
+      </div>
+
+      {/* Content preview */}
+      <div className="max-h-80 overflow-auto">
+        <pre className="p-4 text-[11px] leading-relaxed text-zinc-800 whitespace-pre">
+          <code>{file.contentPreview}</code>
+        </pre>
+      </div>
+
+      {/* Truncation notice */}
+      {truncated && (
+        <div className="border-t border-zinc-200 bg-white px-4 py-2 text-[10px] text-zinc-400">
+          Showing first 100 lines
+        </div>
+      )}
     </div>
   );
 }
@@ -906,6 +972,7 @@ export default function AssistantFramePage() {
               const activity = message.turnId ? session.activities[message.turnId] : undefined;
               const turnUiState = message.turnId ? session.uiStates[message.turnId] : undefined;
               const turnArtifact = message.turnId ? session.artifactsByTurn[message.turnId] : undefined;
+              const turnFileWrite = message.turnId ? session.fileWritesByTurn[message.turnId] : undefined;
               const isLastAssistant = !isUser &&
                 msgIdx === session.messages.map((m) => m.role).lastIndexOf("assistant");
               const isComplete = message.status === "complete";
@@ -939,6 +1006,10 @@ export default function AssistantFramePage() {
                             ? () => handleEditMessage(turnArtifact.title!)
                             : undefined}
                         />
+                      )}
+                      {/* FileWriteCard — rendered when assistant wrote a file */}
+                      {turnFileWrite && !isUser && (
+                        <FileWriteCard file={turnFileWrite} />
                       )}
 
                       {/* §20: aria-live on activity badge */}

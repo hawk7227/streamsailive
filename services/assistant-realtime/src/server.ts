@@ -382,6 +382,24 @@ async function executeTurn(
           break;
         }
 
+        case "file_written": {
+          // Orchestrator completed a write_workspace_file or apply_workspace_patch.
+          // Forward as file.written WS message so the client can render inline.
+          const filePath = typeof data.path === "string" ? data.path : "";
+          if (filePath) {
+            await send(socket, {
+              type: "file.written",
+              turnId,
+              path: filePath,
+              operation: typeof data.operation === "string" ? data.operation : "write",
+              contentPreview: typeof data.contentPreview === "string" ? data.contentPreview : "",
+              bytesWritten: typeof data.bytesWritten === "number" ? data.bytesWritten : 0,
+              language: typeof data.language === "string" ? data.language : null,
+            });
+          }
+          break;
+        }
+
         case "done": {
           if (data.ok === true) {
             turnCompleted = true;

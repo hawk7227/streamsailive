@@ -271,6 +271,19 @@ export type AssistantSessionOutboundMessage =
       mimeType: string;
       mediaType: string;
       title: string | null;
+    }
+  | {
+      // Emitted when write_workspace_file or apply_workspace_patch completes.
+      // Carries the file path, operation, and a content preview for inline rendering.
+      type: "file.written";
+      turnId: string;
+      path: string;
+      /** 'write' for full write, 'patch' for string-replacement patch */
+      operation: "write" | "patch";
+      /** First 100 lines of the written content — for inline code rendering */
+      contentPreview: string;
+      bytesWritten: number;
+      language: string | null;
     };
 
 /* ---------- TYPE GUARD ---------- */

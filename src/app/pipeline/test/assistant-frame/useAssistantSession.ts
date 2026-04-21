@@ -48,6 +48,24 @@ export type AssistantTurnActivity = {
 };
 
 /**
+ * A file written by the assistant during a turn.
+ * Stored in fileWritesByTurn keyed by turnId.
+ * Rendered as a FileWriteCard with syntax-highlighted content preview.
+ */
+export type FileWriteDescriptor = {
+  turnId: string;
+  path: string;
+  /** 'write' for full file write, 'patch' for string-replacement patch */
+  operation: "write" | "patch";
+  /** First 100 lines of the written file — for inline code rendering */
+  contentPreview: string;
+  bytesWritten: number;
+  /** File extension used for syntax highlighting (e.g. 'ts', 'py', 'md') */
+  language: string | null;
+  createdAt: string;
+};
+
+/**
  * A resolved media artifact attached to a turn.
  * Replaces the previous markdown-injection approach (![Generated image](url)).
  * The client stores typed artifact state and renders ArtifactCard components.
@@ -82,6 +100,8 @@ export type AssistantSessionHookState = {
   uiStates: Record<string, TurnUIState>;
   /** Keyed by turnId. Typed artifact metadata for rendering ArtifactCard. */
   artifactsByTurn: Record<string, ArtifactDescriptor>;
+  /** Keyed by turnId. Written file metadata for rendering FileWriteCard. */
+  fileWritesByTurn: Record<string, FileWriteDescriptor>;
   error: AssistantErrorMessage | null;
 };
 
@@ -340,6 +360,7 @@ export function useAssistantSession(
   const [previews, setPreviews] = useState<Record<string, AssistantPreviewDescriptor>>({});
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
   const [artifactsByTurn, setArtifactsByTurn] = useState<Record<string, ArtifactDescriptor>>({});
+  const [fileWritesByTurn, setFileWritesByTurn] = useState<Record<string, FileWriteDescriptor>>({});
   const [uiStates, setUIStates] = useState<Record<string, TurnUIState>>({});
   const [error, setError] = useState<AssistantErrorMessage | null>(null);
 
@@ -546,6 +567,22 @@ export function useAssistantSession(
               return { ...msg, status: "complete" };
             }),
           );
+          return;
+        }
+
+        case "file.written": {
+          setFileWritesByTurn((prev) => ({
+            ...prev,
+            [message.turnId]: {
+              turnId: message.turnId,
+              path: message.path,
+              operation: message.operation,
+              contentPreview: message.contentPreview,
+              bytesWritten: message.bytesWritten,
+              language: message.language,
+              createdAt: new Date().toISOString(),
+            },
+          }));
           return;
         }
 
@@ -763,6 +800,7 @@ export function useAssistantSession(
     setPreviews({});
     setPreviewsByTurn({});
     setArtifactsByTurn({});
+    setFileWritesByTurn({});
     setUIStates({});
     uiStateControllerRef.current.reset();
     if (storageKey) clearPersistedSession(storageKey);
@@ -785,6 +823,7 @@ export function useAssistantSession(
     previews,
     previewsByTurn,
     artifactsByTurn,
+    fileWritesByTurn,
     uiStates,
     error,
     connect,

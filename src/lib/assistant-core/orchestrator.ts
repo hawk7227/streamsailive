@@ -514,6 +514,26 @@ export async function runOrchestrator(req: NextRequest) {
                   send("tool_result", result);
                 }
 
+                // Detect file write operations — emit file_written so the client
+                // can render the content inline. Must happen before the media check.
+                if (
+                  call.name === "write_workspace_file" ||
+                  call.name === "apply_workspace_patch"
+                ) {
+                  const r = asRecord(result);
+                  const preview = firstString(r?.contentPreview);
+                  const filePath = firstString(r?.path);
+                  if (preview && filePath) {
+                    send("file_written", {
+                      path: filePath,
+                      operation: typeof r?.operation === "string" ? r.operation : "write",
+                      contentPreview: preview,
+                      bytesWritten: typeof r?.bytesWritten === "number" ? r.bytesWritten : 0,
+                      language: typeof r?.language === "string" ? r.language : null,
+                    });
+                  }
+                }
+
                 const mediaArtifact =
                   call.name === "generate_media" ? extractMediaArtifact(result) : null;
 
