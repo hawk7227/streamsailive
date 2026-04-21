@@ -21,6 +21,7 @@ import type {
   AssistantPreviewStatus,
 } from "@/lib/assistant-core/assistant-protocol";
 import type { ArtifactDescriptor } from "./useAssistantSession";
+import type { ArtifactRow } from "@/app/api/artifacts/route";
 
 // ── WebSocket URL ────────────────────────────────────────────────────────────
 const REALTIME_WS_URL =
@@ -321,7 +322,7 @@ const CAPABILITIES = [
 ] as const;
 
 // ── Sidebar panel type ────────────────────────────────────────────────────────
-type SidebarPanel = "nav" | "library" | "sessions";
+type SidebarPanel = "nav" | "library" | "sessions" | "artifacts";
 
 type LibraryFile = {
   id: string;
@@ -358,6 +359,8 @@ export default function AssistantFramePage() {
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>("nav");
   const [libraryFiles, setLibraryFiles] = useState<LibraryFile[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  const [artifactRows, setArtifactRows] = useState<ArtifactRow[]>([]);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
   const [sessionIndex, setSessionIndex] = useState<SessionSummary[]>([]);
 
   // ── Workspace + conversation identity ─────────────────────────────────────
@@ -437,6 +440,16 @@ export default function AssistantFramePage() {
     });
     return index;
   }, [session.previews, session.previewsByTurn]);
+
+  // ── Auto-refresh artifact browse panel when conversationId changes ─────────
+  // Only fires when the artifacts panel is open so it doesn't make
+  // background fetches on every chat switch.
+  useEffect(() => {
+    if (sidebarPanel === "artifacts" && conversationId) {
+      void loadArtifacts(conversationId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, sidebarPanel]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const buildTurnContext = useCallback(() => ({
@@ -534,6 +547,24 @@ export default function AssistantFramePage() {
     }
   }, [libraryLoading]);
 
+  // ── Load artifact browse panel ───────────────────────────────────────────
+  const loadArtifacts = useCallback(async (convId: string | null) => {
+    if (!convId || artifactsLoading) return;
+    setArtifactsLoading(true);
+    try {
+      const params = new URLSearchParams({ conversationId: convId, limit: "50" });
+      const res = await fetch(`/api/artifacts?${params.toString()}`, { credentials: "include" });
+      if (res.ok) {
+        const json = await res.json() as { data?: ArtifactRow[] };
+        setArtifactRows(json.data ?? []);
+      }
+    } catch {
+      // ignore — show empty state
+    } finally {
+      setArtifactsLoading(false);
+    }
+  }, [artifactsLoading]);
+
   // ── Sidebar item click ────────────────────────────────────────────────────
   const handleSidebarItem = useCallback(
     (id: string) => {
@@ -547,11 +578,15 @@ export default function AssistantFramePage() {
           if (id === "library") void loadLibrary();
           setSidebarPanel(id as SidebarPanel);
           break;
+        case "images":
+          void loadArtifacts(conversationId);
+          setSidebarPanel("artifacts");
+          break;
         default:
           break;
       }
     },
-    [handleNewChat, loadLibrary],
+    [handleNewChat, loadLibrary, loadArtifacts, conversationId],
   );
 
   // ── Cancel ────────────────────────────────────────────────────────────────
@@ -635,7 +670,8 @@ export default function AssistantFramePage() {
               {toolbarItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = (item.id === "search" && sidebarPanel === "sessions") ||
-                                 (item.id === "library" && sidebarPanel === "library");
+                                 (item.id === "library" && sidebarPanel === "library") ||
+                                 (item.id === "images" && sidebarPanel === "artifacts");
                 return (
                   <button key={item.id} type="button" onClick={() => handleSidebarItem(item.id)}
                     className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-700 hover:bg-white"}`}>
@@ -697,6 +733,85 @@ export default function AssistantFramePage() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Artifact browse panel */}
+            {toolbarOpen && sidebarPanel === "artifacts" && (
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between px-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Generated</span>
+                  <button
+                    onClick={() => void loadArtifacts(conversationId)}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-600"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {artifactsLoading ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                    Loading…
+                  </div>
+                ) : artifactRows.length === 0 ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                    No generated media yet. Ask to create an image or video.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {artifactRows.map((artifact) => {
+                      const isImage = artifact.type === "image" || artifact.mediaType === "image";
+                      const isVideo = artifact.type === "video" || artifact.mediaType === "video" || artifact.mediaType === "i2v";
+                      const isAudio = artifact.type === "audio";
+                      return (
+                        <a
+                          key={artifact.id}
+                          href={artifact.storageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] transition-all duration-150"
+                        >
+                          {/* Thumbnail */}
+                          {isImage && (
+                            <div className="h-32 w-full overflow-hidden bg-zinc-100">
+                              <img
+                                src={artifact.storageUrl}
+                                alt={artifact.title ?? "Generated image"}
+                                className="h-full w-full object-cover transition-transform duration-150 group-hover:scale-[1.02]"
+                              />
+                            </div>
+                          )}
+                          {isVideo && (
+                            <div className="flex h-32 w-full items-center justify-center bg-zinc-900">
+                              <span className="text-3xl">🎬</span>
+                            </div>
+                          )}
+                          {isAudio && (
+                            <div className="flex h-20 w-full items-center justify-center bg-zinc-50">
+                              <span className="text-3xl">
+                                {artifact.mediaType === "song" ? "🎵" : "🔊"}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Footer */}
+                          <div className="px-3 py-2">
+                            {artifact.title && (
+                              <p className="truncate text-[11px] font-medium text-zinc-700">
+                                {artifact.title}
+                              </p>
+                            )}
+                            <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-400">
+                              {artifact.mediaType ?? artifact.type}
+                              {" · "}
+                              {new Date(artifact.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
               </div>
