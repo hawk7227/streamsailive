@@ -8,7 +8,6 @@ import {
   RefreshCw, ChevronDown, RotateCcw, File,
 } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/client";
 import { useAssistantSession } from "./useAssistantSession";
 import { usePersistedDraft, readSessionIndex } from "@/lib/utils/session-persistence";
 import type { SessionSummary } from "@/lib/utils/session-persistence";
@@ -533,15 +532,9 @@ export default function AssistantFramePage() {
 
   const [draft, setDraft] = usePersistedDraft(storageKey);
 
-  // Fetch workspaceId once on mount
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from("workspace_members").select("workspace_id").eq("user_id", user.id).limit(1).single()
-        .then(({ data }) => { if (data?.workspace_id) setWorkspaceId(data.workspace_id as string); });
-    });
-  }, []);
+  // workspaceId resolution removed — was hitting workspace_members with auth
+  // which 500'd and blocked the iframe. The orchestrator handles undefined
+  // workspaceId: file search is skipped, generate_media still runs clean.
 
   // Load or generate conversationId
   useEffect(() => {
