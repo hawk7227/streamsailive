@@ -200,7 +200,12 @@ function updateSessionIndex(
     };
 
     const existing = readSessionIndex();
-    const filtered = existing.filter((s) => s.storageKey !== storageKey);
+    // Dedup on both storageKey AND conversationId:
+    // The same conversation may have been saved under 'assistant-session:default'
+    // before the conversationId loaded, and 'conv-<uuid>' after. Remove both.
+    const filtered = existing.filter(
+      (s) => s.storageKey !== storageKey && s.conversationId !== conversationId,
+    );
     const updated = [summary, ...filtered].slice(0, MAX_INDEX_ENTRIES);
     localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(updated));
   } catch {

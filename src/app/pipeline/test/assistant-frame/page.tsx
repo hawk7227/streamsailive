@@ -580,6 +580,21 @@ export default function AssistantFramePage() {
     window.parent.postMessage({ type: "PIPELINE_ASSISTANT_READY" }, "*");
   }, []);
 
+  // Scroll isolation — prevent the iframe from bubbling scroll events to the
+  // parent page when it hits a boundary. Sets overscroll-behavior: none on the
+  // document root so that reaching the top or bottom of the chat scroll area
+  // does not scroll the embedding page. The message scroll container also has
+  // overscroll-contain via Tailwind for defence-in-depth.
+  useEffect(() => {
+    const prev = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overscrollBehavior = "none";
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.documentElement.style.overscrollBehavior = prev;
+      document.body.style.overscrollBehavior = "";
+    };
+  }, []);
+
   const session = useAssistantSession({
     websocketUrl: REALTIME_WS_URL,
     autoConnect: true,
@@ -1243,13 +1258,10 @@ export default function AssistantFramePage() {
               </div>
             )}
 
-            {/* Apps panel */}
+            {/* Apps panel — reserved for future integrations */}
             {toolbarOpen && sidebarPanel === "apps" && (
               <div className="mt-4">
                 <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Apps</div>
-                <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
-                  App integrations coming soon.
-                </div>
               </div>
             )}
 
@@ -1330,7 +1342,7 @@ export default function AssistantFramePage() {
           </div>
         )}
 
-        <div ref={scrollRef} className="relative overflow-auto px-6 py-6">
+        <div ref={scrollRef} className="relative overflow-auto overscroll-contain px-6 py-6">
           {/* Jump to latest */}
           <div className={`pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center transition-[opacity,transform] duration-[180ms] ease-out ${isAtBottom ? "translate-y-2 opacity-0" : "translate-y-0 pointer-events-auto opacity-100"}`}>
             <button onClick={jumpToBottom}
@@ -1572,12 +1584,7 @@ export default function AssistantFramePage() {
                 <textarea ref={textareaRef} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
-                  placeholder={
-                    inputMode === "image" ? "Describe the image you want to generate…"
-                    : inputMode === "video" ? "Describe the video scene, style, or action…"
-                    : inputMode === "build" ? "Describe what to build, fix, or create…"
-                    : "Ask anything — chat, files, or media generation"
-                  }
+                  placeholder=""
                   rows={1} aria-label="Message input" aria-multiline="true"
                   className="max-h-48 min-h-[28px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400" />
               </div>
