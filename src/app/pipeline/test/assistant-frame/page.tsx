@@ -174,35 +174,63 @@ function PreviewCard({ preview }: { preview: AssistantPreviewDescriptor }) {
 // ── Inline markdown renderer ──────────────────────────────────────────────
 // Handles: images ![alt](url), bold **text**, and plain text.
 // No external dependency — only renders patterns the assistant actually emits.
+// ── Content renderers ─────────────────────────────────────────────────────
+// Pattern: [video](url) — rendered as <video controls playsInline>
+// Pattern: ![alt](url) — rendered as <img>
+// Pattern: **text**    — rendered as <strong>
+// Plain text           — rendered as <span>
+//
+// Order matters: video checked before image so [video](url) is not
+// accidentally matched by an image pattern that shares the ](url) suffix.
+
 function renderContent(text: string): React.ReactNode[] {
   if (!text) return [];
 
   const nodes: React.ReactNode[] = [];
-  // Split on markdown images first
-  const imgPattern = /!\[([^\]]*)\][\s\S]*?\(([^)]+)\)/g;
+  // Combined pattern — video first, then image
+  // Group 1: "video" marker (present for video, absent for image)
+  // Group 2: alt text (image only)
+  // Group 3: URL (both)
+  const mediaPattern = /\[video\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)]+)\)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = imgPattern.exec(text)) !== null) {
-    // Text before image
+  while ((match = mediaPattern.exec(text)) !== null) {
+    // Text before this media block
     if (match.index > lastIndex) {
       nodes.push(...renderInlineText(text.slice(lastIndex, match.index)));
     }
-    // The image itself
-    nodes.push(
-      <div key={match.index} className="mt-3">
-        <img
-          src={match[2]}
-          alt={match[1]}
-          className="max-w-full rounded-2xl border border-zinc-200 shadow-sm"
-          style={{ maxHeight: 480 }}
-        />
-      </div>
-    );
+
+    if (match[1]) {
+      // [video](url) — video element
+      nodes.push(
+        <div key={match.index} className="mt-3">
+          <video
+            src={match[1]}
+            controls
+            playsInline
+            className="w-full rounded-2xl border border-zinc-200 shadow-sm"
+          />
+        </div>,
+      );
+    } else {
+      // ![alt](url) — image element
+      nodes.push(
+        <div key={match.index} className="mt-3">
+          <img
+            src={match[3]}
+            alt={match[2]}
+            className="max-w-full rounded-2xl border border-zinc-200 shadow-sm"
+            style={{ maxHeight: 480 }}
+          />
+        </div>,
+      );
+    }
+
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text after last image
+  // Remaining text after last media block
   if (lastIndex < text.length) {
     nodes.push(...renderInlineText(text.slice(lastIndex)));
   }

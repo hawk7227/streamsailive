@@ -315,6 +315,34 @@ async function executeTurn(
           break;
         }
 
+        case "image": {
+          // Orchestrator resolved an image artifact — forward as typed WS message.
+          // Client hook appends markdown to the assistant message for renderContent.
+          const imageUrl = typeof data.url === "string" ? data.url : "";
+          if (imageUrl) {
+            await send(socket, {
+              type: "image.ready",
+              turnId,
+              url: imageUrl,
+            });
+          }
+          break;
+        }
+
+        case "video": {
+          // Orchestrator resolved a video artifact — forward as typed WS message.
+          // Client hook appends [video](url) markdown to the assistant message.
+          const videoUrl = typeof data.url === "string" ? data.url : "";
+          if (videoUrl) {
+            await send(socket, {
+              type: "video.ready",
+              turnId,
+              url: videoUrl,
+            });
+          }
+          break;
+        }
+
         case "done": {
           if (data.ok === true) {
             turnCompleted = true;

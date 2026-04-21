@@ -236,6 +236,18 @@ export type AssistantSessionOutboundMessage =
       type: "session.closed";
       sessionId?: string;
       reason?: string;
+    }
+  | {
+      // Emitted when an image artifact resolves — URL is safe to render
+      type: "image.ready";
+      turnId: string;
+      url: string;
+    }
+  | {
+      // Emitted when a video artifact resolves — URL is safe to render
+      type: "video.ready";
+      turnId: string;
+      url: string;
     };
 
 /* ---------- TYPE GUARD ---------- */

@@ -285,6 +285,44 @@ export function useAssistantSession(
           return;
         }
 
+        case "image.ready": {
+          // Append image markdown to the assistant message for this turn.
+          // renderContent() parses ![alt](url) and renders <img>.
+          setMessages((previous) =>
+            previous.map((msg) => {
+              if (msg.turnId !== message.turnId || msg.role !== "assistant") {
+                return msg;
+              }
+              const separator = msg.content ? "\n" : "";
+              return {
+                ...msg,
+                content: `${msg.content}${separator}![Generated image](${message.url})`,
+                status: "complete",
+              };
+            }),
+          );
+          return;
+        }
+
+        case "video.ready": {
+          // Append video markdown to the assistant message for this turn.
+          // renderContent() parses [video](url) and renders <video controls>.
+          setMessages((previous) =>
+            previous.map((msg) => {
+              if (msg.turnId !== message.turnId || msg.role !== "assistant") {
+                return msg;
+              }
+              const separator = msg.content ? "\n" : "";
+              return {
+                ...msg,
+                content: `${msg.content}${separator}[video](${message.url})`,
+                status: "complete",
+              };
+            }),
+          );
+          return;
+        }
+
         case "workspace.action": {
           await onWorkspaceAction?.(message.action);
           return;
