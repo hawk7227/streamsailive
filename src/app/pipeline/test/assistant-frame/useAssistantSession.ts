@@ -129,6 +129,7 @@ export type UseAssistantSessionOptions = {
 
 export type UseAssistantSessionApi = AssistantSessionHookState & {
   connect: () => Promise<void>;
+  truncateToTurnId: (turnId: string) => void;
   disconnect: () => Promise<void>;
   clearHistory: () => void;
   sendTurn: (
@@ -355,6 +356,7 @@ export function useAssistantSession(
   // On WebSocket reconnect the server may replay SSE events — any delta whose
   // deltaIndex is less than the count already applied for that turn is dropped.
   const seenDeltaCountRef      = useRef<Map<string, number>>(new Map());
+  const autoRetriedTurns        = useRef<Set<string>>(new Set());
 
   const [connectionState, setConnectionState] =
     useState<AssistantConnectionState>("disconnected");
@@ -495,9 +497,32 @@ export function useAssistantSession(
 
         case "turn.completed":
         case "turn.cancelled": {
-          // Clean up dedup tracking for this turn — free memory, prevent stale state
+          // Clean up dedup tracking for this turn
           if (message.turnId) seenDeltaCountRef.current.delete(message.turnId);
-          setMessages((prev) => finalizeAssistantTurn(prev, message));
+          setMessages((prev) => {
+            const next = finalizeAssistantTurn(prev, message);
+            // §16: Auto-retry once when an error status assistant message appears
+            if (message.type === "turn.cancelled" && message.turnId) {
+              const tId = message.turnId;
+              const errMsg = next.find((m) => m.turnId === tId && m.role === "assistant");
+              if (errMsg?.status === "error" && !autoRetriedTurns.current.has(tId)) {
+                autoRetriedTurns.current.add(tId);
+                const lastUser = next.slice().reverse().find((m) => m.role === "user");
+                if (lastUser && mountedRef.current) {
+                  setTimeout(() => {
+                    if (mountedRef.current && socketRef.current?.readyState === WebSocket.OPEN) {
+                      socketRef.current.send(JSON.stringify({
+                        type: "session.turn",
+                        turnId: crypto.randomUUID(),
+                        message: lastUser.content,
+                      }));
+                    }
+                  }, 1200);
+                }
+              }
+            }
+            return next;
+          });
           return;
         }
 
@@ -787,6 +812,17 @@ export function useAssistantSession(
   );
 
   // ── Cancel turn ───────────────────────────────────────────────────────
+  const truncateToTurnId = useCallback((turnId: string) => {
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.turnId === turnId && m.role === "user");
+      if (idx === -1) return prev;
+      return prev.slice(0, idx);
+    });
+    setArtifactsByTurn((prev) => { const n = { ...prev }; delete n[turnId]; return n; });
+    setFileWritesByTurn((prev) => { const n = { ...prev }; delete n[turnId]; return n; });
+    setToolTraceByTurn((prev) => { const n = { ...prev }; delete n[turnId]; return n; });
+  }, []);
+
   const cancelTurn = useCallback(async (turnId?: string) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       throw new Error("Assistant session is not connected");
@@ -865,6 +901,7 @@ export function useAssistantSession(
     connect,
     disconnect,
     clearHistory,
+    truncateToTurnId,
     sendTurn,
     cancelTurn,
     sendWorkspaceAction,

@@ -835,7 +835,7 @@ export default function AssistantFramePage() {
     <div className="grid h-screen grid-cols-[auto_1fr] bg-white text-zinc-900">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className={`border-r border-zinc-200 bg-zinc-50 transition-all duration-[180ms] ${toolbarOpen ? "w-[280px]" : "w-[68px]"}`}>
+      <aside aria-label="Navigation sidebar" className={`border-r border-zinc-200 bg-zinc-50 motion-safe:transition-all motion-safe:duration-[180ms] ${toolbarOpen ? "w-[280px]" : "w-[68px]"}`}>
         <div className="flex h-full flex-col">
 
           {/* Header */}
@@ -882,7 +882,7 @@ export default function AssistantFramePage() {
           <div className="flex-1 overflow-auto px-3 py-3">
 
             {/* Main nav */}
-            <div className="space-y-1">
+            <nav aria-label="Primary navigation" className="space-y-1">
               {toolbarItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = (item.id === "search" && sidebarPanel === "sessions") ||
@@ -899,7 +899,7 @@ export default function AssistantFramePage() {
                   </button>
                 );
               })}
-            </div>
+            </nav>
 
             {/* Sessions panel — §25 real chat history */}
             {toolbarOpen && sidebarPanel === "sessions" && (() => {
@@ -1274,7 +1274,7 @@ export default function AssistantFramePage() {
       </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
-      <main className="grid h-screen grid-rows-[1fr_auto] bg-white">
+      <main aria-label="Chat area" className="grid h-screen grid-rows-[1fr_auto] bg-white">
 
         {/* §20: role="log" + aria-live="polite" — screen readers announce new messages */}
         {/* Active project badge */}
@@ -1436,7 +1436,10 @@ export default function AssistantFramePage() {
                     {/* §15 + §16: Message action row — appears below bubble */}
                     {isUser && isComplete && (
                       <div className="mt-1.5 flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button type="button" onClick={() => handleEditMessage(message.content)}
+                        <button type="button" onClick={() => {
+                            if (message.turnId) session.truncateToTurnId(message.turnId);
+                            handleEditMessage(message.content);
+                          }}
                           className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700">
                           <FileText className="h-3 w-3" />
                           Edit
