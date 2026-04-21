@@ -6,16 +6,13 @@
  * Responsibilities:
  * - Read and write persisted session data (messages only — not connection state)
  * - Validate stored data at every boundary before accepting it
+ * - Maintain a global session index for sidebar history
  * - Expose usePersistedDraft hook for debounced draft persistence
  *
- * Not responsible for:
- * - Session reconnect logic (that lives in useAssistantSession)
- * - sessionId persistence (server assigns a new one on every session.start)
- * - Activities, previews, connectionState — these are ephemeral
- *
  * Storage keys:
- *   assistant-session:{storageKey}  — messages
+ *   assistant-session:{storageKey}  — session messages
  *   assistant-draft:{storageKey}    — draft text
+ *   assistant-sessions:index        — list of recent session summaries
  */
 
 "use client";
@@ -26,12 +23,24 @@ import type { AssistantChatMessage } from "@/app/pipeline/test/assistant-frame/u
 // ── Schema ────────────────────────────────────────────────────────────────
 
 const SCHEMA_VERSION = 1 as const;
+const MAX_INDEX_ENTRIES = 20;
+const SESSION_INDEX_KEY = "assistant-sessions:index";
 
 type PersistedSession = {
   v: typeof SCHEMA_VERSION;
   storageKey: string;
   savedAt: string;
   messages: AssistantChatMessage[];
+};
+
+// ── Session summary (for sidebar history index) ───────────────────────────
+
+export type SessionSummary = {
+  storageKey: string;
+  conversationId: string;
+  firstMessage: string;
+  messageCount: number;
+  savedAt: string;
 };
 
 // ── Runtime validators ────────────────────────────────────────────────────
@@ -75,6 +84,18 @@ function validatePersistedSession(raw: unknown): PersistedSession | null {
   return obj as unknown as PersistedSession;
 }
 
+function isValidSessionSummary(raw: unknown): raw is SessionSummary {
+  if (!raw || typeof raw !== "object") return false;
+  const s = raw as Record<string, unknown>;
+  return (
+    typeof s.storageKey === "string" &&
+    typeof s.conversationId === "string" &&
+    typeof s.firstMessage === "string" &&
+    typeof s.messageCount === "number" &&
+    typeof s.savedAt === "string"
+  );
+}
+
 // ── Storage keys ──────────────────────────────────────────────────────────
 
 function sessionKey(storageKey: string): string {
@@ -87,10 +108,6 @@ function draftKey(storageKey: string): string {
 
 // ── Core read/write ───────────────────────────────────────────────────────
 
-/**
- * Read and validate stored session. Returns null if absent or invalid.
- * localStorage may be unavailable (SSR, incognito) — always try/catch.
- */
 export function readPersistedSession(storageKey: string): PersistedSession | null {
   if (typeof window === "undefined") return null;
   try {
@@ -105,6 +122,7 @@ export function readPersistedSession(storageKey: string): PersistedSession | nul
 export function writePersistedSession(
   storageKey: string,
   messages: AssistantChatMessage[],
+  conversationId?: string,
 ): void {
   if (typeof window === "undefined") return;
   try {
@@ -115,6 +133,11 @@ export function writePersistedSession(
       messages,
     };
     localStorage.setItem(sessionKey(storageKey), JSON.stringify(record));
+
+    // Keep the global session index up-to-date after every write
+    if (conversationId) {
+      updateSessionIndex(storageKey, conversationId, messages);
+    }
   } catch {
     // localStorage quota exceeded or unavailable — fail silently
   }
@@ -125,6 +148,56 @@ export function clearPersistedSession(storageKey: string): void {
   try {
     localStorage.removeItem(sessionKey(storageKey));
     localStorage.removeItem(draftKey(storageKey));
+  } catch {
+    // ignore
+  }
+}
+
+// ── Session index ─────────────────────────────────────────────────────────
+
+/**
+ * Read the global list of recent sessions.
+ * Used by the sidebar to show session history.
+ */
+export function readSessionIndex(): SessionSummary[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(SESSION_INDEX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidSessionSummary);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Update the global session index with the latest state of this session.
+ * Called automatically by writePersistedSession when conversationId is provided.
+ */
+function updateSessionIndex(
+  storageKey: string,
+  conversationId: string,
+  messages: AssistantChatMessage[],
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    if (!firstUserMsg) return;
+
+    const summary: SessionSummary = {
+      storageKey,
+      conversationId,
+      firstMessage: firstUserMsg.content.slice(0, 100).trim(),
+      messageCount: messages.length,
+      savedAt: new Date().toISOString(),
+    };
+
+    const existing = readSessionIndex();
+    const filtered = existing.filter((s) => s.storageKey !== storageKey);
+    const updated = [summary, ...filtered].slice(0, MAX_INDEX_ENTRIES);
+    localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(updated));
   } catch {
     // ignore
   }
@@ -189,7 +262,6 @@ export function usePersistedDraft(
     [key, debounceMs],
   );
 
-  // Flush on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);

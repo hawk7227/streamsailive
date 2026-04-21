@@ -165,19 +165,83 @@ function getFunctionCalls(response: OpenAI.Responses.Response): FunctionCallItem
     .filter((item) => item.call_id && item.name);
 }
 
+// ── Context window ────────────────────────────────────────────────────────
+// PRD §4: rolling window — recent relevant turns only.
+// Sending the full history degrades OpenAI quality on long conversations.
+// Keep the last CONTEXT_WINDOW_SIZE messages (system excluded).
+const CONTEXT_WINDOW_SIZE = 20; // 10 turn pairs
+
+function applyMessageWindow(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length <= CONTEXT_WINDOW_SIZE) return messages;
+  return messages.slice(-CONTEXT_WINDOW_SIZE);
+}
+
+// ── Multimodal content builder ─────────────────────────────────────────────
+// Constructs vision-compatible message content when image attachments are present.
+// Uses the OpenAI Responses API input_image format.
+
+type InputTextPart  = { type: "input_text";  text: string };
+type InputImagePart = { type: "input_image"; image_url: string; detail: "auto" };
+type InputContentPart = InputTextPart | InputImagePart;
+
+function buildUserContent(
+  text: string,
+  imageUrls: string[],
+): string | InputContentPart[] {
+  if (imageUrls.length === 0) return text;
+  const parts: InputContentPart[] = [{ type: "input_text", text }];
+  for (const url of imageUrls) {
+    parts.push({ type: "input_image", image_url: url, detail: "auto" });
+  }
+  return parts;
+}
+
+function extractImageUrls(context: Record<string, unknown>): string[] {
+  const attachments = context.attachments;
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .filter(
+      (a): a is { kind: string; payload: string } =>
+        !!a &&
+        typeof a === "object" &&
+        (a as Record<string, unknown>).kind === "image" &&
+        typeof (a as Record<string, unknown>).payload === "string" &&
+        String((a as Record<string, unknown>).payload).startsWith("http"),
+    )
+    .map((a) => a.payload);
+}
+
+// ── Input message builder ──────────────────────────────────────────────────
+
 function buildInputMessages(
   systemPrompt: string,
   messages: ChatMessage[],
   userText: string,
-): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-  const base = messages.length
-    ? messages
-    : userText
-      ? [{ role: "user" as const, content: userText }]
-      : [];
+  imageUrls: string[] = [],
+): Array<{ role: "system" | "user" | "assistant"; content: string | InputContentPart[] }> {
+  const windowed = applyMessageWindow(messages);
+
+  // When image attachments are present, upgrade the last user message
+  // (or the current userText fallback) to multimodal content.
+  let base: Array<{ role: "system" | "user" | "assistant"; content: string | InputContentPart[] }>;
+
+  if (windowed.length > 0) {
+    // Find the last user message and inject images into it
+    const lastUserIdx = windowed.map((m) => m.role).lastIndexOf("user");
+    base = windowed.map((m, i) => {
+      if (i === lastUserIdx && imageUrls.length > 0) {
+        return { role: m.role, content: buildUserContent(m.content, imageUrls) };
+      }
+      return { role: m.role, content: m.content };
+    });
+  } else {
+    const content = userText
+      ? buildUserContent(userText, imageUrls)
+      : ("" as string);
+    base = userText ? [{ role: "user" as const, content }] : [];
+  }
 
   if (!systemPrompt.trim()) return base;
-
   return [{ role: "system", content: systemPrompt }, ...base];
 }
 
@@ -290,10 +354,12 @@ export async function runOrchestrator(req: NextRequest) {
 
           const model = OPENAI_MODEL;
 
+          const imageUrls = extractImageUrls(normalized.context);
           const initialInput = buildInputMessages(
             assembledContext.systemPrompt,
             normalized.messages,
             normalized.userText,
+            imageUrls,
           );
 
           send("phase", { phase: "calling_openai", model });

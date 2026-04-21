@@ -32,18 +32,29 @@ function sanitizeMessages(messages?: ChatMessage[]): ChatMessage[] {
   );
 }
 
-function buildSystemPromptBase(route: BuildContextInput["route"]): string {
+// PRD §3: adaptive verbosity — match response length to query complexity.
+// Short factual queries get concise answers. Long or complex queries
+// get thorough responses. This preserves OpenAI quality.
+function verbosityHint(userText: string): string {
+  const len = userText.trim().length;
+  if (len < 60)  return " Be concise — match the brevity of the question.";
+  if (len > 400) return " Be thorough — this is a detailed or complex request.";
+  return "";
+}
+
+function buildSystemPromptBase(route: BuildContextInput["route"], userText = ""): string {
+  const vhint = verbosityHint(userText);
   switch (route) {
     case "image":
-      return "You are STREAMS. Handle image requests precisely. Use tools when needed. Never pretend an image tool ran if it did not run.";
+      return `You are STREAMS. Handle image requests precisely. Use tools when needed. Never pretend an image tool ran if it did not run.${vhint}`;
     case "video":
-      return "You are STREAMS. Handle video and image-to-video requests precisely. Use tools when needed. Never pretend a media tool ran if it did not run.";
+      return `You are STREAMS. Handle video and image-to-video requests precisely. Use tools when needed. Never pretend a media tool ran if it did not run.${vhint}`;
     case "build":
-      return "You are STREAMS. Handle build, code, and repair requests precisely. Use tools when needed. Never pretend filesystem or command execution happened if it did not run.";
+      return `You are STREAMS. Handle build, code, and repair requests precisely. Use tools when needed. Never pretend filesystem or command execution happened if it did not run.${vhint}`;
     case "file":
-      return "You are STREAMS. Handle workspace and file requests precisely. Use tools when needed. Never pretend file operations happened if they did not run.";
+      return `You are STREAMS. Handle workspace and file requests precisely. Use tools when needed. Never pretend file operations happened if they did not run.${vhint}`;
     default:
-      return "You are STREAMS. Respond like a strong, reliable assistant. Use tools only when needed. Never pretend a tool ran if it did not run.";
+      return `You are STREAMS. Respond like a strong, reliable assistant. Use tools only when needed. Never pretend a tool ran if it did not run.${vhint}`;
   }
 }
 
@@ -64,7 +75,7 @@ export async function buildContext(
   const safeContext =
     input.context && typeof input.context === "object" ? input.context : {};
 
-  const basePrompt = buildSystemPromptBase(input.route);
+  const basePrompt = buildSystemPromptBase(input.route, input.userText);
 
   // Retrieve file context when workspaceId is present.
   // Semantic search against the user's current message — returns empty string

@@ -22,6 +22,8 @@ import {
   isAssistantSessionOutboundMessage,
 } from "@/lib/assistant-core/assistant-protocol";
 
+// ── Types ─────────────────────────────────────────────────────────────────
+
 export type AssistantChatMessage = {
   id: string;
   turnId?: string;
@@ -63,6 +65,8 @@ export type UseAssistantSessionOptions = {
   onWorkspaceAction?: (action: AssistantWorkspaceAction) => void | Promise<void>;
   /** Storage key for session persistence. Omit to disable persistence. */
   storageKey?: string;
+  /** conversationId for session index — passed to writePersistedSession. */
+  conversationId?: string;
 };
 
 export type UseAssistantSessionApi = AssistantSessionHookState & {
@@ -83,6 +87,14 @@ export type UseAssistantSessionApi = AssistantSessionHookState & {
   activePreview: AssistantPreviewDescriptor | null;
 };
 
+// ── Constants ─────────────────────────────────────────────────────────────
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY_MS = 1_000;
+const STREAM_SAVE_DEBOUNCE_MS = 800; // §11: save during streaming, debounced
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
 function createId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
@@ -93,7 +105,6 @@ function nowIso(): string {
 
 function parseMessageEvent(data: unknown): AssistantSessionOutboundMessage | null {
   if (typeof data !== "string") return null;
-
   try {
     const parsed = JSON.parse(data);
     return isAssistantSessionOutboundMessage(parsed) ? parsed : null;
@@ -106,12 +117,9 @@ function ensureAssistantStreamingMessage(
   messages: AssistantChatMessage[],
   turnId: string,
 ): AssistantChatMessage[] {
-  const existing = messages.find(
-    (message) => message.turnId === turnId && message.role === "assistant",
-  );
-
-  if (existing) return messages;
-
+  if (messages.some((m) => m.turnId === turnId && m.role === "assistant")) {
+    return messages;
+  }
   return [
     ...messages,
     {
@@ -130,15 +138,9 @@ function updateAssistantStreamingDelta(
   event: AssistantTextDeltaMessage,
 ): AssistantChatMessage[] {
   const withMessage = ensureAssistantStreamingMessage(messages, event.turnId);
-
   return withMessage.map((message) => {
     if (message.turnId !== event.turnId || message.role !== "assistant") return message;
-
-    return {
-      ...message,
-      content: message.content + event.delta,
-      status: "streaming",
-    };
+    return { ...message, content: message.content + event.delta, status: "streaming" };
   });
 }
 
@@ -153,27 +155,38 @@ function finalizeAssistantTurn(
     if (!event.turnId || message.turnId !== event.turnId || message.role !== "assistant") {
       return message;
     }
-
-    if (event.type === "turn.completed") {
-      return { ...message, status: "complete" };
-    }
-
-    if (event.type === "turn.cancelled") {
-      return { ...message, status: "cancelled" };
-    }
-
+    if (event.type === "turn.completed")  return { ...message, status: "complete" };
+    if (event.type === "turn.cancelled")  return { ...message, status: "cancelled" };
     return { ...message, status: "error" };
   });
 }
 
+// ── Hook ──────────────────────────────────────────────────────────────────
+
 export function useAssistantSession(
   options: UseAssistantSessionOptions,
 ): UseAssistantSessionApi {
-  const { websocketUrl, initialContext, autoConnect = true, onWorkspaceAction, storageKey } = options;
+  const {
+    websocketUrl,
+    initialContext,
+    autoConnect = true,
+    onWorkspaceAction,
+    storageKey,
+    conversationId,
+  } = options;
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
-  const pendingConnectRef = useRef<Promise<void> | null>(null);
+  const socketRef              = useRef<WebSocket | null>(null);
+  const sessionIdRef           = useRef<string | null>(null);
+  const pendingConnectRef      = useRef<Promise<void> | null>(null);
+  // §17: auto-reconnect state
+  const reconnectAttemptsRef   = useRef(0);
+  const reconnectTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const explicitDisconnectRef  = useRef(false);
+  const mountedRef             = useRef(true);
+  // §11: streaming save debounce
+  const streamSaveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest messages ref for use in closures without stale state
+  const messagesRef            = useRef<AssistantChatMessage[]>([]);
 
   const [connectionState, setConnectionState] =
     useState<AssistantConnectionState>("disconnected");
@@ -191,13 +204,42 @@ export function useAssistantSession(
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<AssistantErrorMessage | null>(null);
 
+  // Keep messagesRef in sync for closures
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Track mount state to avoid setState after unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // ── Streaming save (§11) ──────────────────────────────────────────────
+  // Debounced — fires 800ms after the last received delta.
+  // Does not write on every token; avoids one localStorage write per delta.
+  const scheduleStreamSave = useCallback(() => {
+    if (!storageKey) return;
+    if (streamSaveTimerRef.current) clearTimeout(streamSaveTimerRef.current);
+    streamSaveTimerRef.current = setTimeout(() => {
+      if (storageKey) {
+        writePersistedSession(storageKey, messagesRef.current, conversationId);
+      }
+    }, STREAM_SAVE_DEBOUNCE_MS);
+  }, [storageKey, conversationId]);
+
+  // ── Message event handler ─────────────────────────────────────────────
   const handleOutboundMessage = useCallback(
     async (message: AssistantSessionOutboundMessage) => {
+      if (!mountedRef.current) return;
+
       switch (message.type) {
         case "session.ready": {
           sessionIdRef.current = message.sessionId;
-          setSession((previous) => ({
-            ...previous,
+          setSession((prev) => ({
+            ...prev,
             sessionId: message.sessionId,
             createdAt: message.createdAt,
           }));
@@ -205,8 +247,8 @@ export function useAssistantSession(
         }
 
         case "session.state": {
-          setSession((previous) => ({
-            ...previous,
+          setSession((prev) => ({
+            ...prev,
             sessionId: message.sessionId,
             status: message.status,
             activeTurnId: message.activeTurnId,
@@ -216,13 +258,13 @@ export function useAssistantSession(
         }
 
         case "turn.started": {
-          setMessages((previous) => ensureAssistantStreamingMessage(previous, message.turnId));
+          setMessages((prev) => ensureAssistantStreamingMessage(prev, message.turnId));
           return;
         }
 
         case "activity": {
-          setActivities((previous) => ({
-            ...previous,
+          setActivities((prev) => ({
+            ...prev,
             [message.turnId]: {
               turnId: message.turnId,
               activity: message.activity,
@@ -234,19 +276,25 @@ export function useAssistantSession(
         }
 
         case "text.delta": {
-          setMessages((previous) => updateAssistantStreamingDelta(previous, message));
+          setMessages((prev) => {
+            const next = updateAssistantStreamingDelta(prev, message);
+            // Update ref immediately so scheduleStreamSave sees latest content
+            messagesRef.current = next;
+            return next;
+          });
+          scheduleStreamSave(); // §11: debounced save during streaming
           return;
         }
 
         case "turn.completed":
         case "turn.cancelled": {
-          setMessages((previous) => finalizeAssistantTurn(previous, message));
+          setMessages((prev) => finalizeAssistantTurn(prev, message));
           return;
         }
 
         case "error": {
           setError(message);
-          setMessages((previous) => finalizeAssistantTurn(previous, message));
+          setMessages((prev) => finalizeAssistantTurn(prev, message));
           return;
         }
 
@@ -256,68 +304,43 @@ export function useAssistantSession(
         case "preview.updated":
         case "preview.stale":
         case "preview.superseded": {
-          setPreviews((previous) => ({
-            ...previous,
-            [message.preview.previewId]: message.preview,
-          }));
-          setPreviewsByTurn((previous) => {
-            const existing = previous[message.turnId] ?? [];
+          setPreviews((prev) => ({ ...prev, [message.preview.previewId]: message.preview }));
+          setPreviewsByTurn((prev) => {
+            const existing = prev[message.turnId] ?? [];
             return existing.includes(message.preview.previewId)
-              ? previous
-              : { ...previous, [message.turnId]: [...existing, message.preview.previewId] };
+              ? prev
+              : { ...prev, [message.turnId]: [...existing, message.preview.previewId] };
           });
           return;
         }
 
         case "preview.closed": {
-          setPreviews((previous) => {
-            const next = { ...previous };
-            delete next[message.previewId];
-            return next;
-          });
-          setPreviewsByTurn((previous) => {
-            const next = { ...previous };
-            next[message.turnId] = (next[message.turnId] ?? []).filter(
-              (id) => id !== message.previewId,
-            );
+          setPreviews((prev) => { const next = { ...prev }; delete next[message.previewId]; return next; });
+          setPreviewsByTurn((prev) => {
+            const next = { ...prev };
+            next[message.turnId] = (next[message.turnId] ?? []).filter((id) => id !== message.previewId);
             return next;
           });
           return;
         }
 
         case "image.ready": {
-          // Append image markdown to the assistant message for this turn.
-          // renderContent() parses ![alt](url) and renders <img>.
-          setMessages((previous) =>
-            previous.map((msg) => {
-              if (msg.turnId !== message.turnId || msg.role !== "assistant") {
-                return msg;
-              }
-              const separator = msg.content ? "\n" : "";
-              return {
-                ...msg,
-                content: `${msg.content}${separator}![Generated image](${message.url})`,
-                status: "complete",
-              };
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.turnId !== message.turnId || msg.role !== "assistant") return msg;
+              const sep = msg.content ? "\n" : "";
+              return { ...msg, content: `${msg.content}${sep}![Generated image](${message.url})`, status: "complete" };
             }),
           );
           return;
         }
 
         case "video.ready": {
-          // Append video markdown to the assistant message for this turn.
-          // renderContent() parses [video](url) and renders <video controls>.
-          setMessages((previous) =>
-            previous.map((msg) => {
-              if (msg.turnId !== message.turnId || msg.role !== "assistant") {
-                return msg;
-              }
-              const separator = msg.content ? "\n" : "";
-              return {
-                ...msg,
-                content: `${msg.content}${separator}[video](${message.url})`,
-                status: "complete",
-              };
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.turnId !== message.turnId || msg.role !== "assistant") return msg;
+              const sep = msg.content ? "\n" : "";
+              return { ...msg, content: `${msg.content}${sep}[video](${message.url})`, status: "complete" };
             }),
           );
           return;
@@ -339,14 +362,16 @@ export function useAssistantSession(
         }
       }
     },
-    [onWorkspaceAction],
+    [onWorkspaceAction, scheduleStreamSave],
   );
 
+  // ── Connect (§17: with auto-reconnect backing) ─────────────────────────
   const connect = useCallback(async () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) return;
     if (pendingConnectRef.current) return pendingConnectRef.current;
 
     const run = new Promise<void>((resolve, reject) => {
+      if (!mountedRef.current) return;
       setConnectionState("connecting");
       setError(null);
 
@@ -354,15 +379,18 @@ export function useAssistantSession(
       socketRef.current = socket;
 
       socket.addEventListener("open", () => {
+        if (!mountedRef.current) return;
+        // Successful connect — reset backoff counter
+        reconnectAttemptsRef.current = 0;
         setConnectionState("connected");
 
-        const startMessage: AssistantSessionInboundMessage = {
-          type: "session.start",
-          protocolVersion: ASSISTANT_PROTOCOL_VERSION,
-          context: initialContext,
-        };
-
-        socket.send(JSON.stringify(startMessage));
+        socket.send(
+          JSON.stringify({
+            type: "session.start",
+            protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+            context: initialContext,
+          } satisfies AssistantSessionInboundMessage),
+        );
         resolve();
       });
 
@@ -376,19 +404,37 @@ export function useAssistantSession(
             message: "Malformed outbound assistant protocol payload",
             code: "MALFORMED_OUTBOUND_PROTOCOL_PAYLOAD",
           };
-          setError(transportError);
+          if (mountedRef.current) setError(transportError);
           return;
         }
-
         await handleOutboundMessage(outbound);
       });
 
       socket.addEventListener("close", () => {
+        if (!mountedRef.current) return;
         setConnectionState("closed");
+
+        // §17: Auto-reconnect with exponential backoff.
+        // Only fires if the disconnect was not initiated by the user.
+        if (
+          !explicitDisconnectRef.current &&
+          reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+        ) {
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttemptsRef.current,
+            16_000,
+          );
+          reconnectAttemptsRef.current++;
+          reconnectTimerRef.current = setTimeout(() => {
+            if (mountedRef.current && !explicitDisconnectRef.current) {
+              void connect();
+            }
+          }, delay);
+        }
       });
 
       socket.addEventListener("error", () => {
-        setConnectionState("error");
+        if (mountedRef.current) setConnectionState("error");
         reject(new Error("WebSocket connection failed"));
       });
     }).finally(() => {
@@ -399,76 +445,65 @@ export function useAssistantSession(
     return run;
   }, [handleOutboundMessage, initialContext, websocketUrl]);
 
+  // ── Disconnect ────────────────────────────────────────────────────────
   const disconnect = useCallback(async () => {
-    if (!socketRef.current) return;
-
-    setConnectionState("closing");
-
-    if (socketRef.current.readyState === WebSocket.OPEN) {
-      const closeMessage: AssistantSessionInboundMessage = {
-        type: "session.close",
-        reason: "explicit_close",
-      };
-      socketRef.current.send(JSON.stringify(closeMessage));
+    explicitDisconnectRef.current = true;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
     }
-
+    if (!socketRef.current) return;
+    setConnectionState("closing");
+    if (socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "session.close", reason: "explicit_close" } satisfies AssistantSessionInboundMessage),
+      );
+    }
     socketRef.current.close();
     socketRef.current = null;
     setConnectionState("closed");
   }, []);
 
+  // ── Send turn ─────────────────────────────────────────────────────────
   const sendTurn = useCallback(
     async (message: string, options?: { context?: Record<string, unknown> }) => {
       if (!message.trim()) return null;
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
         throw new Error("Assistant session is not connected");
       }
-      // PRD §18: prevent overlapping turns — server also enforces this,
-      // but guard at the client to avoid optimistic UI duplication.
+      // PRD §18: prevent overlapping turns
       if (session.status === "running") {
         throw new Error("A turn is already in progress. Cancel it before sending a new one.");
       }
 
       const turnId = createId("turn");
-      const createdAt = nowIso();
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: createId("user_msg"),
-          turnId,
-          role: "user",
-          content: message,
-          status: "complete",
-          createdAt,
-        },
+      setMessages((prev) => [
+        ...prev,
+        { id: createId("user_msg"), turnId, role: "user", content: message, status: "complete", createdAt: nowIso() },
       ]);
 
-      const payload: AssistantSessionInboundMessage = {
-        type: "session.turn",
-        turnId,
-        message,
-        context: options?.context,
-      };
-
-      socketRef.current.send(JSON.stringify(payload));
+      socketRef.current.send(
+        JSON.stringify({
+          type: "session.turn",
+          turnId,
+          message,
+          context: options?.context,
+        } satisfies AssistantSessionInboundMessage),
+      );
       return turnId;
     },
     [session.status],
   );
 
+  // ── Cancel turn ───────────────────────────────────────────────────────
   const cancelTurn = useCallback(async (turnId?: string) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       throw new Error("Assistant session is not connected");
     }
-
-    const payload: AssistantSessionInboundMessage = {
-      type: "session.cancel",
-      turnId,
-      reason: "explicit_cancel",
-    };
-
-    socketRef.current.send(JSON.stringify(payload));
+    socketRef.current.send(
+      JSON.stringify({ type: "session.cancel", turnId, reason: "explicit_cancel" } satisfies AssistantSessionInboundMessage),
+    );
   }, []);
 
   const sendWorkspaceAction = useCallback(
@@ -479,34 +514,42 @@ export function useAssistantSession(
     [onWorkspaceAction],
   );
 
+  // ── Auto-connect on mount ─────────────────────────────────────────────
   useEffect(() => {
     if (!autoConnect) return;
+    explicitDisconnectRef.current = false;
     void connect();
     return () => {
+      explicitDisconnectRef.current = true;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       void disconnect();
     };
-  }, [autoConnect, connect, disconnect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Persist messages after each turn completes — not during streaming
-  // to avoid one localStorage write per text delta.
+  // ── Persist on turn complete ──────────────────────────────────────────
+  // The streaming save (debounced 800ms) handles in-progress turns.
+  // This handles the final durable write after each completed turn.
   useEffect(() => {
     if (!storageKey) return;
     const isStreaming = messages.some((m) => m.status === "streaming");
     if (isStreaming) return;
-    writePersistedSession(storageKey, messages);
-  }, [messages, storageKey]);
+    writePersistedSession(storageKey, messages, conversationId);
+  }, [messages, storageKey, conversationId]);
 
+  // ── Clear history ─────────────────────────────────────────────────────
   const clearHistory = useCallback(() => {
     setMessages([]);
     if (storageKey) clearPersistedSession(storageKey);
   }, [storageKey]);
 
+  // ── Active preview ────────────────────────────────────────────────────
   const activePreview = useMemo(() => {
-    const activeTurnId = session.activeTurnId;
-    if (!activeTurnId) return null;
-    const previewIds = previewsByTurn[activeTurnId] ?? [];
-    const latestPreviewId = previewIds[previewIds.length - 1];
-    return latestPreviewId ? previews[latestPreviewId] ?? null : null;
+    const tid = session.activeTurnId;
+    if (!tid) return null;
+    const ids = previewsByTurn[tid] ?? [];
+    const last = ids[ids.length - 1];
+    return last ? previews[last] ?? null : null;
   }, [previews, previewsByTurn, session.activeTurnId]);
 
   return {
@@ -528,4 +571,3 @@ export function useAssistantSession(
     activePreview,
   };
 }
-
