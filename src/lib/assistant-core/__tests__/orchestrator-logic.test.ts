@@ -14,27 +14,17 @@
 
 import { describe, it, expect } from "vitest";
 
-// ── Re-implement the tested functions here (pure, no env imports) ──────────
-// We test the logic in isolation to avoid env side effects.
-// Any change to the real functions must be reflected here.
+// isChatQueryComplex imported from the real module — no local copy.
+// Signal tests live in __tests__/complexQuerySignals.test.ts.
+// This file only tests routing decisions (selectInitialModel,
+// selectContinuationModel) that depend on the result of isChatQueryComplex.
 
 const OPENAI_MODEL      = "gpt-4.1";
 const OPENAI_MINI_MODEL = "gpt-4o-mini";
 
 const FULL_MODEL_ROUTES = new Set(["build", "file"]);
 
-const COMPLEX_QUERY_KEYWORDS =
-  /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?|tradeoffs?|best\s+practices?|architecture|implementation)\b/i;
-
-const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
-
-function isChatQueryComplex(userText: string): boolean {
-  const text = userText.trim();
-  if (text.length > COMPLEX_QUERY_LENGTH_THRESHOLD) return true;
-  if ((text.match(/\?/g) ?? []).length >= 2) return true;
-  if (COMPLEX_QUERY_KEYWORDS.test(text)) return true;
-  return false;
-}
+import { isChatQueryComplex } from "../complexQuerySignals";
 
 function selectInitialModel(
   route: string,
@@ -80,85 +70,24 @@ describe("TEST 1 — Simple chat → mini (fast path)", () => {
   });
 });
 
-// ── TEST 2 — Complex chat escalation ──────────────────────────────────────
+// ── TEST 2 — Complex chat routing ─────────────────────────────────────────
+// Signal detection tests (which inputs ARE complex) live in
+// __tests__/complexQuerySignals.test.ts. This file only tests that when
+// isChatQueryComplex returns true, the routing decision is correct.
 
-describe("TEST 2 — Complex chat → full model (escalation path)", () => {
-  it("long query (>300 chars) → full model", () => {
-    const longQuery = "a".repeat(301);
-    const isComplex = isChatQueryComplex(longQuery);
-    const model = selectInitialModel("chat", false, isComplex);
-    expect(isComplex).toBe(true);
+describe("TEST 2 — Complex chat → full model (routing decision)", () => {
+  it("when isComplexChat=true → selectInitialModel returns full model", () => {
+    const model = selectInitialModel("chat", false, true);
     expect(model).toBe(OPENAI_MODEL);
   });
 
-  it("multi-part question (≥2 question marks) → full model", () => {
-    const input = "What is vector search? How does it compare to full-text search?";
-    const isComplex = isChatQueryComplex(input);
-    const model = selectInitialModel("chat", false, isComplex);
-    expect(isComplex).toBe(true);
-    expect(model).toBe(OPENAI_MODEL);
-  });
-
-  it("'explain in detail' → full model", () => {
-    const input = "Explain in detail how pgvector works";
-    expect(isChatQueryComplex(input)).toBe(true);
-    expect(selectInitialModel("chat", false, true)).toBe(OPENAI_MODEL);
-  });
-
-  it("'step by step' → full model", () => {
-    const input = "Walk me through step by step how to set up auth";
-    expect(isChatQueryComplex(input)).toBe(true);
-  });
-
-  it("'compare' keyword → full model", () => {
-    const input = "Compare vector search and full-text search in large-scale systems";
-    expect(isChatQueryComplex(input)).toBe(true);
-    expect(selectInitialModel("chat", false, true)).toBe(OPENAI_MODEL);
-  });
-
-  it("'analyze' / 'analyse' → full model", () => {
-    expect(isChatQueryComplex("Analyze the performance bottlenecks")).toBe(true);
-    expect(isChatQueryComplex("Analyse this code for issues")).toBe(true);
-  });
-
-  it("'comprehensive' → full model", () => {
-    expect(isChatQueryComplex("Give me a comprehensive overview of RAG systems")).toBe(true);
-  });
-
-  it("'walk me through' → full model", () => {
-    expect(isChatQueryComplex("Walk me through the authentication flow")).toBe(true);
-  });
-
-  it("'break it down' → full model", () => {
-    expect(isChatQueryComplex("Break it down for me")).toBe(true);
-  });
-
-  it("'pros and cons' → full model", () => {
-    expect(isChatQueryComplex("What are the pros and cons of serverless?")).toBe(true);
-    expect(isChatQueryComplex("pros and cons of Next.js")).toBe(true);
-  });
-
-  it("'in-depth' → full model", () => {
-    expect(isChatQueryComplex("Give me an in-depth explanation of embeddings")).toBe(true);
-  });
-
-  it("exact PRD test input → full model (PRD §2)", () => {
-    const input = "Explain the tradeoffs between vector search and full-text search in large-scale systems.";
-    const isComplex = isChatQueryComplex(input);
-    const model = selectInitialModel("chat", false, isComplex);
-    expect(isComplex).toBe(true);
-    expect(model).toBe(OPENAI_MODEL);
-  });
-
-  it("complex chat: escalated = false (no tools ran) — answer comes from full model", () => {
-    // Complex query uses full model upfront — no escalation needed
-    // continuation = full (same as initial — no change)
+  it("complex chat with no tool calls: escalated=false (full model upfront, no transition)", () => {
     const model = selectInitialModel("chat", false, true);
     const continuation = selectContinuationModel(model, false);
+    const escalated = continuation !== model;
     expect(model).toBe(OPENAI_MODEL);
     expect(continuation).toBe(OPENAI_MODEL);
-    // The TURN_TIMING log will show escalated: false because
-    // continuation === initial (no change, escalation tracks mini→full transition)
+    expect(escalated).toBe(false);
   });
 });
 
@@ -259,37 +188,9 @@ describe("TEST 10 — No double call for non-tool paths", () => {
   });
 });
 
-// ── Boundary / edge cases ─────────────────────────────────────────────────
+// ── Routing boundary conditions ───────────────────────────────────────────
 
-describe("Edge cases and boundary conditions", () => {
-  it("exactly 300 chars → NOT complex (threshold is >300)", () => {
-    const input = "a".repeat(300);
-    expect(isChatQueryComplex(input)).toBe(false);
-  });
-
-  it("exactly 301 chars → complex", () => {
-    const input = "a".repeat(301);
-    expect(isChatQueryComplex(input)).toBe(true);
-  });
-
-  it("exactly 1 question mark → NOT complex", () => {
-    expect(isChatQueryComplex("What is 2+2?")).toBe(false);
-  });
-
-  it("exactly 2 question marks → complex", () => {
-    expect(isChatQueryComplex("What is 2+2? And what is 3+3?")).toBe(true);
-  });
-
-  it("keyword match is case-insensitive", () => {
-    expect(isChatQueryComplex("EXPLAIN IN DETAIL how this works")).toBe(true);
-    expect(isChatQueryComplex("Step-By-Step guide")).toBe(true);
-  });
-
-  it("'analyze' (US) and 'analyse' (UK) both match", () => {
-    expect(isChatQueryComplex("analyze the logs")).toBe(true);
-    expect(isChatQueryComplex("analyse the logs")).toBe(true);
-  });
-
+describe("Routing boundary conditions", () => {
   it("empty string → not complex → mini", () => {
     expect(isChatQueryComplex("")).toBe(false);
     const model = selectInitialModel("chat", false, false);
@@ -300,6 +201,6 @@ describe("Edge cases and boundary conditions", () => {
     const fromMini = selectContinuationModel(OPENAI_MINI_MODEL, true);
     const fromFull = selectContinuationModel(OPENAI_MODEL, true);
     expect(fromMini).toBe(OPENAI_MODEL);
-    expect(fromFull).toBe(OPENAI_MODEL); // no change — already full
+    expect(fromFull).toBe(OPENAI_MODEL);
   });
 });

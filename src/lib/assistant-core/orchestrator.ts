@@ -7,6 +7,7 @@ import { buildContext } from "./context";
 import { client } from "./openai";
 import { buildAssistantTools, executeAssistantTool } from "./tools";
 import { TurnTimer } from "./timing";
+import { isChatQueryComplex } from "./complexQuerySignals";
 import type {
   AssistantMode,
   ChatMessage,
@@ -156,38 +157,9 @@ function applyMessageWindow(messages: ChatMessage[]): ChatMessage[] {
 
 const FULL_MODEL_ROUTES = new Set<AssistantMode>(["build", "file"]);
 
-// ── Query complexity detector ─────────────────────────────────────────────
-// Predicts whether a chat query will need a long, structured, or deeply
-// reasoned response — BEFORE calling any model. Based only on input signals.
-//
-// Design constraint: deterministic, <1ms, no network, no model call.
-// Response-length escalation AFTER streaming is not possible — by the time
-// mini produces 600 chars, those tokens are already in the client. The only
-// safe escalation point is upfront.
-//
-// Signals (each independently sufficient):
-//   1. Long query (>300 chars) — correlated with expected long answer
-//   2. Multi-part question (≥2 question marks) — structured response needed
-//   3. Explicit structured-output vocabulary — user is asking for detail
-//
-// Tune thresholds via TURN_TIMING logs: if model='gpt-4o-mini' and
-// responses feel shallow, lower the length threshold or add keywords.
-
-const COMPLEX_QUERY_KEYWORDS =
-  /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?|tradeoffs?|best\s+practices?|architecture|implementation)\b/i;
-
-const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
-
-function isChatQueryComplex(userText: string): boolean {
-  const text = userText.trim();
-  // Long query → likely wants a detailed answer
-  if (text.length > COMPLEX_QUERY_LENGTH_THRESHOLD) return true;
-  // Multi-part question → structured response needed
-  if ((text.match(/\?/g) ?? []).length >= 2) return true;
-  // Explicit structured-output or deep-reasoning request
-  if (COMPLEX_QUERY_KEYWORDS.test(text)) return true;
-  return false;
-}
+// isChatQueryComplex imported from ./complexQuerySignals.
+// To add new keywords or update thresholds, edit that module.
+// See its header for the routing miss procedure.
 
 function selectInitialModel(
   route: AssistantMode,
