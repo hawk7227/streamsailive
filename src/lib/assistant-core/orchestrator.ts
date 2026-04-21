@@ -6,6 +6,7 @@ import { routeRequest } from "./router";
 import { buildContext } from "./context";
 import { client } from "./openai";
 import { buildAssistantTools, executeAssistantTool } from "./tools";
+import { TurnTimer } from "./timing";
 import type {
   AssistantMode,
   ChatMessage,
@@ -32,10 +33,7 @@ type MediaArtifact = {
 
 const encoder = new TextEncoder();
 
-// ── Tool timeout ─────────────────────────────────────────────────────────
-// PRD §19: every tool call must enforce a timeout (5–30s).
-// Long-running tools (generate_media, run_workspace_command) may raise this
-// via STREAMS_TOOL_TIMEOUT_MS env var, capped at 30s per the PRD.
+// ── Tool timeout ──────────────────────────────────────────────────────────
 const TOOL_TIMEOUT_MS = Math.min(
   Number(STREAMS_TOOL_TIMEOUT_MS ?? "30000") || 30_000,
   30_000,
@@ -49,12 +47,7 @@ function withToolTimeout<T>(
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () =>
-        reject(
-          new Error(
-            `TOOL_TIMEOUT: ${toolName} exceeded ${timeoutMs}ms limit`,
-          ),
-        ),
+      () => reject(new Error(`TOOL_TIMEOUT: ${toolName} exceeded ${timeoutMs}ms limit`)),
       timeoutMs,
     );
   });
@@ -67,18 +60,15 @@ function sse(event: string, data: unknown): Uint8Array {
 
 function normalizeMessages(value: RequestBody["messages"]): ChatMessage[] {
   if (!Array.isArray(value)) return [];
-
   return value
-    .filter(
-      (item): item is { role: string; content: unknown } =>
-        !!item && typeof item.role === "string",
+    .filter((item): item is { role: string; content: unknown } =>
+      !!item && typeof item.role === "string",
     )
     .map((item) => {
       const role =
         item.role === "system" || item.role === "assistant" || item.role === "user"
           ? item.role
           : "user";
-
       let content = "";
       if (typeof item.content === "string") {
         content = item.content;
@@ -86,19 +76,13 @@ function normalizeMessages(value: RequestBody["messages"]): ChatMessage[] {
         content = item.content
           .map((part) => {
             if (typeof part === "string") return part;
-            if (
-              part &&
-              typeof part === "object" &&
-              "text" in part &&
-              typeof (part as { text?: unknown }).text === "string"
-            ) {
+            if (part && typeof part === "object" && "text" in part && typeof (part as { text?: unknown }).text === "string") {
               return String((part as { text: string }).text);
             }
             return "";
           })
           .join("\n");
       }
-
       return { role, content };
     })
     .filter((item) => item.content.trim().length > 0) as ChatMessage[];
@@ -107,21 +91,15 @@ function normalizeMessages(value: RequestBody["messages"]): ChatMessage[] {
 function normalizeRequest(body: RequestBody): NormalizedAssistantRequest {
   const messages = normalizeMessages(body.messages);
   const latestUserMessage =
-    messages
-      .slice()
-      .reverse()
-      .find((message) => message.role === "user")?.content ?? "";
-
+    messages.slice().reverse().find((m) => m.role === "user")?.content ?? "";
   const userText =
     typeof body.message === "string" && body.message.trim()
       ? body.message.trim()
       : latestUserMessage;
-
   return {
     userText,
     messages,
-    context:
-      body.context && typeof body.context === "object" ? body.context : {},
+    context: body.context && typeof body.context === "object" ? body.context : {},
   };
 }
 
@@ -135,64 +113,38 @@ function extractTextFromContent(
 }
 
 function getTextFromResponse(response: OpenAI.Responses.Response): string {
-  // Prefer top-level output_text — canonical deduplicated field on Response.
-  if (response.output_text.trim()) {
-    return response.output_text.trim();
-  }
-
-  // Fallback: walk output items for message content.
+  if (response.output_text.trim()) return response.output_text.trim();
   const chunks: string[] = [];
   for (const item of response.output) {
-    if (item.type === "message") {
-      chunks.push(...extractTextFromContent(item.content));
-    }
+    if (item.type === "message") chunks.push(...extractTextFromContent(item.content));
   }
-
   return chunks.join("\n").trim();
 }
 
 function getFunctionCalls(response: OpenAI.Responses.Response): FunctionCallItem[] {
   return response.output
-    .filter(
-      (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
-        item.type === "function_call",
-    )
-    .map((item) => ({
-      call_id: item.call_id,
-      name: item.name,
-      arguments: item.arguments,
-    }))
+    .filter((item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call")
+    .map((item) => ({ call_id: item.call_id, name: item.name, arguments: item.arguments }))
     .filter((item) => item.call_id && item.name);
 }
 
-// ── Context window ────────────────────────────────────────────────────────
-// PRD §4: rolling window — recent relevant turns only.
-// Sending the full history degrades OpenAI quality on long conversations.
-// Keep the last CONTEXT_WINDOW_SIZE messages (system excluded).
-const CONTEXT_WINDOW_SIZE = 20; // 10 turn pairs
+// ── Context window (§4) ───────────────────────────────────────────────────
+const CONTEXT_WINDOW_SIZE = 20;
 
 function applyMessageWindow(messages: ChatMessage[]): ChatMessage[] {
   if (messages.length <= CONTEXT_WINDOW_SIZE) return messages;
   return messages.slice(-CONTEXT_WINDOW_SIZE);
 }
 
-// ── Multimodal content builder ─────────────────────────────────────────────
-// Constructs vision-compatible message content when image attachments are present.
-// Uses the OpenAI Responses API input_image format.
-
+// ── Multimodal content (§21) ──────────────────────────────────────────────
 type InputTextPart  = { type: "input_text";  text: string };
 type InputImagePart = { type: "input_image"; image_url: string; detail: "auto" };
 type InputContentPart = InputTextPart | InputImagePart;
 
-function buildUserContent(
-  text: string,
-  imageUrls: string[],
-): string | InputContentPart[] {
+function buildUserContent(text: string, imageUrls: string[]): string | InputContentPart[] {
   if (imageUrls.length === 0) return text;
   const parts: InputContentPart[] = [{ type: "input_text", text }];
-  for (const url of imageUrls) {
-    parts.push({ type: "input_image", image_url: url, detail: "auto" });
-  }
+  for (const url of imageUrls) parts.push({ type: "input_image", image_url: url, detail: "auto" });
   return parts;
 }
 
@@ -200,18 +152,14 @@ function extractImageUrls(context: Record<string, unknown>): string[] {
   const attachments = context.attachments;
   if (!Array.isArray(attachments)) return [];
   return attachments
-    .filter(
-      (a): a is { kind: string; payload: string } =>
-        !!a &&
-        typeof a === "object" &&
-        (a as Record<string, unknown>).kind === "image" &&
-        typeof (a as Record<string, unknown>).payload === "string" &&
-        String((a as Record<string, unknown>).payload).startsWith("http"),
+    .filter((a): a is { kind: string; payload: string } =>
+      !!a && typeof a === "object" &&
+      (a as Record<string, unknown>).kind === "image" &&
+      typeof (a as Record<string, unknown>).payload === "string" &&
+      String((a as Record<string, unknown>).payload).startsWith("http"),
     )
     .map((a) => a.payload);
 }
-
-// ── Input message builder ──────────────────────────────────────────────────
 
 function buildInputMessages(
   systemPrompt: string,
@@ -220,13 +168,8 @@ function buildInputMessages(
   imageUrls: string[] = [],
 ): Array<{ role: "system" | "user" | "assistant"; content: string | InputContentPart[] }> {
   const windowed = applyMessageWindow(messages);
-
-  // When image attachments are present, upgrade the last user message
-  // (or the current userText fallback) to multimodal content.
   let base: Array<{ role: "system" | "user" | "assistant"; content: string | InputContentPart[] }>;
-
   if (windowed.length > 0) {
-    // Find the last user message and inject images into it
     const lastUserIdx = windowed.map((m) => m.role).lastIndexOf("user");
     base = windowed.map((m, i) => {
       if (i === lastUserIdx && imageUrls.length > 0) {
@@ -235,27 +178,21 @@ function buildInputMessages(
       return { role: m.role, content: m.content };
     });
   } else {
-    const content = userText
-      ? buildUserContent(userText, imageUrls)
-      : ("" as string);
+    const content = userText ? buildUserContent(userText, imageUrls) : ("" as string);
     base = userText ? [{ role: "user" as const, content }] : [];
   }
-
   if (!systemPrompt.trim()) return base;
   return [{ role: "system", content: systemPrompt }, ...base];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+    ? (value as Record<string, unknown>) : null;
 }
 
 function firstString(...values: unknown[]): string | null {
   for (const value of values) {
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
 }
@@ -269,44 +206,102 @@ function normalizeMediaKind(value: unknown): "image" | "video" | "i2v" {
 function extractMediaArtifact(result: unknown): MediaArtifact | null {
   const root = asRecord(result);
   if (!root) return null;
-
   const payload = asRecord(root.payload);
   const data = asRecord(root.data);
-
   const url = firstString(
-    root.outputUrl,
-    root.url,
-    root.assetUrl,
-    root.videoUrl,
-    root.imageUrl,
-    payload?.outputUrl,
-    payload?.url,
-    payload?.assetUrl,
-    payload?.videoUrl,
-    payload?.imageUrl,
-    data?.outputUrl,
-    data?.url,
-    data?.assetUrl,
-    data?.videoUrl,
-    data?.imageUrl,
+    root.outputUrl, root.url, root.assetUrl, root.videoUrl, root.imageUrl,
+    payload?.outputUrl, payload?.url, payload?.assetUrl, payload?.videoUrl, payload?.imageUrl,
+    data?.outputUrl, data?.url, data?.assetUrl, data?.videoUrl, data?.imageUrl,
   );
-
   if (!url) return null;
-
-  const kind = normalizeMediaKind(
-    firstString(root.type, payload?.type, data?.type),
-  );
-
-  return {
-    kind,
-    url,
-    result: root,
-  };
+  const kind = normalizeMediaKind(firstString(root.type, payload?.type, data?.type));
+  return { kind, url, result: root };
 }
+
+// ── Streaming first-pass response ─────────────────────────────────────────
+// Calls OpenAI with stream:true. Emits text.delta SSE events per token as
+// they arrive. Returns the final Response object from response.completed
+// for function call extraction — identical to the blocking path.
+//
+// PRD §3: first token <200ms. Streaming mode is required to achieve this.
+// The realtime server already handles multiple text.delta events; previously
+// it was receiving only one (the full response in a single event).
+async function streamFirstResponse(
+  params: {
+    model: string;
+    input: Parameters<typeof client.responses.create>[0]["input"];
+    tools: Parameters<typeof client.responses.create>[0]["tools"];
+  },
+  send: (event: string, data: unknown) => void,
+  timer: TurnTimer,
+): Promise<OpenAI.Responses.Response> {
+  const stream = await client.responses.create({
+    model: params.model,
+    input: params.input,
+    tools: params.tools,
+    stream: true,
+  });
+
+  let firstTokenEmitted = false;
+  let completedResponse: OpenAI.Responses.Response | null = null;
+
+  for await (const event of stream) {
+    switch (event.type) {
+      case "response.output_text.delta": {
+        // §3: first token instrumentation
+        if (!firstTokenEmitted) {
+          timer.mark("first_text_ready");
+          firstTokenEmitted = true;
+        }
+        if (event.delta) {
+          send("text_delta", { delta: event.delta });
+        }
+        break;
+      }
+
+      case "response.completed": {
+        completedResponse = event.response;
+        break;
+      }
+
+      case "response.failed":
+      case "response.incomplete": {
+        // Surface failure — caller will handle it
+        break;
+      }
+
+      default:
+        // All other events (function_call_arguments.delta, etc.) are
+        // accumulated inside the final Response on response.completed.
+        break;
+    }
+  }
+
+  if (!completedResponse) {
+    throw new Error("OpenAI stream completed without a response.completed event");
+  }
+
+  // If no text was emitted via deltas (pure tool-call response),
+  // mark first_text_ready now so timing is still recorded.
+  if (!firstTokenEmitted) {
+    timer.mark("first_text_ready");
+  }
+
+  return completedResponse;
+}
+
+// ── Main orchestrator ─────────────────────────────────────────────────────
 
 export async function runOrchestrator(req: NextRequest) {
   const body = (await req.json()) as RequestBody;
   const normalized = normalizeRequest(body);
+
+  // Each turn gets a timer. turnId derived from context if present, else new UUID.
+  const turnId =
+    typeof normalized.context.turnId === "string"
+      ? normalized.context.turnId
+      : crypto.randomUUID();
+  const timer = new TurnTimer(turnId);
 
   return new Response(
     new ReadableStream<Uint8Array>({
@@ -320,6 +315,8 @@ export async function runOrchestrator(req: NextRequest) {
 
         const closeStream = (donePayload: Record<string, unknown>) => {
           if (streamClosed) return;
+          timer.mark("turn_complete");
+          timer.flush();
           send("done", donePayload);
           streamClosed = true;
           controller.close();
@@ -327,11 +324,11 @@ export async function runOrchestrator(req: NextRequest) {
 
         try {
           send("phase", { phase: "routing" });
-
           const route = routeRequest(normalized);
 
           send("phase", { phase: "building_context", route });
 
+          // ── Context build — measured ──────────────────────────────────
           const assembledContext = await buildContext({
             route,
             userText: normalized.userText,
@@ -339,21 +336,23 @@ export async function runOrchestrator(req: NextRequest) {
             context: normalized.context,
             workspaceId:
               typeof normalized.context.workspaceId === "string"
-                ? normalized.context.workspaceId
-                : undefined,
+                ? normalized.context.workspaceId : undefined,
             conversationId:
               typeof normalized.context.conversationId === "string"
-                ? normalized.context.conversationId
-                : undefined,
+                ? normalized.context.conversationId : undefined,
           });
 
-          const tools = buildAssistantTools({
+          timer.mark("context_built");
+          timer.annotate({
             route,
-            context: assembledContext,
+            model: OPENAI_MODEL,
+            msg_length: normalized.userText.length,
+            had_file_ctx: !!assembledContext.fileContext,
+            windowed_messages: Math.min(normalized.messages.length, CONTEXT_WINDOW_SIZE),
           });
 
+          const tools = buildAssistantTools({ route, context: assembledContext });
           const model = OPENAI_MODEL;
-
           const imageUrls = extractImageUrls(normalized.context);
           const initialInput = buildInputMessages(
             assembledContext.systemPrompt,
@@ -364,21 +363,25 @@ export async function runOrchestrator(req: NextRequest) {
 
           send("phase", { phase: "calling_openai", model });
 
-          let response: OpenAI.Responses.Response = await client.responses.create({
-            model,
-            input: initialInput,
-            tools,
-          });
+          // ── First OpenAI call — streaming, measured ───────────────────
+          timer.mark("openai_called");
+
+          let response = await streamFirstResponse(
+            { model, input: initialInput, tools },
+            send,
+            timer,
+          );
 
           let loopCount = 0;
           const maxLoops = 12;
           let mediaResolved = false;
 
+          // ── Tool loop — blocking calls (tool responses are fast) ──────
           while (loopCount < maxLoops && !streamClosed) {
             const calls = getFunctionCalls(response);
             if (calls.length === 0) break;
 
-            loopCount += 1;
+            loopCount++;
 
             const toolOutputs: Array<{
               type: "function_call_output";
@@ -389,35 +392,18 @@ export async function runOrchestrator(req: NextRequest) {
             for (const call of calls) {
               if (streamClosed) return;
 
-              send("tool_call", {
-                call_id: call.call_id,
-                name: call.name,
-              });
+              send("tool_call", { call_id: call.call_id, name: call.name });
 
               let parsedArgs: Record<string, unknown> = {};
-              try {
-                parsedArgs = JSON.parse(call.arguments || "{}");
-              } catch {
-                parsedArgs = {};
-              }
+              try { parsedArgs = JSON.parse(call.arguments || "{}"); } catch { parsedArgs = {}; }
 
               try {
                 const result = await withToolTimeout(
                   executeAssistantTool(
-                    {
-                      name: call.name,
-                      args: parsedArgs,
-                      route: route as AssistantMode,
-                      context: assembledContext,
-                    },
+                    { name: call.name, args: parsedArgs, route: route as AssistantMode, context: assembledContext },
                     {
                       onProgress: (text: string) => {
-                        if (text && text.trim()) {
-                          send("tool_progress", {
-                            name: call.name,
-                            text,
-                          });
-                        }
+                        if (text?.trim()) send("tool_progress", { name: call.name, text });
                       },
                     },
                   ),
@@ -425,47 +411,25 @@ export async function runOrchestrator(req: NextRequest) {
                   TOOL_TIMEOUT_MS,
                 );
 
-                send("tool_result", {
-                  name: call.name,
-                  result,
-                });
+                send("tool_result", { name: call.name, result });
 
-                if (
-                  result &&
-                  typeof result === "object" &&
-                  ("action" in result || "payload" in result)
-                ) {
+                if (result && typeof result === "object" && ("action" in result || "payload" in result)) {
                   send("tool_result", result);
                 }
 
                 const mediaArtifact =
-                  call.name === "generate_media"
-                    ? extractMediaArtifact(result)
-                    : null;
+                  call.name === "generate_media" ? extractMediaArtifact(result) : null;
 
                 if (mediaArtifact) {
                   mediaResolved = true;
-
                   send("phase", { phase: "media_ready", kind: mediaArtifact.kind });
-
-                  send("media", {
-                    kind: mediaArtifact.kind,
-                    url: mediaArtifact.url,
-                    result: mediaArtifact.result,
-                  });
-
+                  send("media", { kind: mediaArtifact.kind, url: mediaArtifact.url, result: mediaArtifact.result });
                   if (mediaArtifact.kind === "image") {
-                    send("image", {
-                      url: mediaArtifact.url,
-                      result: mediaArtifact.result,
-                    });
+                    send("image", { url: mediaArtifact.url, result: mediaArtifact.result });
                   } else {
-                    send("video", {
-                      url: mediaArtifact.url,
-                      result: mediaArtifact.result,
-                    });
+                    send("video", { url: mediaArtifact.url, result: mediaArtifact.result });
                   }
-
+                  timer.annotate({ tool_count: loopCount });
                   closeStream({ ok: true, media: true, kind: mediaArtifact.kind });
                   return;
                 }
@@ -476,14 +440,8 @@ export async function runOrchestrator(req: NextRequest) {
                   output: JSON.stringify(result ?? null),
                 });
               } catch (error) {
-                const message =
-                  error instanceof Error ? error.message : "tool execution failed";
-
-                send("tool_error", {
-                  name: call.name,
-                  error: message,
-                });
-
+                const message = error instanceof Error ? error.message : "tool execution failed";
+                send("tool_error", { name: call.name, error: message });
                 toolOutputs.push({
                   type: "function_call_output",
                   call_id: call.call_id,
@@ -497,38 +455,49 @@ export async function runOrchestrator(req: NextRequest) {
 
             send("phase", { phase: "continuing_after_tools" });
 
+            // Post-tool continuation — blocking mode is correct here:
+            // the model is writing a short summary after tool results,
+            // not the initial potentially-long response.
             response = await client.responses.create({
               model,
               previous_response_id: response.id,
               input: toolOutputs,
             });
+
+            // Emit any text from the continuation response
+            const continuationText = getTextFromResponse(response);
+            if (continuationText) {
+              send("text_delta", { delta: continuationText });
+            }
           }
 
           if (streamClosed) return;
 
+          timer.annotate({ tool_count: loopCount });
           send("phase", { phase: "finalizing" });
 
+          // If the first streaming call produced no text (all tool calls, no continuation),
+          // emit any remaining text from the final response.
           const finalText = getTextFromResponse(response);
-
-          if (finalText) {
-            send("text", { text: finalText });
-          } else {
+          if (loopCount === 0 && finalText) {
+            // This path is hit when streaming produced text but the loop ran zero times.
+            // Text was already emitted via text_delta events from streamFirstResponse.
+            // The realtime server builds the full text from accumulated deltas.
+            // No action needed here.
+          } else if (loopCount === 0 && !finalText) {
             const outputTypes = Array.isArray(response?.output)
-              ? response.output
-                  .map((item: OpenAI.Responses.ResponseOutputItem) => item.type)
-                  .join(", ")
+              ? response.output.map((item: OpenAI.Responses.ResponseOutputItem) => item.type).join(", ")
               : "none";
-
-            send("text", {
-              text: `I received your message, but no text content was returned by the model. [output types: ${outputTypes}]`,
+            send("text_delta", {
+              delta: `I received your message, but no text content was returned by the model. [output types: ${outputTypes}]`,
             });
           }
 
           closeStream({ ok: true });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "orchestrator failed";
-
+          const message = error instanceof Error ? error.message : "orchestrator failed";
+          timer.mark("turn_complete");
+          timer.flush();
           send("tool_error", { error: message });
           closeStream({ ok: false, error: message });
         }
@@ -543,4 +512,3 @@ export async function runOrchestrator(req: NextRequest) {
     },
   );
 }
-

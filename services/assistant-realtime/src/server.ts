@@ -304,12 +304,25 @@ async function executeTurn(
           break;
         }
 
+        case "text_delta": {
+          // Real per-token delta from the OpenAI streaming Responses API.
+          // Orchestrator now uses stream:true on the first responses.create() call.
+          // Each response.output_text.delta event becomes one text_delta SSE event,
+          // forwarded here as a text.delta WS message to the client.
+          // This is what enables PRD §3 first-token <200ms — the client starts
+          // rendering as soon as the first token arrives from OpenAI.
+          const delta = typeof data.delta === "string" ? data.delta : "";
+          if (delta) {
+            await send(socket, { type: "text.delta", turnId, delta });
+          }
+          break;
+        }
+
         case "text": {
+          // Legacy path: fallback for any non-streaming text block.
+          // Still handled for backward compatibility with tool continuation responses.
           const text = typeof data.text === "string" ? data.text : "";
           if (text) {
-            // CLASSIFICATION: single text.delta carrying full response.
-            // Real data from OpenAI via orchestrator. Not simulated.
-            // Token-level streaming: Blocked — requires orchestrator streaming mode.
             await send(socket, { type: "text.delta", turnId, delta: text });
           }
           break;
