@@ -70,13 +70,19 @@ export async function pollVideoJob(
     return { status: "failed" };
   }
 
-  // Fetch conversation_id from generation record for artifact linkage
+  // Fetch conversation_id and prompt from generation record for artifact linkage
   const admin2 = createAdminClient();
   const { data: genRow } = await admin2
     .from("generations")
-    .select("conversation_id")
+    .select("conversation_id, prompt, type")
     .eq("id", job.generation_id)
     .single();
+
+  const genRowTyped = genRow as {
+    conversation_id?: string | null;
+    prompt?: string | null;
+    type?: string | null;
+  } | null;
 
   // Create artifact record and finalize generation
   await finalizeVideoArtifact({
@@ -85,7 +91,9 @@ export async function pollVideoJob(
     workspaceId: job.workspace_id,
     storageUrl,
     mimeType,
-    conversationId: (genRow as { conversation_id?: string | null } | null)?.conversation_id ?? undefined,
+    conversationId: genRowTyped?.conversation_id ?? undefined,
+    title: genRowTyped?.prompt ? genRowTyped.prompt.slice(0, 200) : undefined,
+    mediaType: genRowTyped?.type === "i2v" ? "i2v" : "video",
   });
 
   return { status: "completed", outputUrl: storageUrl };

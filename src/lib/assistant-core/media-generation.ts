@@ -10,6 +10,7 @@ import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler"
 import { submitSceneBatch } from "@/lib/video/scene-batch";
 import type { VideoSceneSpec } from "@/lib/video/types";
 import { generateVideo, VideoRuntimeError } from "@/lib/video-runtime/generateVideo";
+import { finalizeImageArtifact } from "@/lib/media-realism/finalizeImageArtifact";
 
 export type MediaKind = "image" | "video" | "i2v";
 
@@ -23,6 +24,8 @@ export type MediaGenerationArgs = {
   quality?: string;
   imageUrl?: string;
   workspaceId?: string;
+  /** Passed through to finalizeImageArtifact for conversation-scoped artifact browse. */
+  conversationId?: string;
   storyBible?: string;
   sourceKind?: "self" | "family_or_friend" | "synthetic" | "mixed";
   longVideo?: boolean;
@@ -528,18 +531,25 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     const urlParts = image.outputUrl.split("/generations/");
     const storagePath = urlParts[1] ?? `${workspaceId}/unknown`;
 
-    // Step 3: DB insert (AFTER storage write is confirmed)
-    // BLOCKED: user_id context not available in tool executor yet.
-    // DB persistence requires real user session linkage (future slice).
-    // Storage write is proven. DB insert skipped until user context flows through.
-    const assetId = crypto.randomUUID();
-    console.log(JSON.stringify({
-      level: "info",
-      event: "DB_PERSISTENCE_SKIPPED",
-      reason: "user_id not available in tool executor context",
-      storagePath,
-      assetId,
-    }));
+    // Step 3: DB insert (AFTER storage write is confirmed).
+    // Uses SENTINEL_USER_ID — same pattern as video, song, and voice runtimes.
+    // The artifacts table requires only workspace_id, not user_id.
+    const artifactId = await finalizeImageArtifact({
+      workspaceId,
+      storageUrl: image.outputUrl,
+      mimeType: "image/png",
+      title: args.prompt.slice(0, 200),
+      conversationId: args.conversationId,
+    }).catch((err: unknown) => {
+      // Non-fatal — image is already in storage. Log and continue.
+      console.error(JSON.stringify({
+        level: "error",
+        event: "IMAGE_ARTIFACT_FINALIZE_FAILED",
+        reason: err instanceof Error ? err.message : String(err),
+        storagePath,
+      }));
+      return crypto.randomUUID();
+    });
 
     return {
       ok: true,
@@ -548,7 +558,7 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
       model,
       status: "completed",
       outputUrl: image.outputUrl,
-      externalId: assetId,
+      externalId: artifactId,
       costEstimate: null,
       plan,
     };

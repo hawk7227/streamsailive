@@ -95,14 +95,16 @@ export async function pollSongJob(
     ? await uploadStemArtifacts(statusResult.stemUrls, job.workspace_id)
     : [];
 
-  // Fetch conversation_id from generation record for artifact linkage
+  // Fetch conversation_id and prompt from generation record for artifact linkage
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const adminInst = createAdminClient();
   const { data: genRow } = await adminInst
     .from("generations")
-    .select("conversation_id")
+    .select("conversation_id, prompt")
     .eq("id", job.generation_id)
     .single();
+
+  const songGenRow = genRow as { conversation_id?: string | null; prompt?: string | null } | null;
 
   // Finalize — creates artifact records and marks generation+job complete
   await finalizeSongArtifact({
@@ -112,7 +114,8 @@ export async function pollSongJob(
     storageUrl,
     mimeType,
     stems: stems.length > 0 ? stems : undefined,
-    conversationId: (genRow as { conversation_id?: string | null } | null)?.conversation_id ?? undefined,
+    conversationId: songGenRow?.conversation_id ?? undefined,
+    title: songGenRow?.prompt ? songGenRow.prompt.slice(0, 200) : undefined,
   });
 
   return { status: "completed", artifactUrl: storageUrl };

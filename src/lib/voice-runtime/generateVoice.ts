@@ -79,7 +79,7 @@ export async function generateVoice(input: GenerateVoiceInput): Promise<Generate
   }
 
   // 9. Finalize — create artifact + mark generation completed
-  await finalizeVoiceArtifact({ generationId, jobId, workspaceId: normalizedReq.workspaceId, storageUrl, mimeType: submitResult.mimeType, conversationId: normalizedReq.conversationId });
+  await finalizeVoiceArtifact({ generationId, jobId, workspaceId: normalizedReq.workspaceId, storageUrl, mimeType: submitResult.mimeType, conversationId: normalizedReq.conversationId, title: normalizedReq.text.slice(0, 200) });
 
   console.log(JSON.stringify({ level: "info", event: "VOICE_GENERATION_COMPLETED", generationId, provider: resolved.provider, storageUrl }));
 

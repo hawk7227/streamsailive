@@ -532,9 +532,18 @@ export async function executeAssistantTool(
       handlers?.onProgress?.(`preparing ${type} generation`);
 
       const workspaceId =
-        typeof input.context.context?.workspaceId === "string"
-          ? input.context.context.workspaceId
-          : undefined;
+        typeof input.context.workspaceId === "string"
+          ? input.context.workspaceId
+          : typeof input.context.context?.workspaceId === "string"
+            ? input.context.context.workspaceId
+            : undefined;
+
+      const conversationId =
+        typeof input.context.conversationId === "string"
+          ? input.context.conversationId
+          : typeof input.context.context?.conversationId === "string"
+            ? input.context.context.conversationId
+            : undefined;
 
       const result = await executeMediaGeneration({
         type,
@@ -549,6 +558,7 @@ export async function executeAssistantTool(
         longVideo: input.args.longVideo === true,
         realismMode: typeof input.args.realismMode === "string" ? input.args.realismMode as "strict" | "balanced" | "strict_everyday" | "premium_commercial" : undefined,
         workspaceId,
+        conversationId,
       });
 
       handlers?.onProgress?.(`${type} generation ${result.status}`);
