@@ -246,7 +246,7 @@ function NeonSkeleton() {
 // Renders a fully resolved media artifact (image, video) as a typed card.
 // Replaces the previous markdown injection + renderContent regex approach.
 // Receives ArtifactDescriptor from session.artifactsByTurn — NOT message.content.
-function ArtifactCard({ artifact }: { artifact: ArtifactDescriptor }) {
+function ArtifactCard({ artifact, onRegenerate }: { artifact: ArtifactDescriptor; onRegenerate?: () => void }) {
   const isImage = artifact.mediaType === "image";
   const isVideo = artifact.mediaType === "video" || artifact.mediaType === "i2v";
 
@@ -282,6 +282,17 @@ function ArtifactCard({ artifact }: { artifact: ArtifactDescriptor }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Regenerate — only shown when prompt is available */}
+          {onRegenerate && artifact.title && (
+            <button
+              type="button"
+              onClick={onRegenerate}
+              className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Regenerate
+            </button>
+          )}
           {/* Download */}
           <a
             href={artifact.url}
@@ -922,7 +933,12 @@ export default function AssistantFramePage() {
                       </div>
                       {/* ArtifactCard rendered outside the text flow — full width */}
                       {turnArtifact && !isUser && (
-                        <ArtifactCard artifact={turnArtifact} />
+                        <ArtifactCard
+                          artifact={turnArtifact}
+                          onRegenerate={turnArtifact.title
+                            ? () => handleEditMessage(turnArtifact.title!)
+                            : undefined}
+                        />
                       )}
 
                       {/* §20: aria-live on activity badge */}
