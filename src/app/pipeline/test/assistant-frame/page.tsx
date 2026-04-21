@@ -269,13 +269,13 @@ function ThinkingStream({ label }: { label: string | null }) {
         </span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-zinc-500">
+        <p className="text-base font-medium text-zinc-500">
           {label ?? "Working…"}
         </p>
         {/* Skeleton shimmer lines */}
-        <div className="mt-2 space-y-1.5">
-          <div className="h-2.5 w-3/4 animate-pulse rounded-full bg-zinc-100" />
-          <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-zinc-100" style={{ animationDelay: "150ms" }} />
+        <div className="mt-3 space-y-2">
+          <div className="h-3 w-3/4 animate-pulse rounded-full bg-zinc-100" />
+          <div className="h-3 w-1/2 animate-pulse rounded-full bg-zinc-100" style={{ animationDelay: "150ms" }} />
         </div>
       </div>
     </div>
@@ -297,9 +297,9 @@ function ToolTrace({ entries }: { entries: ToolTraceEntry[] }) {
     build_workspace:       "🏗️",
   };
   return (
-    <div className="mt-3 space-y-1 border-t border-zinc-100 pt-3">
+    <div className="mt-4 space-y-1 border-t border-zinc-100 pt-3 opacity-60">
       {entries.map((e, i) => (
-        <div key={i} className="flex items-start gap-2 text-[11px]">
+        <div key={i} className="flex items-start gap-2 text-[11px] text-zinc-400">
           <span className="mt-0.5 shrink-0 text-base leading-none">
             {TOOL_ICONS[e.name] ?? "🔩"}
           </span>
@@ -850,8 +850,8 @@ export default function AssistantFramePage() {
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-4">
             {toolbarOpen ? (
               <div className="min-w-0 flex-1 pr-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">STREAMS</div>
-                <div className="mt-0.5 truncate text-sm font-semibold text-zinc-950">
+                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-400">STREAMS</div>
+                <div className="mt-1 truncate text-[15px] font-semibold text-zinc-950">
                   {sessionIndex.find(s => s.conversationId === conversationId)?.firstMessage?.slice(0, 28) ?? "New conversation"}
                 </div>
               </div>
@@ -875,8 +875,8 @@ export default function AssistantFramePage() {
                 : <WifiOff className="h-4 w-4 shrink-0 text-zinc-400" />}
               {toolbarOpen && (
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium text-zinc-900">{formatConnectionLabel(session.connectionState)}</div>
-                  <div className="truncate text-[11px] text-zinc-500">{session.session.sessionId || "Awaiting session"}</div>
+                  <div className="text-[13px] font-semibold text-zinc-900">{formatConnectionLabel(session.connectionState)}</div>
+                  <div className="truncate text-[11px] font-mono text-zinc-400 mt-0.5">{session.session.sessionId ? session.session.sessionId.slice(0, 20) + "…" : "Awaiting session"}</div>
                   {(session.connectionState === "closed" || session.connectionState === "error") && (
                     <button onClick={() => void session.connect()}
                       className="mt-1.5 text-[11px] font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700">
@@ -930,7 +930,7 @@ export default function AssistantFramePage() {
                                  (item.id === "settings" && sidebarPanel === "settings");
                 return (
                   <button key={item.id} type="button" onClick={() => handleSidebarItem(item.id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-700 hover:bg-white"}`}>
+                    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-[14px] font-medium transition-colors ${isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-700 hover:bg-white"}`}>
                     <Icon className="h-4 w-4 shrink-0" />
                     {toolbarOpen && <span>{item.label}</span>}
                   </button>
@@ -1335,7 +1335,7 @@ export default function AssistantFramePage() {
           </div>
         )}
 
-        <div ref={scrollRef} className="relative overflow-auto overscroll-contain px-6 py-6">
+        <div ref={scrollRef} className="relative overflow-auto overscroll-contain px-8 py-8">
           {/* Jump to latest */}
           <div className={`pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center transition-[opacity,transform] duration-[180ms] ease-out ${isAtBottom ? "translate-y-2 opacity-0" : "translate-y-0 pointer-events-auto opacity-100"}`}>
             <button onClick={jumpToBottom}
@@ -1358,7 +1358,7 @@ export default function AssistantFramePage() {
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 px-8 py-8">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Ready</div>
                   <div className="mt-2 text-2xl font-semibold text-zinc-950">What can I help you build?</div>
-                  <div className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
+                  <div className="mt-3 max-w-xl text-base leading-7 text-zinc-500">
                     Chat, generate images and video, write and debug code, or ask questions about any file you upload.
                   </div>
                 </div>
@@ -1366,8 +1366,8 @@ export default function AssistantFramePage() {
                   {CAPABILITIES.map((cap) => (
                     <div key={cap.label} className="rounded-2xl border border-zinc-200 bg-white px-4 py-4">
                       <div className="text-2xl">{cap.icon}</div>
-                      <div className="mt-2 text-sm font-semibold text-zinc-900">{cap.label}</div>
-                      <div className="mt-1 text-[12px] leading-5 text-zinc-500">{cap.hint}</div>
+                      <div className="mt-3 text-[15px] font-semibold text-zinc-900">{cap.label}</div>
+                      <div className="mt-1.5 text-[13px] leading-5 text-zinc-500">{cap.hint}</div>
                     </div>
                   ))}
                 </div>
@@ -1393,7 +1393,7 @@ export default function AssistantFramePage() {
                   <div className={`w-full max-w-3xl ${isUser ? "" : ""}`}>
 
                     {/* Role label — outside bubble, above */}
-                    <div className={`mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${isUser ? "text-right text-zinc-400" : "text-zinc-400"}`}>
+                    <div className={`mb-2 px-1 text-[12px] font-bold tracking-[0.12em] uppercase ${isUser ? "text-right text-zinc-500" : "text-zinc-500"}`}>
                       {isUser ? "You" : "STREAMS"}
                     </div>
 
@@ -1408,7 +1408,7 @@ export default function AssistantFramePage() {
                     {/* Bubble — only render when there is content, artifact, or error */}
                     {(message.content || turnArtifact || turnFileWrite || isError ||
                       (message.status === "streaming" && turnUiState?.label === "Creating image…")) && (
-                      <div className={`rounded-2xl border px-5 py-4 ${
+                      <div className={`rounded-2xl border px-6 py-5 ${
                         isUser
                           ? "border-zinc-900 bg-zinc-900 text-white"
                           : isError && !message.content
@@ -1416,7 +1416,7 @@ export default function AssistantFramePage() {
                             : "border-zinc-200 bg-white text-zinc-900"
                       }`}>
                         {/* Content */}
-                        <div className={`text-sm leading-7 ${isUser ? "text-white" : (isError && !message.content) ? "text-rose-700" : "text-zinc-800"}`}>
+                        <div className={`text-[16px] leading-[1.8] ${isUser ? "text-white" : (isError && !message.content) ? "text-rose-700" : "text-zinc-800"}`}>
                           {isUser
                             ? (message.content || "")
                             : turnArtifact
@@ -1458,7 +1458,7 @@ export default function AssistantFramePage() {
 
                         {/* Incomplete indicator — content exists but turn errored */}
                         {!isUser && isError && message.content && (
-                          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-amber-600">
+                          <div className="mt-4 flex items-center gap-1.5 text-xs text-amber-600">
                             <span>⚠</span>
                             <span>Response may be incomplete</span>
                           </div>
@@ -1529,7 +1529,7 @@ export default function AssistantFramePage() {
         </div>
 
         {/* ── Input area ────────────────────────────────────────────────── */}
-        <div className="border-t border-zinc-200 bg-white px-6 py-4">
+        <div className="border-t border-zinc-200 bg-white px-6 py-5">
           <div className="mx-auto max-w-[820px] space-y-3">
 
             {/* Attachment panel */}
@@ -1556,7 +1556,7 @@ export default function AssistantFramePage() {
                 const active = inputMode === m;
                 return (
                   <button key={m} type="button" onClick={() => setInputMode(m)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"}`}>
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-medium transition-colors ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"}`}>
                     <span className="text-xs">{cfg[m].icon}</span>
                     {cfg[m].label}
                   </button>
@@ -1572,19 +1572,19 @@ export default function AssistantFramePage() {
                 <Paperclip className="h-4 w-4" />
               </button>
 
-              <div className="flex-1 rounded-3xl border border-zinc-300 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+              <div className="flex-1 rounded-3xl border border-zinc-300 bg-white px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.06)]">
                 {/* §20: aria-label and aria-multiline on textarea */}
                 <textarea ref={textareaRef} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
                   placeholder=""
                   rows={1} aria-label="Message input" aria-multiline="true"
-                  className="max-h-48 min-h-[28px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400" />
+                  className="max-h-48 min-h-[32px] w-full resize-none bg-transparent text-base leading-7 text-zinc-900 outline-none placeholder:text-zinc-400" />
               </div>
 
               {session.isTurnRunning ? (
                 <button onClick={handleCancel}
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-zinc-200 px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50">
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-zinc-200 px-5 text-base font-medium text-zinc-800 hover:bg-zinc-50">
                   <Square className="h-4 w-4" />
                   Cancel
                 </button>
@@ -1592,7 +1592,7 @@ export default function AssistantFramePage() {
                 <button onClick={handleSend}
                   disabled={!draft.trim() || session.connectionState !== "connected"}
                   aria-label="Send message"
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-zinc-900 px-5 text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
                   <Send className="h-4 w-4" />
                   Send
                 </button>
