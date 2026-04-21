@@ -51,6 +51,13 @@ type SocketSession = {
   previousResponseId: string | null;
   createdAt: string;
   activeAbort: AbortController | null;
+  /**
+   * Monotonically increasing index of text.delta messages sent for the
+   * active turn. Reset to 0 at the start of each turn. Included in every
+   * text.delta WS message so the client can detect and drop duplicate
+   * deltas on WebSocket reconnect.
+   */
+  turnDeltaIndex: number;
 };
 
 function createSession(): SocketSession {
@@ -61,6 +68,7 @@ function createSession(): SocketSession {
     previousResponseId: null,
     createdAt: new Date().toISOString(),
     activeAbort: null,
+    turnDeltaIndex: 0,
   };
 }
 
@@ -194,10 +202,11 @@ async function executeTurn(
   context: Record<string, unknown>,
   log: Logger,
 ): Promise<void> {
-  // Mark running
+  // Mark running — reset delta index so reconnect dedup starts from 0 for this turn
   session.status = "running";
   session.activeTurnId = turnId;
   session.activeAbort = new AbortController();
+  session.turnDeltaIndex = 0;
 
   // Emit turn.started immediately — latency mask, <50ms, no backend dependency
   await send(socket, {
@@ -309,11 +318,15 @@ async function executeTurn(
           // Orchestrator now uses stream:true on the first responses.create() call.
           // Each response.output_text.delta event becomes one text_delta SSE event,
           // forwarded here as a text.delta WS message to the client.
-          // This is what enables PRD §3 first-token <200ms — the client starts
-          // rendering as soon as the first token arrives from OpenAI.
+          // deltaIndex is included so the client can skip duplicates on reconnect.
           const delta = typeof data.delta === "string" ? data.delta : "";
           if (delta) {
-            await send(socket, { type: "text.delta", turnId, delta });
+            await send(socket, {
+              type: "text.delta",
+              turnId,
+              delta,
+              deltaIndex: session.turnDeltaIndex++,
+            });
           }
           break;
         }
@@ -323,7 +336,12 @@ async function executeTurn(
           // Still handled for backward compatibility with tool continuation responses.
           const text = typeof data.text === "string" ? data.text : "";
           if (text) {
-            await send(socket, { type: "text.delta", turnId, delta: text });
+            await send(socket, {
+              type: "text.delta",
+              turnId,
+              delta: text,
+              deltaIndex: session.turnDeltaIndex++,
+            });
           }
           break;
         }
@@ -462,6 +480,12 @@ async function handleMessage(
 
   switch (msg.type) {
     case "session.start": {
+      // On reconnect the client may pass the last known previousResponseId.
+      // Restore it on the session so the next turn can use it for resumption.
+      if (typeof msg.previousResponseId === "string" && msg.previousResponseId) {
+        session.previousResponseId = msg.previousResponseId;
+      }
+
       await send(socket, {
         type: "session.ready",
         sessionId: session.sessionId,
@@ -470,9 +494,9 @@ async function handleMessage(
       await send(socket, {
         type: "session.state",
         sessionId: session.sessionId,
-        status: "idle",
-        activeTurnId: null,
-        previousResponseId: null,
+        status: session.status,
+        activeTurnId: session.activeTurnId,
+        previousResponseId: session.previousResponseId,
       });
       break;
     }

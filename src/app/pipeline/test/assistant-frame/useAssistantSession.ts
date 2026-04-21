@@ -307,6 +307,8 @@ export function useAssistantSession(
 
   const socketRef              = useRef<WebSocket | null>(null);
   const sessionIdRef           = useRef<string | null>(null);
+  // Tracks the latest previousResponseId so reconnect session.start can include it
+  const previousResponseIdRef  = useRef<string | null>(null);
   const pendingConnectRef      = useRef<Promise<void> | null>(null);
   // §17: auto-reconnect state
   const reconnectAttemptsRef   = useRef(0);
@@ -318,6 +320,10 @@ export function useAssistantSession(
   // Latest messages ref for use in closures without stale state
   const messagesRef            = useRef<AssistantChatMessage[]>([]);
   const uiStateControllerRef   = useRef(new UIStateController());
+  // Deduplication: tracks how many text.delta events have been applied per turnId.
+  // On WebSocket reconnect the server may replay SSE events — any delta whose
+  // deltaIndex is less than the count already applied for that turn is dropped.
+  const seenDeltaCountRef      = useRef<Map<string, number>>(new Map());
 
   const [connectionState, setConnectionState] =
     useState<AssistantConnectionState>("disconnected");
@@ -402,6 +408,9 @@ export function useAssistantSession(
         }
 
         case "session.state": {
+          // Keep ref in sync so the reconnect session.start can read it without
+          // stale closure issues — React state is not readable in WS callbacks.
+          previousResponseIdRef.current = message.previousResponseId;
           setSession((prev) => ({
             ...prev,
             sessionId: message.sessionId,
@@ -431,6 +440,16 @@ export function useAssistantSession(
         }
 
         case "text.delta": {
+          // Deduplication guard — drop any delta whose index is below what we
+          // have already applied for this turn. This prevents double-appending
+          // on WebSocket reconnect if the server replays SSE events.
+          const seenCount = seenDeltaCountRef.current.get(message.turnId) ?? 0;
+          if (message.deltaIndex < seenCount) {
+            // Already applied — drop silently
+            return;
+          }
+          seenDeltaCountRef.current.set(message.turnId, message.deltaIndex + 1);
+
           setMessages((prev) => {
             const next = updateAssistantStreamingDelta(prev, message);
             // Update ref immediately so scheduleStreamSave sees latest content
@@ -443,6 +462,8 @@ export function useAssistantSession(
 
         case "turn.completed":
         case "turn.cancelled": {
+          // Clean up dedup tracking for this turn — free memory, prevent stale state
+          if (message.turnId) seenDeltaCountRef.current.delete(message.turnId);
           setMessages((prev) => finalizeAssistantTurn(prev, message));
           return;
         }
@@ -571,6 +592,9 @@ export function useAssistantSession(
             type: "session.start",
             protocolVersion: ASSISTANT_PROTOCOL_VERSION,
             context: initialContext,
+            // On reconnect: pass the last known previousResponseId so the server
+            // can restore it. On initial connect this will be null (no-op).
+            previousResponseId: previousResponseIdRef.current,
           } satisfies AssistantSessionInboundMessage),
         );
         resolve();

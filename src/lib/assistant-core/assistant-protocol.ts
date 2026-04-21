@@ -25,6 +25,12 @@ export type AssistantSessionInboundMessage =
       type: "session.start";
       protocolVersion: string;
       context?: Record<string, unknown>;
+      /**
+       * When reconnecting mid-turn, pass the last known previousResponseId
+       * so the server can resume the in-progress turn rather than starting fresh.
+       * Omit on initial connect.
+       */
+      previousResponseId?: string | null;
     }
   | {
       type: "session.turn";
@@ -69,6 +75,13 @@ export type AssistantTextDeltaMessage = {
   type: "text.delta";
   turnId: string;
   delta: string;
+  /**
+   * Monotonically increasing index of this delta within the turn (0-based).
+   * The client uses this to deduplicate deltas on WebSocket reconnect.
+   * If a reconnect delivers a delta whose deltaIndex is less than the number
+   * of deltas already applied for this turn, the client drops it.
+   */
+  deltaIndex: number;
 };
 
 /* ---------- TURN ---------- */
