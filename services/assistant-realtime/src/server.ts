@@ -226,6 +226,11 @@ async function executeTurn(
   // Real event — maps to orchestrator routing phase
   await sendActivity(socket, turnId, "understanding");
 
+  // Hoisted above try so catch block can read turnCompleted to distinguish
+  // "stream cleanup threw after clean delivery" from "genuine execution failure".
+  let turnCompleted = false;
+  let hadError = false;
+
   try {
     const upstream = await fetch(UPSTREAM_URL, {
       method: "POST",
@@ -240,9 +245,6 @@ async function executeTurn(
     if (!upstream.body) {
       throw new Error("Upstream returned no body");
     }
-
-    let turnCompleted = false;
-    let hadError = false;
 
     // Translate orchestrator SSE events → WS protocol messages
     for await (const { event, data } of parseSseStream(upstream.body)) {
@@ -433,6 +435,17 @@ async function executeTurn(
     if ((err as Error).name === "AbortError") {
       if (socket.readyState === socket.OPEN) {
         await send(socket, { type: "turn.cancelled", turnId });
+      }
+    } else if (turnCompleted) {
+      // Stream cleanup threw (e.g. reader.releaseLock or connection reset from Vercel
+      // closing the HTTP response after done:true was already received).
+      // The response was fully delivered — send turn.completed, not error.
+      log.warn("stream cleanup error after clean turn completion — sending turn.completed", {
+        turnId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      if (socket.readyState === socket.OPEN) {
+        await send(socket, { type: "turn.completed", turnId });
       }
     } else {
       const message = err instanceof Error ? err.message : "Turn execution failed";
