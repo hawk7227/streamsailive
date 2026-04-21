@@ -6,6 +6,11 @@ import type { FilePreviewManifest } from '@/lib/files/preview';
 
 interface AttachmentRailProps {
   onAdd: (attachment: PendingAttachment) => void;
+  /**
+   * "dark"  — original dark-surface styles (default, preserves existing usage)
+   * "light" — zinc-based styles for white/light backgrounds
+   */
+  variant?: 'dark' | 'light';
 }
 
 interface UploadResponse {
@@ -23,11 +28,8 @@ async function uploadAttachment(file: File): Promise<UploadResponse> {
     credentials: 'include',
     body: formData,
   });
-
   const payload = await response.json() as UploadResponse;
-  if (!response.ok) {
-    throw new Error(payload.error ?? 'Upload failed');
-  }
+  if (!response.ok) throw new Error(payload.error ?? 'Upload failed');
   return payload;
 }
 
@@ -38,16 +40,55 @@ function mapKind(file: File): PendingAttachment['kind'] {
   return 'document';
 }
 
-export function AttachmentRail({ onAdd }: AttachmentRailProps) {
+export function AttachmentRail({ onAdd, variant = 'dark' }: AttachmentRailProps) {
   const [tab, setTab] = useState<PendingAttachment['kind'] | null>(null);
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const imageRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
+  const imageRef    = useRef<HTMLInputElement>(null);
+  const videoRef    = useRef<HTMLInputElement>(null);
   const documentRef = useRef<HTMLInputElement>(null);
-  const audioRef = useRef<HTMLInputElement>(null);
-  const tabs = useMemo(() => ([['url', 'URL'], ['image', 'Image'], ['video', 'Video'], ['document', 'Document'], ['audio', 'Audio']] as const), []);
+  const audioRef    = useRef<HTMLInputElement>(null);
+
+  const tabs = useMemo(
+    () =>
+      [
+        ['url', 'URL'],
+        ['image', 'Image'],
+        ['video', 'Video'],
+        ['document', 'Document'],
+        ['audio', 'Audio'],
+      ] as const,
+    [],
+  );
+
+  // ── Per-variant class maps ─────────────────────────────────────────────
+  const cx = useMemo(() => {
+    if (variant === 'light') {
+      return {
+        wrap:       'grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3',
+        tabBase:    'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+        tabActive:  'border-zinc-400 bg-zinc-200 text-zinc-900',
+        tabInactive:'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700',
+        input:      'flex-1 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400',
+        addBtn:     'rounded-2xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-800',
+        fileBtn:    'rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50',
+        busyText:   'text-xs text-zinc-500',
+        errorText:  'text-xs text-rose-600',
+      };
+    }
+    return {
+      wrap:       'grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3',
+      tabBase:    'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+      tabActive:  'border-white/20 bg-white/10 text-white',
+      tabInactive:'border-white/10 bg-transparent text-white/65 hover:border-white/20 hover:text-white',
+      input:      'flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35',
+      addBtn:     'rounded-2xl bg-white px-4 text-sm font-semibold text-[#0A0C10]',
+      fileBtn:    'rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50',
+      busyText:   'text-xs text-cyan-200',
+      errorText:  'text-xs text-rose-300',
+    };
+  }, [variant]);
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -55,13 +96,13 @@ export function AttachmentRail({ onAdd }: AttachmentRailProps) {
     try {
       const uploaded = await uploadAttachment(file);
       onAdd({
-        kind: mapKind(file),
-        label: file.name,
-        payload: uploaded.preview?.inlineText ?? uploaded.preview?.sourceUrl ?? file.name,
-        fileId: uploaded.file?.id,
+        kind:     mapKind(file),
+        label:    file.name,
+        payload:  uploaded.preview?.inlineText ?? uploaded.preview?.sourceUrl ?? file.name,
+        fileId:   uploaded.file?.id,
         mimeType: file.type || uploaded.file?.mime_type,
         metadata: { size: file.size, uploaded: true },
-        preview: uploaded.preview,
+        preview:  uploaded.preview,
       });
       setTab(null);
     } catch (uploadError) {
@@ -72,34 +113,58 @@ export function AttachmentRail({ onAdd }: AttachmentRailProps) {
   };
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+    <div className={cx.wrap}>
+      {/* Tab row */}
       <div className="flex flex-wrap gap-2">
         {tabs.map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setTab(tab === value ? null : value)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${tab === value ? 'border-white/20 bg-white/10 text-white' : 'border-white/10 bg-transparent text-white/65 hover:border-white/20 hover:text-white'}`}>
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(tab === value ? null : value)}
+            className={`${cx.tabBase} ${tab === value ? cx.tabActive : cx.tabInactive}`}
+          >
             {label}
           </button>
         ))}
       </div>
 
-      {tab === 'url' ? (
+      {/* URL input */}
+      {tab === 'url' && (
         <div className="flex gap-2">
-          <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Paste a website or YouTube URL" className="flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" />
-          <button type="button" onClick={() => { if (!url.trim()) return; onAdd({ kind: 'url', label: url.trim(), payload: url.trim() }); setUrl(''); setTab(null); }} className="rounded-2xl bg-white px-4 text-sm font-semibold text-[#0A0C10]">Add</button>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Paste a website or YouTube URL"
+            className={cx.input}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (!url.trim()) return;
+              onAdd({ kind: 'url', label: url.trim(), payload: url.trim() });
+              setUrl('');
+              setTab(null);
+            }}
+            className={cx.addBtn}
+          >
+            Add
+          </button>
         </div>
-      ) : null}
+      )}
 
-      {tab === 'image' ? <button disabled={busy} type="button" onClick={() => imageRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select image</button> : null}
-      {tab === 'video' ? <button disabled={busy} type="button" onClick={() => videoRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select video</button> : null}
-      {tab === 'document' ? <button disabled={busy} type="button" onClick={() => documentRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select document</button> : null}
-      {tab === 'audio' ? <button disabled={busy} type="button" onClick={() => audioRef.current?.click()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/75 disabled:opacity-50">Select audio</button> : null}
+      {tab === 'image'    && <button disabled={busy} type="button" onClick={() => imageRef.current?.click()}    className={cx.fileBtn}>Select image</button>}
+      {tab === 'video'    && <button disabled={busy} type="button" onClick={() => videoRef.current?.click()}    className={cx.fileBtn}>Select video</button>}
+      {tab === 'document' && <button disabled={busy} type="button" onClick={() => documentRef.current?.click()} className={cx.fileBtn}>Select document</button>}
+      {tab === 'audio'    && <button disabled={busy} type="button" onClick={() => audioRef.current?.click()}    className={cx.fileBtn}>Select audio</button>}
 
-      {busy ? <div className="text-xs text-cyan-200">Uploading and indexing attachment…</div> : null}
-      {error ? <div className="text-xs text-rose-300">{error}</div> : null}
+      {busy  && <div className={cx.busyText}>Uploading and indexing…</div>}
+      {error && <div className={cx.errorText}>{error}</div>}
 
-      <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
-      <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
-      <input ref={documentRef} type="file" accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.ts,.tsx,.js,.jsx,.py,.sql,.html,.css,.xml,.yaml,.yml" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
-      <input ref={audioRef} type="file" accept="audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.currentTarget.value = ''; }} />
+      {/* Hidden file inputs */}
+      <input ref={imageRef}    type="file" accept="image/*"    className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.currentTarget.value = ''; }} />
+      <input ref={videoRef}    type="file" accept="video/*"    className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.currentTarget.value = ''; }} />
+      <input ref={documentRef} type="file" accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.ts,.tsx,.js,.jsx,.py,.sql,.html,.css,.xml,.yaml,.yml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.currentTarget.value = ''; }} />
+      <input ref={audioRef}    type="file" accept="audio/*"    className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.currentTarget.value = ''; }} />
     </div>
   );
 }
