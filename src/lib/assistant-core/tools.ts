@@ -7,6 +7,8 @@ import type {
   ToolProgressHandlers,
 } from "./contracts";
 import { executeMediaGeneration } from "./media-generation";
+import { generateSong } from "@/lib/song-runtime/generateSong";
+import { generateVoice } from "@/lib/voice-runtime/generateVoice";
 import { STREAMS_ALLOWED_COMMANDS, STREAMS_BUILD_COMMAND, STREAMS_COMMAND_TIMEOUT_MS, STREAMS_PERSISTENT_WORKSPACE_ROOT } from "@/lib/env";
 
 type ToolDefinition = {
@@ -306,6 +308,49 @@ export function buildAssistantTools(
     },
     {
       type: "function",
+      name: "generate_song",
+      description: "Generate a song or music track using the configured song runtime. Supports vocal and instrumental modes, genre/mood/tempo styling, and optional lyrics.",
+      strict: null,
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Description of the song to generate" },
+          lyrics: { type: "string", description: "Optional lyrics to use in the song" },
+          instrumental: { type: "boolean", description: "Generate an instrumental track (no vocals)" },
+          genre: { type: "string", description: "Music genre (e.g. pop, hip-hop, jazz, rock)" },
+          mood: { type: "string", description: "Emotional mood (e.g. upbeat, melancholic, energetic)" },
+          tempo: { type: "string", description: "Tempo description (e.g. fast, slow, moderate)" },
+          durationSeconds: { type: "number", description: "Target duration in seconds (10–300)" },
+          provider: { type: "string", enum: ["suno", "udio", "auto"], description: "Song generation provider" },
+          referenceAudioUrl: { type: "string", description: "URL of a reference audio track for style guidance" },
+          requireStems: { type: "boolean", description: "Request separate stem files (vocals, instrumental) if the provider supports them" },
+        },
+        required: ["prompt"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "generate_voice",
+      description: "Generate spoken voice audio from text using the configured voice runtime. Supports ElevenLabs and OpenAI TTS with voice selection, speed, and style control.",
+      strict: null,
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "The text to convert to speech" },
+          voice: { type: "string", description: "Voice ID or name to use" },
+          provider: { type: "string", enum: ["elevenlabs", "openai"], description: "TTS provider" },
+          speed: { type: "number", description: "Speaking speed multiplier (0.5–2.0, default 1.0)" },
+          style: { type: "string", description: "Speaking style or persona" },
+          emotion: { type: "string", description: "Emotional delivery (e.g. calm, excited, serious)" },
+          format: { type: "string", enum: ["mp3", "wav"], description: "Output audio format" },
+        },
+        required: ["text"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
       name: "list_workspace_files",
       description: "List files in the workspace.",
       strict: null,
@@ -600,6 +645,57 @@ export async function executeAssistantTool(
           : STREAMS_BUILD_COMMAND || "pnpm run build";
 
       return await runCommand(command, handlers);
+    }
+
+    case "generate_song": {
+      const prompt = safeString(input.args.prompt, "prompt");
+      const workspaceId =
+        typeof input.context.context?.workspaceId === "string"
+          ? input.context.context.workspaceId
+          : undefined;
+
+      handlers?.onProgress?.("preparing song generation");
+
+      const result = await generateSong({
+        prompt,
+        lyrics: typeof input.args.lyrics === "string" ? input.args.lyrics : undefined,
+        instrumental: input.args.instrumental === true,
+        genre: typeof input.args.genre === "string" ? input.args.genre : undefined,
+        mood: typeof input.args.mood === "string" ? input.args.mood : undefined,
+        tempo: typeof input.args.tempo === "string" ? input.args.tempo : undefined,
+        durationSeconds: typeof input.args.durationSeconds === "number" ? input.args.durationSeconds : undefined,
+        provider: typeof input.args.provider === "string" ? input.args.provider : undefined,
+        referenceAudioUrl: typeof input.args.referenceAudioUrl === "string" ? input.args.referenceAudioUrl : undefined,
+        requireStems: input.args.requireStems === true,
+        workspaceId,
+      });
+
+      handlers?.onProgress?.(`song generation ${result.status}`);
+      return result;
+    }
+
+    case "generate_voice": {
+      const text = safeString(input.args.text, "text");
+      const workspaceId =
+        typeof input.context.context?.workspaceId === "string"
+          ? input.context.context.workspaceId
+          : undefined;
+
+      handlers?.onProgress?.("preparing voice synthesis");
+
+      const result = await generateVoice({
+        text,
+        voice: typeof input.args.voice === "string" ? input.args.voice : undefined,
+        provider: typeof input.args.provider === "string" ? input.args.provider : undefined,
+        speed: typeof input.args.speed === "number" ? input.args.speed : undefined,
+        style: typeof input.args.style === "string" ? input.args.style : undefined,
+        emotion: typeof input.args.emotion === "string" ? input.args.emotion : undefined,
+        format: input.args.format === "wav" ? "wav" : "mp3",
+        workspaceId,
+      });
+
+      handlers?.onProgress?.(`voice synthesis ${result.status}`);
+      return result;
     }
 
     default: {

@@ -62,3 +62,30 @@ COMMENT ON TABLE video_jobs IS 'One row per provider job or clip. Replaces paren
 COMMENT ON TABLE artifacts  IS 'One row per durable stored output asset. Never stores temporary provider URLs.';
 COMMENT ON COLUMN video_jobs.provider_job_id IS 'Provider-specific job ID. For fal: response_url. For kling/runway: task_id.';
 COMMENT ON COLUMN video_jobs.clip_index      IS 'null for single-clip jobs; 0-based index for longform scene clips.';
+
+-- generation_jobs: unified job table for song and voice runtimes.
+-- (video uses video_jobs for now; future slice consolidates all into generation_jobs)
+CREATE TABLE IF NOT EXISTS generation_jobs (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  generation_id    UUID        NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+  workspace_id     UUID        NOT NULL,
+  media_type       TEXT        NOT NULL,   -- 'song' | 'voice'
+  provider         TEXT        NOT NULL,
+  model            TEXT,
+  provider_job_id  TEXT,
+  phase            TEXT        NOT NULL DEFAULT 'submit',
+  status           TEXT        NOT NULL DEFAULT 'pending',
+  request_payload  JSONB       NOT NULL DEFAULT '{}',
+  response_payload JSONB,
+  output_url       TEXT,
+  error            TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_generation_id ON generation_jobs(generation_id);
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_pending
+  ON generation_jobs(status, media_type, created_at)
+  WHERE status IN ('pending', 'queued', 'processing');
+
+COMMENT ON TABLE generation_jobs IS 'Unified job table for song and voice runtimes. Video uses video_jobs (future: consolidate).';

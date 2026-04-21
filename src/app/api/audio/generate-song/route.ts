@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
-import { generateSong, extractVocals } from "@/lib/audio/songPipeline";
+import { generateSong } from "@/lib/song-runtime/generateSong";
 import { enqueueJob } from "@/lib/jobs/queue";
-import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 
 export const maxDuration = 120;
 
@@ -49,45 +48,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: { jobId: job.id, status: "pending" } }, { status: 202 });
   }
 
-  // Sync mode — generate and return
+  // Sync mode — delegate to the single authoritative song generation gate
   try {
-    const compiled = compileGenerationRequest({
-      medium: "song",
-      prompt: body.prompt,
-      provider: body.provider ?? "auto",
-      storyBible: body.storyBible,
-      sourceKind: body.sourceKind ?? "self",
-      referenceSummary: [body.voiceDatasetId ? `voiceDataset:${body.voiceDatasetId}` : null, body.referenceAudioUrl ? `referenceAudio:${body.referenceAudioUrl}` : null, body.voiceGuideMode ? `guide:${body.voiceGuideMode}` : null].filter(Boolean).join(", "),
-    });
-
     const result = await generateSong({
-      prompt:       compiled.prompt,
-      style:        body.style,
-      title:        body.title,
+      prompt: body.prompt,
       instrumental: body.instrumental,
-      provider:     body.provider ?? "auto",
+      genre: body.style,
+      referenceAudioUrl: body.referenceAudioUrl ?? undefined,
+      requireStems: body.extractVocals ?? false,
+      provider: body.provider ?? "auto",
+      workspaceId,
     });
-
-    // Vocal extraction (non-blocking if URL is ready)
-    if (body.extractVocals && result.audioUrl && result.status === "completed") {
-      const stems = await extractVocals(result.audioUrl);
-      if (stems) result.stems = stems;
-    }
-
-    // Save to media_assets
-    if (result.audioUrl && result.status === "completed") {
-      await admin.from("media_assets").insert({
-        workspace_id: workspaceId,
-        user_id:      user.id,
-        type:         "audio",
-        url:          result.audioUrl,
-        name:         result.title,
-        mime_type:    "audio/mpeg",
-        duration_secs: result.duration,
-        metadata:     { provider: result.provider, stems: result.stems, prompt: body.prompt, compiledPrompt: compiled.prompt, voiceDatasetId: body.voiceDatasetId, referenceAudioUrl: body.referenceAudioUrl, voiceGuideMode: body.voiceGuideMode, enhanceVocals: body.enhanceVocals ?? false, sourceKind: body.sourceKind ?? "self" },
-        tags:         ["song", "generated", result.provider],
-      }).then(() => {});
-    }
 
     return NextResponse.json({ data: result });
   } catch (e) {
