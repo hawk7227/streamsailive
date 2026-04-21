@@ -74,6 +74,16 @@ function formatActivityLabel(activity: string, toolName?: string): string {
   return "Working";
 }
 
+
+function getMostRecentTurnLabel(
+  uiStates: Record<string, { updatedAt: number; label: string | null }>,
+): string | null {
+  const values = Object.values(uiStates);
+  if (values.length === 0) return null;
+  const newest = [...values].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return newest?.label ?? null;
+}
+
 // ── Preview type config ──────────────────────────────────────────────────────
 type PreviewTypeConfig = { icon: string; label: string; bg: string; border: string; iconBg: string };
 const PREVIEW_TYPE_CONFIG: Record<AssistantPreviewType, PreviewTypeConfig> = {
@@ -359,6 +369,7 @@ export default function AssistantFramePage() {
   });
 
   const activeTurnId = session.session.activeTurnId;
+  const activeLabel = useMemo(() => getMostRecentTurnLabel(session.uiStates), [session.uiStates]);
   const { scrollRef, isAtBottom, jumpToBottom } = useSmartScroll(session.messages);
 
   const previewsByTurn = useMemo(() => {
@@ -677,6 +688,12 @@ export default function AssistantFramePage() {
           <div className="mx-auto flex max-w-[820px] flex-col gap-5"
                role="log" aria-live="polite" aria-label="Conversation messages">
 
+            {activeLabel ? (
+              <div className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium tracking-[0.06em] text-zinc-500">
+                {activeLabel}
+              </div>
+            ) : null}
+
             {/* Empty state */}
             {session.messages.length === 0 && (
               <div className="space-y-5">
@@ -704,6 +721,7 @@ export default function AssistantFramePage() {
               const isUser = message.role === "user";
               const turnPreviews = message.turnId ? previewsByTurn.get(message.turnId) ?? [] : [];
               const activity = message.turnId ? session.activities[message.turnId] : undefined;
+              const turnUiState = message.turnId ? session.uiStates[message.turnId] : undefined;
               const isLastAssistant = !isUser &&
                 msgIdx === session.messages.map((m) => m.role).lastIndexOf("assistant");
               const isComplete = message.status === "complete";
@@ -722,16 +740,16 @@ export default function AssistantFramePage() {
                           ? (message.content || "")
                           : (message.content
                               ? renderContent(message.content)
-                              : message.status === "streaming" && activity && formatActivityLabel(activity.activity, activity.toolName) === "Generating"
+                              : message.status === "streaming" && turnUiState?.label === "Creating image…"
                                 ? <NeonSkeleton />
-                                : (message.status === "streaming" ? "…" : ""))}
+                                : "")}
                       </div>
 
                       {/* §20: aria-live on activity badge */}
-                      {activity && !isUser && (
+                      {turnUiState?.label && !isUser && (
                         <div className="mt-3 inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium tracking-[0.06em] text-zinc-500"
                              aria-live="polite" aria-atomic="true">
-                          {formatActivityLabel(activity.activity, activity.toolName)}
+                          {turnUiState.label}
                         </div>
                       )}
 

@@ -21,6 +21,13 @@ import {
   type AssistantWorkspaceAction,
   isAssistantSessionOutboundMessage,
 } from "@/lib/assistant-core/assistant-protocol";
+import {
+  UIStateController,
+  type ActivityStage,
+  type RealtimeEvent,
+  type ToolType,
+  type TurnUIState,
+} from "@/lib/ui-runtime";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -55,6 +62,7 @@ export type AssistantSessionHookState = {
   activities: Record<string, AssistantTurnActivity>;
   previews: Record<string, AssistantPreviewDescriptor>;
   previewsByTurn: Record<string, string[]>;
+  uiStates: Record<string, TurnUIState>;
   error: AssistantErrorMessage | null;
 };
 
@@ -161,6 +169,109 @@ function finalizeAssistantTurn(
   });
 }
 
+
+
+function isTranslatableActivityStage(stage: string): stage is ActivityStage {
+  return (
+    stage === "understanding" ||
+    stage === "routing" ||
+    stage === "building_context" ||
+    stage === "calling_openai" ||
+    stage === "streaming" ||
+    stage === "executing_tool"
+  );
+}
+
+function mapAssistantToolNameToToolType(toolName?: string): ToolType | undefined {
+  switch (toolName) {
+    case "generate_media":
+      return "image";
+    case "generate_song":
+    case "generate_voice":
+      return "audio";
+    case "search_files":
+    case "list_workspace_files":
+    case "read_workspace_file":
+      return "files";
+    case "write_workspace_file":
+    case "apply_workspace_patch":
+      return "document";
+    case "build_workspace":
+    case "run_workspace_command":
+    case "run_verification":
+    case "send_workspace_action":
+      return "build";
+    case "list_conversation_artifacts":
+      return "document";
+    default:
+      return undefined;
+  }
+}
+
+function toRealtimeEvent(
+  message: AssistantSessionOutboundMessage,
+): RealtimeEvent | null {
+  switch (message.type) {
+    case "turn.started":
+      return {
+        type: "turn.started",
+        turnId: message.turnId,
+        timestamp: Date.now(),
+      };
+
+    case "session.state":
+      if (!message.activeTurnId) return null;
+      return {
+        type: "session.state",
+        turnId: message.activeTurnId,
+        status:
+          message.status === "running"
+            ? "running"
+            : message.status === "closed"
+              ? "completed"
+              : "idle",
+        timestamp: Date.now(),
+      };
+
+    case "activity":
+      if (!isTranslatableActivityStage(message.activity)) return null;
+      return {
+        type: "activity",
+        turnId: message.turnId,
+        stage: message.activity,
+        tool: mapAssistantToolNameToToolType(message.toolName),
+        timestamp: Date.now(),
+      };
+
+    case "text.delta":
+      return {
+        type: "text.delta",
+        turnId: message.turnId,
+        delta: message.delta,
+        timestamp: Date.now(),
+      };
+
+    case "turn.completed":
+      return {
+        type: "response.completed",
+        turnId: message.turnId,
+        timestamp: Date.now(),
+      };
+
+    case "error":
+      if (!message.turnId) return null;
+      return {
+        type: "response.failed",
+        turnId: message.turnId,
+        error: message.message,
+        timestamp: Date.now(),
+      };
+
+    default:
+      return null;
+  }
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────
 
 export function useAssistantSession(
@@ -187,6 +298,7 @@ export function useAssistantSession(
   const streamSaveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Latest messages ref for use in closures without stale state
   const messagesRef            = useRef<AssistantChatMessage[]>([]);
+  const uiStateControllerRef   = useRef(new UIStateController());
 
   const [connectionState, setConnectionState] =
     useState<AssistantConnectionState>("disconnected");
@@ -202,6 +314,7 @@ export function useAssistantSession(
   const [activities, setActivities] = useState<Record<string, AssistantTurnActivity>>({});
   const [previews, setPreviews] = useState<Record<string, AssistantPreviewDescriptor>>({});
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
+  const [uiStates, setUIStates] = useState<Record<string, TurnUIState>>({});
   const [error, setError] = useState<AssistantErrorMessage | null>(null);
 
   // Keep messagesRef in sync for closures
@@ -230,10 +343,32 @@ export function useAssistantSession(
     }, STREAM_SAVE_DEBOUNCE_MS);
   }, [storageKey, conversationId]);
 
+  const applyRealtimeUIState = useCallback((event: RealtimeEvent) => {
+    const next = uiStateControllerRef.current.update(event);
+    if (!next) return;
+
+    setUIStates((current) => ({
+      ...current,
+      [next.turnId]: next,
+    }));
+
+    if (event.type === "response.completed" || event.type === "response.failed") {
+      uiStateControllerRef.current.clear(event.turnId);
+    }
+  }, []);
+
+  const applyMessageUIState = useCallback((message: AssistantSessionOutboundMessage) => {
+    const event = toRealtimeEvent(message);
+    if (!event) return;
+    applyRealtimeUIState(event);
+  }, [applyRealtimeUIState]);
+
   // ── Message event handler ─────────────────────────────────────────────
   const handleOutboundMessage = useCallback(
     async (message: AssistantSessionOutboundMessage) => {
       if (!mountedRef.current) return;
+
+      applyMessageUIState(message);
 
       switch (message.type) {
         case "session.ready": {
@@ -362,7 +497,7 @@ export function useAssistantSession(
         }
       }
     },
-    [onWorkspaceAction, scheduleStreamSave],
+    [applyMessageUIState, onWorkspaceAction, scheduleStreamSave],
   );
 
   // ── Connect (§17: with auto-reconnect backing) ─────────────────────────
@@ -483,6 +618,19 @@ export function useAssistantSession(
         { id: createId("user_msg"), turnId, role: "user", content: message, status: "complete", createdAt: nowIso() },
       ]);
 
+      applyRealtimeUIState({
+        type: "turn.started",
+        turnId,
+        timestamp: Date.now(),
+      });
+
+      applyRealtimeUIState({
+        type: "session.state",
+        turnId,
+        status: "running",
+        timestamp: Date.now(),
+      });
+
       socketRef.current.send(
         JSON.stringify({
           type: "session.turn",
@@ -493,7 +641,7 @@ export function useAssistantSession(
       );
       return turnId;
     },
-    [session.status],
+    [applyRealtimeUIState, session.status],
   );
 
   // ── Cancel turn ───────────────────────────────────────────────────────
@@ -540,6 +688,11 @@ export function useAssistantSession(
   // ── Clear history ─────────────────────────────────────────────────────
   const clearHistory = useCallback(() => {
     setMessages([]);
+    setActivities({});
+    setPreviews({});
+    setPreviewsByTurn({});
+    setUIStates({});
+    uiStateControllerRef.current.reset();
     if (storageKey) clearPersistedSession(storageKey);
   }, [storageKey]);
 
@@ -559,6 +712,7 @@ export function useAssistantSession(
     activities,
     previews,
     previewsByTurn,
+    uiStates,
     error,
     connect,
     disconnect,
