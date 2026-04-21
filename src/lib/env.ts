@@ -75,6 +75,7 @@ export const SUPABASE_SERVICE_ROLE_KEY =
 
 // OpenAI
 export const OPENAI_MODEL = optional("OPENAI_MODEL", "gpt-4.1");
+export const OPENAI_MINI_MODEL = optional("OPENAI_MINI_MODEL", "gpt-4o-mini");
 export const OPENAI_API_KEY_VOICE = optionalKey("OPENAI_API_KEY_VOICE");
 export const OPENAI_API_KEY_SORA = optionalKey("OPENAI_API_KEY_SORA");
 

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import "@/lib/env";
-import { OPENAI_MODEL, STREAMS_TOOL_TIMEOUT_MS } from "@/lib/env";
+import { OPENAI_MODEL, OPENAI_MINI_MODEL, STREAMS_TOOL_TIMEOUT_MS } from "@/lib/env";
 import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
@@ -134,6 +134,48 @@ const CONTEXT_WINDOW_SIZE = 20;
 function applyMessageWindow(messages: ChatMessage[]): ChatMessage[] {
   if (messages.length <= CONTEXT_WINDOW_SIZE) return messages;
   return messages.slice(-CONTEXT_WINDOW_SIZE);
+}
+
+// ── Model selection ──────────────────────────────────────────────────────────
+// Two-phase strategy: gpt-4o-mini first, escalate to full model when needed.
+//
+// Upfront full-model routes:
+//   build — code generation requires consistent quality
+//   file  — workspace operations need reliable tool-use reasoning
+//   Any route with file context — semantic synthesis over chunks
+//
+// Post-stream escalation:
+//   When mini calls tools (no text was streamed), the continuation response
+//   uses the full model. The user sees the continuation text — it must be
+//   high quality. Tool calls produce no text.delta events, so no partial
+//   text has been shown when this decision is made.
+//
+// Env overrides:
+//   OPENAI_MODEL      — full model (default: gpt-4.1)
+//   OPENAI_MINI_MODEL — fast model (default: gpt-4o-mini)
+
+const FULL_MODEL_ROUTES = new Set<AssistantMode>(["build", "file"]);
+
+function selectInitialModel(
+  route: AssistantMode,
+  hasFileContext: boolean,
+): string {
+  // File context requires semantic synthesis — full model
+  if (hasFileContext) return OPENAI_MODEL;
+  // Build and file workspace routes — full model for reliability
+  if (FULL_MODEL_ROUTES.has(route)) return OPENAI_MODEL;
+  // All other routes start with mini
+  return OPENAI_MINI_MODEL;
+}
+
+function selectContinuationModel(
+  initialModel: string,
+  firstCallHadTools: boolean,
+): string {
+  // When mini called tools, escalate to full model for the synthesis response.
+  // This is the text the user actually reads — it should be high quality.
+  if (initialModel === OPENAI_MINI_MODEL && firstCallHadTools) return OPENAI_MODEL;
+  return initialModel;
 }
 
 // ── Multimodal content (§21) ──────────────────────────────────────────────
@@ -343,16 +385,20 @@ export async function runOrchestrator(req: NextRequest) {
           });
 
           timer.mark("context_built");
+          // annotation updated after first response (escalated + continuation_model fields added below)
           timer.annotate({
             route,
-            model: OPENAI_MODEL,
             msg_length: normalized.userText.length,
             had_file_ctx: !!assembledContext.fileContext,
             windowed_messages: Math.min(normalized.messages.length, CONTEXT_WINDOW_SIZE),
           });
 
           const tools = buildAssistantTools({ route, context: assembledContext });
-          const model = OPENAI_MODEL;
+          // Select initial model based on route and context
+          const initialModel = selectInitialModel(
+            route,
+            !!assembledContext.fileContext,
+          );
           const imageUrls = extractImageUrls(normalized.context);
           const initialInput = buildInputMessages(
             assembledContext.systemPrompt,
@@ -361,16 +407,32 @@ export async function runOrchestrator(req: NextRequest) {
             imageUrls,
           );
 
-          send("phase", { phase: "calling_openai", model });
+          send("phase", { phase: "calling_openai", model: initialModel });
 
           // ── First OpenAI call — streaming, measured ───────────────────
+          // Uses mini for chat/image/video routes; full model for build/file
+          // and file-backed turns. See selectInitialModel().
           timer.mark("openai_called");
 
           let response = await streamFirstResponse(
-            { model, input: initialInput, tools },
+            { model: initialModel, input: initialInput, tools },
             send,
             timer,
           );
+
+          // Determine continuation model after the first response.
+          // If mini called tools (no text was streamed), escalate to full model
+          // for the synthesis response the user actually reads.
+          const firstCallHadTools = getFunctionCalls(response).length > 0;
+          const continuationModel = selectContinuationModel(initialModel, firstCallHadTools);
+          const escalated = continuationModel !== initialModel;
+
+          // Annotate timing with model selection outcome
+          timer.annotate({
+            model: initialModel,
+            continuation_model: continuationModel,
+            escalated,
+          });
 
           let loopCount = 0;
           const maxLoops = 12;
@@ -455,11 +517,11 @@ export async function runOrchestrator(req: NextRequest) {
 
             send("phase", { phase: "continuing_after_tools" });
 
-            // Post-tool continuation — blocking mode is correct here:
-            // the model is writing a short summary after tool results,
-            // not the initial potentially-long response.
+            // Post-tool continuation — blocking mode is correct here.
+            // Uses continuationModel: full model when mini called tools (escalated),
+            // or the initial model when full model was used from the start.
             response = await client.responses.create({
-              model,
+              model: continuationModel,
               previous_response_id: response.id,
               input: toolOutputs,
             });
