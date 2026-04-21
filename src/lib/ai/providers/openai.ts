@@ -1,6 +1,6 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfigSync } from "../../config";
-import { IMAGE_MODEL, OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_API_KEY_SORA, OPENAI_API_KEY_VOICE } from "@/lib/env";
+import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_API_KEY_SORA, OPENAI_API_KEY_VOICE } from "@/lib/env";
 
 export class OpenAIProvider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -72,7 +72,9 @@ export class OpenAIProvider implements AIProvider {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: options.model || IMAGE_MODEL || "gpt-image-1",
+                // Model is decided by the caller (generateEnforcedImage → generationConfig).
+                // Transport layer does not select, default, or override models.
+                model: options.model,
                 prompt: options.prompt,
                 n: 1,
                 size,
