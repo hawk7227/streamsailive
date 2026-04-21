@@ -413,7 +413,7 @@ const CAPABILITIES = [
 ] as const;
 
 // ── Sidebar panel type ────────────────────────────────────────────────────────
-type SidebarPanel = "nav" | "library" | "sessions" | "artifacts" | "projects";
+type SidebarPanel = "nav" | "library" | "sessions" | "artifacts" | "projects" | "apps" | "settings";
 
 type LibraryFile = {
   id: string;
@@ -729,6 +729,10 @@ export default function AssistantFramePage() {
           void loadProjects();
           setSidebarPanel("projects");
           break;
+        case "apps":
+        case "settings":
+          setSidebarPanel(id as SidebarPanel);
+          break;
         default:
           break;
       }
@@ -819,7 +823,9 @@ export default function AssistantFramePage() {
                 const isActive = (item.id === "search" && sidebarPanel === "sessions") ||
                                  (item.id === "library" && sidebarPanel === "library") ||
                                  (item.id === "images" && sidebarPanel === "artifacts") ||
-                                 (item.id === "projects" && sidebarPanel === "projects");
+                                 (item.id === "projects" && sidebarPanel === "projects") ||
+                                 (item.id === "apps" && sidebarPanel === "apps") ||
+                                 (item.id === "settings" && sidebarPanel === "settings");
                 return (
                   <button key={item.id} type="button" onClick={() => handleSidebarItem(item.id)}
                     className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-700 hover:bg-white"}`}>
@@ -1072,6 +1078,41 @@ export default function AssistantFramePage() {
               </div>
             )}
 
+            {/* Apps panel */}
+            {toolbarOpen && sidebarPanel === "apps" && (
+              <div className="mt-4">
+                <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Apps</div>
+                <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                  App integrations coming soon.
+                </div>
+              </div>
+            )}
+
+            {/* Settings panel */}
+            {toolbarOpen && sidebarPanel === "settings" && (
+              <div className="mt-4">
+                <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Settings</div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                    <span className="text-sm text-zinc-700">Connection</span>
+                    <span className={`text-[11px] font-medium ${session.connectionState === "connected" ? "text-green-600" : "text-zinc-400"}`}>
+                      {session.connectionState === "connected" ? "Connected" : session.connectionState}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                    <span className="text-sm text-zinc-700">Workspace</span>
+                    <span className="font-mono text-[10px] text-zinc-400">{workspaceId ? workspaceId.slice(0, 8) + "…" : "—"}</span>
+                  </div>
+                  {currentProjectName && (
+                    <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                      <span className="text-sm text-zinc-700">Active project</span>
+                      <span className="text-[11px] font-medium text-zinc-700">{currentProjectName}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Recents — shown in nav mode */}
             {toolbarOpen && sidebarPanel === "nav" && (
               <div className="mt-6">
@@ -1100,6 +1141,16 @@ export default function AssistantFramePage() {
       <main className="grid h-screen grid-rows-[1fr_auto] bg-white">
 
         {/* §20: role="log" + aria-live="polite" — screen readers announce new messages */}
+        {/* Active project badge */}
+        {currentProjectName && (
+          <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50 px-6 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Project</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-2.5 py-0.5 text-[11px] font-medium text-white">
+              📁 {currentProjectName}
+            </span>
+          </div>
+        )}
+
         <div ref={scrollRef} className="relative overflow-auto px-6 py-6">
           {/* Jump to latest */}
           <div className={`pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center transition-[opacity,transform] duration-[180ms] ease-out ${isAtBottom ? "translate-y-2 opacity-0" : "translate-y-0 pointer-events-auto opacity-100"}`}>
@@ -1278,7 +1329,7 @@ export default function AssistantFramePage() {
                 <Paperclip className="h-4 w-4" />
               </button>
 
-              <div className="flex-1 rounded-3xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+              <div className="flex-1 rounded-3xl border border-zinc-300 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
                 {/* §20: aria-label and aria-multiline on textarea */}
                 <textarea ref={textareaRef} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -1298,7 +1349,7 @@ export default function AssistantFramePage() {
                 <button onClick={handleSend}
                   disabled={!draft.trim() || session.connectionState !== "connected"}
                   aria-label="Send message"
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-300">
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
                   <Send className="h-4 w-4" />
                   Send
                 </button>
