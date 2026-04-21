@@ -27,8 +27,10 @@ import {
 } from "react";
 import type { AssistantChatMessage } from "./useAssistantSession";
 
-// Distance from scroll bottom that counts as "at bottom"
-const AT_BOTTOM_THRESHOLD_PX = 80;
+// Distance from scroll bottom that counts as "at bottom".
+// 120px provides enough headroom so streaming content growth does not
+// accidentally trip the threshold and stop auto-scroll mid-turn.
+const AT_BOTTOM_THRESHOLD_PX = 120;
 
 export type UseSmartScrollReturn = {
   /** Attach to the scrollable container div */
