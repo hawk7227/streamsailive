@@ -273,6 +273,14 @@ export async function runOrchestrator(req: NextRequest) {
             userText: normalized.userText,
             messages: normalized.messages,
             context: normalized.context,
+            workspaceId:
+              typeof normalized.context.workspaceId === "string"
+                ? normalized.context.workspaceId
+                : undefined,
+            conversationId:
+              typeof normalized.context.conversationId === "string"
+                ? normalized.context.conversationId
+                : undefined,
           });
 
           const tools = buildAssistantTools({

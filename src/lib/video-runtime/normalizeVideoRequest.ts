@@ -62,5 +62,6 @@ export function normalizeVideoRequest(
     provider: input.provider?.trim() || DEFAULT_PROVIDER,
     model: input.model?.trim() || null,
     workspaceId: input.workspaceId?.trim() || "assistant-core",
+    conversationId: input.conversationId?.trim() || undefined,
   };
 }

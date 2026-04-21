@@ -20,6 +20,7 @@ export function normalizeVoiceRequest(input: GenerateVoiceInput): NormalizedVoic
     language: input.language?.trim() || "en",
     format: input.format === "wav" ? "wav" : "mp3",
     workspaceId: input.workspaceId?.trim() || "assistant-core",
+    conversationId: input.conversationId?.trim() || undefined,
     provider: input.provider?.trim() || DEFAULT_PROVIDER,
     model: input.model?.trim() || null,
     segments,

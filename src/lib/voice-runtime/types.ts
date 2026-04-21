@@ -23,6 +23,7 @@ export type GenerateVoiceInput = {
   provider?: string;
   model?: string;
   segments?: VoiceSegment[];
+  conversationId?: string;
 };
 
 export type NormalizedVoiceRequest = {
@@ -35,6 +36,7 @@ export type NormalizedVoiceRequest = {
   language: string;
   format: "mp3" | "wav";
   workspaceId: string;
+  conversationId?: string;
   provider: string;
   model: string | null;
   segments: VoiceSegment[];

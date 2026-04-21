@@ -16,6 +16,10 @@ export type BuildContextInput = {
   userText: string;
   messages?: ChatMessage[];
   context?: Record<string, unknown>;
+  /** Present when the request originates from an authenticated workspace session. */
+  workspaceId?: string;
+  /** Present when the request is tied to a specific conversation. */
+  conversationId?: string;
 };
 
 export type AssembledAssistantContext = {
@@ -24,6 +28,10 @@ export type AssembledAssistantContext = {
   userText: string;
   messages: ChatMessage[];
   context: Record<string, unknown>;
+  /** Populated when workspaceId is present — injected file context for this turn. */
+  fileContext?: string;
+  workspaceId?: string;
+  conversationId?: string;
 };
 
 export type BuildAssistantToolsInput = {

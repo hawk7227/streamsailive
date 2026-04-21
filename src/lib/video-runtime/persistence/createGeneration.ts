@@ -25,6 +25,7 @@ export async function createGenerationRecord(
     provider: plan.provider,
     model: plan.model,
     mode: "assistant",
+    conversation_id: req.conversationId ?? null,
     metadata: {
       normalizedRequest: req,
       clipCount: plan.clips.length,

@@ -20,6 +20,7 @@ export async function finalizeSongArtifact(args: {
   mimeType: string;
   durationSeconds?: number;
   stems?: UploadedStem[];
+  conversationId?: string;
 }): Promise<string> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
@@ -30,6 +31,7 @@ export async function finalizeSongArtifact(args: {
     id: artifactId,
     generation_id: args.generationId,
     workspace_id: args.workspaceId,
+    conversation_id: args.conversationId ?? null,
     type: "audio",
     storage_url: args.storageUrl,
     mime_type: args.mimeType,

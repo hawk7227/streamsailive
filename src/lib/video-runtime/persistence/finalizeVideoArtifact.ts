@@ -12,6 +12,7 @@ export async function finalizeVideoArtifact(args: {
   workspaceId: string;
   storageUrl: string;
   mimeType: string;
+  conversationId?: string;
 }): Promise<string> {
   const admin = createAdminClient();
   const artifactId = crypto.randomUUID();
@@ -20,6 +21,7 @@ export async function finalizeVideoArtifact(args: {
     id: artifactId,
     generation_id: args.generationId,
     workspace_id: args.workspaceId,
+    conversation_id: args.conversationId ?? null,
     type: "video",
     storage_url: args.storageUrl,
     mime_type: args.mimeType,

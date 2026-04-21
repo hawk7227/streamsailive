@@ -22,6 +22,7 @@ export type GenerateVideoInput = {
   sourceKind?: "self" | "family_or_friend" | "synthetic" | "mixed";
   longVideo?: boolean;
   realismMode?: "strict" | "balanced" | "strict_everyday" | "premium_commercial";
+  conversationId?: string;
 };
 
 // ── Normalized request ────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export type NormalizedVideoRequest = {
   provider: string;
   model: string | null;
   workspaceId: string;
+  conversationId?: string;
 };
 
 // ── Plan ──────────────────────────────────────────────────────────────────

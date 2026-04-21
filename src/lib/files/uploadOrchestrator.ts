@@ -62,7 +62,7 @@ export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
   if (error || !fileRecord) throw new Error(error?.message ?? 'Failed to create file record');
 
   if (parsed.text) {
-    await chunkAndIndexFile(fileRecord.id, parsed.text);
+    await chunkAndIndexFile(fileRecord.id, parsed.text, input.file.name);
   }
 
   if (effectiveIngestType === 'voice_dataset') {

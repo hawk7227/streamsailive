@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 /**
  * jobs/pollVideoJob.ts
  *
@@ -69,6 +70,14 @@ export async function pollVideoJob(
     return { status: "failed" };
   }
 
+  // Fetch conversation_id from generation record for artifact linkage
+  const admin2 = createAdminClient();
+  const { data: genRow } = await admin2
+    .from("generations")
+    .select("conversation_id")
+    .eq("id", job.generation_id)
+    .single();
+
   // Create artifact record and finalize generation
   await finalizeVideoArtifact({
     generationId: job.generation_id,
@@ -76,6 +85,7 @@ export async function pollVideoJob(
     workspaceId: job.workspace_id,
     storageUrl,
     mimeType,
+    conversationId: (genRow as { conversation_id?: string | null } | null)?.conversation_id ?? undefined,
   });
 
   return { status: "completed", outputUrl: storageUrl };

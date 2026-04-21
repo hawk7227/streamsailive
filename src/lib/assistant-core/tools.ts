@@ -9,6 +9,8 @@ import type {
 import { executeMediaGeneration } from "./media-generation";
 import { generateSong } from "@/lib/song-runtime/generateSong";
 import { generateVoice } from "@/lib/voice-runtime/generateVoice";
+import { searchWorkspaceFiles } from "@/lib/files/retrieval";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { STREAMS_ALLOWED_COMMANDS, STREAMS_BUILD_COMMAND, STREAMS_COMMAND_TIMEOUT_MS, STREAMS_PERSISTENT_WORKSPACE_ROOT } from "@/lib/env";
 
 type ToolDefinition = {
@@ -351,6 +353,35 @@ export function buildAssistantTools(
     },
     {
       type: "function",
+      name: "search_files",
+      description: "Search uploaded files and indexed documents in the workspace using semantic similarity. Use this when the user asks about code, documents, logs, or any content they have uploaded. Returns the most relevant file chunks for the query.",
+      strict: null,
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query — a question or description of what to find" },
+          limit: { type: "number", description: "Maximum number of results to return (default 6, max 12)" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "list_conversation_artifacts",
+      description: "List media artifacts (images, videos, audio) generated in this conversation. Use this to reference previously generated outputs, get their URLs, or present them to the user.",
+      strict: null,
+      parameters: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["image", "video", "audio", "all"], description: "Filter by artifact type. Defaults to all." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
       name: "list_workspace_files",
       description: "List files in the workspace.",
       strict: null,
@@ -645,6 +676,88 @@ export async function executeAssistantTool(
           : STREAMS_BUILD_COMMAND || "pnpm run build";
 
       return await runCommand(command, handlers);
+    }
+
+    case "search_files": {
+      const query = safeString(input.args.query, "query");
+      const limit = typeof input.args.limit === "number"
+        ? Math.min(Math.max(1, Math.floor(input.args.limit)), 12)
+        : 6;
+
+      const workspaceId =
+        typeof input.context.workspaceId === "string"
+          ? input.context.workspaceId
+          : typeof input.context.context?.workspaceId === "string"
+            ? input.context.context.workspaceId
+            : undefined;
+
+      if (!workspaceId) {
+        return { ok: false, error: "workspaceId is required to search files", matches: [] };
+      }
+
+      handlers?.onProgress?.("searching files");
+
+      const matches = await searchWorkspaceFiles(workspaceId, query, limit);
+
+      return {
+        ok: true,
+        query,
+        matchCount: matches.length,
+        matches: matches.map((m) => ({
+          fileName: m.fileName,
+          mimeType: m.mimeType,
+          chunkIndex: m.chunkIndex,
+          content: m.content.slice(0, 2000),
+          relevance: m.rank,
+        })),
+      };
+    }
+
+    case "list_conversation_artifacts": {
+      const typeFilter = typeof input.args.type === "string" ? input.args.type : "all";
+      const conversationId =
+        typeof input.context.conversationId === "string"
+          ? input.context.conversationId
+          : typeof input.context.context?.conversationId === "string"
+            ? input.context.context.conversationId
+            : undefined;
+
+      if (!conversationId) {
+        return { ok: false, error: "No conversation ID in context", artifacts: [] };
+      }
+
+      handlers?.onProgress?.("retrieving conversation artifacts");
+
+      const admin = createAdminClient();
+      let query = admin
+        .from("artifacts")
+        .select("id, type, storage_url, mime_type, duration_seconds, metadata, created_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (typeFilter !== "all") {
+        query = query.eq("type", typeFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return { ok: false, error: error.message, artifacts: [] };
+      }
+
+      return {
+        ok: true,
+        conversationId,
+        artifactCount: data?.length ?? 0,
+        artifacts: (data ?? []).map((a) => ({
+          id: a.id,
+          type: a.type,
+          url: a.storage_url,
+          mimeType: a.mime_type,
+          durationSeconds: a.duration_seconds,
+          createdAt: a.created_at,
+        })),
+      };
     }
 
     case "generate_song": {
