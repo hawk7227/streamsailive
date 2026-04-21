@@ -156,15 +156,52 @@ function applyMessageWindow(messages: ChatMessage[]): ChatMessage[] {
 
 const FULL_MODEL_ROUTES = new Set<AssistantMode>(["build", "file"]);
 
+// ── Query complexity detector ─────────────────────────────────────────────
+// Predicts whether a chat query will need a long, structured, or deeply
+// reasoned response — BEFORE calling any model. Based only on input signals.
+//
+// Design constraint: deterministic, <1ms, no network, no model call.
+// Response-length escalation AFTER streaming is not possible — by the time
+// mini produces 600 chars, those tokens are already in the client. The only
+// safe escalation point is upfront.
+//
+// Signals (each independently sufficient):
+//   1. Long query (>300 chars) — correlated with expected long answer
+//   2. Multi-part question (≥2 question marks) — structured response needed
+//   3. Explicit structured-output vocabulary — user is asking for detail
+//
+// Tune thresholds via TURN_TIMING logs: if model='gpt-4o-mini' and
+// responses feel shallow, lower the length threshold or add keywords.
+
+const COMPLEX_QUERY_KEYWORDS =
+  /(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d?\s+to)?|analyz[e|i]|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?)/i;
+
+const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
+
+function isChatQueryComplex(userText: string): boolean {
+  const text = userText.trim();
+  // Long query → likely wants a detailed answer
+  if (text.length > COMPLEX_QUERY_LENGTH_THRESHOLD) return true;
+  // Multi-part question → structured response needed
+  if ((text.match(/\?/g) ?? []).length >= 2) return true;
+  // Explicit structured-output or deep-reasoning request
+  if (COMPLEX_QUERY_KEYWORDS.test(text)) return true;
+  return false;
+}
+
 function selectInitialModel(
   route: AssistantMode,
   hasFileContext: boolean,
+  userText: string,
 ): string {
-  // File context requires semantic synthesis — full model
+  // File context requires semantic synthesis over retrieved chunks — full model
   if (hasFileContext) return OPENAI_MODEL;
-  // Build and file workspace routes — full model for reliability
+  // Build and file workspace routes — full model for reliability and consistency
   if (FULL_MODEL_ROUTES.has(route)) return OPENAI_MODEL;
-  // All other routes start with mini
+  // Chat route: escalate to full model when query signals complex reasoning
+  // This is the only safe escalation point — input-signal based, zero latency
+  if (route === "chat" && isChatQueryComplex(userText)) return OPENAI_MODEL;
+  // All other routes (chat simple, image, video) start with mini
   return OPENAI_MINI_MODEL;
 }
 
@@ -390,14 +427,16 @@ export async function runOrchestrator(req: NextRequest) {
             route,
             msg_length: normalized.userText.length,
             had_file_ctx: !!assembledContext.fileContext,
+            complex_query: route === "chat" && isChatQueryComplex(normalized.userText),
             windowed_messages: Math.min(normalized.messages.length, CONTEXT_WINDOW_SIZE),
           });
 
           const tools = buildAssistantTools({ route, context: assembledContext });
-          // Select initial model based on route and context
+          // Select initial model based on route, context, and query complexity
           const initialModel = selectInitialModel(
             route,
             !!assembledContext.fileContext,
+            normalized.userText,
           );
           const imageUrls = extractImageUrls(normalized.context);
           const initialInput = buildInputMessages(
