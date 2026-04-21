@@ -401,39 +401,26 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     throw new Error("PROVIDER_REQUEST_FAILED: imageUrl is required for image-to-video generation.");
   }
 
-  // ── Governance gates — parity with /api/generations route ───────────────
-  // Both entrypoints must enforce the same pre-dispatch standards.
-  if (args.type === "video" || args.type === "i2v") {
-    if (!args.storyBible?.trim()) {
+  // ── Governance gates ──────────────────────────────────────────────────────
+  // i2v requires a source image — everything else proceeds directly.
+  if (args.type === "i2v" && args.imageUrl?.trim()) {
+    const compiled = compileGenerationRequest({
+      medium: "video",
+      prompt: args.prompt,
+      provider: args.provider ?? "fal",
+      storyBible: args.storyBible,
+      sourceKind: args.sourceKind,
+    });
+
+    if (compiled.structuralScore && !compiled.structuralScore.isSafeForVideo) {
       throw new VideoGovernanceError(
-        "STORY_BIBLE_REQUIRED",
-        "Story Bible is required before video generation. Provide a storyBible describing the scene, subject, and narrative.",
+        "STRUCTURAL_SCORE_BLOCKED",
+        "Source image is not safe for video yet. Structural integrity score is too low.",
+        {
+          structuralScore: compiled.structuralScore,
+          repairPlan: compiled.repairPlan,
+        },
       );
-    }
-
-    // Run structural score for i2v — block if source image is not safe
-    if (args.type === "i2v" && args.imageUrl?.trim()) {
-      const compiled = compileGenerationRequest({
-        medium: "video",
-        prompt: args.prompt,
-        provider: args.provider ?? "fal",
-        storyBible: args.storyBible,
-        sourceKind: args.sourceKind,
-      });
-
-      if (
-        compiled.structuralScore &&
-        !compiled.structuralScore.isSafeForVideo
-      ) {
-        throw new VideoGovernanceError(
-          "STRUCTURAL_SCORE_BLOCKED",
-          "Source image is not safe for video yet. Structural integrity score is too low.",
-          {
-            structuralScore: compiled.structuralScore,
-            repairPlan: compiled.repairPlan,
-          },
-        );
-      }
     }
   }
 

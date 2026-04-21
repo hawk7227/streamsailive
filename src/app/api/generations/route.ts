@@ -160,13 +160,6 @@ export async function POST(request: Request) {
           referenceSummary,
         });
 
-        if (!storyBible) {
-          return NextResponse.json({
-            error: "Story Bible is required before video generation.",
-            code: "STORY_BIBLE_REQUIRED",
-          }, { status: 422 });
-        }
-
         if (compiledRequest.structuralScore && !compiledRequest.structuralScore.isSafeForVideo && type === "i2v") {
           return NextResponse.json({
             error: "Source image is not safe for video yet.",

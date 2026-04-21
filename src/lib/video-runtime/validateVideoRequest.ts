@@ -19,14 +19,6 @@ export function validateVideoRequest(req: NormalizedVideoRequest): void {
     );
   }
 
-  // All video requires Story Bible
-  if (!req.storyBible?.trim()) {
-    throw new VideoRuntimeError(
-      "STORY_BIBLE_REQUIRED",
-      "Story Bible is required before video generation. Provide a storyBible describing the scene, subject, and narrative.",
-    );
-  }
-
   // i2v: run structural score gate — block unsafe source images
   if (req.mode === "image_to_video" && req.imageUrl) {
     const compiled = compileGenerationRequest({

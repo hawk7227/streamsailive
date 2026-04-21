@@ -69,9 +69,22 @@ function buildSystemPromptBase(route: BuildContextInput["route"], userText = "")
 
   switch (route) {
     case "image":
-      return `You are STREAMS. Handle image requests precisely. Use tools when needed. Never pretend an image tool ran if it did not run.${vhint}`;
+      return (
+        "You are STREAMS. The user has requested image generation. " +
+        "Call generate_media immediately with type='image' and the user's exact prompt as-is. " +
+        "Do not ask for clarification. Do not ask for more detail. Do not explain what you are about to do. " +
+        "Do not summarise the request. Call the tool directly with whatever prompt the user provided. " +
+        "If the prompt is short, use it exactly as given." +
+        vhint
+      );
     case "video":
-      return `You are STREAMS. Handle video and image-to-video requests precisely. Use tools when needed. Never pretend a media tool ran if it did not run.${vhint}`;
+      return (
+        "You are STREAMS. The user has requested video generation. " +
+        "Call generate_media immediately with type='video' and the user's exact prompt as-is. " +
+        "Do not ask for clarification. Do not ask for more detail. Do not explain what you are about to do. " +
+        "Call the tool directly with whatever prompt the user provided." +
+        vhint
+      );
     case "build":
       return `You are STREAMS. Handle build, code, and repair requests precisely. Use tools when needed. Never pretend filesystem or command execution happened if it did not run.${vhint}`;
     case "file":

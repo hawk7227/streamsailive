@@ -287,7 +287,7 @@ export function buildAssistantTools(
     {
       type: "function",
       name: "generate_media",
-      description: "Generate an image, video, or image-to-video output using the configured media pipeline.",
+      description: "Generate an image, video, or image-to-video output. Call this immediately when the user requests any visual media. Do not ask for clarification first.",
       strict: null,
       parameters: {
         type: "object",
@@ -300,9 +300,8 @@ export function buildAssistantTools(
           aspectRatio: { type: "string" },
           quality: { type: "string" },
           imageUrl: { type: "string" },
-          storyBible: { type: "string" },
           longVideo: { type: "boolean" },
-          realismMode: { type: "string", enum: ["strict", "balanced", "strict_everyday", "premium_commercial"] }
+          realismMode: { type: "string", enum: ["strict", "balanced", "strict_everyday", "premium_commercial"] },
         },
         required: ["type", "prompt"],
         additionalProperties: false,
