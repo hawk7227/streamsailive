@@ -504,7 +504,9 @@ function formatBytes(bytes: number): string {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AssistantFramePage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [toolbarOpen, setToolbarOpen] = useState(true);
+  // Start collapsed — chat fills full iframe width from left edge (x=0).
+  // User expands sidebar manually via the chevron toggle.
+  const [toolbarOpen, setToolbarOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>("nav");
   const [libraryFiles, setLibraryFiles] = useState<LibraryFile[]>([]);
@@ -843,7 +845,7 @@ export default function AssistantFramePage() {
     <div className="grid h-screen grid-cols-[auto_1fr] bg-white text-zinc-900">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside aria-label="Navigation sidebar" className={`border-r border-zinc-200 bg-zinc-50 motion-safe:transition-all motion-safe:duration-[180ms] ${toolbarOpen ? "w-[280px]" : "w-[68px]"}`}>
+      <aside aria-label="Navigation sidebar" className={`border-r border-zinc-200 bg-zinc-50 motion-safe:transition-all motion-safe:duration-[180ms] ${toolbarOpen ? "w-[280px]" : "w-0 overflow-hidden"}`}>
         <div className="flex h-full flex-col">
 
           {/* Header */}
@@ -1308,7 +1310,17 @@ export default function AssistantFramePage() {
       </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
-      <main aria-label="Chat area" className="grid h-screen grid-rows-[1fr_auto] bg-white">
+      <main aria-label="Chat area" className="grid h-screen grid-rows-[1fr_auto] bg-white relative">
+        {/* Sidebar toggle — floats at top-left of chat area when sidebar is closed */}
+        {!toolbarOpen && (
+          <button
+            onClick={() => setToolbarOpen(true)}
+            className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"
+            aria-label="Open sidebar"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
 
         {/* §20: role="log" + aria-live="polite" — screen readers announce new messages */}
         {/* Active project badge */}
