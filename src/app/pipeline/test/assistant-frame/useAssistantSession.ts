@@ -90,6 +90,15 @@ export type AssistantSessionSnapshot = {
   createdAt?: string;
 };
 
+/** A single step in the tool execution trace for a turn. */
+export type ToolTraceEntry = {
+  /** 'call' | 'progress' | 'result' */
+  kind: "call" | "progress" | "result";
+  name: string;
+  text: string | null;
+  timestamp: number;
+};
+
 export type AssistantSessionHookState = {
   connectionState: AssistantConnectionState;
   session: AssistantSessionSnapshot;
@@ -102,6 +111,8 @@ export type AssistantSessionHookState = {
   artifactsByTurn: Record<string, ArtifactDescriptor>;
   /** Keyed by turnId. Written file metadata for rendering FileWriteCard. */
   fileWritesByTurn: Record<string, FileWriteDescriptor>;
+  /** Keyed by turnId. Ordered list of tool execution steps. */
+  toolTraceByTurn: Record<string, ToolTraceEntry[]>;
   error: AssistantErrorMessage | null;
 };
 
@@ -361,6 +372,7 @@ export function useAssistantSession(
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
   const [artifactsByTurn, setArtifactsByTurn] = useState<Record<string, ArtifactDescriptor>>({});
   const [fileWritesByTurn, setFileWritesByTurn] = useState<Record<string, FileWriteDescriptor>>({});
+  const [toolTraceByTurn, setToolTraceByTurn] = useState<Record<string, ToolTraceEntry[]>>({});
   const [uiStates, setUIStates] = useState<Record<string, TurnUIState>>({});
   const [error, setError] = useState<AssistantErrorMessage | null>(null);
 
@@ -591,8 +603,30 @@ export function useAssistantSession(
           return;
         }
 
-        case "tool.call":
-        case "tool.progress":
+        case "tool.call": {
+          const name = typeof (message as Record<string,unknown>).name === "string"
+            ? (message as Record<string,unknown>).name as string : "tool";
+          setToolTraceByTurn((prev) => {
+            const entry: ToolTraceEntry = { kind: "call", name, text: null, timestamp: Date.now() };
+            const existing = prev[message.turnId ?? ""] ?? [];
+            if (!message.turnId) return prev;
+            return { ...prev, [message.turnId]: [...existing, entry] };
+          });
+          return;
+        }
+        case "tool.progress": {
+          const name = typeof (message as Record<string,unknown>).name === "string"
+            ? (message as Record<string,unknown>).name as string : "tool";
+          const text = typeof (message as Record<string,unknown>).text === "string"
+            ? (message as Record<string,unknown>).text as string : null;
+          setToolTraceByTurn((prev) => {
+            const entry: ToolTraceEntry = { kind: "progress", name, text, timestamp: Date.now() };
+            const existing = prev[message.turnId ?? ""] ?? [];
+            if (!message.turnId) return prev;
+            return { ...prev, [message.turnId]: [...existing, entry] };
+          });
+          return;
+        }
         case "tool.result":
         case "workspace.action.result":
         case "voice.state":
@@ -801,6 +835,7 @@ export function useAssistantSession(
     setPreviewsByTurn({});
     setArtifactsByTurn({});
     setFileWritesByTurn({});
+    setToolTraceByTurn({});
     setUIStates({});
     uiStateControllerRef.current.reset();
     if (storageKey) clearPersistedSession(storageKey);
@@ -824,6 +859,7 @@ export function useAssistantSession(
     previewsByTurn,
     artifactsByTurn,
     fileWritesByTurn,
+    toolTraceByTurn,
     uiStates,
     error,
     connect,

@@ -20,7 +20,7 @@ import type {
   AssistantPreviewType,
   AssistantPreviewStatus,
 } from "@/lib/assistant-core/assistant-protocol";
-import type { ArtifactDescriptor, FileWriteDescriptor } from "./useAssistantSession";
+import type { ArtifactDescriptor, FileWriteDescriptor, ToolTraceEntry } from "./useAssistantSession";
 import type { ArtifactRow } from "@/app/api/artifacts/route";
 import type { ProjectRow } from "@/app/api/projects/route";
 
@@ -252,6 +252,66 @@ function NeonSkeleton() {
         <div key={i} className="neon-stick" style={{ left: stick.left, top: stick.top, width: stick.w, height: stick.h, background: stick.color, boxShadow: `0 0 8px 2px ${stick.color}88, 0 0 20px 4px ${stick.color}44`, transform: `rotate(${stick.rot})`, "--dur": stick.dur, "--pulse": stick.pulse, "--delay": stick.delay } as React.CSSProperties} />
       ))}
       <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 4px)", pointerEvents: "none" }} />
+    </div>
+  );
+}
+
+// ── ThinkingStream ────────────────────────────────────────────────────────────
+// Animated activity block shown while a turn is in progress.
+// Replaces the old tiny pill — this is visible, real, and tied to live events.
+function ThinkingStream({ label }: { label: string | null }) {
+  return (
+    <div className="flex items-start gap-3 py-1">
+      {/* Animated pulse dot */}
+      <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-400 opacity-60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-zinc-500" />
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-zinc-500">
+          {label ?? "Working…"}
+        </p>
+        {/* Skeleton shimmer lines */}
+        <div className="mt-2 space-y-1.5">
+          <div className="h-2.5 w-3/4 animate-pulse rounded-full bg-zinc-100" />
+          <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-zinc-100" style={{ animationDelay: "150ms" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ToolTrace ─────────────────────────────────────────────────────────────────
+// Collapsible execution trace showing tool calls + progress steps.
+function ToolTrace({ entries }: { entries: ToolTraceEntry[] }) {
+  if (entries.length === 0) return null;
+  const TOOL_ICONS: Record<string, string> = {
+    generate_media:        "🎨",
+    search_files:          "🔍",
+    list_workspace_files:  "📁",
+    read_workspace_file:   "📄",
+    write_workspace_file:  "✏️",
+    apply_workspace_patch: "🔧",
+    run_workspace_command: "⚡",
+    build_workspace:       "🏗️",
+  };
+  return (
+    <div className="mt-3 space-y-1 border-t border-zinc-100 pt-3">
+      {entries.map((e, i) => (
+        <div key={i} className="flex items-start gap-2 text-[11px]">
+          <span className="mt-0.5 shrink-0 text-base leading-none">
+            {TOOL_ICONS[e.name] ?? "🔩"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="font-mono font-medium text-zinc-600">{e.name}</span>
+            {e.text && (
+              <span className="ml-1.5 text-zinc-400">{e.text}</span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1166,11 +1226,7 @@ export default function AssistantFramePage() {
           <div className="mx-auto flex max-w-[820px] flex-col gap-5"
                role="log" aria-live="polite" aria-label="Conversation messages">
 
-            {activeLabel ? (
-              <div className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium tracking-[0.06em] text-zinc-500">
-                {activeLabel}
-              </div>
-            ) : null}
+{/* Activity stream now rendered per-message below */}
 
             {/* Empty state */}
             {session.messages.length === 0 && (
@@ -1202,57 +1258,90 @@ export default function AssistantFramePage() {
               const turnUiState = message.turnId ? session.uiStates[message.turnId] : undefined;
               const turnArtifact = message.turnId ? session.artifactsByTurn[message.turnId] : undefined;
               const turnFileWrite = message.turnId ? session.fileWritesByTurn[message.turnId] : undefined;
+              const turnToolTrace = message.turnId ? (session.toolTraceByTurn[message.turnId] ?? []) : [];
               const isLastAssistant = !isUser &&
                 msgIdx === session.messages.map((m) => m.role).lastIndexOf("assistant");
               const isComplete = message.status === "complete";
               const isError = message.status === "error";
 
               return (
-                <div key={message.id} className={`group flex ${isUser ? "justify-end" : "justify-start"}`}>
-                  <div className="w-full max-w-3xl">
-                    {/* Bubble */}
-                    <div className={`rounded-3xl border px-5 py-4 ${isUser ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-900"}`}>
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                        {isUser ? "You" : "Assistant"}
-                      </div>
-                      <div className={`mt-2 text-sm leading-7 ${isUser ? "text-white" : "text-zinc-800"}`}>
-                        {isUser
-                          ? (message.content || "")
-                          : turnArtifact
-                            // Resolved artifact — render typed card, not markdown
-                            ? null
-                            : message.content
-                              ? renderContent(message.content)
-                              : message.status === "streaming" && turnUiState?.label === "Creating image…"
-                                ? <NeonSkeleton />
-                                : ""}
-                      </div>
-                      {/* ArtifactCard rendered outside the text flow — full width */}
-                      {turnArtifact && !isUser && (
-                        <ArtifactCard
-                          artifact={turnArtifact}
-                          onRegenerate={turnArtifact.title
-                            ? () => handleEditMessage(turnArtifact.title!)
-                            : undefined}
-                        />
-                      )}
-                      {/* FileWriteCard — rendered when assistant wrote a file */}
-                      {turnFileWrite && !isUser && (
-                        <FileWriteCard file={turnFileWrite} />
-                      )}
+                <div key={message.id} className={`group flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                  <div className={`w-full max-w-3xl ${isUser ? "" : ""}`}>
 
-                      {/* §20: aria-live on activity badge */}
-                      {turnUiState?.label && !isUser && (
-                        <div className="mt-3 inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium tracking-[0.06em] text-zinc-500"
-                             aria-live="polite" aria-atomic="true">
-                          {turnUiState.label}
-                        </div>
-                      )}
-
-                      {turnPreviews.length > 0 && !isUser && (
-                        <div>{turnPreviews.map((p) => <PreviewCard key={p.previewId} preview={p} />)}</div>
-                      )}
+                    {/* Role label — outside bubble, above */}
+                    <div className={`mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${isUser ? "text-right text-zinc-400" : "text-zinc-400"}`}>
+                      {isUser ? "You" : "STREAMS"}
                     </div>
+
+                    {/* ThinkingStream — shown while turn is running, no content yet */}
+                    {!isUser && message.status === "streaming" && !message.content && !turnArtifact && (
+                      <div className="mb-2 rounded-2xl border border-zinc-100 bg-zinc-50 px-5 py-4"
+                           aria-live="polite" aria-atomic="true">
+                        <ThinkingStream label={turnUiState?.label ?? null} />
+                      </div>
+                    )}
+
+                    {/* Bubble — only render when there is content, artifact, or error */}
+                    {(message.content || turnArtifact || turnFileWrite || isError ||
+                      (message.status === "streaming" && turnUiState?.label === "Creating image…")) && (
+                      <div className={`rounded-2xl border px-5 py-4 ${
+                        isUser
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : isError
+                            ? "border-rose-200 bg-rose-50"
+                            : "border-zinc-200 bg-white text-zinc-900"
+                      }`}>
+                        {/* Content */}
+                        <div className={`text-sm leading-7 ${isUser ? "text-white" : isError ? "text-rose-700" : "text-zinc-800"}`}>
+                          {isUser
+                            ? (message.content || "")
+                            : turnArtifact
+                              ? null
+                              : message.content
+                                ? renderContent(message.content)
+                                : message.status === "streaming" && turnUiState?.label === "Creating image…"
+                                  ? <NeonSkeleton />
+                                  : isError
+                                    ? "Something went wrong."
+                                    : ""}
+                        </div>
+
+                        {/* Live activity label during streaming (has content) */}
+                        {!isUser && message.status === "streaming" && message.content && turnUiState?.label && (
+                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400"
+                               aria-live="polite" aria-atomic="true">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-400 opacity-60" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                            </span>
+                            {turnUiState.label}
+                          </div>
+                        )}
+
+                        {/* ArtifactCard — full width inside bubble */}
+                        {turnArtifact && !isUser && (
+                          <ArtifactCard
+                            artifact={turnArtifact}
+                            onRegenerate={turnArtifact.title
+                              ? () => handleEditMessage(turnArtifact.title!)
+                              : undefined}
+                          />
+                        )}
+                        {/* FileWriteCard */}
+                        {turnFileWrite && !isUser && (
+                          <FileWriteCard file={turnFileWrite} />
+                        )}
+
+                        {/* Tool execution trace */}
+                        {!isUser && turnToolTrace.length > 0 && (
+                          <ToolTrace entries={turnToolTrace} />
+                        )}
+
+                        {turnPreviews.length > 0 && !isUser && (
+                          <div>{turnPreviews.map((p) => <PreviewCard key={p.previewId} preview={p} />)}</div>
+                        )}
+                      </div>
+                    )}
 
                     {/* §15 + §16: Message action row — appears below bubble */}
                     {isUser && isComplete && (
