@@ -20,6 +20,10 @@ export async function generateImageCandidatesFromProvider(params: {
   const model = generationConfig.image.model;
   const quality = generationConfig.image.quality;
 
+  // Single log point for all image generation paths.
+  // chat-image, assistant tool, and /api/generate-image all converge here.
+  console.log(JSON.stringify({ level: "info", event: "IMAGE_MODEL_USED", model }));
+
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: {

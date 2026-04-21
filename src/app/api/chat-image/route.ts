@@ -6,6 +6,7 @@ import { getCurrentWorkspaceSelection } from '@/lib/team-server';
 import { buildStoredImageAttachment } from '@/lib/assistant-media/chatImage';
 import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES } from "@/lib/env";
 import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
+import { generationConfig } from "@/lib/media-realism/generationConfig";
 
 export const maxDuration = 120;
 export const runtime = 'nodejs';
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
       role: 'user',
       content: prompt,
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: generationConfig.image.model,
       attachments: [],
     })
     .select('id')
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
       role: 'assistant',
       content: 'Generated image.',
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: generationConfig.image.model,
       attachments: [attachment],
     })
     .select('id')
