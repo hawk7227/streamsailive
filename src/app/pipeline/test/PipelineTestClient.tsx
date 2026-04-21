@@ -863,7 +863,7 @@ Accept only if:
     for (const rule of guidance.rules) {
       const lower = rule.instruction.toLowerCase();
       let frontendValue = "";
-      let guidanceValue = rule.value ?? rule.instruction;
+      const guidanceValue = rule.value ?? rule.instruction;
       let conflict = false;
       let label = rule.field;
       let description = "";
@@ -2166,7 +2166,7 @@ Accept only if:
       case "PLAN_LONG_VIDEO": void executeAssistantPlan("PLAN_LONG_VIDEO", String(action.payload?.prompt ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
       case "REGENERATE_REALISM": void executeAssistantPlan(generationIntent === "PLAN_IMAGE" ? "PLAN_IMAGE" : "PLAN_VIDEO", String(action.payload?.prompt ?? stepPrompts.imagery ?? storyText), (action.payload?.target as OutputTarget | undefined) ?? "center"); break;
       case "SEND_TO_SCREEN": if (typeof action.payload?.url === "string" && typeof action.payload?.mediaType === "string") sendToDestination(action.payload.url, action.payload.mediaType as "image"|"video", (action.payload?.screen as PreviewDestination | undefined) ?? "desktop"); break;
-      case "SEND_TO_SHELF": if (typeof action.payload?.url === "string" && typeof action.payload?.mediaType === "string") pushMediaShelfItem({ id: `assistant-shelf-${Date.now()}`, title: `Assistant ${String(action.payload.mediaType)}`, type: action.payload.mediaType as any, url: action.payload.url, subtitle: String(action.payload?.prompt ?? "") || undefined, status: "approved" }); break;
+      case "SEND_TO_SHELF": if (typeof action.payload?.url === "string" && typeof action.payload?.mediaType === "string") pushMediaShelfItem({ id: `assistant-shelf-${Date.now()}`, title: `Assistant ${String(action.payload.mediaType)}`, type: action.payload.mediaType as "image" | "video", url: action.payload.url, subtitle: String(action.payload?.prompt ?? "") || undefined, status: "approved" }); break;
       case "run_step":
         if (typeof action.payload?.stepId === "string") { setSelectedStepId(action.payload.stepId); setStepConfigOpen(true); }
         break;
@@ -2551,7 +2551,7 @@ Accept only if:
                 out += "  ✓ No text/UI in image (negative prompt enforced)\n";
                 out += "  ✓ Realism engine active (anti-cinematic QC gate)\n";
                 out += "  ✓ Config-driven validator (no niche lock)\n";
-                out += "  ✓ Model driven by IMAGE_MODEL env var (default: dall-e-3)";
+                out += "  ✓ Model driven by IMAGE_MODEL env var (default: gpt-image-1)";
 
               } catch(e) {
                 out += `\n\n❌ Exception: ${e instanceof Error ? e.message : String(e)}`;

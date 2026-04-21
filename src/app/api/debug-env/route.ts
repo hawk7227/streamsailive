@@ -36,7 +36,7 @@ export async function GET() {
       const res = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: "dall-e-3", prompt: "A plain white square", n: 1, size: "1024x1024" }),
+        body: JSON.stringify({ model: process.env.IMAGE_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-1", prompt: "A plain white square", n: 1, size: "1024x1024" }),
       });
       const body = await res.json() as { data?: unknown[]; error?: { message?: string } };
       dalleTest = res.ok && body.data?.[0]

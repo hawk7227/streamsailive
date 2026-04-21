@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceSelection } from '@/lib/team-server';
-import { uploadImageToSupabase } from '@/lib/supabase/storage';
 import { buildStoredImageAttachment } from '@/lib/assistant-media/chatImage';
-import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_IMAGE_MODEL } from "@/lib/env";
+import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES } from "@/lib/env";
+import { generateEnforcedImage } from "@/lib/media-realism/enforcedImage";
 
 export const maxDuration = 120;
 export const runtime = 'nodejs';
@@ -49,10 +49,12 @@ async function ensureConversation(admin: ReturnType<typeof createAdminClient>, u
   return data.id as string;
 }
 
-function buildSize(input: ChatImageRequest['size']): '1024x1024' | '1024x1536' | '1536x1024' {
-  if (input === '1024x1536' || input === '1536x1024' || input === '1024x1024') return input;
-  return '1024x1024';
+function mapSizeToAspectRatio(input: ChatImageRequest['size']): '1:1' | '4:5' | '16:9' {
+  if (input === '1024x1536') return '4:5';
+  if (input === '1536x1024') return '16:9';
+  return '1:1';
 }
+
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -76,33 +78,22 @@ export async function POST(request: NextRequest) {
   const imageApiKey = OPENAI_API_KEY_IMAGES || OPENAI_API_KEY;
   if (!imageApiKey) return NextResponse.json({ error: 'OPENAI_API_KEY is not set' }, { status: 500 });
 
-  const model = OPENAI_IMAGE_MODEL || 'gpt-image-1';
-  const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${imageApiKey}`,
-    },
-    body: JSON.stringify({
-      model,
+  let storageUrl: string;
+  try {
+    const result = await generateEnforcedImage({
       prompt,
-      size: buildSize(body.size),
-      n: 1,
-    }),
-  });
-
-  if (!imageResponse.ok) {
-    const detail = await imageResponse.text().catch(() => imageResponse.statusText);
-    return NextResponse.json({ error: `Image generation failed (${imageResponse.status}): ${detail}` }, { status: 502 });
+      apiKey: imageApiKey,
+      workspaceId,
+      mode: 'images',
+      realismMode: 'strict_everyday',
+      aspectRatio: mapSizeToAspectRatio(body.size),
+    });
+    storageUrl = result.outputUrl;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Image generation failed';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  const payload = await imageResponse.json() as { data?: Array<{ url?: string; b64_json?: string }> };
-  const first = payload.data?.[0];
-  const source = first?.b64_json ? `data:image/png;base64,${first.b64_json}` : first?.url;
-  if (!source) return NextResponse.json({ error: 'Provider returned no image artifact' }, { status: 502 });
-
-  const filename = `${crypto.randomUUID()}.png`;
-  const storageUrl = await uploadImageToSupabase(source, workspaceId, filename);
   const createdAt = new Date().toISOString();
   const artifact: StoredImageArtifact = {
     id: crypto.randomUUID(),
@@ -130,7 +121,7 @@ export async function POST(request: NextRequest) {
       role: 'user',
       content: prompt,
       provider: 'openai',
-      model,
+      model: 'gpt-image-1',
       attachments: [],
     })
     .select('id')
@@ -144,7 +135,7 @@ export async function POST(request: NextRequest) {
       role: 'assistant',
       content: 'Generated image.',
       provider: 'openai',
-      model,
+      model: 'gpt-image-1',
       attachments: [attachment],
     })
     .select('id')

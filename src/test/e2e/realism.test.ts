@@ -239,10 +239,10 @@ describe("ScenePlannerV2 — orientation and shotType from context", () => {
 // ── UNIT: Generation config ──────────────────────────────────────────────────
 
 describe("GenerationConfig — env var driven", () => {
-  it("defaults to dall-e-3 when IMAGE_MODEL not set", async () => {
+  it("defaults to gpt-image-1 when IMAGE_MODEL not set", async () => {
     const { generationConfig } = await import("@/lib/media-realism/generationConfig");
-    // In test env IMAGE_MODEL is unset, should fall back to dall-e-3
-    expect(["dall-e-3", "gpt-image-1", process.env.IMAGE_MODEL].filter(Boolean)).toContain(generationConfig.image.model);
+    // In test env IMAGE_MODEL is unset, should fall back to gpt-image-1
+    expect(["gpt-image-1", process.env.IMAGE_MODEL].filter(Boolean)).toContain(generationConfig.image.model);
   });
 
   it("defaults to standard quality when IMAGE_QUALITY not set", async () => {

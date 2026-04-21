@@ -1,6 +1,6 @@
 import { AIProvider, GenerationOptions, GenerationResult, GenerationType } from "../types";
 import { getSiteConfigSync } from "../../config";
-import { OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_API_KEY_SORA, OPENAI_API_KEY_VOICE } from "@/lib/env";
+import { IMAGE_MODEL, OPENAI_API_KEY, OPENAI_API_KEY_IMAGES, OPENAI_API_KEY_SORA, OPENAI_API_KEY_VOICE } from "@/lib/env";
 
 export class OpenAIProvider implements AIProvider {
     async generate(type: GenerationType, options: GenerationOptions): Promise<GenerationResult> {
@@ -59,6 +59,12 @@ export class OpenAIProvider implements AIProvider {
             throw new Error("OPENAI_API_KEY is not set");
         }
 
+        const size = options.aspectRatio === "1:1"
+            ? "1024x1024"
+            : options.aspectRatio === "9:16" || options.aspectRatio === "4:5"
+              ? "1024x1536"
+              : "1536x1024";
+
         const response = await fetch("https://api.openai.com/v1/images/generations", {
             method: "POST",
             headers: {
@@ -66,10 +72,10 @@ export class OpenAIProvider implements AIProvider {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: "dall-e-3",
+                model: options.model || IMAGE_MODEL || "gpt-image-1",
                 prompt: options.prompt,
                 n: 1,
-                size: options.aspectRatio === "9:16" ? "1024x1792" : "1792x1024",
+                size,
             }),
         });
 
@@ -79,11 +85,13 @@ export class OpenAIProvider implements AIProvider {
             throw new Error(`OpenAI Image generation failed (${response.status}): ${detail}`);
         }
 
-        const result = await response.json();
-        if (result.data && result.data[0] && result.data[0].url) {
+        const result = await response.json() as { data?: Array<{ url?: string; b64_json?: string }> };
+        const first = result.data?.[0];
+        const outputUrl = first?.url ?? (first?.b64_json ? `data:image/png;base64,${first.b64_json}` : undefined);
+        if (outputUrl) {
             return {
                 status: "completed",
-                outputUrl: result.data[0].url,
+                outputUrl,
             };
         }
 
