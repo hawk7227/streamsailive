@@ -841,9 +841,11 @@ export default function AssistantFramePage() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-4">
             {toolbarOpen ? (
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Assistant runtime</div>
-                <div className="mt-1 text-xl font-semibold text-zinc-950">Session chat</div>
+              <div className="min-w-0 flex-1 pr-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">STREAMS</div>
+                <div className="mt-0.5 truncate text-sm font-semibold text-zinc-950">
+                  {sessionIndex.find(s => s.conversationId === conversationId)?.firstMessage?.slice(0, 28) ?? "New conversation"}
+                </div>
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-200 bg-white p-2">
@@ -880,6 +882,33 @@ export default function AssistantFramePage() {
 
           {/* Nav / panels */}
           <div className="flex-1 overflow-auto px-3 py-3">
+
+            {/* Global search — always visible, opens sessions panel */}
+            {toolbarOpen && (
+              <div className="mb-3">
+                <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-3 py-2 focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-300">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={sessionSearch}
+                    onChange={(e) => {
+                      setSessionSearch(e.target.value);
+                      setSidebarPanel("sessions");
+                    }}
+                    onFocus={() => setSidebarPanel("sessions")}
+                    placeholder="Search sessions…"
+                    aria-label="Search sessions"
+                    className="min-w-0 flex-1 bg-transparent text-[12px] text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
+                  />
+                  {sessionSearch && (
+                    <button type="button" onClick={() => { setSessionSearch(""); setSidebarPanel("nav"); }}
+                      className="shrink-0 text-zinc-400 hover:text-zinc-600">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Main nav */}
             <nav aria-label="Primary navigation" className="space-y-1">
@@ -1377,12 +1406,12 @@ export default function AssistantFramePage() {
                       <div className={`rounded-2xl border px-5 py-4 ${
                         isUser
                           ? "border-zinc-900 bg-zinc-900 text-white"
-                          : isError
+                          : isError && !message.content
                             ? "border-rose-200 bg-rose-50"
                             : "border-zinc-200 bg-white text-zinc-900"
                       }`}>
                         {/* Content */}
-                        <div className={`text-sm leading-7 ${isUser ? "text-white" : isError ? "text-rose-700" : "text-zinc-800"}`}>
+                        <div className={`text-sm leading-7 ${isUser ? "text-white" : (isError && !message.content) ? "text-rose-700" : "text-zinc-800"}`}>
                           {isUser
                             ? (message.content || "")
                             : turnArtifact
@@ -1422,6 +1451,13 @@ export default function AssistantFramePage() {
                           <FileWriteCard file={turnFileWrite} />
                         )}
 
+                        {/* Incomplete indicator — content exists but turn errored */}
+                        {!isUser && isError && message.content && (
+                          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-amber-600">
+                            <span>⚠</span>
+                            <span>Response may be incomplete</span>
+                          </div>
+                        )}
                         {/* Tool execution trace */}
                         {!isUser && turnToolTrace.length > 0 && (
                           <ToolTrace entries={turnToolTrace} />
@@ -1462,8 +1498,8 @@ export default function AssistantFramePage() {
                         </button>
                       </div>
                     )}
-                    {/* §16: Retry on error */}
-                    {!isUser && isError && (
+                    {/* §16: Retry only when turn errored with no content */}
+                    {!isUser && isError && !message.content && (
                       <div className="mt-2 flex gap-2">
                         <button type="button" onClick={() => void handleRetry()}
                           disabled={session.isTurnRunning}
