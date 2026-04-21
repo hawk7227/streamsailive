@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadFileWithHash } from '@/lib/supabase/storage';
 import { parseByType } from '@/lib/files/parserRouter';
 import { chunkAndIndexFile } from '@/lib/files/chunker';
+import { parseImportPaths } from '@/lib/files/importParser';
+import { indexFileImports } from '@/lib/files/importIndexer';
 import { enqueueJob } from '@/lib/jobs/queue';
 import { buildFilePreviewManifest } from '@/lib/files/preview';
 
@@ -63,6 +65,22 @@ export async function orchestrateFileUpload(input: UploadOrchestrationInput) {
 
   if (parsed.text) {
     await chunkAndIndexFile(fileRecord.id, parsed.text, input.file.name);
+
+    // Parse and index import edges for cross-file retrieval augmentation.
+    // Only runs for code files — returns empty array for all others.
+    const importBasenames = parseImportPaths(parsed.text, input.file.name);
+    if (importBasenames.length > 0) {
+      // Non-fatal — import indexing failure does not block the upload.
+      await indexFileImports(fileRecord.id as string, input.workspaceId, importBasenames)
+        .catch((err: unknown) => {
+          console.error(JSON.stringify({
+            level: 'error',
+            event: 'IMPORT_INDEX_FAILED',
+            fileId: fileRecord.id,
+            reason: err instanceof Error ? err.message : String(err),
+          }));
+        });
+    }
   }
 
   if (effectiveIngestType === 'voice_dataset') {

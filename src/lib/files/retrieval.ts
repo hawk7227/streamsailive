@@ -176,6 +176,10 @@ async function tsvectorSearch(
 // Increase if workspaces have many files with highly similar content.
 
 const MAX_CHUNKS_PER_FILE = 2;
+
+// Max additional chunks from imported files to append after primary results.
+// These are supplementary — they never displace primary results.
+const IMPORT_AUGMENT_MAX = 2;
 const FETCH_MULTIPLIER    = 2;
 
 type RawResult = { file_id: string; chunk_index: number; content: string; rank: number };
@@ -200,6 +204,93 @@ function diversifyByFile(
 }
 
 // ── Public search function ────────────────────────────────────────────────────
+
+// ── Import graph augmentation ─────────────────────────────────────────────────
+//
+// After primary retrieval, look up files imported by the result files and
+// append the top-1 chunk from each imported file not already in results.
+// Capped at IMPORT_AUGMENT_MAX to avoid diluting high-signal primary results.
+//
+// Example:
+//   Primary result: auth.ts (2 chunks)
+//   auth.ts imports types.ts → types.ts has User/Session type definitions
+//   Augmented result: auth.ts (2 chunks) + types.ts (1 chunk)
+//   Model now has the type context needed to reason about authentication.
+
+async function augmentWithImportedChunks(
+  primaryResults: RawResult[],
+  fileIds: string[],
+  query: string,
+  workspaceId: string,
+): Promise<RawResult[]> {
+  if (primaryResults.length === 0) return [];
+
+  const admin = createAdminClient();
+
+  // Collect unique from_file_ids already in results
+  const resultFileIds = new Set(primaryResults.map((r) => r.file_id));
+
+  // Query file_import_edges for imported files
+  const { data: edges } = await admin
+    .from("file_import_edges")
+    .select("to_file_id")
+    .in("from_file_id", [...resultFileIds])
+    .eq("workspace_id", workspaceId);
+
+  if (!edges?.length) return [];
+
+  // Collect imported file IDs not already in primary results
+  // Only consider files that are in the workspace (fileIds whitelist)
+  const workspaceFileSet = new Set(fileIds);
+  const augmentFileIds: string[] = [];
+  for (const edge of edges) {
+    const toId = edge.to_file_id as string;
+    if (!resultFileIds.has(toId) && workspaceFileSet.has(toId) && !augmentFileIds.includes(toId)) {
+      augmentFileIds.push(toId);
+      if (augmentFileIds.length >= IMPORT_AUGMENT_MAX) break;
+    }
+  }
+
+  if (augmentFileIds.length === 0) return [];
+
+  // Fetch the top-1 chunk from each augmented file using tsvector search.
+  // Limit 1 per file — these are supplementary chunks, not primary matches.
+  const augmented: RawResult[] = [];
+  const safe = query.trim();
+  const minRank = Math.min(...primaryResults.map((r) => r.rank));
+
+  for (const augFileId of augmentFileIds) {
+    const { data } = await admin
+      .from("file_chunks")
+      .select("chunk_index, content, file_id")
+      .textSearch("search_vec", safe, { type: "websearch" })
+      .eq("file_id", augFileId)
+      .limit(1);
+
+    if (data?.[0]) {
+      const row = data[0] as { chunk_index: number; content: string; file_id: string };
+      augmented.push({
+        file_id: row.file_id,
+        chunk_index: row.chunk_index,
+        content: row.content,
+        // Rank just below primary results — supplementary, not competing
+        rank: minRank - 0.01,
+      });
+    }
+  }
+
+  if (augmented.length > 0) {
+    console.log(JSON.stringify({
+      level: "info",
+      event: "RETRIEVAL_AUGMENTED",
+      workspaceId,
+      augmentedCount: augmented.length,
+      augmentFileIds,
+    }));
+  }
+
+  return augmented;
+}
 
 export async function searchWorkspaceFiles(
   workspaceId: string,
@@ -272,7 +363,12 @@ export async function searchWorkspaceFiles(
     }));
   }
 
-  return diversified.map((r) => ({
+  // Augment with chunks from files imported by the primary result files.
+  // Appended after primary results — supplementary context, not ranked competitors.
+  const augmented = await augmentWithImportedChunks(diversified, fileIds, safe, workspaceId);
+  const allResults = [...diversified, ...augmented];
+
+  return allResults.map((r) => ({
     fileId: r.file_id,
     fileName: fileMap.get(r.file_id)?.name ?? r.file_id,
     mimeType: fileMap.get(r.file_id)?.mimeType ?? "application/octet-stream",
