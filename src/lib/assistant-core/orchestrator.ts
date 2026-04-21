@@ -174,7 +174,7 @@ const FULL_MODEL_ROUTES = new Set<AssistantMode>(["build", "file"]);
 // responses feel shallow, lower the length threshold or add keywords.
 
 const COMPLEX_QUERY_KEYWORDS =
-  /(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d?\s+to)?|analyz[e|i]|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?)/i;
+  /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?)\b/i;
 
 const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
 
@@ -192,15 +192,14 @@ function isChatQueryComplex(userText: string): boolean {
 function selectInitialModel(
   route: AssistantMode,
   hasFileContext: boolean,
-  userText: string,
+  isComplexChat: boolean,
 ): string {
   // File context requires semantic synthesis over retrieved chunks — full model
   if (hasFileContext) return OPENAI_MODEL;
   // Build and file workspace routes — full model for reliability and consistency
   if (FULL_MODEL_ROUTES.has(route)) return OPENAI_MODEL;
-  // Chat route: escalate to full model when query signals complex reasoning
-  // This is the only safe escalation point — input-signal based, zero latency
-  if (route === "chat" && isChatQueryComplex(userText)) return OPENAI_MODEL;
+  // Chat route: escalate when query signals complex reasoning (pre-computed)
+  if (isComplexChat) return OPENAI_MODEL;
   // All other routes (chat simple, image, video) start with mini
   return OPENAI_MINI_MODEL;
 }
@@ -422,12 +421,16 @@ export async function runOrchestrator(req: NextRequest) {
           });
 
           timer.mark("context_built");
+
+          // Computed once — used in both timer annotation and model selection
+          const isComplexChat = route === "chat" && isChatQueryComplex(normalized.userText);
+
           // annotation updated after first response (escalated + continuation_model fields added below)
           timer.annotate({
             route,
             msg_length: normalized.userText.length,
             had_file_ctx: !!assembledContext.fileContext,
-            complex_query: route === "chat" && isChatQueryComplex(normalized.userText),
+            complex_query: isComplexChat,
             windowed_messages: Math.min(normalized.messages.length, CONTEXT_WINDOW_SIZE),
           });
 
@@ -436,7 +439,7 @@ export async function runOrchestrator(req: NextRequest) {
           const initialModel = selectInitialModel(
             route,
             !!assembledContext.fileContext,
-            normalized.userText,
+            isComplexChat,
           );
           const imageUrls = extractImageUrls(normalized.context);
           const initialInput = buildInputMessages(
@@ -577,15 +580,11 @@ export async function runOrchestrator(req: NextRequest) {
           timer.annotate({ tool_count: loopCount });
           send("phase", { phase: "finalizing" });
 
-          // If the first streaming call produced no text (all tool calls, no continuation),
-          // emit any remaining text from the final response.
-          const finalText = getTextFromResponse(response);
-          if (loopCount === 0 && finalText) {
-            // This path is hit when streaming produced text but the loop ran zero times.
-            // Text was already emitted via text_delta events from streamFirstResponse.
-            // The realtime server builds the full text from accumulated deltas.
-            // No action needed here.
-          } else if (loopCount === 0 && !finalText) {
+          // Fallback: if no text was streamed and no tools ran, the model returned
+          // an empty or unrecognised output. Surface it explicitly.
+          // Normal case (loopCount === 0, text already streamed via text_delta events
+          // in streamFirstResponse): no action needed here.
+          if (loopCount === 0 && !getTextFromResponse(response)) {
             const outputTypes = Array.isArray(response?.output)
               ? response.output.map((item: OpenAI.Responses.ResponseOutputItem) => item.type).join(", ")
               : "none";
