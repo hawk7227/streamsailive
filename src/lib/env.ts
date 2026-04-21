@@ -156,7 +156,7 @@ export const AI_PROVIDER_I2V = optionalKey("AI_PROVIDER_I2V");
 export const OPENAI_IMAGE_MODEL = optional("OPENAI_IMAGE_MODEL", "gpt-image-1");
 export const OPENAI_API_BASE_URL = optionalKey("OPENAI_API_BASE_URL");
 export const IMAGE_MODEL = optional("IMAGE_MODEL", "gpt-image-1");
-export const IMAGE_QUALITY = optional("IMAGE_QUALITY", "medium");
+export const IMAGE_QUALITY = optional("IMAGE_QUALITY", "standard");
 export const IMAGE_CANDIDATES = optional("IMAGE_CANDIDATES", "4");
 export const IMAGE_MAX_ATTEMPTS = optional("IMAGE_MAX_ATTEMPTS", "3");
 

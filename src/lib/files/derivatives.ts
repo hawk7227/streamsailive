@@ -34,8 +34,8 @@ async function withTempFile<T>(buffer: Buffer, fileName: string, run: (inputPath
 async function generatePoster(buffer: Buffer, fileName: string): Promise<GeneratedDerivative> {
   return withTempFile(buffer, fileName, async (inputPath, tempDir) => {
     const outputPath = path.join(tempDir, 'poster.jpg');
-    const primaryArgs = ['-y', '-ss', '00:00:01.000', '-i', inputPath, '-frames:v', '1', '-vf', 'scale=min(1280,iw):-2', outputPath];
-    const fallbackArgs = ['-y', '-i', inputPath, '-frames:v', '1', '-vf', 'scale=min(1280,iw):-2', outputPath];
+    const primaryArgs = ['-y', '-ss', '00:00:01.000', '-i', inputPath, '-frames:v', '1', '-vf', 'scale=1280:-1', outputPath];
+    const fallbackArgs = ['-y', '-i', inputPath, '-frames:v', '1', outputPath];
 
     try {
       await execFileAsync('ffmpeg', primaryArgs);
