@@ -460,6 +460,7 @@ export default function AssistantFramePage() {
   });
   const [newProjectName, setNewProjectName] = useState("");
   const [sessionIndex, setSessionIndex] = useState<SessionSummary[]>([]);
+  const [sessionSearch, setSessionSearch] = useState("");
 
   // ── Workspace + conversation identity ─────────────────────────────────────
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
@@ -830,25 +831,60 @@ export default function AssistantFramePage() {
             </div>
 
             {/* Sessions panel — §25 real chat history */}
-            {toolbarOpen && sidebarPanel === "sessions" && (
-              <div className="mt-4">
-                <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Recent sessions</div>
-                {sessionIndex.length === 0 ? (
-                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">No previous sessions.</div>
-                ) : (
-                  <div className="space-y-1">
-                    {sessionIndex.map((s) => (
-                      <button key={s.storageKey} type="button"
-                        onClick={() => handleLoadSession(s)}
-                        className={`flex w-full flex-col rounded-2xl border px-3 py-3 text-left transition-colors hover:bg-white ${s.conversationId === conversationId ? "border-zinc-300 bg-white" : "border-transparent"}`}>
-                        <span className="truncate text-sm text-zinc-800">{s.firstMessage || "Empty session"}</span>
-                        <span className="mt-0.5 text-[11px] text-zinc-400">{s.messageCount} messages · {new Date(s.savedAt).toLocaleDateString()}</span>
-                      </button>
-                    ))}
+            {toolbarOpen && sidebarPanel === "sessions" && (() => {
+              const query = sessionSearch.trim().toLowerCase();
+              const filtered = query
+                ? sessionIndex.filter((s) => s.firstMessage.toLowerCase().includes(query))
+                : sessionIndex;
+
+              function Highlight({ text, q }: { text: string; q: string }) {
+                if (!q || !text.toLowerCase().includes(q)) return <>{text}</>;
+                const idx = text.toLowerCase().indexOf(q);
+                return (
+                  <>
+                    {text.slice(0, idx)}
+                    <mark className="rounded bg-yellow-100 text-yellow-900">{text.slice(idx, idx + q.length)}</mark>
+                    {text.slice(idx + q.length)}
+                  </>
+                );
+              }
+
+              return (
+                <div className="mt-4">
+                  {/* Search input */}
+                  <div className="mb-3 px-1">
+                    <input
+                      type="text"
+                      value={sessionSearch}
+                      onChange={(e) => setSessionSearch(e.target.value)}
+                      placeholder="Search sessions…"
+                      className="w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-[12px] text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+                    />
                   </div>
-                )}
-              </div>
-            )}
+
+                  {filtered.length === 0 ? (
+                    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                      {query ? "No sessions match." : "No previous sessions."}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {filtered.map((s) => (
+                        <button key={s.storageKey} type="button"
+                          onClick={() => handleLoadSession(s)}
+                          className={`flex w-full flex-col rounded-2xl border px-3 py-3 text-left transition-colors hover:bg-white ${s.conversationId === conversationId ? "border-zinc-300 bg-white" : "border-transparent"}`}>
+                          <span className="truncate text-sm text-zinc-800">
+                            <Highlight text={s.firstMessage || "Empty session"} q={query} />
+                          </span>
+                          <span className="mt-0.5 text-[11px] text-zinc-400">
+                            {s.messageCount} messages · {new Date(s.savedAt).toLocaleDateString()}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Library panel — §26 file asset browser */}
             {toolbarOpen && sidebarPanel === "library" && (
