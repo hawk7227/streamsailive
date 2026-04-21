@@ -30,8 +30,11 @@
  *   "What can you do?" → here (identity, meta)
  */
 
+// cap\w+ catches ALL spelling variants of "capabilities":
+//   capabilities, capabilties, capbilties, capabilites, capabalities …
+// "what\s+are\s+your\s+cap\w+" is the typo-tolerant anchor.
 export const META_CAPABILITY_QUERY_PATTERN =
-  /\b(what\s+can\s+you\s+do|what\s+are\s+your\s+capabilities|your\s+capabilities|capabilities|who\s+are\s+you|how\s+do\s+you\s+work|how\s+you\s+work|what\s+are\s+you|what\s+kind\s+of\s+assistant|what\s+kind\s+of\s+system|what\s+are\s+your\s+strengths|what\s+are\s+your\s+limitations|what\s+are\s+you\s+good\s+at|what\s+are\s+you\s+best\s+at|what\s+can\s+this\s+system\s+do|how\s+intelligent\s+are\s+you|what\s+is\s+your\s+role|what\s+is\s+your\s+purpose|tell\s+me\s+about\s+yourself|describe\s+yourself|introduce\s+yourself)\b/i;
+  /\b(what\s+can\s+you\s+do|what\s+are\s+your\s+cap\w+|your\s+cap\w+|cap\w*bilit\w*|cap\w*bilt\w*|who\s+are\s+you|how\s+do\s+you\s+work|how\s+you\s+work|what\s+are\s+you|what\s+kind\s+of\s+assistant|what\s+kind\s+of\s+system|what\s+are\s+your\s+strengths|what\s+are\s+your\s+limitations|what\s+are\s+you\s+good\s+at|what\s+are\s+you\s+best\s+at|what\s+can\s+this\s+system\s+do|how\s+intelligent\s+are\s+you|what\s+is\s+your\s+role|what\s+is\s+your\s+purpose|tell\s+me\s+about\s+yourself|describe\s+yourself|introduce\s+yourself)\b/i;
 
 /**
  * Returns true when the user is asking about STREAMS itself — its identity,

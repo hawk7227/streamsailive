@@ -124,10 +124,31 @@ describe("Invariants", () => {
 // ── Routing miss regressions ──────────────────────────────────────────────────
 // Each test documents a real miss observed in production.
 // Test name = exact user message that failed.
+// Pattern fix: what\s+are\s+your\s+cap\w+ covers ALL typo variants.
 
 describe("Routing miss regressions", () => {
-  // When a real capability question is not detected, add a test here using the
-  // exact failing user message as the test name. See metaQuerySignals.ts header
-  // for the full procedure.
-  it.todo("add first miss here when observed");
+  // 2026-04-21: "WHAT ARE YOUR CAPBILTIES" — misspelling of capabilities
+  it("'WHAT ARE YOUR CAPBILTIES' → detected", () => {
+    expect(isMetaCapabilityQuery("WHAT ARE YOUR CAPBILTIES")).toBe(true);
+  });
+
+  // Common variant: CAPABILTIES (transposed letters)
+  it("'WHAT ARE YOUR CAPABILTIES' → detected", () => {
+    expect(isMetaCapabilityQuery("WHAT ARE YOUR CAPABILTIES")).toBe(true);
+  });
+
+  // Common variant: CAPABILITES (extra e)
+  it("'what are your capabilites' → detected", () => {
+    expect(isMetaCapabilityQuery("what are your capabilites")).toBe(true);
+  });
+
+  // Common variant: CAPABALITIES (extra a)
+  it("'what are your capabalities' → detected", () => {
+    expect(isMetaCapabilityQuery("what are your capabalities")).toBe(true);
+  });
+
+  // Confirm no false positive: content question about React
+  it("'How does React work?' → NOT detected (content, not identity)", () => {
+    expect(isMetaCapabilityQuery("How does React work?")).toBe(false);
+  });
 });
