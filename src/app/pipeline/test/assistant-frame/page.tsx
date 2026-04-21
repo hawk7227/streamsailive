@@ -1390,86 +1390,98 @@ export default function AssistantFramePage() {
 
               return (
                 <div key={message.id} className={`group flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-                  <div className={`w-full max-w-3xl ${isUser ? "" : ""}`}>
+                  <div className={`w-full ${isUser ? "flex justify-end" : ""}`}>
 
-                    {/* Role label — outside bubble, above */}
-                    <div className={`mb-2 px-1 text-[12px] font-bold tracking-[0.12em] uppercase ${isUser ? "text-right text-zinc-500" : "text-zinc-500"}`}>
-                      {isUser ? "You" : "STREAMS"}
-                    </div>
-
-                    {/* ThinkingStream — shown while turn is running, no content yet */}
-                    {!isUser && message.status === "streaming" && !message.content && !turnArtifact && (
-                      <div className="mb-2 rounded-2xl border border-zinc-100 bg-zinc-50 px-5 py-4"
-                           aria-live="polite" aria-atomic="true">
-                        <ThinkingStream label={turnUiState?.label ?? null} />
+                    {/* USER MESSAGE — compact pill, right-aligned, subtle warm background */}
+                    {isUser && (
+                      <div className="max-w-[72%]">
+                        <div className="rounded-2xl bg-zinc-100 px-5 py-3.5">
+                          <div className="text-[16px] leading-[1.75] text-zinc-900">
+                            {message.content || ""}
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    {/* Bubble — only render when there is content, artifact, or error */}
-                    {(message.content || turnArtifact || turnFileWrite || isError ||
-                      (message.status === "streaming" && turnUiState?.label === "Creating image…")) && (
-                      <div className={`rounded-2xl border px-6 py-5 ${
-                        isUser
-                          ? "border-zinc-900 bg-zinc-900 text-white"
-                          : isError && !message.content
-                            ? "border-rose-200 bg-rose-50"
-                            : "border-zinc-200 bg-white text-zinc-900"
-                      }`}>
-                        {/* Content */}
-                        <div className={`text-[16px] leading-[1.8] ${isUser ? "text-white" : (isError && !message.content) ? "text-rose-700" : "text-zinc-800"}`}>
-                          {isUser
-                            ? (message.content || "")
-                            : turnArtifact
-                              ? null
-                              : message.content
-                                ? renderContent(message.content)
-                                : message.status === "streaming" && turnUiState?.label === "Creating image…"
-                                  ? <NeonSkeleton />
-                                  : isError
-                                    ? "Something went wrong."
-                                    : ""}
+                    {/* AI MESSAGE — no bubble, bare text on white, full width */}
+                    {!isUser && (
+                      <div className="w-full max-w-3xl">
+
+                        {/* STREAMS label */}
+                        <div className="mb-3 text-[11px] font-bold tracking-[0.16em] uppercase text-zinc-400">
+                          STREAMS
                         </div>
 
-                        {/* Live activity label during streaming (has content) */}
-                        {!isUser && message.status === "streaming" && message.content && turnUiState?.label && (
-                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400"
-                               aria-live="polite" aria-atomic="true">
-                            <span className="relative flex h-1.5 w-1.5">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-400 opacity-60" />
-                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-zinc-400" />
-                            </span>
-                            {turnUiState.label}
+                        {/* ThinkingStream — shown while streaming with no content yet */}
+                        {message.status === "streaming" && !message.content && !turnArtifact && (
+                          <div aria-live="polite" aria-atomic="true">
+                            <ThinkingStream label={turnUiState?.label ?? null} />
                           </div>
                         )}
 
-                        {/* ArtifactCard — full width inside bubble */}
-                        {turnArtifact && !isUser && (
-                          <ArtifactCard
-                            artifact={turnArtifact}
-                            onRegenerate={turnArtifact.title
-                              ? () => handleEditMessage(turnArtifact.title!)
-                              : undefined}
-                          />
-                        )}
-                        {/* FileWriteCard */}
-                        {turnFileWrite && !isUser && (
-                          <FileWriteCard file={turnFileWrite} />
-                        )}
-
-                        {/* Incomplete indicator — content exists but turn errored */}
-                        {!isUser && isError && message.content && (
-                          <div className="mt-4 flex items-center gap-1.5 text-xs text-amber-600">
-                            <span>⚠</span>
-                            <span>Response may be incomplete</span>
+                        {/* Error — no content */}
+                        {isError && !message.content && (
+                          <div className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[15px] text-rose-700">
+                            Something went wrong.
                           </div>
                         )}
-                        {/* Tool execution trace */}
-                        {!isUser && turnToolTrace.length > 0 && (
-                          <ToolTrace entries={turnToolTrace} />
-                        )}
 
-                        {turnPreviews.length > 0 && !isUser && (
-                          <div>{turnPreviews.map((p) => <PreviewCard key={p.previewId} preview={p} />)}</div>
+                        {/* Main content — bare on white */}
+                        {(message.content || turnArtifact || turnFileWrite ||
+                          (message.status === "streaming" && turnUiState?.label === "Creating image…")) && (
+                          <div>
+                            <div className="text-[16px] leading-[1.8] text-zinc-900">
+                              {turnArtifact
+                                ? null
+                                : message.content
+                                  ? renderContent(message.content)
+                                  : message.status === "streaming" && turnUiState?.label === "Creating image…"
+                                    ? <NeonSkeleton />
+                                    : ""}
+                            </div>
+
+                            {/* Live activity dot during streaming */}
+                            {message.status === "streaming" && message.content && turnUiState?.label && (
+                              <div className="mt-3 flex items-center gap-1.5 text-[12px] text-zinc-400"
+                                   aria-live="polite" aria-atomic="true">
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-400 opacity-60" />
+                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                                </span>
+                                {turnUiState.label}
+                              </div>
+                            )}
+
+                            {/* ArtifactCard */}
+                            {turnArtifact && (
+                              <ArtifactCard
+                                artifact={turnArtifact}
+                                onRegenerate={turnArtifact.title
+                                  ? () => handleEditMessage(turnArtifact.title!)
+                                  : undefined}
+                              />
+                            )}
+
+                            {/* FileWriteCard */}
+                            {turnFileWrite && <FileWriteCard file={turnFileWrite} />}
+
+                            {/* Incomplete warning */}
+                            {isError && message.content && (
+                              <div className="mt-4 flex items-center gap-1.5 text-xs text-amber-500">
+                                <span>⚠</span>
+                                <span>Response may be incomplete</span>
+                              </div>
+                            )}
+
+                            {/* Tool trace — footnote only */}
+                            {turnToolTrace.length > 0 && (
+                              <ToolTrace entries={turnToolTrace} />
+                            )}
+
+                            {turnPreviews.length > 0 && (
+                              <div>{turnPreviews.map((p) => <PreviewCard key={p.previewId} preview={p} />)}</div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1529,7 +1541,7 @@ export default function AssistantFramePage() {
         </div>
 
         {/* ── Input area ────────────────────────────────────────────────── */}
-        <div className="border-t border-zinc-200 bg-white px-6 py-5">
+        <div className="border-t-2 border-zinc-100 bg-white px-6 py-5">
           <div className="mx-auto max-w-[820px] space-y-3">
 
             {/* Attachment panel */}
@@ -1556,7 +1568,7 @@ export default function AssistantFramePage() {
                 const active = inputMode === m;
                 return (
                   <button key={m} type="button" onClick={() => setInputMode(m)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-medium transition-colors ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"}`}>
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition-colors ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900"}`}>
                     <span className="text-xs">{cfg[m].icon}</span>
                     {cfg[m].label}
                   </button>
@@ -1566,33 +1578,39 @@ export default function AssistantFramePage() {
 
             {/* Input row */}
             <div className="flex items-end gap-3">
-              {/* §20: aria-label on attach button */}
+
+              {/* Attach button — always visible */}
               <button type="button" onClick={() => setAttachOpen((v) => !v)} aria-label="Attach files"
-                className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-colors ${attachOpen ? "border-zinc-400 bg-zinc-100 text-zinc-900" : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-700"}`}>
-                <Paperclip className="h-4 w-4" />
+                className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 transition-colors ${attachOpen ? "border-zinc-800 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-600 hover:border-zinc-500 hover:text-zinc-900"}`}>
+                <Paperclip className="h-5 w-5" />
               </button>
 
-              <div className="flex-1 rounded-3xl border border-zinc-300 bg-white px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.06)]">
-                {/* §20: aria-label and aria-multiline on textarea */}
+              {/* Input field — strong visible border, focus ring */}
+              <div className="flex-1 rounded-3xl border-2 border-zinc-300 bg-white px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.08)] focus-within:border-zinc-500 focus-within:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-150">
                 <textarea ref={textareaRef} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
-                  placeholder=""
+                  placeholder="Message STREAMS…"
                   rows={1} aria-label="Message input" aria-multiline="true"
                   className="max-h-48 min-h-[32px] w-full resize-none bg-transparent text-base leading-7 text-zinc-900 outline-none placeholder:text-zinc-400" />
               </div>
 
+              {/* Send / Cancel — always solid, never near-invisible */}
               {session.isTurnRunning ? (
                 <button onClick={handleCancel}
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-zinc-200 px-5 text-base font-medium text-zinc-800 hover:bg-zinc-50">
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border-2 border-zinc-300 bg-white px-5 text-base font-semibold text-zinc-800 hover:border-zinc-400 hover:bg-zinc-50 transition-colors">
                   <Square className="h-4 w-4" />
-                  Cancel
+                  Stop
                 </button>
               ) : (
                 <button onClick={handleSend}
                   disabled={!draft.trim() || session.connectionState !== "connected"}
                   aria-label="Send message"
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-zinc-900 px-5 text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
+                  className={`inline-flex h-12 items-center gap-2 rounded-2xl px-5 text-base font-semibold transition-all duration-150 ${
+                    draft.trim() && session.connectionState === "connected"
+                      ? "bg-zinc-900 text-white shadow-[0_4px_14px_rgba(0,0,0,0.2)] hover:bg-zinc-800"
+                      : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+                  }`}>
                   <Send className="h-4 w-4" />
                   Send
                 </button>
