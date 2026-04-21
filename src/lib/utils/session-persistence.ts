@@ -39,6 +39,8 @@ export type SessionSummary = {
   storageKey: string;
   conversationId: string;
   firstMessage: string;
+  /** Last assistant message content (≤120 chars). Used as session preview. */
+  lastAssistantMessage?: string;
   messageCount: number;
   savedAt: string;
 };
@@ -92,7 +94,8 @@ function isValidSessionSummary(raw: unknown): raw is SessionSummary {
     typeof s.conversationId === "string" &&
     typeof s.firstMessage === "string" &&
     typeof s.messageCount === "number" &&
-    typeof s.savedAt === "string"
+    typeof s.savedAt === "string" &&
+    (s.lastAssistantMessage === undefined || typeof s.lastAssistantMessage === "string")
   );
 }
 
@@ -186,10 +189,12 @@ function updateSessionIndex(
     const firstUserMsg = messages.find((m) => m.role === "user");
     if (!firstUserMsg) return;
 
+    const lastAssistantMsg = messages.slice().reverse().find((m) => m.role === "assistant");
     const summary: SessionSummary = {
       storageKey,
       conversationId,
       firstMessage: firstUserMsg.content.slice(0, 100).trim(),
+      lastAssistantMessage: lastAssistantMsg?.content?.slice(0, 120).trim(),
       messageCount: messages.length,
       savedAt: new Date().toISOString(),
     };

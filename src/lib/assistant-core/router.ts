@@ -6,6 +6,14 @@ export function routeRequest(req: NormalizedAssistantRequest): AssistantMode {
 
   if (!text) return "chat";
 
+  // Explicit client-side mode override — when the user has selected a mode chip
+  // (image/video/build), honour it directly without text pattern matching.
+  // This makes the input mode chips functional end-to-end.
+  const clientMode = typeof req.context?.inputMode === "string" ? req.context.inputMode : null;
+  if (clientMode === "image") return "image";
+  if (clientMode === "video") return "video";
+  if (clientMode === "build") return "build";
+
   // Meta/capability queries ("what can you do", "who are you", etc.) always
   // resolve to chat route. Model selection (full model) and system prompt
   // override (buildCapabilityMetaPrompt) are handled downstream.

@@ -473,7 +473,7 @@ const CAPABILITIES = [
 ] as const;
 
 // ── Sidebar panel type ────────────────────────────────────────────────────────
-type SidebarPanel = "nav" | "library" | "sessions" | "artifacts" | "projects" | "apps" | "settings";
+type SidebarPanel = "nav" | "library" | "sessions" | "artifacts" | "projects" | "apps" | "settings" | "pipeline";
 
 type LibraryFile = {
   id: string;
@@ -521,6 +521,7 @@ export default function AssistantFramePage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [sessionIndex, setSessionIndex] = useState<SessionSummary[]>([]);
   const [sessionSearch, setSessionSearch] = useState("");
+  const [inputMode, setInputMode] = useState<"chat"|"image"|"video"|"build">("chat");
 
   // ── Workspace + conversation identity ─────────────────────────────────────
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
@@ -617,7 +618,8 @@ export default function AssistantFramePage() {
     conversationId: conversationId ?? undefined,
     projectId: currentProjectId ?? undefined,
     projectName: currentProjectName ?? undefined,
-  }), [requestContext, workspaceId, conversationId, currentProjectId, currentProjectName]);
+    inputMode,
+  }), [requestContext, workspaceId, conversationId, currentProjectId, currentProjectName, inputMode]);
 
   const handleSend = useCallback(async () => {
     const value = draft.trim();
@@ -790,7 +792,10 @@ export default function AssistantFramePage() {
           setSidebarPanel("projects");
           break;
         case "apps":
+          setSidebarPanel("pipeline"); // Apps button opens Active Pipeline panel
+          break;
         case "settings":
+        case "pipeline":
           setSidebarPanel(id as SidebarPanel);
           break;
         default:
@@ -884,7 +889,7 @@ export default function AssistantFramePage() {
                                  (item.id === "library" && sidebarPanel === "library") ||
                                  (item.id === "images" && sidebarPanel === "artifacts") ||
                                  (item.id === "projects" && sidebarPanel === "projects") ||
-                                 (item.id === "apps" && sidebarPanel === "apps") ||
+                                 (item.id === "apps" && (sidebarPanel === "apps" || sidebarPanel === "pipeline")) ||
                                  (item.id === "settings" && sidebarPanel === "settings");
                 return (
                   <button key={item.id} type="button" onClick={() => handleSidebarItem(item.id)}
@@ -937,13 +942,33 @@ export default function AssistantFramePage() {
                       {filtered.map((s) => (
                         <button key={s.storageKey} type="button"
                           onClick={() => handleLoadSession(s)}
-                          className={`flex w-full flex-col rounded-2xl border px-3 py-3 text-left transition-colors hover:bg-white ${s.conversationId === conversationId ? "border-zinc-300 bg-white" : "border-transparent"}`}>
-                          <span className="truncate text-sm text-zinc-800">
-                            <Highlight text={s.firstMessage || "Empty session"} q={query} />
-                          </span>
-                          <span className="mt-0.5 text-[11px] text-zinc-400">
-                            {s.messageCount} messages · {new Date(s.savedAt).toLocaleDateString()}
-                          </span>
+                          className={`flex w-full items-start gap-2.5 rounded-2xl border px-3 py-3 text-left transition-colors hover:bg-white ${s.conversationId === conversationId ? "border-zinc-300 bg-white" : "border-transparent"}`}>
+                          {/* State dot */}
+                          <div className="mt-1.5 shrink-0">
+                            {s.conversationId === conversationId && session.isTurnRunning ? (
+                              <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                              </span>
+                            ) : s.conversationId === conversationId ? (
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-zinc-200" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-zinc-800">
+                              <Highlight text={s.firstMessage || "Empty session"} q={query} />
+                            </span>
+                            {s.lastAssistantMessage && (
+                              <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
+                                {s.lastAssistantMessage}
+                              </span>
+                            )}
+                            <span className="mt-0.5 block text-[10px] text-zinc-300">
+                              {s.messageCount} msg · {new Date(s.savedAt).toLocaleDateString()}
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1138,6 +1163,57 @@ export default function AssistantFramePage() {
               </div>
             )}
 
+            {/* Active pipeline panel */}
+            {toolbarOpen && sidebarPanel === "pipeline" && (
+              <div className="mt-4">
+                <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Active Pipeline</div>
+
+                {session.isTurnRunning ? (
+                  <div className="space-y-2">
+                    {/* Live status */}
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                        </span>
+                        <span className="text-[11px] font-semibold text-blue-700">Running</span>
+                      </div>
+                      {activeLabel && (
+                        <p className="mt-1.5 text-[11px] text-blue-600">{activeLabel}</p>
+                      )}
+                    </div>
+
+                    {/* Live tool trace from active turn */}
+                    {session.session.activeTurnId && (session.toolTraceByTurn[session.session.activeTurnId] ?? []).length > 0 && (
+                      <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">Execution steps</div>
+                        {(session.toolTraceByTurn[session.session.activeTurnId] ?? []).map((e, i) => (
+                          <div key={i} className="flex items-start gap-2 py-1 text-[11px]">
+                            <span className="shrink-0 text-sm">{
+                              ({ generate_media:"🎨", search_files:"🔍", write_workspace_file:"✏️",
+                                 apply_workspace_patch:"🔧", build_workspace:"🏗️", read_workspace_file:"📄",
+                                 list_workspace_files:"📁" } as Record<string,string>)[e.name] ?? "🔩"
+                            }</span>
+                            <span className="min-w-0 flex-1 font-mono text-zinc-600">{e.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button onClick={handleCancel}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50">
+                      Stop pipeline
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-400">
+                    No pipeline running. Start a chat or generation request.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Apps panel */}
             {toolbarOpen && sidebarPanel === "apps" && (
               <div className="mt-4">
@@ -1207,6 +1283,20 @@ export default function AssistantFramePage() {
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Project</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-2.5 py-0.5 text-[11px] font-medium text-white">
               📁 {currentProjectName}
+            </span>
+          </div>
+        )}
+
+        {/* System status bar — visible during active turns */}
+        {session.isTurnRunning && (
+          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-6 py-2"
+               aria-live="polite" aria-atomic="true">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />
+            </span>
+            <span className="text-[11px] font-medium text-blue-600">
+              {activeLabel ?? "Processing…"}
             </span>
           </div>
         )}
@@ -1410,6 +1500,26 @@ export default function AssistantFramePage() {
               </div>
             )}
 
+            {/* Mode chips */}
+            <div className="flex items-center gap-2">
+              {(["chat","image","video","build"] as const).map((m) => {
+                const cfg = {
+                  chat:  { label: "Chat",  icon: "💬" },
+                  image: { label: "Image", icon: "🖼" },
+                  video: { label: "Video", icon: "🎬" },
+                  build: { label: "Build", icon: "🏗️" },
+                } as const;
+                const active = inputMode === m;
+                return (
+                  <button key={m} type="button" onClick={() => setInputMode(m)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"}`}>
+                    <span className="text-xs">{cfg[m].icon}</span>
+                    {cfg[m].label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Input row */}
             <div className="flex items-end gap-3">
               {/* §20: aria-label on attach button */}
@@ -1423,7 +1533,12 @@ export default function AssistantFramePage() {
                 <textarea ref={textareaRef} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
-                  placeholder="Ask normally — chat, build, files, or generation requests"
+                  placeholder={
+                    inputMode === "image" ? "Describe the image you want to generate…"
+                    : inputMode === "video" ? "Describe the video scene, style, or action…"
+                    : inputMode === "build" ? "Describe what to build, fix, or create…"
+                    : "Ask anything — chat, files, or media generation"
+                  }
                   rows={1} aria-label="Message input" aria-multiline="true"
                   className="max-h-48 min-h-[28px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400" />
               </div>
