@@ -19,6 +19,8 @@ import type {
   ChatMessage,
 } from "./contracts";
 import { buildFileContext } from "@/lib/files/retrieval";
+import { isMetaCapabilityQuery } from "./metaQuerySignals";
+import { buildCapabilityMetaPrompt } from "./capabilityPrompt";
 
 // ── Parallel context deadline ─────────────────────────────────────────────────
 // File retrieval races against this deadline before the OpenAI call starts.
@@ -57,6 +59,14 @@ function verbosityHint(userText: string): string {
 
 function buildSystemPromptBase(route: BuildContextInput["route"], userText = ""): string {
   const vhint = verbosityHint(userText);
+
+  // Meta/capability query — override with high-intelligence self-description.
+  // Checked before route switch so it takes precedence on any route
+  // (e.g. a meta question phrased as a build command still gets answered correctly).
+  if (isMetaCapabilityQuery(userText)) {
+    return buildCapabilityMetaPrompt(vhint);
+  }
+
   switch (route) {
     case "image":
       return `You are STREAMS. Handle image requests precisely. Use tools when needed. Never pretend an image tool ran if it did not run.${vhint}`;

@@ -87,6 +87,8 @@
 //   architecture        — system design discussion
 //   implementation      — how-to detail expected
 
+import { isMetaCapabilityQuery } from "./metaQuerySignals";
+
 export const COMPLEX_QUERY_KEYWORDS =
   /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?|tradeoffs?|best\s+practices?|architecture|implementation)\b/i;
 
@@ -104,6 +106,10 @@ export const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
  */
 export function isChatQueryComplex(userText: string): boolean {
   const text = userText.trim();
+
+  // Signal 0: meta/capability query — always escalate to full model.
+  // These questions require the model's highest reasoning to answer well.
+  if (isMetaCapabilityQuery(text)) return true;
 
   // Signal 1: long query
   if (text.length > COMPLEX_QUERY_LENGTH_THRESHOLD) return true;

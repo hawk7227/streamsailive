@@ -1,9 +1,15 @@
 import type { AssistantMode, NormalizedAssistantRequest } from "./contracts";
+import { isMetaCapabilityQuery } from "./metaQuerySignals";
 
 export function routeRequest(req: NormalizedAssistantRequest): AssistantMode {
   const text = (req.userText || "").toLowerCase().trim();
 
   if (!text) return "chat";
+
+  // Meta/capability queries ("what can you do", "who are you", etc.) always
+  // resolve to chat route. Model selection (full model) and system prompt
+  // override (buildCapabilityMetaPrompt) are handled downstream.
+  if (isMetaCapabilityQuery(text)) return "chat";
 
   if (
     /\b(generate image|create image|make image|image|photo|picture|banner|thumbnail|mockup)\b/i.test(text)
