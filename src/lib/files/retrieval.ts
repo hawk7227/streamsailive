@@ -16,6 +16,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OPENAI_API_KEY } from "@/lib/env";
+import { embeddingCache, embeddingCacheKey } from "./embedCache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,9 +35,20 @@ interface EmbeddingResponse {
   data: Array<{ index: number; embedding: number[] }>;
 }
 
-async function embedQuery(query: string): Promise<number[] | null> {
+async function embedQuery(query: string, workspaceId?: string): Promise<number[] | null> {
   const apiKey = OPENAI_API_KEY;
   if (!apiKey) return null;
+
+  // Check LRU cache before calling OpenAI.
+  // Cache hit eliminates the embeddings round-trip on follow-up turns.
+  if (workspaceId) {
+    const cacheKey = embeddingCacheKey(workspaceId, query);
+    const cached = embeddingCache.get(cacheKey);
+    if (cached) {
+      console.log(JSON.stringify({ level: "info", event: "EMBED_CACHE_HIT", workspaceId, cacheStats: embeddingCache.stats() }));
+      return cached;
+    }
+  }
 
   try {
     const res = await fetch("https://api.openai.com/v1/embeddings", {
@@ -55,7 +67,15 @@ async function embedQuery(query: string): Promise<number[] | null> {
 
     if (!res.ok) return null;
     const data = await res.json() as EmbeddingResponse;
-    return data.data[0]?.embedding ?? null;
+    const embedding = data.data[0]?.embedding ?? null;
+
+    // Store in cache for subsequent turns in the same conversation
+    if (embedding && workspaceId) {
+      const cacheKey = embeddingCacheKey(workspaceId, query);
+      embeddingCache.set(cacheKey, embedding);
+    }
+
+    return embedding;
   } catch {
     return null;
   }
@@ -165,7 +185,7 @@ export async function searchWorkspaceFiles(
   );
 
   // Attempt vector search first
-  const queryEmbedding = await embedQuery(safe);
+  const queryEmbedding = await embedQuery(safe, workspaceId);
   let rawResults: Array<{ file_id: string; chunk_index: number; content: string; rank: number }> = [];
 
   if (queryEmbedding) {

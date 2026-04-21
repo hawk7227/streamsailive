@@ -20,6 +20,19 @@ import type {
 } from "./contracts";
 import { buildFileContext } from "@/lib/files/retrieval";
 
+// ── Parallel context deadline ─────────────────────────────────────────────────
+// File retrieval races against this deadline before the OpenAI call starts.
+// With a warm LRU embedding cache, retrieval resolves in <10ms and always wins.
+// On a cold cache miss, embedQuery typically takes 100–350ms. The deadline caps
+// that penalty so the orchestrator never blocks longer than this value waiting
+// for retrieval before starting the OpenAI stream.
+//
+// Tuning guide (read TURN_TIMING logs):
+//   context_ms < 50ms consistently  → deadline is generous, can tighten
+//   context_ms = 150ms often        → cache is cold; check hit rate in logs
+//   had_file_ctx: false frequently  → raise deadline or pre-warm cache
+const PARALLEL_CONTEXT_DEADLINE_MS = 150;
+
 function sanitizeMessages(messages?: ChatMessage[]): ChatMessage[] {
   if (!Array.isArray(messages)) return [];
   return messages.filter(
@@ -78,26 +91,41 @@ export async function buildContext(
   const basePrompt = buildSystemPromptBase(input.route, input.userText);
 
   // Retrieve file context when workspaceId is present.
-  // Semantic search against the user's current message — returns empty string
-  // when no relevant files exist, keeping context minimal per PRD §4.
+  //
+  // Races against PARALLEL_CONTEXT_DEADLINE_MS:
+  //   - LRU cache hit  → resolves in <10ms, deadline never fires
+  //   - Cache miss     → embedQuery + pgvector, typically 120–350ms
+  //   - Deadline fires → proceeds without file context (non-fatal)
+  //
+  // This caps the retrieval latency contribution to the hot path.
+  // PRD §4: minimal relevant chunks — empty result = no injection.
   let fileContext = "";
   if (input.workspaceId && input.userText.trim()) {
     try {
-      fileContext = await buildFileContext(
-        input.workspaceId,
-        input.userText,
-        6, // max 6 chunks — keeps context bounded
-      );
+      const retrieved = await Promise.race([
+        buildFileContext(input.workspaceId, input.userText, 6),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve(""), PARALLEL_CONTEXT_DEADLINE_MS),
+        ),
+      ]);
+      fileContext = retrieved;
+
+      if (!fileContext) {
+        console.log(JSON.stringify({
+          level: "info",
+          event: "FILE_CONTEXT_DEADLINE_FIRED",
+          workspaceId: input.workspaceId,
+          deadlineMs: PARALLEL_CONTEXT_DEADLINE_MS,
+        }));
+      }
     } catch (err) {
       // Retrieval failure is non-fatal — assistant continues without file context
-      console.error(
-        JSON.stringify({
-          level: "error",
-          event: "FILE_CONTEXT_RETRIEVAL_FAILED",
-          workspaceId: input.workspaceId,
-          reason: err instanceof Error ? err.message : String(err),
-        }),
-      );
+      console.error(JSON.stringify({
+        level: "error",
+        event: "FILE_CONTEXT_RETRIEVAL_FAILED",
+        workspaceId: input.workspaceId,
+        reason: err instanceof Error ? err.message : String(err),
+      }));
     }
   }
 
