@@ -330,13 +330,17 @@ async function executeTurn(
 
         case "image": {
           // Orchestrator resolved an image artifact — forward as typed WS message.
-          // Client hook appends markdown to the assistant message for renderContent.
+          // Now carries artifactId, mimeType, mediaType, title alongside url.
           const imageUrl = typeof data.url === "string" ? data.url : "";
           if (imageUrl) {
             await send(socket, {
               type: "image.ready",
               turnId,
               url: imageUrl,
+              artifactId: typeof data.artifactId === "string" ? data.artifactId : null,
+              mimeType: typeof data.mimeType === "string" ? data.mimeType : "image/png",
+              mediaType: typeof data.mediaType === "string" ? data.mediaType : "image",
+              title: typeof data.title === "string" ? data.title : null,
             });
           }
           break;
@@ -344,13 +348,17 @@ async function executeTurn(
 
         case "video": {
           // Orchestrator resolved a video artifact — forward as typed WS message.
-          // Client hook appends [video](url) markdown to the assistant message.
+          // Now carries artifactId, mimeType, mediaType, title alongside url.
           const videoUrl = typeof data.url === "string" ? data.url : "";
           if (videoUrl) {
             await send(socket, {
               type: "video.ready",
               turnId,
               url: videoUrl,
+              artifactId: typeof data.artifactId === "string" ? data.artifactId : null,
+              mimeType: typeof data.mimeType === "string" ? data.mimeType : "video/mp4",
+              mediaType: typeof data.mediaType === "string" ? data.mediaType : "video",
+              title: typeof data.title === "string" ? data.title : null,
             });
           }
           break;

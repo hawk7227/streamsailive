@@ -29,6 +29,9 @@ type FunctionCallItem = {
 type MediaArtifact = {
   kind: "image" | "video" | "i2v";
   url: string;
+  artifactId: string | null;
+  mimeType: string;
+  title: string | null;
   result: Record<string, unknown>;
 };
 
@@ -258,14 +261,32 @@ function extractMediaArtifact(result: unknown): MediaArtifact | null {
   if (!root) return null;
   const payload = asRecord(root.payload);
   const data = asRecord(root.data);
+
   const url = firstString(
     root.outputUrl, root.url, root.assetUrl, root.videoUrl, root.imageUrl,
     payload?.outputUrl, payload?.url, payload?.assetUrl, payload?.videoUrl, payload?.imageUrl,
     data?.outputUrl, data?.url, data?.assetUrl, data?.videoUrl, data?.imageUrl,
   );
   if (!url) return null;
+
   const kind = normalizeMediaKind(firstString(root.type, payload?.type, data?.type));
-  return { kind, url, result: root };
+
+  // externalId is the artifactId written by finalizeImageArtifact /
+  // finalizeVideoArtifact during the tool execution — available on result.
+  const artifactId = firstString(root.externalId, payload?.externalId) ?? null;
+
+  // mimeType: images are always png from gpt-image-1; video defaults to mp4.
+  const mimeType =
+    kind === "image" ? "image/png"
+    : kind === "i2v"  ? "video/mp4"
+    : "video/mp4";
+
+  // title: the generation prompt, truncated for display.
+  // Pulled from plan.prompt (MediaGenerationExecution shape) or root.prompt.
+  const planRecord = asRecord(root.plan);
+  const title = firstString(planRecord?.prompt, root.prompt) ?? null;
+
+  return { kind, url, artifactId, mimeType, title, result: root };
 }
 
 // ── Streaming first-pass response ─────────────────────────────────────────
@@ -501,9 +522,23 @@ export async function runOrchestrator(req: NextRequest) {
                   send("phase", { phase: "media_ready", kind: mediaArtifact.kind });
                   send("media", { kind: mediaArtifact.kind, url: mediaArtifact.url, result: mediaArtifact.result });
                   if (mediaArtifact.kind === "image") {
-                    send("image", { url: mediaArtifact.url, result: mediaArtifact.result });
+                    send("image", {
+                      url: mediaArtifact.url,
+                      artifactId: mediaArtifact.artifactId,
+                      mimeType: mediaArtifact.mimeType,
+                      mediaType: mediaArtifact.kind,
+                      title: mediaArtifact.title,
+                      result: mediaArtifact.result,
+                    });
                   } else {
-                    send("video", { url: mediaArtifact.url, result: mediaArtifact.result });
+                    send("video", {
+                      url: mediaArtifact.url,
+                      artifactId: mediaArtifact.artifactId,
+                      mimeType: mediaArtifact.mimeType,
+                      mediaType: mediaArtifact.kind,
+                      title: mediaArtifact.title,
+                      result: mediaArtifact.result,
+                    });
                   }
                   timer.annotate({ tool_count: loopCount });
                   closeStream({ ok: true, media: true, kind: mediaArtifact.kind });

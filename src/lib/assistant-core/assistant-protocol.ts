@@ -238,16 +238,26 @@ export type AssistantSessionOutboundMessage =
       reason?: string;
     }
   | {
-      // Emitted when an image artifact resolves — URL is safe to render
+      // Emitted when an image artifact resolves — URL is safe to render.
+      // artifactId links back to the artifacts table row for reuse/browsing.
       type: "image.ready";
       turnId: string;
       url: string;
+      artifactId: string | null;
+      mimeType: string;
+      mediaType: string;
+      title: string | null;
     }
   | {
-      // Emitted when a video artifact resolves — URL is safe to render
+      // Emitted when a video artifact resolves — URL is safe to render.
+      // artifactId links back to the artifacts table row for reuse/browsing.
       type: "video.ready";
       turnId: string;
       url: string;
+      artifactId: string | null;
+      mimeType: string;
+      mediaType: string;
+      title: string | null;
     };
 
 /* ---------- TYPE GUARD ---------- */

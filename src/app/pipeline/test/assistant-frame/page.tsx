@@ -20,6 +20,7 @@ import type {
   AssistantPreviewType,
   AssistantPreviewStatus,
 } from "@/lib/assistant-core/assistant-protocol";
+import type { ArtifactDescriptor } from "./useAssistantSession";
 
 // ── WebSocket URL ────────────────────────────────────────────────────────────
 const REALTIME_WS_URL =
@@ -236,6 +237,62 @@ function NeonSkeleton() {
         <div key={i} className="neon-stick" style={{ left: stick.left, top: stick.top, width: stick.w, height: stick.h, background: stick.color, boxShadow: `0 0 8px 2px ${stick.color}88, 0 0 20px 4px ${stick.color}44`, transform: `rotate(${stick.rot})`, "--dur": stick.dur, "--pulse": stick.pulse, "--delay": stick.delay } as React.CSSProperties} />
       ))}
       <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 4px)", pointerEvents: "none" }} />
+    </div>
+  );
+}
+
+// ── ArtifactCard ─────────────────────────────────────────────────────────────
+// Renders a fully resolved media artifact (image, video) as a typed card.
+// Replaces the previous markdown injection + renderContent regex approach.
+// Receives ArtifactDescriptor from session.artifactsByTurn — NOT message.content.
+function ArtifactCard({ artifact }: { artifact: ArtifactDescriptor }) {
+  const isImage = artifact.mediaType === "image";
+  const isVideo = artifact.mediaType === "video" || artifact.mediaType === "i2v";
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+      {/* Media */}
+      {isImage && (
+        <img
+          src={artifact.url}
+          alt={artifact.title ?? "Generated image"}
+          className="w-full object-cover"
+          style={{ maxHeight: 480 }}
+        />
+      )}
+      {isVideo && (
+        <video
+          src={artifact.url}
+          controls
+          playsInline
+          className="w-full rounded-t-2xl"
+        />
+      )}
+
+      {/* Footer — title + actions */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          {artifact.title && (
+            <p className="truncate text-[11px] text-zinc-500">{artifact.title}</p>
+          )}
+          <p className="mt-0.5 font-mono text-[10px] text-zinc-400 uppercase tracking-[0.1em]">
+            {isImage ? "Image" : isVideo ? "Video" : artifact.mediaType}
+            {artifact.artifactId && ` · ${artifact.artifactId.slice(0, 8)}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Download */}
+          <a
+            href={artifact.url}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            Download
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
@@ -722,6 +779,7 @@ export default function AssistantFramePage() {
               const turnPreviews = message.turnId ? previewsByTurn.get(message.turnId) ?? [] : [];
               const activity = message.turnId ? session.activities[message.turnId] : undefined;
               const turnUiState = message.turnId ? session.uiStates[message.turnId] : undefined;
+              const turnArtifact = message.turnId ? session.artifactsByTurn[message.turnId] : undefined;
               const isLastAssistant = !isUser &&
                 msgIdx === session.messages.map((m) => m.role).lastIndexOf("assistant");
               const isComplete = message.status === "complete";
@@ -738,12 +796,19 @@ export default function AssistantFramePage() {
                       <div className={`mt-2 text-sm leading-7 ${isUser ? "text-white" : "text-zinc-800"}`}>
                         {isUser
                           ? (message.content || "")
-                          : (message.content
+                          : turnArtifact
+                            // Resolved artifact — render typed card, not markdown
+                            ? null
+                            : message.content
                               ? renderContent(message.content)
                               : message.status === "streaming" && turnUiState?.label === "Creating image…"
                                 ? <NeonSkeleton />
-                                : "")}
+                                : ""}
                       </div>
+                      {/* ArtifactCard rendered outside the text flow — full width */}
+                      {turnArtifact && !isUser && (
+                        <ArtifactCard artifact={turnArtifact} />
+                      )}
 
                       {/* §20: aria-live on activity badge */}
                       {turnUiState?.label && !isUser && (

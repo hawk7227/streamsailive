@@ -47,6 +47,23 @@ export type AssistantTurnActivity = {
   updatedAt: string;
 };
 
+/**
+ * A resolved media artifact attached to a turn.
+ * Replaces the previous markdown-injection approach (![Generated image](url)).
+ * The client stores typed artifact state and renders ArtifactCard components.
+ */
+export type ArtifactDescriptor = {
+  artifactId: string | null;
+  turnId: string;
+  url: string;
+  mimeType: string;
+  /** 'image' | 'video' | 'i2v' */
+  mediaType: string;
+  /** Truncated generation prompt — shown as label in ArtifactCard. */
+  title: string | null;
+  createdAt: string;
+};
+
 export type AssistantSessionSnapshot = {
   sessionId: string | null;
   status: "idle" | "running" | "closed";
@@ -63,6 +80,8 @@ export type AssistantSessionHookState = {
   previews: Record<string, AssistantPreviewDescriptor>;
   previewsByTurn: Record<string, string[]>;
   uiStates: Record<string, TurnUIState>;
+  /** Keyed by turnId. Typed artifact metadata for rendering ArtifactCard. */
+  artifactsByTurn: Record<string, ArtifactDescriptor>;
   error: AssistantErrorMessage | null;
 };
 
@@ -314,6 +333,7 @@ export function useAssistantSession(
   const [activities, setActivities] = useState<Record<string, AssistantTurnActivity>>({});
   const [previews, setPreviews] = useState<Record<string, AssistantPreviewDescriptor>>({});
   const [previewsByTurn, setPreviewsByTurn] = useState<Record<string, string[]>>({});
+  const [artifactsByTurn, setArtifactsByTurn] = useState<Record<string, ArtifactDescriptor>>({});
   const [uiStates, setUIStates] = useState<Record<string, TurnUIState>>({});
   const [error, setError] = useState<AssistantErrorMessage | null>(null);
 
@@ -460,22 +480,49 @@ export function useAssistantSession(
         }
 
         case "image.ready": {
+          // Store typed artifact descriptor — ArtifactCard renders from this,
+          // not from markdown injection in message.content.
+          setArtifactsByTurn((prev) => ({
+            ...prev,
+            [message.turnId]: {
+              artifactId: message.artifactId ?? null,
+              turnId: message.turnId,
+              url: message.url,
+              mimeType: message.mimeType ?? "image/png",
+              mediaType: message.mediaType ?? "image",
+              title: message.title ?? null,
+              createdAt: new Date().toISOString(),
+            },
+          }));
+          // Mark the assistant message complete
           setMessages((prev) =>
             prev.map((msg) => {
               if (msg.turnId !== message.turnId || msg.role !== "assistant") return msg;
-              const sep = msg.content ? "\n" : "";
-              return { ...msg, content: `${msg.content}${sep}![Generated image](${message.url})`, status: "complete" };
+              return { ...msg, status: "complete" };
             }),
           );
           return;
         }
 
         case "video.ready": {
+          // Store typed artifact descriptor — ArtifactCard renders from this.
+          setArtifactsByTurn((prev) => ({
+            ...prev,
+            [message.turnId]: {
+              artifactId: message.artifactId ?? null,
+              turnId: message.turnId,
+              url: message.url,
+              mimeType: message.mimeType ?? "video/mp4",
+              mediaType: message.mediaType ?? "video",
+              title: message.title ?? null,
+              createdAt: new Date().toISOString(),
+            },
+          }));
+          // Mark the assistant message complete
           setMessages((prev) =>
             prev.map((msg) => {
               if (msg.turnId !== message.turnId || msg.role !== "assistant") return msg;
-              const sep = msg.content ? "\n" : "";
-              return { ...msg, content: `${msg.content}${sep}[video](${message.url})`, status: "complete" };
+              return { ...msg, status: "complete" };
             }),
           );
           return;
@@ -691,6 +738,7 @@ export function useAssistantSession(
     setActivities({});
     setPreviews({});
     setPreviewsByTurn({});
+    setArtifactsByTurn({});
     setUIStates({});
     uiStateControllerRef.current.reset();
     if (storageKey) clearPersistedSession(storageKey);
@@ -712,6 +760,7 @@ export function useAssistantSession(
     activities,
     previews,
     previewsByTurn,
+    artifactsByTurn,
     uiStates,
     error,
     connect,
