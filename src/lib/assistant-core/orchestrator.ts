@@ -174,7 +174,7 @@ const FULL_MODEL_ROUTES = new Set<AssistantMode>(["build", "file"]);
 // responses feel shallow, lower the length threshold or add keywords.
 
 const COMPLEX_QUERY_KEYWORDS =
-  /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?)\b/i;
+  /\b(explain\s+(?:in\s+)?detail|step[- ]by[- ]step|compare(?:d\s+to)?|analyz[ei]e?|analyse|in[- ]depth|comprehensive|thorough|elaborate|walk\s+me\s+through|break\s+(?:it\s+)?down|outline|pros?\s+and\s+cons?|tradeoffs?|best\s+practices?|architecture|implementation)\b/i;
 
 const COMPLEX_QUERY_LENGTH_THRESHOLD = 300;
 
