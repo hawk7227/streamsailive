@@ -157,6 +157,48 @@ async function tsvectorSearch(
   }));
 }
 
+// ── Retrieval diversification ─────────────────────────────────────────────────
+//
+// Without a per-file cap, the top-N results can be entirely from one file.
+// Example: a large types.ts with many embedding-similar chunks can consume
+// all 6 slots, leaving nothing for server.ts or auth.ts even when relevant.
+//
+// Fix: over-fetch (limit × FETCH_MULTIPLIER) candidates, then walk them in
+// rank order and skip any file that has already filled MAX_CHUNKS_PER_FILE
+// slots. The final result set is capped back to limit.
+//
+// MAX_CHUNKS_PER_FILE = 2 means at most 2 chunks from any single file.
+// For a 6-slot result, up to 6 different files can contribute (or 3 files × 2).
+// For a 4-file workspace, worst case is 4 files × 1.5 slots each.
+//
+// FETCH_MULTIPLIER = 2 means we fetch 12 candidates for a 6-slot result.
+// This guarantees we can always fill all slots when enough diverse content exists.
+// Increase if workspaces have many files with highly similar content.
+
+const MAX_CHUNKS_PER_FILE = 2;
+const FETCH_MULTIPLIER    = 2;
+
+type RawResult = { file_id: string; chunk_index: number; content: string; rank: number };
+
+function diversifyByFile(
+  results: RawResult[],
+  limit: number,
+  maxPerFile: number,
+): RawResult[] {
+  const countByFile = new Map<string, number>();
+  const out: RawResult[] = [];
+
+  for (const r of results) {
+    const count = countByFile.get(r.file_id) ?? 0;
+    if (count >= maxPerFile) continue;
+    countByFile.set(r.file_id, count + 1);
+    out.push(r);
+    if (out.length >= limit) break;
+  }
+
+  return out;
+}
+
 // ── Public search function ────────────────────────────────────────────────────
 
 export async function searchWorkspaceFiles(
@@ -184,12 +226,15 @@ export async function searchWorkspaceFiles(
     ]),
   );
 
+  // Over-fetch candidates so diversification always has enough to fill limit slots.
+  const fetchLimit = limit * FETCH_MULTIPLIER;
+
   // Attempt vector search first
   const queryEmbedding = await embedQuery(safe, workspaceId);
-  let rawResults: Array<{ file_id: string; chunk_index: number; content: string; rank: number }> = [];
+  let rawResults: RawResult[] = [];
 
   if (queryEmbedding) {
-    const vectorRows = await vectorSearch(queryEmbedding, fileIds, limit);
+    const vectorRows = await vectorSearch(queryEmbedding, fileIds, fetchLimit);
 
     if (vectorRows.length > 0) {
       rawResults = vectorRows.map((r) => ({
@@ -203,10 +248,31 @@ export async function searchWorkspaceFiles(
 
   // Fall back to tsvector if vector search returned nothing
   if (rawResults.length === 0) {
-    rawResults = await tsvectorSearch(safe, fileIds, limit);
+    rawResults = await tsvectorSearch(safe, fileIds, fetchLimit);
   }
 
-  return rawResults.map((r) => ({
+  // Apply per-file cap — preserves rank order, limits any single file to
+  // MAX_CHUNKS_PER_FILE slots in the final result set.
+  const diversified = diversifyByFile(rawResults, limit, MAX_CHUNKS_PER_FILE);
+
+  // Log when the cap was actually hit — tells you how often a single file
+  // was dominating results and how many files are now represented.
+  const preCapCount = Math.min(rawResults.length, limit);
+  if (diversified.length < preCapCount) {
+    const filesRepresented = new Set(diversified.map((r) => r.file_id)).size;
+    console.log(JSON.stringify({
+      level: "info",
+      event: "RETRIEVAL_DIVERSIFIED",
+      workspaceId,
+      candidateCount: rawResults.length,
+      preCapCount,
+      finalCount: diversified.length,
+      filesRepresented,
+      maxChunksPerFile: MAX_CHUNKS_PER_FILE,
+    }));
+  }
+
+  return diversified.map((r) => ({
     fileId: r.file_id,
     fileName: fileMap.get(r.file_id)?.name ?? r.file_id,
     mimeType: fileMap.get(r.file_id)?.mimeType ?? "application/octet-stream",
