@@ -6,6 +6,7 @@ import { CRON_SECRET, KLING_API_KEY, KLING_ASSESS_API_KEY, RUNWAY_API_KEY } from
 import { falQueuePoll } from "@/lib/ai/providers/fal";
 import { stitchVideoScenes } from "@/lib/video/scene-stitcher";
 import type { SceneSiblingRow } from "@/lib/video/types";
+import { processVideoPendingJobs } from "@/lib/video-runtime/jobs/processVideoJob";
 
 // GET /api/cron/check-videos
 // Backup poller — Vercel Cron every 2 minutes.
@@ -307,10 +308,17 @@ export async function GET(request: Request) {
     );
   }
 
+  // Process video_jobs table (new runtime layer) alongside the legacy generations poller
+  const videoJobsResult = await processVideoPendingJobs().catch((err) => {
+    console.error(JSON.stringify({ level: "error", event: "PROCESS_VIDEO_JOBS_FAILED", reason: err instanceof Error ? err.message : String(err) }));
+    return { checked: 0, completed: 0, failed: 0, processing: 0 };
+  });
+
   return NextResponse.json({
     checked: pollable.length,
     skipped_parent_rows: (pending?.length ?? 0) - pollable.length,
     updated: toUpdate.length,
+    video_jobs: videoJobsResult,
     completed: results.filter(r => r.status === "completed").length,
     failed: results.filter(r => r.status === "failed").length,
     processing: results.filter(r => r.status === "processing").length,

@@ -9,6 +9,7 @@ import { OPENAI_API_KEY } from "@/lib/env";
 import { compileGenerationRequest } from "@/lib/generator-intelligence/compiler";
 import { submitSceneBatch } from "@/lib/video/scene-batch";
 import type { VideoSceneSpec } from "@/lib/video/types";
+import { generateVideo, VideoRuntimeError } from "@/lib/video-runtime/generateVideo";
 
 export type MediaKind = "image" | "video" | "i2v";
 
@@ -553,45 +554,34 @@ export async function executeMediaGeneration(args: MediaGenerationArgs): Promise
     };
   }
 
-  // Non-OpenAI / async video path
-  const options: GenerationOptions = {
-    prompt: plan.finalPrompt,
-    aspectRatio: args.aspectRatio,
+  // Delegate to the single authoritative video runtime gate.
+  // generateVideo() owns: normalize, validate, plan, persist, submit.
+  // Polling and finalization happen in the cron via processVideoPendingJobs().
+  const videoResult = await generateVideo({
+    type: args.type as "video" | "i2v",
+    prompt: args.prompt,
+    provider: args.provider,
+    model: args.model,
     duration: args.duration,
+    aspectRatio: args.aspectRatio,
     quality: args.quality,
     imageUrl: args.imageUrl,
-    model: model ?? undefined,
-  };
-
-  const result = await generateContent(args.type as GenerationType, options, provider);
-
-  // Persist pending video job to DB so the cron poller can track it.
-  // Uses sentinel user_id (same as image path) until user context flows through.
-  if (
-    result.status === "pending" &&
-    result.externalId &&
-    args.workspaceId &&
-    (args.type === "video" || args.type === "i2v")
-  ) {
-    await insertPendingVideoGeneration({
-      type: args.type,
-      prompt: plan.finalPrompt,
-      provider,
-      model: model ?? null,
-      workspaceId: args.workspaceId,
-      externalId: result.externalId,
-    });
-  }
+    workspaceId: args.workspaceId,
+    storyBible: args.storyBible,
+    sourceKind: args.sourceKind,
+    longVideo: args.longVideo,
+    realismMode: args.realismMode,
+  });
 
   return {
-    ok: result.status !== "failed",
+    ok: videoResult.ok,
     type: args.type,
-    provider,
-    model,
-    status: result.status,
-    outputUrl: result.outputUrl ?? null,
-    externalId: result.externalId ?? null,
-    costEstimate: result.costEstimate ?? null,
+    provider: videoResult.provider,
+    model: videoResult.model,
+    status: videoResult.status,
+    outputUrl: videoResult.outputUrl,
+    externalId: videoResult.generationId,
+    costEstimate: null,
     plan,
   };
 }
