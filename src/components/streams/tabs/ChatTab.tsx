@@ -32,7 +32,7 @@ const SESSIONS = [
 
 const SEED_MSGS: Msg[] = [
   { id: "m1", role: "user",      text: "generate an image of a lady walking in the city" },
-  { id: "m2", role: "assistant", text: "A cinematic street scene — warm golden hour, a woman in motion against a blur of city life. Generated at full resolution.", mediaUrl: undefined },
+  { id: "m2", role: "assistant", text: "A cinematic street scene — warm golden hour, a woman in motion against a blur of city life. Generated at full resolution.", mediaUrl: "placeholder", mediaType: "image" as const },
   { id: "m3", role: "user",      text: "make her outfit more formal" },
   { id: "m4", role: "assistant", text: "Updated — sharp blazer, tailored trousers. Same motion, same light, same city energy." },
 ];
@@ -149,6 +149,16 @@ export default function ChatTab() {
       {/* Main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
+        {/* AI assistant header — badge + title + subtitle */}
+        <div style={{ padding: "14px 32px 0", flexShrink: 0 }} className="streams-chat-header">
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 10, color: C.acc2, marginBottom: 8 }}>
+            <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
+            Chat · image · video · build
+          </div>
+          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: C.t1, marginBottom: 4 }}>AI assistant</div>
+          <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>Generate images, videos, voice and code directly from conversation.</div>
+        </div>
+
         {/* Mobile top bar */}
         <div className="streams-chat-mobile-bar" style={{
           display: "none", padding: "10px 16px",
@@ -209,6 +219,16 @@ export default function ChatTab() {
                     }} />
                   )}
                 </div>
+                {/* Inline media placeholder */}
+                {msg.mediaType === "image" && msg.mediaUrl && (
+                  <div style={{ width: "100%", maxWidth: 260, aspectRatio: "1/1", marginTop: 8, borderRadius: R.r2, background: C.bg4, border: `1px solid ${C.bdr}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                      <rect x="2" y="2" width="32" height="32" rx="5" stroke="#3D2E8A" strokeWidth="1.5"/>
+                      <path d="M2 25l9-9 6 6 6-8 11 11" stroke="#3D2E8A" strokeWidth="1.5" strokeLinecap="round"/>
+                      <circle cx="11" cy="12" r="3" fill="#3D2E8A"/>
+                    </svg>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -291,6 +311,7 @@ export default function ChatTab() {
           .streams-chat-sidebar { display: none !important; }
           .streams-chat-mobile-bar { display: flex !important; }
           .streams-chat-msgs { padding: 16px !important; }
+          .streams-chat-header { padding: 10px 16px 0 !important; }
           .streams-chat-input { padding: 10px 16px 16px !important; }
         }
       `}</style>

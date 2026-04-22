@@ -18,8 +18,9 @@ import VideoEditorTab from "./tabs/VideoEditorTab";
 import GenerateTab   from "./tabs/GenerateTab";
 import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
+import SettingsTab   from "./tabs/SettingsTab";
 
-type Tab = "chat" | "editor" | "generate" | "reference" | "person";
+type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings";
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "chat",      icon: "💬", label: "Chat"      },
@@ -27,6 +28,7 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "generate",  icon: "✦",  label: "Generate"  },
   { id: "reference", icon: "⬡",  label: "Reference" },
   { id: "person",    icon: "◈",  label: "Person"    },
+  { id: "settings",  icon: "⚙",  label: "Settings"  },
 ];
 
 export default function StreamsPanel() {
@@ -118,6 +120,7 @@ export default function StreamsPanel() {
           {active === "generate"  && <GenerateTab />}
           {active === "reference" && <ReferenceTab />}
           {active === "person"    && <PersonTab />}
+          {active === "settings"  && <SettingsTab />}
         </main>
 
         {/* ── Mobile bottom nav ───────────────────────────────── */}

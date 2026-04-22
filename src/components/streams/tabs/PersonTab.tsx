@@ -80,6 +80,24 @@ export default function PersonTab() {
     <div style={{ height: "100%", overflowY: "auto", padding: "20px" }} className="streams-person-scroll">
       <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
+        {/* Video selector */}
+        <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: 16 }}>
+          <div style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Select video to edit</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, border: `1px dashed ${C.bdr2}`, borderRadius: R.r2, padding: "20px 14px", textAlign: "center", cursor: "pointer", background: C.bg3 }}>
+              <div style={{ fontSize: 20, color: C.t4, marginBottom: 6, opacity: .4 }}>↑</div>
+              <div style={{ fontSize: 12, color: C.t2, fontWeight: 500 }}>Upload video</div>
+              <div style={{ fontSize: 10, color: C.t4, marginTop: 4 }}>mp4 · mov · triggers 8-step ingest automatically</div>
+            </div>
+            <div style={{ flex: 1, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r2, padding: 12 }}>
+              <div style={{ fontSize: 9, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 8 }}>From Library</div>
+              {["Video lady walking city","Generate brand assets"].map(t => (
+                <div key={t} style={{ padding: "6px 8px", borderRadius: R.r1, cursor: "pointer", fontSize: 11, color: C.t3, marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}` }}>{t}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Card 1 — Ingest pipeline */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
           <div style={{

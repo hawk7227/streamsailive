@@ -179,6 +179,20 @@ export default function ReferenceTab() {
                 </div>
               </div>
 
+              {/* Variation prompts */}
+              <div>
+                <div style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>Variation prompts</div>
+                {[
+                  "Cinematic street portrait, woman in bold red coat, 85mm equiv, overcast light, urban background",
+                  "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
+                  "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
+                ].map((vp, i) => (
+                  <div key={i} onClick={() => {}} style={{ padding: "6px 10px", borderRadius: R.r1, marginBottom: 4, fontSize: 10, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: "pointer", lineHeight: 1.5 }}>
+                    {vp}
+                  </div>
+                ))}
+              </div>
+
               {/* Action buttons */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {[
@@ -211,15 +225,17 @@ export default function ReferenceTab() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Preview area */}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 20 }}>
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-              color: C.t4,
-            }}>
-              <div style={{ fontSize: 40, opacity: .2 }}>⊞</div>
-              <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase" }}>
-                Drop reference or click Upload
+            {analysis === "done" ? (
+              <div style={{ width: "100%", maxWidth: 480, aspectRatio: "16/9", borderRadius: R.r2, background: C.bg3, border: `1px solid ${C.bdr}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                <svg width="44" height="44" viewBox="0 0 36 36" fill="none"><rect x="2" y="2" width="32" height="32" rx="5" stroke="#3D2E8A" strokeWidth="1.5"/><path d="M2 25l9-9 6 6 6-8 11 11" stroke="#3D2E8A" strokeWidth="1.5" strokeLinecap="round"/><circle cx="11" cy="12" r="3" fill="#3D2E8A"/></svg>
+                <div style={{ fontSize: 10, color: C.t4 }}>Reference analyzed · GPT-4o Vision</div>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: C.t4 }}>
+                <div style={{ fontSize: 40, opacity: .2 }}>⊞</div>
+                <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase" }}>Drop reference or click Upload</div>
+              </div>
+            )}
           </div>
 
           {/* Output grid */}

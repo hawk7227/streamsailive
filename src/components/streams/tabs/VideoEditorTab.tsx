@@ -41,9 +41,12 @@ export default function VideoEditorTab() {
     setEditText(w);
   }
 
+  const [revoiceState, setRevoiceState] = useState<"idle"|"running"|"done">("idle");
+
   function handleReVoice() {
-    if (!editText.trim()) return;
-    alert(`Re-voice: "${editText}" → fal-ai/elevenlabs/tts/eleven-v3 → Sync Lipsync v2 → ffmpeg compose`);
+    if (!editText.trim() || revoiceState === "running") return;
+    setRevoiceState("running");
+    setTimeout(() => setRevoiceState("done"), 2000);
   }
 
   const activeShotData = SHOTS.find(s => s.id === activeShot)!;
@@ -85,8 +88,14 @@ export default function VideoEditorTab() {
           overflow: "hidden",
         }} className="streams-editor-left">
 
+          {/* Panel header — "EDITABLE LAYERS" + shot count */}
+          <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 600 }}>Editable Layers</span>
+            <span style={{ fontSize: 9, padding: "1px 7px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>3 shots</span>
+          </div>
+
           {/* Motion beats */}
-          <div style={{ padding: "10px 12px 6px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "8px 12px 4px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Motion beats</span>
             <span style={{ fontSize: 10, color: C.acc2, cursor: "pointer" }}>+ add shot</span>
           </div>
@@ -102,6 +111,10 @@ export default function VideoEditorTab() {
                   background: activeShot === shot.id ? C.accDim : "transparent",
                 }}
               >
+                {/* Shot thumbnail placeholder */}
+                <div style={{ width: "100%", aspectRatio: "16/9", background: C.bg4, borderRadius: 4, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.bdr}` }}>
+                  <span style={{ fontSize: 10, color: C.t4, opacity: .4 }}>▶</span>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 9, color: C.acc2, fontWeight: 600 }}>{shot.num}</span>
                   <span style={{ fontSize: 9, color: C.t4 }}>{shot.time}</span>
@@ -261,12 +274,17 @@ export default function VideoEditorTab() {
             onClick={handleReVoice}
             style={{
               padding: "5px 12px", borderRadius: R.r1,
-              background: C.acc, border: "none", color: "#fff",
-              fontSize: 11, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+              background: revoiceState === "done" ? C.green : revoiceState === "running" ? C.bg4 : C.acc,
+              border: "none", color: "#fff",
+              fontSize: 11, fontFamily: "inherit",
+              cursor: revoiceState === "running" ? "not-allowed" : "pointer",
+              flexShrink: 0,
               transition: `background ${DUR.fast} ${EASE}`,
+              display: "flex", alignItems: "center", gap: 5,
             }}
           >
-            Re-voice
+            {revoiceState === "running" && <span style={{ width: 10, height: 10, borderRadius: R.pill, border: "1.5px solid rgba(255,255,255,.4)", borderTopColor: "#fff", display: "block", animation: "streams-editor-spin 600ms linear infinite" }} />}
+            {revoiceState === "done" ? "✓ Done" : revoiceState === "running" ? "Processing…" : "Re-voice"}
           </button>
           <input
             value={editText}
