@@ -85,6 +85,21 @@ export default function SettingsTab() {
           if (s.watermark_enabled !== undefined) setWatermark(s.watermark_enabled);
           if (s.cost_limit_daily_usd !== undefined) setDaily(String(s.cost_limit_daily_usd));
           if (s.cost_limit_monthly_usd !== undefined) setMonthly(String(s.cost_limit_monthly_usd));
+          // Load key hints (last 4 chars of each key, stored when key was tested)
+          const hintMap = [
+            (s as Record<string,unknown>).fal_key_hint as string | undefined,
+            (s as Record<string,unknown>).elevenlabs_key_hint as string | undefined,
+            (s as Record<string,unknown>).openai_key_hint as string | undefined,
+          ];
+          if (hintMap.some(Boolean)) {
+            setKeyVals((v: string[]) => v.map((existing: string, i: number) =>
+              !existing && hintMap[i] ? `••••••••${hintMap[i]}` : existing
+            ));
+            setKeys((k: ApiKey[]) => k.map((key: ApiKey, i: number) =>
+              hintMap[i] ? { ...key, status: "valid" as const } : key
+            ));
+          }
+
           // Model defaults
           if (s.default_video_model || s.default_image_model || s.default_voice_model || s.default_music_model) {
             setModels((md: { mode: string; current: string; options: string[] }[]) => md.map((m: { mode: string; current: string; options: string[] }) => {

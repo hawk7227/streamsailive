@@ -185,6 +185,50 @@ export default function GenerateTab() {
   async function handleGenerate() {
     if (isActive) return;
     stopPolling();
+
+    // Bulk mode — 2+ items → /api/streams/bulk
+    if (bulkCount > 1) {
+      setGenState("submitting");
+      const tempIds = Array.from({length: bulkCount}, (_, i) => (Date.now() + i).toString());
+      setGrid((prev: GridItem[]) => [...prev, ...tempIds.map(id => ({id, status:"waiting" as const}))]);
+      try {
+        const bulkBody = {
+          mode:       bulkMode,
+          generation: mode === "Image" ? "image" : "video",
+          items:      tempIds.map(() => ({ prompt: prompt || styleInput, aspectRatio: ar, duration })),
+        };
+        const res  = await fetch("/api/streams/bulk", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(bulkBody) });
+        const data = await res.json() as { bulkJobId?: string; items?: {itemId:string;requestId:string|null;status:string}[]; error?: string };
+        if (!res.ok || !data.bulkJobId) { setGenState("failed"); setGrid((prev:GridItem[])=>prev.filter(g=>!tempIds.includes(g.id))); return; }
+        setGenState("queued");
+        // Map temp IDs to real item IDs + update status
+        setGrid((prev:GridItem[]) => prev.map((g:GridItem) => {
+          const idx = tempIds.indexOf(g.id);
+          if (idx < 0) return g;
+          const item = data.items?.[idx];
+          return { ...g, id: item?.itemId ?? g.id, status: item?.status === "running" ? "running" : "waiting", generationId: item?.itemId };
+        }));
+        // Poll bulk status
+        const bjId = data.bulkJobId;
+        pollRef.current = setInterval(async () => {
+          const sr = await fetch("/api/streams/bulk/status", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ bulkJobId: bjId }) });
+          const sd = await sr.json() as { status?:string; outputUrls?:string[]; completed?:number; total?:number };
+          if (sd.status === "completed" || sd.status === "partial" || sd.status === "failed") {
+            stopPolling();
+            setGenState("done");
+            if (sd.outputUrls) {
+              setGrid((prev:GridItem[]) => {
+                const donePrev = prev.filter(g=>g.status==="done");
+                const newItems: GridItem[] = sd.outputUrls!.map((url,i) => ({id:`bulk_${bjId}_${i}`,status:"done",outputUrl:url,generationId:`bulk_${bjId}_${i}`}));
+                return [...donePrev, ...newItems];
+              });
+            }
+          }
+        }, 6000);
+      } catch { setGenState("failed"); }
+      return;
+    }
+
     setGenState("submitting");
     const tempId = Date.now().toString();
     setGrid((prev: GridItem[]) => [...prev, {id: tempId, status:"waiting"}]);
