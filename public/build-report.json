@@ -2,8 +2,8 @@
   "build": {
     "project": "StreamsAI",
     "version": "0.4.0",
-    "timestamp": "2026-04-22T00:00:00Z",
-    "commit": "d71ceab",
+    "timestamp": "2026-04-22T23:07:49Z",
+    "commit": "fe3fc52",
     "branch": "main",
     "status": "passing"
   },
@@ -17,7 +17,14 @@
   "streams_panel": {
     "route": "/streams",
     "standalone": true,
-    "tabs": ["Chat","Editor","Generate","Reference","Person","Settings"],
+    "tabs": [
+      "Chat",
+      "Editor",
+      "Generate",
+      "Reference",
+      "Person",
+      "Settings"
+    ],
     "mobile_first": true,
     "design_tokens_locked": true
   },
@@ -29,19 +36,33 @@
       "/api/streams/voice/generate",
       "/api/streams/music/generate",
       "/api/streams/settings",
-      "/api/streams/reference/analyze"
+      "/api/streams/reference/analyze",
+      "/api/streams/library",
+      "/api/streams/stitch",
+      "/api/streams/share",
+      "/s/[slug]"
     ],
     "implemented_unproven": [
       "/api/streams/video/ingest",
       "/api/streams/video/ingest/status",
       "/api/streams/video/edit-voice",
       "/api/streams/video/edit-motion",
-      "/api/streams/video/dub"
+      "/api/streams/video/dub",
+      "/api/streams/video/ingest/status"
     ]
   },
   "db_migration": {
     "file": "20260422_streams_panel_tables.sql",
-    "tables": ["generation_log","workspace_settings","person_analysis","reference_analyses","video_versions","bulk_jobs","bulk_job_items","share_links"],
+    "tables": [
+      "generation_log",
+      "workspace_settings",
+      "person_analysis",
+      "reference_analyses",
+      "video_versions",
+      "bulk_jobs",
+      "bulk_job_items",
+      "share_links"
+    ],
     "status": "written_needs_run_in_supabase"
   },
   "fal_endpoints_registered": 40,

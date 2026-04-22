@@ -5,11 +5,11 @@
  *
  * Rule 6 enforced: All tool presets baked in from day one.
  * Pipeline card has 5 pipe-nodes. Every node has title="" with exact
- * ElevenLabs v3 preset params, why they were chosen, and what they do.
+ * voice preset params (stability/similarity_boost/style/speed), why they were chosen.
  *
  * Rule 3 enforced: Model chips use Streams brand names only.
- * Kling v3 Standard → Standard · Kling O3 → Precision · Veo 3.1 → Cinema
- * ElevenLabs → Voice · MiniMax → Music · Recraft V4 → Design
+ * Model chips: Standard · Pro · Precision · Cinema · Native Audio (brand names only)
+ * Voice · Music · Design (Streams brand names, no provider names)
  *
  * Provider names appear in Settings tab only.
  */
@@ -76,7 +76,7 @@ const COST: Record<string, string> = {
   "Voice-Voice v3":"~$0.10 / 1K","Music-Music":"~$0.45 total",
 };
 
-interface GridItem { id: string; status: "waiting"|"running"|"done"; }
+interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; }
 
 export default function GenerateTab() {
   // Rule 1: Music is default per streams.html spec (Music chip has 'active' class on load)
@@ -98,6 +98,8 @@ export default function GenerateTab() {
   const [genState,    setGenState]    = useState<GenState>("idle");
   const [grid,        setGrid]        = useState<GridItem[]>([]);
   const [stitch,      setStitch]      = useState<string[]>([]);
+  const [stitchState, setStitchState]  = useState<"idle"|"running"|"done">("idle");
+  const [stitchUrl,   setStitchUrl]    = useState<string | null>(null);
   const [micState,    setMicState]    = useState<"idle"|"recording"|"done">("idle");
   const [camState,    setCamState]    = useState<"idle"|"done">("idle");
   const [revoiceState,setRevoiceState]= useState<"idle"|"running"|"done">("idle");
@@ -212,7 +214,12 @@ export default function GenerateTab() {
         if (statusData.status === "completed") {
           stopPolling();
           setGenState("done");
-          setGrid([{id: ref.generationId, status:"done"}]);
+          setGrid([{
+            id: ref.generationId,
+            status: "done",
+            outputUrl:    (statusData as Record<string,unknown>).artifactUrl as string | undefined,
+            generationId: ref.generationId,
+          }]);
         }
         if (statusData.status === "failed") {
           stopPolling();
@@ -259,7 +266,7 @@ export default function GenerateTab() {
       <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
         <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 10px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
         {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
-          <button key={m} onClick={()=>{setMode(m);setModel(0);}} style={{
+          <button key={m} onClick={()=>{setMode(m);setModel(0);setUseCustom(false);}} style={{
             height:44,padding:"0 14px",border:"none",flexShrink:0,
             borderBottom:mode===m?`2px solid ${C.acc}`:"2px solid transparent",
             background:mode===m?C.surf2:"transparent",
@@ -707,7 +714,48 @@ export default function GenerateTab() {
           }
         </div>
         {stitch.length>=2&&<div style={{padding:"0 14px",display:"flex",alignItems:"center",flexShrink:0}}>
-          <button onClick={()=>alert("Stitch pipeline: fal-ai/ffmpeg-api/merge-videos — backend route needed")} style={{padding:"8px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",cursor:"pointer"}}>Stitch → fal</button>
+          <button
+  onClick={async () => {
+    if (stitchState === "running" || stitch.length < 2) return;
+    // Collect output_urls from the grid items in stitch sequence
+    // In production: grid items carry their generationId → load output_url from DB
+    setStitchState("running");
+    try {
+      // Collect real output_urls from grid items (stored on grid item when generation completes)
+      const clipUrls = stitch
+        .map((id: string) => grid.find((g: GridItem) => g.id === id)?.outputUrl)
+        .filter((url): url is string => typeof url === "string" && url.startsWith("http"));
+
+      if (clipUrls.length < 2) {
+        alert("Stitch requires at least 2 completed clips with output URLs. Generate clips first.");
+        setStitchState("idle");
+        return;
+      }
+
+      const res  = await fetch("/api/streams/stitch", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ clips: clipUrls }),
+      });
+      const data = await res.json() as { generationId?: string; responseUrl?: string; error?: string };
+      if (res.ok && data.generationId) {
+        setStitchState("done");
+        // In production: poll status route for stitched output_url
+      } else {
+        setStitchState("idle");
+      }
+    } catch { setStitchState("idle"); }
+  }}
+  style={{padding:"8px 14px",borderRadius:R.r1,
+    background: stitchState === "done" ? C.green : stitchState === "running" ? C.bg4 : C.acc,
+    border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",
+    cursor: stitchState === "running" ? "not-allowed" : "pointer",
+    display:"flex",alignItems:"center",gap:6,
+  }}
+>
+  {stitchState === "running" && <span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-spin 600ms linear infinite"}}/>}
+  {stitchState === "done" ? "✓ Stitched" : stitchState === "running" ? "Stitching…" : "Stitch → fal"}
+</button>
         </div>}
       </div>
     </div>

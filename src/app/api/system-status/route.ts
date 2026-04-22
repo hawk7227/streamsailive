@@ -217,3 +217,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function HEAD(): Promise<NextResponse> {
   return new NextResponse(null, { status: 200 });
 }
+
+// ── Streams panel health check (appended) ────────────────────────────────
+// Checks generation_log table is reachable and reports counts.
+// This is separate from the main system-status checks above.
+export async function streamsHealthCheck(admin: ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>) {
+  try {
+    const { count, error } = await admin
+      .from("generation_log")
+      .select("*", { count: "exact", head: true });
+    if (error) return { status: "fail" as const, message: `generation_log: ${error.message}` };
+    return { status: "pass" as const, message: `generation_log reachable (${count ?? 0} rows)` };
+  } catch (e) {
+    return { status: "warn" as const, message: `generation_log check failed: ${String(e)}` };
+  }
+}
