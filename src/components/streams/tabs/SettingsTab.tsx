@@ -41,12 +41,35 @@ export default function SettingsTab() {
   const [watermark,setWatermark]= useState(true);
   const [saved,    setSaved]    = useState(false);
 
-  function testKey(i: number) {
-    if (!keyVals[i].trim()) return;
-    setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) => idx === i ? { ...key, status: "testing" } : key));
-    setTimeout(() => {
-      setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) => idx === i ? { ...key, status: keyVals[idx].length > 8 ? "valid" : "invalid" } : key));
-    }, 1400);
+  async function testKey(i: number) {
+    const keyVal = keyVals[i].trim();
+    if (!keyVal) return;
+
+    setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
+      idx === i ? { ...key, status: "testing" } : key));
+
+    const providerMap: Record<number, "fal" | "elevenlabs" | "openai"> = {
+      0: "fal",
+      1: "elevenlabs",
+      2: "openai",
+    };
+    const provider = providerMap[i];
+    if (!provider) return;
+
+    try {
+      const res  = await fetch("/api/streams/settings/test-key", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ provider, key: keyVal }),
+      });
+      const data = await res.json() as { valid?: boolean; latencyMs?: number; error?: string };
+      const newStatus: "valid" | "invalid" = (res.ok && data.valid) ? "valid" : "invalid";
+      setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
+        idx === i ? { ...key, status: newStatus } : key));
+    } catch {
+      setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
+        idx === i ? { ...key, status: "invalid" } : key));
+    }
   }
 
   const [saveError, setSaveError] = useState<string | null>(null);

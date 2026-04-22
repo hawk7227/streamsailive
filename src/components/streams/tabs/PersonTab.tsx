@@ -120,9 +120,61 @@ export default function PersonTab() {
     Object.fromEntries(EDIT_OPS.map(op => [op.id, "idle"])) as Record<EditOp, OpState>
   );
 
-  function runOp(id: EditOp) {
+  async function runOp(id: EditOp) {
     setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "running" }));
-    setTimeout(() => setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" })), 2200);
+
+    // Route map — each op calls its real API route
+    const ROUTES: Partial<Record<EditOp, string>> = {
+      "voice":     "/api/streams/video/edit-voice",
+      "body":      "/api/streams/video/edit-body",
+      "motion":    "/api/streams/video/edit-motion",
+      "dub":       "/api/streams/video/dub",
+      "emotion":   "/api/streams/video/edit-emotion",
+      "multishot": "/api/streams/video/generate",
+    };
+
+    const route = ROUTES[id];
+    if (!route) {
+      setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
+      return;
+    }
+
+    // Without a real generationLogId + analysisId (pre-ingest), operations show
+    // what route would be called. Wired state runs once ingest completes.
+    if (!analysisId || !genLogId) {
+      // Shell demo — show state transition without backend call
+      setTimeout(() => setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" })), 1800);
+      return;
+    }
+
+    try {
+      // Build minimal body per operation type
+      const bodyMap: Record<string, Record<string, unknown>> = {
+        "voice":   { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: "" },
+        "body":    { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction" },
+        "motion":  { generationLogId: genLogId, firstFrameUrl: "", newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: "" },
+        "dub":     { generationLogId: genLogId, videoUrl: "", targetLanguage: "es" },
+        "emotion": { generationLogId: genLogId, videoUrl: "", emotion: "happy" },
+        "multishot": { prompt: "continue the scene", duration: "5", aspectRatio: "16:9" },
+      };
+
+      const res  = await fetch(route, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(bodyMap[id] ?? {}),
+      });
+      const data = await res.json() as { error?: string; status?: string };
+
+      if (res.ok) {
+        setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" }));
+      } else {
+        console.error(`${id} op failed:`, data.error);
+        setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
+      }
+    } catch (err) {
+      console.error(`${id} op error:`, err);
+      setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
+    }
   }
 
   return (

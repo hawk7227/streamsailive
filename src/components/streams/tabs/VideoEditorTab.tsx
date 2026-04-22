@@ -248,7 +248,10 @@ export default function VideoEditorTab() {
         <div style={{ padding: "6px 16px", borderBottom: `1px solid ${C.bdr}`, background: "rgba(124,58,237,0.06)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, overflowX: "auto" }}>
           <span style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", flexShrink: 0 }}>Edit audio</span>
           <div style={{ display: "flex", flexWrap: "nowrap", gap: 4, flex: 1, overflowX: "auto" }}>
-            {(selectedWord ? TRANSCRIPT.flatMap(l => l.words).slice(0, 7) : TRANSCRIPT[1].words).map((w, i) => (
+            {(selectedWord
+              ? (TRANSCRIPT.find(l => l.words.includes(selectedWord))?.words ?? TRANSCRIPT[1].words)
+              : TRANSCRIPT[1].words
+            ).map((w, i) => (
               <span key={i} onClick={() => selectWord(w)} style={{ padding: "2px 7px", borderRadius: R.r1, fontSize: 14, background: selectedWord === w ? C.accDim : C.surf, border: `1px solid ${selectedWord === w ? C.acc : C.bdr}`, color: selectedWord === w ? C.t1 : C.t2, cursor: "pointer", whiteSpace: "nowrap" }}>{w}</span>
             ))}
           </div>
