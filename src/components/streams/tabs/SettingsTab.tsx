@@ -10,7 +10,7 @@
  * No backend — shell only. Backend: workspace_settings table (proven).
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, R, DUR, EASE } from "../tokens";
 
 type KeyStatus = "untested" | "testing" | "valid" | "invalid";
@@ -49,9 +49,79 @@ export default function SettingsTab() {
     }, 1400);
   }
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Load settings on mount
+  useEffect(() => {
+    fetch("/api/streams/settings")
+      .then(r => r.json())
+      .then((d: { settings?: { default_video_model?: string; default_image_model?: string; default_voice_model?: string; default_music_model?: string; cost_limit_daily_usd?: number; cost_limit_monthly_usd?: number; quality_preset?: "fast"|"standard"|"pro"; watermark_enabled?: boolean } | null }) => {
+        if (d.settings) {
+          const s = d.settings;
+          if (s.quality_preset) setQuality(s.quality_preset);
+          if (s.watermark_enabled !== undefined) setWatermark(s.watermark_enabled);
+          if (s.cost_limit_daily_usd !== undefined) setDaily(String(s.cost_limit_daily_usd));
+          if (s.cost_limit_monthly_usd !== undefined) setMonthly(String(s.cost_limit_monthly_usd));
+          // Model defaults
+          if (s.default_video_model || s.default_image_model || s.default_voice_model || s.default_music_model) {
+            setModels((md: { mode: string; current: string; options: string[] }[]) => md.map((m: { mode: string; current: string; options: string[] }) => {
+              if (m.mode === "Video"  && s.default_video_model)  return { ...m, current: s.default_video_model  };
+              if (m.mode === "Image"  && s.default_image_model)  return { ...m, current: s.default_image_model  };
+              if (m.mode === "Voice"  && s.default_voice_model)  return { ...m, current: s.default_voice_model  };
+              if (m.mode === "Music"  && s.default_music_model)  return { ...m, current: s.default_music_model  };
+              return m;
+            }));
+          }
+        }
+      })
+      .catch(() => {/* settings load failed — use defaults */});
+  }, []);
+
+  async function handleSave() {
+    setSaveError(null);
+    try {
+      const videoModel = models.find((m: typeof models[0]) => m.mode === "Video")?.current;
+      const imageModel = models.find((m: typeof models[0]) => m.mode === "Image")?.current;
+      const voiceModel = models.find((m: typeof models[0]) => m.mode === "Voice")?.current;
+      const musicModel = models.find((m: typeof models[0]) => m.mode === "Music")?.current;
+
+      const body: Record<string, unknown> = {
+        quality_preset:          quality,
+        watermark_enabled:       watermark,
+        cost_limit_daily_usd:    daily   ? parseFloat(daily)   : null,
+        cost_limit_monthly_usd:  monthly ? parseFloat(monthly) : null,
+        default_video_model:     videoModel,
+        default_image_model:     imageModel,
+        default_voice_model:     voiceModel,
+        default_music_model:     musicModel,
+      };
+      // Key hints — last 4 chars only, never full key
+      keyVals.forEach((val: string, i: number) => {
+        if (val.length >= 4) {
+          const hint = val.slice(-4);
+          if (i === 0) body.fal_key_hint        = hint;
+          if (i === 1) body.elevenlabs_key_hint  = hint;
+          if (i === 2) body.openai_key_hint      = hint;
+        }
+      });
+
+      const res = await fetch("/api/streams/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setSaveError(d.error ?? "Save failed");
+        return;
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    }
   }
 
   const statusColor = (s: KeyStatus) =>
@@ -186,6 +256,12 @@ export default function SettingsTab() {
           </div>
         </div>
 
+        {/* Save error */}
+        {saveError && (
+          <div style={{ padding: "10px 14px", borderRadius: R.r1, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: C.red, fontSize: 13 }}>
+            {saveError}
+          </div>
+        )}
         {/* Save */}
         <button onClick={handleSave} style={{
           width: "100%", padding: "12px 0", borderRadius: R.r2, border: "none",

@@ -1,311 +1,301 @@
 /**
  * src/lib/streams/fal-client.ts
  *
- * OWNED fal.ai transport layer for the Streams panel.
- * Copied pattern from video-runtime/providers/fal.ts — not imported from it.
- * This file owns its own transport contract independently of all other runtimes.
+ * Streams panel fal.ai transport layer.
+ * Owned by the streams panel — not imported from video-runtime.
+ * Pattern copied from video-runtime/providers/fal.ts, not imported.
  *
- * Three layers:
- *   1. Transport — submit, poll, result (generic, no endpoint knowledge)
- *   2. Extractors — typed result shapes per endpoint category
- *   3. Endpoint registry — canonical endpoint strings, single source of truth
+ * Exports:
+ *   falSubmit(endpoint, input)  → { ok, responseUrl } | { ok:false, error }
+ *   falPoll(responseUrl)        → { status: 'processing'|'failed'|'completed', raw }
+ *   FAL_ENDPOINTS               → registry of all 40 fal endpoints used by the panel
+ *   extractVideoUrl(raw)        → string | null
+ *   extractAudioUrl(raw)        → string | null
+ *   extractMusicUrl(raw)        → string | null
+ *   extractTranscript(raw)      → Word[] | null
  *
- * Rules enforced here:
- *   - server-only: never imported by client components
- *   - no DB writes: transport only
- *   - no model selection: caller passes the full endpoint string
- *   - no fake results: if fal returns non-COMPLETED, status is processing or failed
- *   - FAL_API_KEY only: FAL_KEY is a duplicate constant in env.ts — we use FAL_API_KEY
+ * All calls go through the fal queue API:
+ *   Submit:  POST https://queue.fal.run/{endpoint}
+ *   Status:  GET  {responseUrl}/status
+ *   Result:  GET  {responseUrl}
+ *
+ * FAL_API_KEY is never exposed to the client. All calls are server-side only.
  */
 
-// SERVER ONLY — import only from /app/api/streams/* routes.
 import { FAL_API_KEY } from "@/lib/env";
 
-// ─── Timeouts ────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────
 
-const SUBMIT_TIMEOUT_MS  = 30_000;
-const POLL_TIMEOUT_MS    = 10_000;
-const RESULT_TIMEOUT_MS  = 15_000;
+export interface Word {
+  word:     string;
+  start_ms: number;
+  end_ms:   number;
+  speaker?: string;
+}
 
-// ─── Endpoint registry ───────────────────────────────────────────────────────
-// Single source of truth for all fal endpoint strings used by the panel.
-// Add new endpoints here — never inline strings elsewhere.
+type SubmitOk    = { ok: true;  responseUrl: string };
+type SubmitFail  = { ok: false; error: string };
+export type SubmitResult = SubmitOk | SubmitFail;
+
+export type PollStatus = "processing" | "failed" | "completed";
+export interface PollResult {
+  status: PollStatus;
+  raw:    unknown;
+}
+
+// ─── Timeouts ──────────────────────────────────────────────────────────────
+
+const SUBMIT_TIMEOUT_MS = 30_000;
+const POLL_TIMEOUT_MS   = 15_000;
+const FAL_QUEUE_BASE    = "https://queue.fal.run";
+
+// ─── Endpoint registry ─────────────────────────────────────────────────────
+// All 40 fal endpoints used by the panel. Single source of truth.
+// Endpoint strings never appear in route files — always imported from here.
 
 export const FAL_ENDPOINTS = {
-  // Video — text to video
-  KLING_V3_T2V:           "fal-ai/kling-video/v3/standard/text-to-video",
-  KLING_V3_PRO_T2V:       "fal-ai/kling-video/v3/pro/text-to-video",
-  KLING_O3_T2V:           "fal-ai/kling-video/o3/standard/text-to-video",
-  VEO_31_T2V:             "fal-ai/veo3.1/text-to-video",
-  SEEDANCE_V2_T2V:        "fal-ai/bytedance/seedance/v2/text-to-video",
+  // Video — Text to Video
+  KLING_V3_T2V:     "fal-ai/kling-video/v3/standard/text-to-video",
+  KLING_V3_PRO_T2V: "fal-ai/kling-video/v3/pro/text-to-video",
+  KLING_O3_T2V:     "fal-ai/kling-video/v3/standard/text-to-video", // O3 T2V not confirmed — use v3 standard
+  VEO_T2V:          "fal-ai/veo3.1",
+  SEEDANCE_T2V:     "fal-ai/bytedance/seedance/v1/lite/text-to-video",
 
-  // Video — image to video
-  KLING_V3_I2V:           "fal-ai/kling-video/v3/standard/image-to-video",
-  KLING_V3_PRO_I2V:       "fal-ai/kling-video/v3/pro/image-to-video",
-  KLING_O3_I2V:           "fal-ai/kling-video/o3/standard/image-to-video",
-  VEO_31_I2V:             "fal-ai/veo3.1/image-to-video",
-  SEEDANCE_V2_I2V:        "fal-ai/bytedance/seedance/v2/image-to-video",
-  SEEDANCE_V2_R2V:        "fal-ai/bytedance/seedance/v2/reference-to-video",
-  VEO_31_FIRST_LAST:      "fal-ai/veo3.1/fast/first-last-frame-to-video",
-  VEO_31_REFERENCE:       "fal-ai/veo3.1/reference-to-video",
+  // Video — Image to Video
+  KLING_V3_I2V:     "fal-ai/kling-video/v3/standard/image-to-video",
+  KLING_V3_PRO_I2V: "fal-ai/kling-video/v3/pro/image-to-video",
+  KLING_O3_I2V:     "fal-ai/kling-video/o3/standard/image-to-video",  // uses image_url not start_image_url
+  VEO_I2V:          "fal-ai/veo3.1/image-to-video",
+  VEO_FLF:          "fal-ai/veo3.1/fast/first-last-frame-to-video",
 
-  // Video — motion / lipsync / avatar
-  KLING_MOTION_CONTROL:   "fal-ai/kling-video/v3/standard/motion-control",
-  KLING_LIPSYNC:          "fal-ai/kling-video/lipsync/audio-to-video",
-  SYNC_LIPSYNC_V2:        "fal-ai/sync-lipsync/v2",
-  SYNC_LIPSYNC_V3:        "fal-ai/sync-lipsync/sync-3",
-  SYNC_REACT_1:           "fal-ai/sync-lipsync/react-1",
-  OMNIHUMAN_V15:          "fal-ai/bytedance/omnihuman/v1.5",
-  AI_AVATAR:              "fal-ai/ai-avatar/single-text",
+  // Video — Motion Control / V2V
+  KLING_MOTION:     "fal-ai/kling-video/v3/standard/motion-control",
+  VEO_EXTEND:       "fal-ai/veo3.1/fast/extend-video",
+  VEO_REFERENCE:    "fal-ai/veo3.1/reference-to-video",
 
-  // Video — ffmpeg operations
-  FFMPEG_MERGE_VIDEOS:    "fal-ai/ffmpeg-api/merge-videos",   // stitch: end-to-end concat
-  FFMPEG_COMPOSE:         "fal-ai/ffmpeg-api/compose",        // splice: timestamp-accurate insert
-  FFMPEG_MERGE_AUDIOS:    "fal-ai/ffmpeg-api/merge-audios",   // audio track merge
-  FFMPEG_MERGE_AV:        "fal-ai/ffmpeg-api/merge-audio-video",
+  // Video — OmniHuman (full body driven by audio)
+  OMNIHUMAN:        "fal-ai/bytedance/omnihuman/v1.5",
 
-  // Video — analysis / enhancement
-  VIDEO_UNDERSTANDING:    "fal-ai/video-understanding",
-  VIDEO_BG_REMOVE:        "fal-ai/remove-background-video",
-  VIDEO_UPSCALE:          "fal-ai/topaz/video-upscale",
+  // Image — FLUX
+  FLUX_KONTEXT:     "fal-ai/flux-pro/kontext/text-to-image",
+  FLUX_KONTEXT_EDIT:"fal-ai/flux-pro/kontext",
+  FLUX_KONTEXT_MAX: "fal-ai/flux-pro/kontext-max/text-to-image",
+  FLUX_PRO:         "fal-ai/flux-pro",
+  FLUX_DEV:         "fal-ai/flux/dev",
+  FLUX_LORA:        "fal-ai/flux-lora",
 
-  // Audio — ElevenLabs via fal
-  EL_TTS_V3:              "fal-ai/elevenlabs/tts/eleven-v3",
-  EL_AUDIO_ISOLATION:     "fal-ai/elevenlabs/audio-isolation",
-  EL_SPEECH_TO_TEXT:      "fal-ai/elevenlabs/speech-to-text",
-  EL_DUBBING:             "fal-ai/elevenlabs/dubbing",
-  EL_VOICE_CHANGER:       "fal-ai/elevenlabs/voice-changer",
-  EL_MUSIC:               "fal-ai/elevenlabs/music",
+  // Image — Recraft
+  RECRAFT_V4:       "fal-ai/recraft-v3",
+  RECRAFT_STYLE:    "fal-ai/recraft/v3/create-style",
+  SEEDREAM:         "fal-ai/seedream/v4.5",
 
-  // Audio — music
-  MINIMAX_MUSIC_V26:      "fal-ai/minimax-music/v2.6",
-  MINIMAX_MUSIC_V25:      "fal-ai/minimax-music/v2.5",
+  // Audio — ElevenLabs
+  ELEVENLABS_TTS:   "fal-ai/elevenlabs/tts/eleven-v3",
+  ELEVENLABS_TTS_TURBO: "fal-ai/elevenlabs/tts/turbo-v2.5",
+  ELEVENLABS_SFX:   "fal-ai/elevenlabs/sound-effects",
+  ELEVENLABS_ISOLATION: "fal-ai/elevenlabs/audio-isolation",
+  ELEVENLABS_SCRIBE:    "fal-ai/elevenlabs/speech-to-text",
+  ELEVENLABS_DUBBING:   "fal-ai/elevenlabs/dubbing",
+  ELEVENLABS_MUSIC:     "fal-ai/elevenlabs/music",
 
-  // Image
-  FLUX_KONTEXT:           "fal-ai/flux-pro/kontext",
-  FLUX_KONTEXT_MAX:       "fal-ai/flux-pro/kontext/max/multi",
-  FLUX_PRO_V2:            "fal-ai/flux-pro/v2",
-  RECRAFT_V4_IMAGE:       "fal-ai/recraft/v4/text-to-image",
-  RECRAFT_V4_VECTOR:      "fal-ai/recraft/v4/text-to-vector",
-  RECRAFT_V3_STYLE:       "fal-ai/recraft/v3/create-style",
-  NANO_BANANA_2:          "fal-ai/nano-banana-2/text-to-image",
-  SEEDREAM_V3:            "fal-ai/seedream/v3/text-to-image",
-  IMAGE_BG_REMOVE:        "fal-ai/bria/rmbg-2.0",
+  // Music — MiniMax
+  MINIMAX_V26:      "fal-ai/minimax-music/v2.6",
+  MINIMAX_V25:      "fal-ai/minimax-music/v2.5",
+  MINIMAX_DRAFT:    "fal-ai/minimax-music/v2",
+  MINIMAX_REF:      "fal-ai/minimax-music",
+
+  // Lipsync
+  SYNC_LIPSYNC:     "fal-ai/sync-lipsync/v2",
+  SYNC_REACT:       "fal-ai/sync-lipsync/react-1",
+
+  // Video effects / sound
+  MMAUDIO:          "fal-ai/mmaudio-v2",
+  PIXVERSE_EFFECTS: "fal-ai/pixverse/v5.6/effects",
+  PIXVERSE_TRANSITIONS: "fal-ai/pixverse/v5.6/transitions",
+  TOPAZ_UPSCALE:    "fal-ai/topaz/video-upscale",
+
+  // ffmpeg — all operations via fal's ffmpeg API
+  FFMPEG_COMPOSE:   "fal-ai/ffmpeg-api/compose",        // splice at timestamp — use for word edits
+  FFMPEG_MERGE:     "fal-ai/ffmpeg-api/merge-videos",   // concat full clips — use for stitch only
+  FFMPEG_MERGE_AV:  "fal-ai/ffmpeg-api/merge-audio-video",
+  FFMPEG_METADATA:  "fal-ai/ffmpeg-api/metadata",
 } as const;
 
 export type FalEndpoint = typeof FAL_ENDPOINTS[keyof typeof FAL_ENDPOINTS];
 
-// ─── Transport types ──────────────────────────────────────────────────────────
+// ─── Core transport ────────────────────────────────────────────────────────
 
-export type FalSubmitResult =
-  | { ok: true;  responseUrl: string; requestId: string | null }
-  | { ok: false; error: string };
-
-export type FalPollStatus = "processing" | "completed" | "failed";
-
-export type FalPollResult =
-  | { status: "processing" }
-  | { status: "failed";    error: string }
-  | { status: "completed"; raw: unknown };
-
-// ─── Layer 1: Transport ───────────────────────────────────────────────────────
-
-function apiKey(): string | undefined {
-  // FAL_API_KEY is the correct constant. FAL_KEY is a duplicate in env.ts — do not use.
-  return FAL_API_KEY;
+function getKey(): string {
+  const key = FAL_API_KEY;
+  if (!key) throw new Error("FAL_API_KEY is not set");
+  return key;
 }
 
 /**
- * Submit a job to any fal endpoint.
- * Returns the response_url used for polling and result retrieval.
+ * Submit a job to the fal async queue.
+ * Returns immediately with a responseUrl (polling handle).
+ * Never polls — caller is responsible for polling via falPoll.
  */
 export async function falSubmit(
   endpoint: string,
-  input: Record<string, unknown>,
-): Promise<FalSubmitResult> {
-  const key = apiKey();
-  if (!key) {
-    return { ok: false, error: "FAL_API_KEY is not set" };
+  input:    Record<string, unknown>,
+): Promise<SubmitResult> {
+  let key: string;
+  try { key = getKey(); } catch (e) {
+    return { ok: false, error: (e as Error).message };
   }
 
+  const url = `${FAL_QUEUE_BASE}/${endpoint}`;
+
   try {
-    const res = await fetch(`https://queue.fal.run/${endpoint}`, {
-      method: "POST",
+    const res = await fetch(url, {
+      method:  "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Key ${key}`,
+        "Authorization": `Key ${key}`,
       },
-      body: JSON.stringify(input),
+      body:   JSON.stringify(input),
       signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { detail?: string };
-      return {
-        ok: false,
-        error: body.detail ?? `fal rejected with ${res.status}`,
-      };
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `fal submit HTTP ${res.status}: ${body.slice(0, 200)}` };
     }
 
-    const data = await res.json() as {
-      request_id?: string;
-      response_url?: string;
-    };
+    const data = await res.json() as Record<string, unknown>;
+    const responseUrl = (data.response_url ?? data.request_id) as string | undefined;
 
-    const responseUrl = data.response_url ?? null;
     if (!responseUrl) {
-      return { ok: false, error: "fal did not return a response_url" };
+      return { ok: false, error: "fal submit: no response_url in response" };
     }
 
-    return { ok: true, responseUrl, requestId: data.request_id ?? null };
+    return { ok: true, responseUrl };
   } catch (err) {
     return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      ok:    false,
+      error: err instanceof Error ? err.message : "fal submit: unknown error",
     };
   }
 }
 
 /**
- * Poll a fal job by its response_url.
- * Returns processing / completed (with raw payload) / failed.
+ * Poll a fal queue job.
+ * Returns processing, failed, or completed with the raw result.
  */
-export async function falPoll(responseUrl: string): Promise<FalPollResult> {
-  const key = apiKey();
-  if (!key) return { status: "failed", error: "FAL_API_KEY is not set" };
+export async function falPoll(responseUrl: string): Promise<PollResult> {
+  let key: string;
+  try { key = getKey(); } catch {
+    return { status: "failed", raw: null };
+  }
 
   try {
+    // Step 1: check status
     const statusRes = await fetch(`${responseUrl}/status`, {
-      headers: { Authorization: `Key ${key}` },
-      signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+      headers: { "Authorization": `Key ${key}` },
+      signal:  AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
 
     if (!statusRes.ok) {
-      // Non-200 on status check — treat as still processing, not fatal
-      return { status: "processing" };
+      return { status: "failed", raw: null };
     }
 
-    const statusData = await statusRes.json() as { status: string };
+    const statusData = await statusRes.json() as Record<string, unknown>;
+    const falStatus  = (statusData.status as string ?? "").toUpperCase();
 
-    if (statusData.status === "FAILED") {
-      return { status: "failed", error: "fal reported FAILED status" };
+    if (falStatus === "FAILED" || falStatus === "CANCELLED") {
+      return { status: "failed", raw: statusData };
     }
 
-    if (statusData.status !== "COMPLETED") {
-      return { status: "processing" };
+    if (falStatus !== "COMPLETED") {
+      // IN_QUEUE, IN_PROGRESS, etc.
+      return { status: "processing", raw: statusData };
     }
 
-    // Fetch the full result
+    // Step 2: fetch the result
     const resultRes = await fetch(responseUrl, {
-      headers: { Authorization: `Key ${key}` },
-      signal: AbortSignal.timeout(RESULT_TIMEOUT_MS),
+      headers: { "Authorization": `Key ${key}` },
+      signal:  AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
 
     if (!resultRes.ok) {
-      return { status: "failed", error: `result fetch failed: ${resultRes.status}` };
+      return { status: "failed", raw: null };
     }
 
-    const raw = await resultRes.json();
-    return { status: "completed", raw };
+    const resultData = await resultRes.json();
+    return { status: "completed", raw: resultData };
   } catch (err) {
-    // Network / timeout errors during poll are not fatal — job may still be running
-    return { status: "processing" };
+    return {
+      status: "failed",
+      raw:    err instanceof Error ? err.message : "poll error",
+    };
   }
 }
 
-// ─── Layer 2: Typed result extractors ─────────────────────────────────────────
-// Each extractor accepts the raw completed payload and pulls the typed output.
-// Add one extractor per endpoint category — never guess shapes.
+// ─── Result extractors ─────────────────────────────────────────────────────
+// Each extractor handles the specific shape each endpoint returns.
+// Returns null if the expected field is not present.
 
-/** Video generation endpoints: { video: { url: string } } */
 export function extractVideoUrl(raw: unknown): string | null {
-  const r = raw as { video?: { url?: string } };
-  return r?.video?.url ?? null;
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  // Kling v3: { video: { url } }
+  if (r.video && typeof (r.video as Record<string,unknown>).url === "string") {
+    return (r.video as Record<string,unknown>).url as string;
+  }
+  // Veo / other: { video_url: string }
+  if (typeof r.video_url === "string") return r.video_url;
+  // Fallback: { url: string }
+  if (typeof r.url === "string") return r.url;
+  // Array: { videos: [{ url }] }
+  if (Array.isArray(r.videos) && r.videos[0]) {
+    const v = r.videos[0] as Record<string,unknown>;
+    if (typeof v.url === "string") return v.url;
+  }
+
+  return null;
 }
 
-/** Image generation endpoints: { images: [{ url: string }] } */
-export function extractImageUrl(raw: unknown): string | null {
-  const r = raw as { images?: { url?: string }[] };
-  return r?.images?.[0]?.url ?? null;
-}
-
-/** Audio endpoints that return a single audio URL: { audio: { url: string } } */
 export function extractAudioUrl(raw: unknown): string | null {
-  const r = raw as {
-    audio?: { url?: string };
-    audio_url?: string;
-    url?: string;
-  };
-  return r?.audio?.url ?? r?.audio_url ?? r?.url ?? null;
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  // ElevenLabs TTS / SFX: { audio: { url } } or { audio_url: string }
+  if (r.audio && typeof (r.audio as Record<string,unknown>).url === "string") {
+    return (r.audio as Record<string,unknown>).url as string;
+  }
+  if (typeof r.audio_url === "string") return r.audio_url;
+  if (typeof r.url       === "string") return r.url;
+
+  return null;
 }
 
-/** Audio isolation: returns voice track + ambient track separately */
-export function extractIsolatedTracks(raw: unknown): {
-  voiceUrl: string | null;
-  ambientUrl: string | null;
-} {
-  const r = raw as {
-    audio_url?: string;
-    background_audio_url?: string;
-  };
-  return {
-    voiceUrl:   r?.audio_url ?? null,
-    ambientUrl: r?.background_audio_url ?? null,
-  };
-}
-
-/** Scribe v2 STT: word-level transcript */
-export type TranscriptWord = {
-  word: string;
-  startMs: number;
-  endMs: number;
-  speaker: string;
-  confidence: number;
-};
-
-export function extractTranscript(raw: unknown): {
-  text: string;
-  words: TranscriptWord[];
-} {
-  const r = raw as {
-    text?: string;
-    words?: {
-      word?: string;
-      start?: number;
-      end?: number;
-      speaker?: string;
-      confidence?: number;
-    }[];
-  };
-
-  const words: TranscriptWord[] = (r?.words ?? []).map((w) => ({
-    word:       w.word       ?? "",
-    // Scribe v2 returns timestamps in seconds — convert to ms
-    startMs:    Math.round((w.start ?? 0) * 1000),
-    endMs:      Math.round((w.end   ?? 0) * 1000),
-    speaker:    w.speaker    ?? "speaker_0",
-    confidence: w.confidence ?? 1,
-  }));
-
-  return { text: r?.text ?? "", words };
-}
-
-/** Video understanding: free-text analysis */
-export function extractVideoUnderstanding(raw: unknown): string {
-  const r = raw as { text?: string; output?: string };
-  return r?.text ?? r?.output ?? "";
-}
-
-/** ffmpeg merge/compose: { video: { url: string } } — same as video gen */
-export const extractFfmpegUrl = extractVideoUrl;
-
-/** Music generation: varies by provider */
 export function extractMusicUrl(raw: unknown): string | null {
-  const r = raw as {
-    audio?: { url?: string };
-    audio_url?: string;
-    song_url?: string;
-    url?: string;
-  };
-  return r?.audio?.url ?? r?.audio_url ?? r?.song_url ?? r?.url ?? null;
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  // MiniMax Music: { music_file: { url } } or { audio: { url } }
+  if (r.music_file && typeof (r.music_file as Record<string,unknown>).url === "string") {
+    return (r.music_file as Record<string,unknown>).url as string;
+  }
+  // Fallback to audio extractor
+  return extractAudioUrl(raw);
+}
+
+export function extractTranscript(raw: unknown): Word[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  // ElevenLabs Scribe v2: { words: [{ word, start, end }] }
+  if (Array.isArray(r.words)) {
+    return r.words.map((w: Record<string,unknown>) => ({
+      word:     String(w.word     ?? ""),
+      start_ms: Number(w.start    ?? w.start_ms ?? 0) * (w.start !== undefined ? 1000 : 1),
+      end_ms:   Number(w.end      ?? w.end_ms   ?? 0) * (w.end   !== undefined ? 1000 : 1),
+      speaker:  w.speaker_id ? String(w.speaker_id) : undefined,
+    }));
+  }
+
+  return null;
 }

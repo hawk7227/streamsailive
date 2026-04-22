@@ -14,7 +14,7 @@
  * Provider names appear in Settings tab only.
  */
 
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { C, R, DUR, EASE } from "../tokens";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
@@ -134,14 +134,71 @@ export default function GenerateTab() {
     setTimeout(()=>{ta.focus();ta.setSelectionRange(pos+tag.length+2,pos+tag.length+2);},0);
   }
 
-  function handleGenerate() {
+  // generationRef stores { generationId, responseUrl } between poll calls
+  const generationRef = React.useRef<{ generationId: string; responseUrl: string } | null>(null);
+  const pollRef       = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }
+
+  async function handleGenerate() {
     if (isActive) return;
+    stopPolling();
     setGenState("submitting");
-    const id = Date.now().toString();
-    setGrid([{id, status:"waiting"}]);
-    setTimeout(()=>{ setGenState("queued"); setGrid([{id, status:"running"}]); }, 600);
-    setTimeout(()=>setGenState("polling"), 1800);
-    setTimeout(()=>{ setGenState("done"); setGrid([{id, status:"done"}]); }, 3400);
+    const tempId = Date.now().toString();
+    setGrid([{id: tempId, status:"waiting"}]);
+
+    try {
+      // Select correct route based on mode
+      const route = mode === "Music"
+        ? "/api/streams/music/generate"
+        : "/api/streams/video/generate";
+
+      const body = mode === "Music"
+        ? { provider: currentModel.toLowerCase().replace(/ /g,"-"), prompt: styleInput, lyrics: lyricsInput || undefined, topic: topic || undefined }
+        : { prompt, duration, aspectRatio: ar };
+
+      const res  = await fetch(route, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      const data = await res.json() as { generationId?: string; responseUrl?: string; error?: string };
+
+      if (!res.ok || !data.generationId) {
+        setGenState("failed");
+        setGrid([{id: tempId, status:"done"}]);
+        console.error("Generate failed:", data.error);
+        return;
+      }
+
+      generationRef.current = { generationId: data.generationId, responseUrl: data.responseUrl! };
+      setGrid([{id: data.generationId, status:"running"}]);
+      setGenState("queued");
+
+      // Poll every 6 seconds
+      pollRef.current = setInterval(async () => {
+        const ref = generationRef.current;
+        if (!ref) return stopPolling();
+
+        const statusRes  = await fetch("/api/streams/video/status", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ generationId: ref.generationId, responseUrl: ref.responseUrl }) });
+        const statusData = await statusRes.json() as { status?: string; artifactUrl?: string };
+
+        if (statusData.status === "processing") { setGenState("polling"); return; }
+        if (statusData.status === "completed") {
+          stopPolling();
+          setGenState("done");
+          setGrid([{id: ref.generationId, status:"done"}]);
+        }
+        if (statusData.status === "failed") {
+          stopPolling();
+          setGenState("failed");
+          setGrid([{id: ref.generationId, status:"done"}]);
+        }
+      }, 6000);
+
+    } catch (err) {
+      console.error("Generate error:", err);
+      setGenState("failed");
+      setGrid([{id: tempId, status:"done"}]);
+    }
   }
 
   function handleMic() {
