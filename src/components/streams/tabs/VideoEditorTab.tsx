@@ -49,6 +49,11 @@ export default function VideoEditorTab() {
   const [revoiceState, setRevoiceState] = useState<"idle"|"running"|"done">("idle");
   const [dubLang,      setDubLang]      = useState("Spanish");
   const [dubState,     setDubState]     = useState<"idle"|"running"|"done">("idle");
+  // Shell state — real analysisId and generationLogId come from PersonTab ingest
+  // Wired to real routes: edit-voice calls /api/streams/video/edit-voice
+  //                       dub calls      /api/streams/video/dub
+  const [analysisId,   setAnalysisId]   = useState<string | null>(null);
+  const [genLogId,     setGenLogId]     = useState<string | null>(null);
   const [downloading,  setDownloading]  = useState<string|null>(null);
 
   function selectWord(w: string) {
@@ -56,16 +61,78 @@ export default function VideoEditorTab() {
     setEditText(w);
   }
 
-  function handleReVoice() {
+  async function handleReVoice() {
     if (!editText.trim() || revoiceState === "running") return;
     setRevoiceState("running");
-    setTimeout(() => setRevoiceState("done"), 2000);
+
+    // If no analysisId — the ingest pipeline hasn't run yet.
+    // Fall back to simulation for shell demo.
+    if (!analysisId || !genLogId) {
+      setTimeout(() => setRevoiceState("done"), 2000);
+      return;
+    }
+
+    // Find the word's timestamp from the transcript (shell uses hardcoded data)
+    // In production: read from Scribe v2 transcript stored in person_analysis
+    const wordMatch = TRANSCRIPT.flatMap(l => l.words).indexOf(selectedWord ?? "");
+    const estimatedStart = wordMatch >= 0 ? wordMatch * 400 : 1000;
+    const estimatedEnd   = estimatedStart + 500;
+
+    try {
+      const res  = await fetch("/api/streams/video/edit-voice", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          generationLogId: genLogId,
+          analysisId,
+          originalText:    selectedWord ?? "",
+          newText:         editText,
+          startMs:         estimatedStart,
+          endMs:           estimatedEnd,
+          videoUrl:        "", // comes from generation_log.output_url in production
+        }),
+      });
+      const data = await res.json() as { versionId?: string; error?: string };
+      if (res.ok && data.versionId) {
+        setRevoiceState("done");
+      } else {
+        console.error("Re-voice failed:", data.error);
+        setRevoiceState("idle");
+      }
+    } catch {
+      setRevoiceState("idle");
+    }
   }
 
-  function handleDub() {
+  async function handleDub() {
     if (dubState === "running") return;
     setDubState("running");
-    setTimeout(() => setDubState("done"), 3000);
+
+    if (!genLogId) {
+      setTimeout(() => setDubState("done"), 3000);
+      return;
+    }
+
+    try {
+      const res  = await fetch("/api/streams/video/dub", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          generationLogId: genLogId,
+          videoUrl:        "", // from generation_log.output_url in production
+          targetLanguage:  dubLang.toLowerCase().slice(0, 2),
+        }),
+      });
+      const data = await res.json() as { versionId?: string; error?: string };
+      if (res.ok && data.versionId) {
+        setDubState("done");
+      } else {
+        console.error("Dub failed:", data.error);
+        setDubState("idle");
+      }
+    } catch {
+      setDubState("idle");
+    }
   }
 
   function handleDownload(label: string) {

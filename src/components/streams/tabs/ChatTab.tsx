@@ -50,35 +50,83 @@ export default function ChatTab() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  function handleSend() {
+  async function handleSend() {
     const text = input.trim();
     if (!text || streaming) return;
+
     const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
     setMsgs((p: Msg[]) => [...p, userMsg]);
     setInput("");
     setStreaming(true);
 
-    // Shell only — simulates the SSE stream shape without calling backend
     const aiId = (Date.now() + 1).toString();
     setMsgs((p: Msg[]) => [...p, { id: aiId, role: "assistant", text: "", streaming: true }]);
 
-    let built = "";
-    const reply = mode === "Image"
-      ? "Generating image…"
-      : mode === "Video"
-      ? "Generating video…"
-      : "I understand your request. When the backend is connected, I will stream a full response here token by token via the SSE text_delta event.";
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ message: text, mode: mode.toLowerCase() }),
+      });
 
-    const iv = setInterval(() => {
-      if (built.length >= reply.length) {
-        clearInterval(iv);
-        setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === aiId ? { ...m, streaming: false } : m));
+      if (!res.ok || !res.body) {
+        setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === aiId
+          ? { ...m, text: "Error connecting to assistant.", streaming: false } : m));
         setStreaming(false);
         return;
       }
-      built += reply[built.length];
-      setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === aiId ? { ...m, text: built } : m));
-    }, 18);
+
+      // Parse SSE stream — orchestrator format:
+      //   event: text_delta + data: {"delta":"..."}
+      //   event: media      + data: {"kind":"image","url":"..."}
+      //   event: done       + data: {...}
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+
+        for (const chunk of chunks) {
+          const lines     = chunk.split("\n");
+          const eventLine = lines.find(l => l.startsWith("event:"));
+          const dataLine  = lines.find(l => l.startsWith("data:"));
+          if (!dataLine) continue;
+
+          const eventName = eventLine?.replace("event:", "").trim() ?? "message";
+          let payload: Record<string, unknown> = {};
+          try { payload = JSON.parse(dataLine.replace("data:", "").trim()); } catch { continue; }
+
+          if (eventName === "text_delta") {
+            const delta = String(payload.delta ?? "");
+            setMsgs((p: Msg[]) => p.map((m: Msg) =>
+              m.id === aiId ? { ...m, text: m.text + delta } : m));
+          } else if (eventName === "media") {
+            const mediaUrl  = String(payload.url  ?? "");
+            const mediaType = String(payload.kind ?? "image") as "image" | "video";
+            setMsgs((p: Msg[]) => p.map((m: Msg) =>
+              m.id === aiId ? { ...m, mediaUrl, mediaType } : m));
+          } else if (eventName === "done") {
+            setMsgs((p: Msg[]) => p.map((m: Msg) =>
+              m.id === aiId ? { ...m, streaming: false } : m));
+            setStreaming(false);
+          }
+        }
+      }
+      setMsgs((p: Msg[]) => p.map((m: Msg) =>
+        m.id === aiId ? { ...m, streaming: false } : m));
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Connection error";
+      setMsgs((p: Msg[]) => p.map((m: Msg) =>
+        m.id === aiId ? { ...m, text: errMsg, streaming: false } : m));
+    } finally {
+      setStreaming(false);
+    }
   }
 
   const Sidebar = (

@@ -7,10 +7,11 @@
  * No backend — shell only.
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { C, R, DUR, EASE } from "../tokens";
 
 type EditOp = "voice" | "body" | "motion" | "dub" | "emotion" | "multishot";
+type IngestState = "idle" | "uploading" | "processing" | "done" | "failed";
 type OpState = "idle" | "running" | "done";
 
 const INGEST_STEPS = [
@@ -67,6 +68,54 @@ const EDIT_OPS: {
 ];
 
 export default function PersonTab() {
+  const [ingestState,  setIngestState]  = useState<IngestState>("idle");
+  const [analysisId,   setAnalysisId]   = useState<string | null>(null);
+  const [ingestError,  setIngestError]  = useState<string | null>(null);
+  const [pollCount,    setPollCount]    = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function handleIngest(videoUrl: string) {
+    setIngestState("uploading");
+    setIngestError(null);
+    try {
+      const res  = await fetch("/api/streams/video/ingest", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ videoUrl }),
+      });
+      const data = await res.json() as { analysisId?: string; error?: string };
+      if (!res.ok || !data.analysisId) {
+        setIngestError(data.error ?? "Ingest failed");
+        setIngestState("failed");
+        return;
+      }
+      setAnalysisId(data.analysisId);
+      setIngestState("processing");
+
+      // Poll ingest/status every 8s
+      pollRef.current = setInterval(async () => {
+        setPollCount((n: number) => n + 1);
+        const statusRes  = await fetch("/api/streams/video/ingest/status", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ analysisId: data.analysisId }),
+        });
+        const statusData = await statusRes.json() as { status?: string };
+        if (statusData.status === "done") {
+          clearInterval(pollRef.current!);
+          setIngestState("done");
+        } else if (statusData.status === "failed") {
+          clearInterval(pollRef.current!);
+          setIngestError("Ingest pipeline failed");
+          setIngestState("failed");
+        }
+      }, 8000);
+    } catch (err) {
+      setIngestError(err instanceof Error ? err.message : "Ingest failed");
+      setIngestState("failed");
+    }
+  }
+
   const [opStates, setOpStates] = useState<Record<EditOp, OpState>>(
     Object.fromEntries(EDIT_OPS.map(op => [op.id, "idle"])) as Record<EditOp, OpState>
   );

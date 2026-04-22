@@ -155,14 +155,36 @@ export default function GenerateTab() {
     setGrid([{id: tempId, status:"waiting"}]);
 
     try {
-      // Select correct route based on mode
-      const route = mode === "Music"
-        ? "/api/streams/music/generate"
-        : "/api/streams/video/generate";
+      // Select correct route and body based on mode
+      type RouteBody = Record<string, unknown>;
+      let route: string;
+      let body: RouteBody;
 
-      const body = mode === "Music"
-        ? { provider: currentModel.toLowerCase().replace(/ /g,"-"), prompt: styleInput, lyrics: lyricsInput || undefined, topic: topic || undefined }
-        : { prompt, duration, aspectRatio: ar };
+      if (mode === "Music") {
+        route = "/api/streams/music/generate";
+        body  = {
+          provider: currentModel.toLowerCase().replace(/\s+/g, "-"),
+          prompt:   styleInput || prompt,
+          lyrics:   lyricsInput || undefined,
+          topic:    topic       || undefined,
+        };
+      } else if (mode === "Image") {
+        route = "/api/streams/image/generate";
+        body  = {
+          model:  currentModel.toLowerCase().replace(/\s+/g, "-"),
+          prompt,
+          ...(useCustom && canCustomSize
+            ? { width: roundedW, height: roundedH }
+            : { aspectRatio: styleAr }),
+        };
+      } else if (mode === "Voice") {
+        route = "/api/streams/voice/generate";
+        body  = { text: prompt, model: currentModel.toLowerCase().replace(/\s+/g, "-") };
+      } else {
+        // T2V | I2V | Motion — all go to video/generate
+        route = "/api/streams/video/generate";
+        body  = { prompt, duration, aspectRatio: ar };
+      }
 
       const res  = await fetch(route, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
       const data = await res.json() as { generationId?: string; responseUrl?: string; error?: string };
