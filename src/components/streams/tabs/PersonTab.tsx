@@ -42,7 +42,7 @@ const EDIT_OPS: {
   },
   {
     id: "motion", title: "Motion style change",
-    sub: "User uploads motion reference video. appearance_description pre-fills character prompt (NOT image_url — motion-control takes text only). Kling transfers movement style.",
+    sub: "User uploads motion reference video. appearance_description auto-fills character prompt (NOT image_url — motion-control takes text only). Motion control transfers the movement style.",
     endpoints: ["fal-ai/kling-video/v3/standard/motion-control","fal-ai/ffmpeg-api/compose"],
     cost: "~$0.56 · 5s shot only", costColor: C.acc2,
   },
@@ -60,7 +60,7 @@ const EDIT_OPS: {
   },
   {
     id: "multishot", title: "Multi-shot motion",
-    sub: "Kling v3 multi_prompt — N shots in one call. No stitch needed. Each prompt maps to an editable motion beat immediately.",
+    sub: "Multi-prompt — N shots in one call. No stitch needed. Each prompt maps to an editable motion beat immediately.",
     endpoints: ["fal-ai/kling-video/v3/standard/text-to-video","multi_prompt: [{prompt, duration}]"],
     cost: "one call · no stitching", costColor: C.acc2,
   },

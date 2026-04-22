@@ -229,7 +229,7 @@ export default function ReferenceTab() {
                   { name: "Recreate",   icon: "✦", sub: "exact match"      },
                   { name: "Variation",  icon: "↻", sub: "new composition"  },
                   { name: "Style only", icon: "◉", sub: "new subject"      },
-                  { name: "Animate",    icon: "▶", sub: "Kling / Veo I2V"  },
+                  { name: "Animate",    icon: "▶", sub: "Generate motion"   },
                 ].map(action => (
                   <button key={action.name} onClick={() => doAction(action.name)} style={{
                     padding: "10px 8px", borderRadius: R.r2, cursor: "pointer", fontFamily: "inherit",

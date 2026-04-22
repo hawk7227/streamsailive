@@ -92,15 +92,26 @@ export async function POST(request: Request): Promise<NextResponse> {
     fal_status:      "pending",
   });
 
-  // Build fal input — MiniMax v2.6 schema
-  const falInput: Record<string, unknown> = {
-    prompt: body.prompt,
-  };
+  // Build fal input — schema differs per provider
+  // MiniMax v2.6: { prompt (style), lyrics_prompt (words), is_instrumental, lyrics_optimizer }
+  // ElevenLabs Music: { prompt (overall style), sections: [{ name, lyrics, duration_ms }] }
+  const falInput: Record<string, unknown> = {};
 
-  if (body.lyrics)             falInput.lyrics_prompt    = body.lyrics;
-  if (body.is_instrumental)    falInput.is_instrumental  = true;
-  if (body.lyrics_optimizer)   falInput.lyrics_optimizer = true;
-  if (body.reference_audio_url) falInput.reference_audio_url = body.reference_audio_url;
+  if (provider === "commercial") {
+    // ElevenLabs Music schema
+    falInput.prompt = body.prompt;
+    if (body.lyrics) {
+      falInput.sections = [{ name: "Main", lyrics: body.lyrics, duration_ms: 120000 }];
+    }
+    if (body.is_instrumental) falInput.force_instrumental = true;
+  } else {
+    // MiniMax schema (v2.6, v2.5, draft, ref)
+    falInput.prompt = body.prompt;
+    if (body.lyrics)              falInput.lyrics_prompt    = body.lyrics;
+    if (body.is_instrumental)     falInput.is_instrumental  = true;
+    if (body.lyrics_optimizer)    falInput.lyrics_optimizer = true;
+    if (body.reference_audio_url) falInput.reference_audio_url = body.reference_audio_url;
+  }
 
   const submitResult = await falSubmit(endpoint, falInput);
 

@@ -41,7 +41,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
-import { falPoll, extractVideoUrl } from "@/lib/streams/fal-client";
+import { falPoll, extractVideoUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
 
@@ -177,7 +177,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Prevents one workspace from polling another workspace's fal job
   const { data: logRow, error: logError } = await admin
     .from("generation_log")
-    .select("id, fal_status, output_url")
+    .select("id, fal_status, output_url, generation_type")
     .eq("id", generationId)
     .eq("workspace_id", workspaceId)
     .single();
@@ -227,8 +227,22 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // pollResult.status === "completed"
 
-  // 8a. Extract video URL from raw fal response
-  const providerVideoUrl = extractVideoUrl(pollResult.raw);
+  // 8a. Extract output URL — strategy depends on generation_type
+  // Video:        extractVideoUrl  (Kling, Veo, etc.)
+  // Music/Voice:  extractAudioUrl  (ElevenLabs TTS, MiniMax)
+  // Music cover:  extractMusicUrl  (MiniMax Music)
+  // Image:        extractVideoUrl  falls back gracefully; images often return { url: string }
+  const genType = (logRow as Record<string, unknown>).generation_type as string ?? "video";
+
+  let providerVideoUrl: string | null = null;
+  if (genType === "music") {
+    providerVideoUrl = extractMusicUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
+  } else if (genType === "voice") {
+    providerVideoUrl = extractAudioUrl(pollResult.raw);
+  } else {
+    // video, image, motion, video_t2v, video_i2v — try video first, fall back to audio
+    providerVideoUrl = extractVideoUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
+  }
 
   if (!providerVideoUrl) {
     await admin

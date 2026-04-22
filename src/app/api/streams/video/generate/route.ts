@@ -35,7 +35,7 @@ export const maxDuration = 60;
 
 // ─── Input contract ───────────────────────────────────────────────────────────
 
-const VALID_DURATIONS    = [5, 10] as const;
+const VALID_DURATIONS    = [3, 4, 5, 8, 10, 15] as const;
 const VALID_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
 
 type Duration    = typeof VALID_DURATIONS[number];
@@ -64,10 +64,15 @@ function validateBody(raw: unknown): { body: RequestBody } | { errors: Validatio
     errors.push({ field: "prompt", message: "prompt must not exceed 2000 characters" });
   }
 
-  // duration — optional, must be 5 or 10
+  // duration — optional. Frontend sends as string ("5"), coerce to number before validation.
   if (obj.duration !== undefined) {
-    if (!VALID_DURATIONS.includes(obj.duration as Duration)) {
-      errors.push({ field: "duration", message: "duration must be 5 or 10" });
+    const durationNum = typeof obj.duration === "string"
+      ? parseInt(obj.duration, 10)
+      : (obj.duration as number);
+    if (!VALID_DURATIONS.includes(durationNum as Duration)) {
+      errors.push({ field: "duration", message: "duration must be one of: 3, 4, 5, 8, 10, 15" });
+    } else {
+      obj.duration = durationNum; // normalize to number for downstream
     }
   }
 

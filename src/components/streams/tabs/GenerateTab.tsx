@@ -14,7 +14,7 @@
  * Provider names appear in Settings tab only.
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { C, R, DUR, EASE } from "../tokens";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
@@ -141,6 +141,11 @@ export default function GenerateTab() {
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
+
+  // Cleanup: clear polling interval on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => { stopPolling(); };
+  }, []);
 
   async function handleGenerate() {
     if (isActive) return;

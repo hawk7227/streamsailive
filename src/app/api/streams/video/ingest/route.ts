@@ -35,7 +35,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { falSubmit, FAL_ENDPOINTS } from "@/lib/streams/fal-client";
-import { ELEVENLABS_API_KEY } from "@/lib/env";
+// ELEVENLABS_API_KEY used in Step 7 (IVC) — implement when ingest/status poller is built
 
 export const maxDuration = 60;
 
