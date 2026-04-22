@@ -82,17 +82,17 @@ export default function PersonTab() {
 
         {/* Video selector */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: 16 }}>
-          <div style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Select video to edit</div>
+          <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Select video to edit</div>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1, border: `1px dashed ${C.bdr2}`, borderRadius: R.r2, padding: "20px 14px", textAlign: "center", cursor: "pointer", background: C.bg3 }}>
               <div style={{ fontSize: 20, color: C.t4, marginBottom: 6, opacity: .4 }}>↑</div>
-              <div style={{ fontSize: 12, color: C.t2, fontWeight: 500 }}>Upload video</div>
-              <div style={{ fontSize: 10, color: C.t4, marginTop: 4 }}>mp4 · mov · triggers 8-step ingest automatically</div>
+              <div style={{ fontSize: 15, color: C.t2, fontWeight: 500 }}>Upload video</div>
+              <div style={{ fontSize: 13, color: C.t4, marginTop: 4 }}>mp4 · mov · triggers 8-step ingest automatically</div>
             </div>
             <div style={{ flex: 1, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r2, padding: 12 }}>
-              <div style={{ fontSize: 9, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 8 }}>From Library</div>
+              <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 8 }}>From Library</div>
               {["Video lady walking city","Generate brand assets"].map(t => (
-                <div key={t} style={{ padding: "6px 8px", borderRadius: R.r1, cursor: "pointer", fontSize: 11, color: C.t3, marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}` }}>{t}</div>
+                <div key={t} style={{ padding: "6px 8px", borderRadius: R.r1, cursor: "pointer", fontSize: 14, color: C.t3, marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}` }}>{t}</div>
               ))}
             </div>
           </div>
@@ -104,10 +104,10 @@ export default function PersonTab() {
             padding: "14px 18px", borderBottom: `1px solid ${C.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.t1 }}>
+            <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Ingest pipeline — runs once on video creation
             </div>
-            <span style={{ fontSize: 9, padding: "3px 10px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
+            <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
               auto-runs on every video
             </span>
           </div>
@@ -119,7 +119,7 @@ export default function PersonTab() {
                   background: step.done ? C.green : C.t4,
                   boxShadow: step.done ? `0 0 6px ${C.green}` : "none",
                 }} />
-                <span style={{ fontSize: 11, color: step.done ? C.t2 : C.t4, lineHeight: 1.4 }}>{step.label}</span>
+                <span style={{ fontSize: 14, color: step.done ? C.t2 : C.t4, lineHeight: 1.4 }}>{step.label}</span>
               </div>
             ))}
           </div>
@@ -128,7 +128,7 @@ export default function PersonTab() {
           <div style={{
             margin: "0 18px 16px", padding: "12px 14px",
             background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r2,
-            fontSize: 11, color: C.t3, lineHeight: 1.7,
+            fontSize: 14, color: C.t3, lineHeight: 1.7,
           }}>
             Stored once:{" "}
             {["voice.mp3","ambient.mp3","silent_video.mp4","transcript.json","frames[]","face_reference.jpg","appearance_description","voice_id","speakingSegments[]"].map((item, i) => (
@@ -148,10 +148,10 @@ export default function PersonTab() {
             padding: "14px 18px", borderBottom: `1px solid ${C.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.t1 }}>
+            <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Edit operations — each is a single fal API call
             </div>
-            <span style={{ fontSize: 9, padding: "3px 10px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
+            <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
               FAL_KEY only
             </span>
           </div>
@@ -164,24 +164,24 @@ export default function PersonTab() {
                 borderRadius: R.r2, padding: "14px",
                 transition: `all ${DUR.base} ${EASE}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: C.t1, marginBottom: 6 }}>{op.title}</div>
-                <div style={{ fontSize: 10, color: C.t3, lineHeight: 1.55, marginBottom: 10 }}>{op.sub}</div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: C.t1, marginBottom: 6 }}>{op.title}</div>
+                <div style={{ fontSize: 13, color: C.t3, lineHeight: 1.55, marginBottom: 10 }}>{op.sub}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
                   {op.endpoints.map(ep => (
                     <div key={ep} style={{
-                      fontSize: 9, padding: "3px 8px", borderRadius: R.r1,
+                      fontSize: 12, padding: "3px 8px", borderRadius: R.r1,
                       background: C.bg4, border: `1px solid ${C.bdr}`,
                       color: C.t3, fontFamily: "inherit",
                     }}>{ep}</div>
                   ))}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 10, color: op.costColor, fontWeight: 500 }}>{op.cost}</span>
+                  <span style={{ fontSize: 13, color: op.costColor, fontWeight: 500 }}>{op.cost}</span>
                   <button
                     onClick={() => runOp(op.id)}
                     disabled={opStates[op.id] === "running"}
                     style={{
-                      padding: "5px 12px", borderRadius: R.r1, fontSize: 10, cursor: "pointer",
+                      padding: "5px 12px", borderRadius: R.r1, fontSize: 13, cursor: "pointer",
                       fontFamily: "inherit", border: "none",
                       background: opStates[op.id] === "done" ? C.green : C.acc,
                       color: "#fff",
@@ -204,7 +204,7 @@ export default function PersonTab() {
         <div style={{
           padding: "12px 16px", borderRadius: R.r2,
           border: `1px solid ${C.bdr}`, background: C.bg3,
-          fontSize: 10, color: C.t4, lineHeight: 1.6,
+          fontSize: 13, color: C.t4, lineHeight: 1.6,
         }}>
           Backend routes required: <span style={{ color: C.t3 }}>/api/streams/video/ingest · /api/streams/video/edit-voice · /api/streams/video/edit-body · /api/streams/video/edit-motion · /api/streams/video/dub · /api/streams/video/emotion</span>
         </div>

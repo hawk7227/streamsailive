@@ -91,6 +91,10 @@ export default function GenerateTab() {
   const [styleInput,  setStyleInput]  = useState("");
   const [lyricsInput, setLyricsInput] = useState("");
   const [styleAr,     setStyleAr]     = useState("1:1");
+  const [useCustom,   setUseCustom]   = useState(false);
+  const [customW,     setCustomW]     = useState("1024");
+  const [customH,     setCustomH]     = useState("1024");
+
   const [genState,    setGenState]    = useState<GenState>("idle");
   const [grid,        setGrid]        = useState<GridItem[]>([]);
   const [stitch,      setStitch]      = useState<string[]>([]);
@@ -106,6 +110,18 @@ export default function GenerateTab() {
                : VIDEO_MODELS;
 
   const currentModel = models[Math.min(model, models.length-1)];
+
+  // Rounding logic — backend spec: Math.round(value / 8) * 8
+  // Custom sizing only for FLUX Pro and Nano — Kontext uses aspect ratio enum only
+  const CUSTOM_MODELS = ["FLUX Pro","Nano"];
+  const canCustomSize = mode === "Image" && CUSTOM_MODELS.includes(currentModel);
+  const roundTo8 = (v: string): number => {
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n <= 0) return 0;
+    return Math.round(n / 8) * 8;
+  };
+  const roundedW = roundTo8(customW);
+  const roundedH = roundTo8(customH);
   const cost = COST[`${mode}-${currentModel}`] ?? "—";
   const isActive = genState==="submitting"||genState==="queued"||genState==="polling";
 
@@ -157,23 +173,23 @@ export default function GenerateTab() {
 
       {/* Mode bar */}
       <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
-        <span style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 10px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
+        <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 10px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
         {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
           <button key={m} onClick={()=>{setMode(m);setModel(0);}} style={{
-            height:38,padding:"0 13px",border:"none",flexShrink:0,
+            height:44,padding:"0 14px",border:"none",flexShrink:0,
             borderBottom:mode===m?`2px solid ${C.acc}`:"2px solid transparent",
             background:mode===m?C.surf2:"transparent",
-            color:mode===m?C.t1:C.t3,fontSize:11,fontFamily:"inherit",cursor:"pointer",
+            color:mode===m?C.t1:C.t3,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
           }}>{m}</button>
         ))}
       </div>
 
       {/* Music sub-mode bar — only visible for Music mode */}
       {mode==="Music" && (
-        <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:4,background:C.bg2,paddingTop:8,paddingBottom:8}}>
+        <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10}}>
           {([["style-lyrics","Style + Lyrics"],["auto-lyrics","Auto-Lyrics"],["instrumental","Instrumental"],["cover","Cover"],["my-voice","My Voice"]] as [MusicSub,string][]).map(([id,label])=>(
             <button key={id} onClick={()=>setMusicSub(id)} style={{
-              padding:"4px 10px",borderRadius:R.pill,fontSize:10,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
+              padding:"4px 10px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
               border:`1px solid ${musicSub===id?C.acc:C.bdr}`,
               background:musicSub===id?C.acc:"transparent",
               color:musicSub===id?"#fff":C.t3,
@@ -187,11 +203,11 @@ export default function GenerateTab() {
 
         {/* Model chips */}
         <div>
-          <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>Model</div>
+          <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>Model</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
             {models.map((m,i)=>(
               <button key={m} onClick={()=>setModel(i)} style={{
-                padding:"4px 10px",borderRadius:R.pill,fontSize:10,fontFamily:"inherit",cursor:"pointer",
+                padding:"4px 10px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",
                 border:`1px solid ${model===i?C.acc:C.bdr}`,
                 background:model===i?C.accDim:"transparent",
                 color:model===i?C.acc2:C.t3,
@@ -203,42 +219,42 @@ export default function GenerateTab() {
         {/* T2V / Motion — prompt */}
         {(mode==="T2V"||mode==="Motion")&&(
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>
               {mode==="Motion"?"Character appearance":"Prompt"}
               {mode==="Motion"&&<span style={{color:C.t3,textTransform:"none",letterSpacing:0,marginLeft:4}}>— describe appearance only, not motion</span>}
             </div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={4} maxLength={2500}
               placeholder={mode==="Motion"?"Describe how the character looks (hair, clothing, build)…":"Describe the video…"}
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
         )}
 
         {/* I2V */}
         {mode==="I2V"&&(<>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Start image <span style={{color:C.red}}>required</span></div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Start image <span style={{color:C.red}}>required</span></div>
             <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"20px 14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
-              <div style={{fontSize:20,color:C.t4,marginBottom:6,opacity:.4}}>↑</div>
-              <div style={{fontSize:11,color:C.t3}}>Drop start frame or URL</div>
-              <div style={{fontSize:10,color:C.t4,marginTop:2}}>jpg · png · webp</div>
+              <div style={{fontSize: 20,color:C.t4,marginBottom:6,opacity:.4}}>↑</div>
+              <div style={{fontSize: 14,color:C.t3}}>Drop start frame or URL</div>
+              <div style={{fontSize: 13,color:C.t4,marginTop:2}}>jpg · png · webp</div>
             </div>
           </div>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion prompt</div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion prompt</div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={3} placeholder="Slow cinematic push-in, golden hour stays consistent…"
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
         </>)}
 
         {/* Motion — reference video */}
         {mode==="Motion"&&(
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion reference video</div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion reference video</div>
             <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"16px 14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
-              <div style={{fontSize:11,color:C.t3}}>Upload reference video</div>
-              <div style={{fontSize:10,color:C.t4,marginTop:2}}>mp4 · mov</div>
+              <div style={{fontSize: 14,color:C.t3}}>Upload reference video</div>
+              <div style={{fontSize: 13,color:C.t4,marginTop:2}}>mp4 · mov</div>
             </div>
           </div>
         )}
@@ -246,43 +262,105 @@ export default function GenerateTab() {
         {/* Image */}
         {mode==="Image"&&(<>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
+            <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={4} maxLength={2500} placeholder="Describe the image…"
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
+
+          {/* Size: Aspect ratio OR Custom pixels */}
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Aspect ratio</div>
-            <div style={{display:"flex",gap:6}}>
-              {["21:9","16:9","4:3","1:1","9:16"].map(a=>(
-                <button key={a} onClick={()=>setStyleAr(a)} style={{
-                  flex:1,padding:"5px 0",borderRadius:R.r1,fontSize:9,fontFamily:"inherit",cursor:"pointer",
-                  border:`1px solid ${styleAr===a?C.acc:C.bdr}`,
-                  background:styleAr===a?C.accDim:"transparent",
-                  color:styleAr===a?C.acc2:C.t3,
-                }}>{a}</button>
-              ))}
+            <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span>Size</span>
+              {canCustomSize && (
+                <button onClick={()=>setUseCustom((u:boolean)=>!u)} style={{
+                  fontSize:12,padding:"2px 10px",borderRadius:R.pill,cursor:"pointer",fontFamily:"inherit",
+                  border:`1px solid ${useCustom?C.acc:C.bdr}`,
+                  background:useCustom?C.accDim:"transparent",
+                  color:useCustom?C.acc2:C.t3,
+                }}>
+                  {useCustom?"Custom ✓":"Custom px"}
+                </button>
+              )}
             </div>
+
+            {/* Custom pixel inputs — only for FLUX Pro, Nano */}
+            {useCustom && canCustomSize ? (
+              <div>
+                <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,color:C.t4,marginBottom:4}}>Width (px)</div>
+                    <input
+                      type="number" value={customW} min={64} max={4096} step={8}
+                      onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setCustomW(e.target.value)}
+                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
+                    />
+                    <div style={{fontSize:12,color:C.acc2,marginTop:3}}>
+                      → {roundedW > 0 ? `${roundedW}px` : "—"}
+                    </div>
+                  </div>
+                  <div style={{paddingTop:26,color:C.t4,fontSize:15}}>×</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,color:C.t4,marginBottom:4}}>Height (px)</div>
+                    <input
+                      type="number" value={customH} min={64} max={4096} step={8}
+                      onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setCustomH(e.target.value)}
+                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
+                    />
+                    <div style={{fontSize:12,color:C.acc2,marginTop:3}}>
+                      → {roundedH > 0 ? `${roundedH}px` : "—"}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  padding:"8px 12px",borderRadius:R.r1,background:C.bg4,
+                  border:`1px solid ${C.bdr}`,fontSize:12,color:C.t4,lineHeight:1.6,
+                }}>
+                  Rounded to nearest ×8 — actual generation: <span style={{color:C.t2}}>{roundedW} × {roundedH}</span>
+                  {(parseInt(customW)!==roundedW||parseInt(customH)!==roundedH)&&
+                    <span style={{color:C.amber}}> (input adjusted)</span>
+                  }
+                </div>
+              </div>
+            ) : (
+              /* Aspect ratio enum — Kontext + all models */
+              <div style={{display:"flex",gap:6}}>
+                {["21:9","16:9","4:3","1:1","9:16"].map(a=>(
+                  <button key={a} onClick={()=>setStyleAr(a)} style={{
+                    flex:1,padding:"7px 0",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",
+                    border:`1px solid ${styleAr===a?C.acc:C.bdr}`,
+                    background:styleAr===a?C.accDim:"transparent",
+                    color:styleAr===a?C.acc2:C.t3,
+                  }}>{a}</button>
+                ))}
+              </div>
+            )}
+
+            {!canCustomSize && (
+              <div style={{fontSize:12,color:C.t4,marginTop:6}}>
+                Custom px sizing: select FLUX Pro or Nano model above
+              </div>
+            )}
           </div>
         </>)}
 
         {/* Voice */}
         {mode==="Voice"&&(<>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
               Text <span style={{color:C.t3,textTransform:"none",letterSpacing:0}}>— [excited] [whispers] [sighs] tags supported inline</span>
             </div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={5} placeholder="Enter text. Use [excited] or [whispers] inline for emotion."
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Stability <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0–1</span></div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Stability <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0–1</span></div>
             <input type="range" min={0} max={100} defaultValue={50} step={1} style={{width:"100%",accentColor:C.acc}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.t4,marginTop:2}}><span>Creative</span><span>Consistent</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize: 12,color:C.t4,marginTop:2}}><span>Creative</span><span>Consistent</span></div>
           </div>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Speed <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0.7–1.2</span></div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Speed <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0.7–1.2</span></div>
             <input type="range" min={70} max={120} defaultValue={100} step={1} style={{width:"100%",accentColor:C.acc}}/>
           </div>
         </>)}
@@ -293,22 +371,22 @@ export default function GenerateTab() {
           {/* My Voice — the full pipeline */}
           {musicSub==="my-voice"&&(<>
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
               <input value={topic} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setTopic(e.target.value)}
                 placeholder="A woman finding her power in the city at night"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
                 Style prompt <span style={{color:C.red,textTransform:"none",letterSpacing:0}}>— STYLE ONLY · no lyrics here</span>
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
               <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
                 {STYLE_TPLS.map(t=>(
                   <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{
-                    padding:"3px 8px",borderRadius:R.pill,fontSize:9,cursor:"pointer",fontFamily:"inherit",
+                    padding:"3px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
                     background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,
                   }}>{t.label}</button>
                 ))}
@@ -317,8 +395,8 @@ export default function GenerateTab() {
 
             {/* Device capture */}
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Your voice + face</div>
-              <div style={{fontSize:10,color:C.t4,marginBottom:10,lineHeight:1.5}}>Captured once. Stored in PersonAnalysis. All future songs read from storage.</div>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Your voice + face</div>
+              <div style={{fontSize: 13,color:C.t4,marginBottom:10,lineHeight:1.5}}>Captured once. Stored in PersonAnalysis. All future songs read from storage.</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {[
                   {id:"mic",state:micState,icon:micState==="done"?"✓":micState==="recording"?"🔴":"🎙",
@@ -335,10 +413,10 @@ export default function GenerateTab() {
                     cursor:"pointer",textAlign:"left",width:"100%",
                     animation:btn.state==="recording"?"streams-pulse 1.5s ease infinite":"none",
                   }}>
-                    <span style={{fontSize:20}}>{btn.icon}</span>
+                    <span style={{fontSize: 20}}>{btn.icon}</span>
                     <div>
-                      <div style={{fontSize:11,color:C.t1,fontFamily:"inherit",fontWeight:500}}>{btn.title}</div>
-                      <div style={{fontSize:10,color:C.t4,marginTop:2}}>{btn.sub}</div>
+                      <div style={{fontSize: 14,color:C.t1,fontFamily:"inherit",fontWeight:500}}>{btn.title}</div>
+                      <div style={{fontSize: 13,color:C.t4,marginTop:2}}>{btn.sub}</div>
                     </div>
                   </button>
                 ))}
@@ -347,7 +425,7 @@ export default function GenerateTab() {
 
             {/* Rule 6: Pipeline card with exact presets baked in */}
             <div style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r2,overflow:"hidden"}}>
-              <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.bdr}`,fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>
+              <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.bdr}`,fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>
                 Generation pipeline — all presets pre-configured
               </div>
               <div style={{padding:"10px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
@@ -356,18 +434,18 @@ export default function GenerateTab() {
                     key={node.ep}
                     title={node.tip}
                     style={{
-                      padding:"8px 10px",borderRadius:R.r1,fontSize:10,fontFamily:"inherit",
+                      padding:"8px 10px",borderRadius:R.r1,fontSize: 13,fontFamily:"inherit",
                       background:C.bg4,border:`1px solid ${node.hi?C.accBr:C.bdr}`,
                       cursor:"help",flex:"0 0 calc(50% - 3px)",
                     }}
                   >
-                    <div style={{fontSize:9,color:node.hi?C.acc2:C.t4,marginBottom:3,fontWeight:500}}>{node.ep}</div>
-                    <div style={{fontSize:10,color:C.t2}}>{node.name}</div>
+                    <div style={{fontSize: 12,color:node.hi?C.acc2:C.t4,marginBottom:3,fontWeight:500}}>{node.ep}</div>
+                    <div style={{fontSize: 13,color:C.t2}}>{node.name}</div>
                   </div>
                 ))}
               </div>
               {/* Preset box — Rule 6 compliance */}
-              <div style={{padding:"10px 12px",borderTop:`1px solid ${C.bdr}`,background:C.bg4,fontSize:10,color:C.t3,lineHeight:1.7}}>
+              <div style={{padding:"10px 12px",borderTop:`1px solid ${C.bdr}`,background:C.bg4,fontSize: 13,color:C.t3,lineHeight:1.7}}>
                 <div><strong style={{color:C.t2}}>Voice preset (auto-applied):</strong> stability 0.30 · similarity_boost 0.85 · style 0.80 · speed 0.95</div>
                 <div style={{marginTop:4,color:C.t4}}>stability 0.30 = Creative mode — broad emotional range, natural vibrato, musical dynamics. Structure tags signal intensity. No speaker_boost on v3.</div>
                 <div style={{marginTop:4}}><strong style={{color:C.t2}}>Animate preset:</strong> guidance_scale 1 · audio_guidance_scale 2 · resolution 720p</div>
@@ -379,44 +457,44 @@ export default function GenerateTab() {
           {/* Style + Lyrics */}
           {(musicSub==="style-lyrics"||musicSub==="auto-lyrics"||musicSub==="cover")&&(<>
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
               <input value={topic} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setTopic(e.target.value)}
                 placeholder="A woman finding her power in the city at night"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
                 Style prompt <span style={{color:C.red,textTransform:"none",letterSpacing:0}}>— STYLE ONLY · no lyrics here</span>
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
               <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
                 {STYLE_TPLS.map(t=>(
-                  <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{padding:"3px 8px",borderRadius:R.pill,fontSize:9,cursor:"pointer",fontFamily:"inherit",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3}}>{t.label}</button>
+                  <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{padding:"3px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3}}>{t.label}</button>
                 ))}
               </div>
             </div>
             {musicSub!=="auto-lyrics"&&musicSub!=="instrumental"&&(
               <div>
-                <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
+                <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
                   Lyrics <span style={{color:C.amber,textTransform:"none",letterSpacing:0}}>— WORDS + structure tags only</span>
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:6}}>
                   {STRUCT_TAGS.map(tag=>(
-                    <button key={tag} onClick={()=>insertTag(tag)} style={{padding:"2px 7px",borderRadius:R.r1,fontSize:9,cursor:"pointer",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontFamily:"inherit"}}>{tag}</button>
+                    <button key={tag} onClick={()=>insertTag(tag)} style={{padding:"2px 7px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontFamily:"inherit"}}>{tag}</button>
                   ))}
                 </div>
                 <textarea ref={lyricsRef} value={lyricsInput} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setLyricsInput(e.target.value)}
                   rows={5} placeholder={"[Verse]\nNeon lights on wet asphalt glow\n\n[Chorus]\nThis is my city, my time, my sky"}
-                  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:11,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+                  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 14,fontFamily:"inherit",resize:"none",outline:"none"}}/>
               </div>
             )}
             {musicSub==="cover"&&(
               <div>
-                <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Reference audio <span style={{color:C.t3,textTransform:"none",letterSpacing:0}}>— vocals required · min 15s</span></div>
+                <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Reference audio <span style={{color:C.t3,textTransform:"none",letterSpacing:0}}>— vocals required · min 15s</span></div>
                 <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
-                  <div style={{fontSize:10,color:C.t3}}>Drop audio or click · wav · mp3</div>
+                  <div style={{fontSize: 13,color:C.t3}}>Drop audio or click · wav · mp3</div>
                 </div>
               </div>
             )}
@@ -425,12 +503,12 @@ export default function GenerateTab() {
           {/* Instrumental */}
           {musicSub==="instrumental"&&(
             <div>
-              <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
+              <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
                 Style prompt <span style={{color:C.red,textTransform:"none",letterSpacing:0}}>— STYLE ONLY · no lyrics</span>
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
           )}
         </>)}
@@ -438,18 +516,18 @@ export default function GenerateTab() {
         {/* Duration + AR (video modes) */}
         {(mode==="T2V"||mode==="I2V"||mode==="Motion")&&(<>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Duration</div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Duration</div>
             <select value={duration} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setDuration(e.target.value as Duration)}
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"7px 10px",color:C.t1,fontSize:12,fontFamily:"inherit",outline:"none"}}>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"7px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}>
               {(["3","4","5","8","10","15"] as Duration[]).map(d=><option key={d} value={d}>{d}s</option>)}
             </select>
           </div>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Aspect ratio</div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Aspect ratio</div>
             <div style={{display:"flex",gap:6}}>
               {(["16:9","9:16","1:1"] as AR[]).map(a=>(
                 <button key={a} onClick={()=>setAr(a)} style={{
-                  flex:1,padding:"6px 0",borderRadius:R.r1,fontSize:11,fontFamily:"inherit",cursor:"pointer",
+                  flex:1,padding:"6px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
                   border:`1px solid ${ar===a?C.acc:C.bdr}`,
                   background:ar===a?C.accDim:"transparent",color:ar===a?C.acc2:C.t3,
                 }}>{a}</button>
@@ -457,11 +535,11 @@ export default function GenerateTab() {
             </div>
           </div>
           <div>
-            <div style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Native audio</div>
+            <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Native audio</div>
             <div style={{display:"flex",gap:6}}>
               {[true,false].map(v=>(
                 <button key={String(v)} onClick={()=>setAudio(v)} style={{
-                  flex:1,padding:"6px 0",borderRadius:R.r1,fontSize:11,fontFamily:"inherit",cursor:"pointer",
+                  flex:1,padding:"6px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
                   border:`1px solid ${audio===v?C.acc:C.bdr}`,
                   background:audio===v?C.accDim:"transparent",color:audio===v?C.acc2:C.t3,
                 }}>{v?"On":"Off"}</button>
@@ -474,13 +552,13 @@ export default function GenerateTab() {
       {/* Footer */}
       <div style={{padding:"12px 14px",borderTop:`1px solid ${C.bdr}`,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize:9,color:C.t4,letterSpacing:".06em",textTransform:"uppercase"}}>Est. cost</span>
-          <span style={{fontSize:11,color:C.acc2,fontWeight:500}}>{cost}</span>
+          <span style={{fontSize: 12,color:C.t4,letterSpacing:".06em",textTransform:"uppercase"}}>Est. cost</span>
+          <span style={{fontSize: 14,color:C.acc2,fontWeight:500}}>{cost}</span>
         </div>
         <button onClick={handleGenerate} disabled={isActive} style={{
           width:"100%",padding:"12px 0",borderRadius:R.r2,border:"none",
           background:isActive?C.bg4:C.acc,color:isActive?C.t4:"#fff",
-          fontSize:13,fontFamily:"inherit",fontWeight:500,
+          fontSize: 16,fontFamily:"inherit",fontWeight:500,
           cursor:isActive?"not-allowed":"pointer",
           transition:`background ${DUR.fast} ${EASE}`,
           display:"flex",alignItems:"center",justifyContent:"center",gap:8,
@@ -495,8 +573,8 @@ export default function GenerateTab() {
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:C.bg}} className="streams-gen-right">
       <div style={{flex:1,overflowY:"auto",padding:16}}>
         {grid.length===0?(
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.t4,fontSize:11,flexDirection:"column",gap:8}}>
-            <span style={{fontSize:28,opacity:.2}}>✦</span>Generate clips — they appear here
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.t4,fontSize: 14,flexDirection:"column",gap:8}}>
+            <span style={{fontSize: 28,opacity:.2}}>✦</span>Generate clips — they appear here
           </div>
         ):(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
@@ -510,17 +588,17 @@ export default function GenerateTab() {
               }}>
                 {item.status==="running"&&<div style={{position:"absolute",inset:0,background:"rgba(124,58,237,.06)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{width:24,height:24,borderRadius:R.pill,border:`2px solid ${C.acc}`,borderTopColor:"transparent",display:"block",animation:"streams-spin 600ms linear infinite"}}/></div>}
                 {item.status==="done"&&<>
-                  <div style={{fontSize:28,color:C.t4,opacity:.2}}>▶</div>
+                  <div style={{fontSize: 28,color:C.t4,opacity:.2}}>▶</div>
                   <div style={{position:"absolute",bottom:8,right:8}}>
                     <button onClick={()=>addToStitch(item.id)} style={{
-                      padding:"3px 8px",borderRadius:R.r1,fontSize:9,cursor:"pointer",fontFamily:"inherit",
+                      padding:"3px 8px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
                       background:stitch.includes(item.id)?C.acc:C.bg4,
                       border:`1px solid ${stitch.includes(item.id)?C.acc:C.bdr}`,
                       color:stitch.includes(item.id)?"#fff":C.t3,
                     }}>+ stitch</button>
                   </div>
                 </>}
-                {item.status==="waiting"&&<div style={{fontSize:10,color:C.t4}}>Waiting…</div>}
+                {item.status==="waiting"&&<div style={{fontSize: 13,color:C.t4}}>Waiting…</div>}
               </div>
             ))}
           </div>
@@ -530,22 +608,22 @@ export default function GenerateTab() {
       {/* Stitch strip */}
       <div style={{height:80,flexShrink:0,borderTop:`1px solid ${C.bdr}`,background:C.bg2,display:"flex",alignItems:"stretch"}}>
         <div style={{padding:"0 14px",borderRight:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:9,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Stitch sequence</span>
-          <span style={{fontSize:9,padding:"2px 7px",borderRadius:R.pill,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t4}}>fal ffmpeg-api</span>
+          <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Stitch sequence</span>
+          <span style={{fontSize: 12,padding:"2px 7px",borderRadius:R.pill,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t4}}>fal ffmpeg-api</span>
         </div>
         <div style={{flex:1,overflowX:"auto",display:"flex",alignItems:"center",gap:8,padding:"0 14px"}}>
           {stitch.length===0
-            ?<span style={{fontSize:10,color:C.t4}}>Generate clips — add to stitch — merge via fal ffmpeg API</span>
+            ?<span style={{fontSize: 13,color:C.t4}}>Generate clips — add to stitch — merge via fal ffmpeg API</span>
             :stitch.map((id:string,i:number)=>(
               <div key={id} style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:80,height:48,borderRadius:R.r1,background:C.bg3,border:`1px solid ${C.accBr}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:C.acc2}}>clip {i+1}</div>
-                {i<stitch.length-1&&<span style={{color:C.t4,fontSize:14}}>→</span>}
+                <div style={{width:80,height:48,borderRadius:R.r1,background:C.bg3,border:`1px solid ${C.accBr}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize: 12,color:C.acc2}}>clip {i+1}</div>
+                {i<stitch.length-1&&<span style={{color:C.t4,fontSize: 14}}>→</span>}
               </div>
             ))
           }
         </div>
         {stitch.length>=2&&<div style={{padding:"0 14px",display:"flex",alignItems:"center",flexShrink:0}}>
-          <button style={{padding:"8px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>Stitch → fal</button>
+          <button style={{padding:"8px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",cursor:"pointer"}}>Stitch → fal</button>
         </div>}
       </div>
     </div>

@@ -56,23 +56,23 @@ export default function VideoEditorTab() {
 
       {/* Sub-tabs */}
       <div style={{
-        display: "flex", height: 40, flexShrink: 0,
+        display: "flex", height: 46, flexShrink: 0,
         borderBottom: `1px solid ${C.bdr}`,
         background: C.bg2, padding: "0 16px", gap: 0,
         overflowX: "auto",
       }}>
         {["Motion","Transcript","Audio","Export"].map(t => (
           <button key={t} style={{
-            height: 40, padding: "0 14px", border: "none",
+            height: 46, padding: "0 16px", border: "none",
             borderBottom: t === "Motion" ? `2px solid ${C.acc}` : "2px solid transparent",
             background: "transparent", color: t === "Motion" ? C.t1 : C.t3,
-            fontSize: 11, fontFamily: "inherit", cursor: "pointer",
+            fontSize: 14, fontFamily: "inherit", cursor: "pointer",
             letterSpacing: ".02em", flexShrink: 0,
           }}>{t}</button>
         ))}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <button style={{ padding: "5px 12px", borderRadius: R.r1, background: C.surf, border: `1px solid ${C.bdr}`, color: C.t3, fontSize: 10, fontFamily: "inherit", cursor: "pointer" }}>↑ Upload</button>
-          <button style={{ padding: "5px 12px", borderRadius: R.r1, background: C.acc, border: "none", color: "#fff", fontSize: 10, fontFamily: "inherit", cursor: "pointer" }}>Export video</button>
+          <button style={{ padding: "5px 12px", borderRadius: R.r1, background: C.surf, border: `1px solid ${C.bdr}`, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>↑ Upload</button>
+          <button style={{ padding: "5px 12px", borderRadius: R.r1, background: C.acc, border: "none", color: "#fff", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>Export video</button>
         </div>
       </div>
 
@@ -90,14 +90,14 @@ export default function VideoEditorTab() {
 
           {/* Panel header — "EDITABLE LAYERS" + shot count */}
           <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 600 }}>Editable Layers</span>
-            <span style={{ fontSize: 9, padding: "1px 7px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>3 shots</span>
+            <span style={{ fontSize: 12, color: C.t4, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 600 }}>Editable Layers</span>
+            <span style={{ fontSize: 12, padding: "1px 7px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>3 shots</span>
           </div>
 
           {/* Motion beats */}
           <div style={{ padding: "8px 12px 4px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Motion beats</span>
-            <span style={{ fontSize: 10, color: C.acc2, cursor: "pointer" }}>+ add shot</span>
+            <span style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Motion beats</span>
+            <span style={{ fontSize: 13, color: C.acc2, cursor: "pointer" }}>+ add shot</span>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
@@ -113,11 +113,11 @@ export default function VideoEditorTab() {
               >
                 {/* Shot thumbnail placeholder */}
                 <div style={{ width: "100%", aspectRatio: "16/9", background: C.bg4, borderRadius: 4, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.bdr}` }}>
-                  <span style={{ fontSize: 10, color: C.t4, opacity: .4 }}>▶</span>
+                  <span style={{ fontSize: 13, color: C.t4, opacity: .4 }}>▶</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 9, color: C.acc2, fontWeight: 600 }}>{shot.num}</span>
-                  <span style={{ fontSize: 9, color: C.t4 }}>{shot.time}</span>
+                  <span style={{ fontSize: 12, color: C.acc2, fontWeight: 600 }}>{shot.num}</span>
+                  <span style={{ fontSize: 12, color: C.t4 }}>{shot.time}</span>
                 </div>
                 <textarea
                   value={shotPrompts[shot.id]}
@@ -126,7 +126,7 @@ export default function VideoEditorTab() {
                   rows={2}
                   style={{
                     width: "100%", background: "transparent", border: "none",
-                    outline: "none", color: C.t2, fontSize: 11,
+                    outline: "none", color: C.t2, fontSize: 14,
                     fontFamily: "inherit", resize: "none", lineHeight: 1.4,
                   }}
                 />
@@ -136,13 +136,13 @@ export default function VideoEditorTab() {
 
           {/* Transcript */}
           <div style={{ borderTop: `1px solid ${C.bdr}`, flexShrink: 0, padding: "8px 12px 4px", display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Audio transcript</span>
-            <span style={{ fontSize: 9, color: C.t4, fontFamily: "inherit" }}>Scribe v2</span>
+            <span style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Audio transcript</span>
+            <span style={{ fontSize: 12, color: C.t4, fontFamily: "inherit" }}>Scribe v2</span>
           </div>
           <div style={{ flex: "0 0 140px", overflowY: "auto", padding: "4px 12px 8px" }}>
             {TRANSCRIPT.map((line, i) => (
               <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 9, color: C.acc2, fontWeight: 600, marginBottom: 4, letterSpacing: ".04em" }}>
+                <div style={{ fontSize: 12, color: C.acc2, fontWeight: 600, marginBottom: 4, letterSpacing: ".04em" }}>
                   {line.speaker} · {line.time}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
@@ -151,7 +151,7 @@ export default function VideoEditorTab() {
                       key={j}
                       onClick={() => selectWord(w)}
                       style={{
-                        padding: "2px 6px", borderRadius: R.r1, fontSize: 11,
+                        padding: "2px 6px", borderRadius: R.r1, fontSize: 14,
                         background: selectedWord === w ? C.accDim : C.surf,
                         border: `1px solid ${selectedWord === w ? C.acc : C.bdr}`,
                         color: selectedWord === w ? C.t1 : C.t2,
@@ -175,13 +175,13 @@ export default function VideoEditorTab() {
             background: C.bg2, display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
           }}>
             <span style={{
-              fontSize: 9, padding: "3px 8px", borderRadius: R.r1,
+              fontSize: 12, padding: "3px 8px", borderRadius: R.r1,
               background: C.accDim, border: `1px solid ${C.accBr}`,
               color: C.acc2, fontWeight: 600, letterSpacing: ".06em",
             }}>
               SHOT {SHOTS.findIndex(s => s.id === activeShot) + 1} · {activeShotData.time}
             </span>
-            <span style={{ fontSize: 9, color: C.t4, marginLeft: "auto" }}>1920 × 1080</span>
+            <span style={{ fontSize: 12, color: C.t4, marginLeft: "auto" }}>1920 × 1080</span>
           </div>
 
           {/* 16:9 preview */}
@@ -193,8 +193,8 @@ export default function VideoEditorTab() {
               border: `1px solid ${C.bdr}`, position: "relative", width: "100%",
             }}>
               <div style={{ fontSize: 32, color: C.t4, opacity: .3, marginBottom: 12 }}>▶</div>
-              <div style={{ fontSize: 11, color: C.t4 }}>Video preview · 1920×1080</div>
-              <div style={{ fontSize: 10, color: C.t3, marginTop: 6, padding: "4px 12px", border: `1px solid ${C.bdr}`, borderRadius: R.r1 }}>
+              <div style={{ fontSize: 14, color: C.t4 }}>Video preview · 1920×1080</div>
+              <div style={{ fontSize: 13, color: C.t3, marginTop: 6, padding: "4px 12px", border: `1px solid ${C.bdr}`, borderRadius: R.r1 }}>
                 Backend route needed · /api/streams/video/ingest
               </div>
               {/* Playhead */}
@@ -225,12 +225,12 @@ export default function VideoEditorTab() {
               background: playing ? C.acc : C.surf,
               border: `1px solid ${playing ? C.acc : C.bdr}`,
               color: playing ? "#fff" : C.t2,
-              fontSize: 11, cursor: "pointer",
+              fontSize: 14, cursor: "pointer",
             }}
           >
             {playing ? "⏸" : "▶"}
           </button>
-          <span style={{ fontSize: 10, color: C.t4, fontFamily: "inherit" }}>0:00 / 0:10</span>
+          <span style={{ fontSize: 13, color: C.t4, fontFamily: "inherit" }}>0:00 / 0:10</span>
         </div>
 
         {/* Word chip edit bar */}
@@ -239,7 +239,7 @@ export default function VideoEditorTab() {
           background: "rgba(124,58,237,0.06)",
           display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
         }}>
-          <span style={{ fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", flexShrink: 0 }}>Edit audio</span>
+          <span style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", flexShrink: 0 }}>Edit audio</span>
           <div style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 4 }}>
             {(selectedWord
               ? TRANSCRIPT.flatMap(l => l.words).filter((_, i) => i < 6)
@@ -249,7 +249,7 @@ export default function VideoEditorTab() {
                 key={i}
                 onClick={() => selectWord(w)}
                 style={{
-                  padding: "2px 7px", borderRadius: R.r1, fontSize: 11,
+                  padding: "2px 7px", borderRadius: R.r1, fontSize: 14,
                   background: selectedWord === w ? C.accDim : C.surf,
                   border: `1px solid ${selectedWord === w ? C.acc : C.bdr}`,
                   color: selectedWord === w ? C.t1 : C.t2,
@@ -263,7 +263,7 @@ export default function VideoEditorTab() {
           {/* Voice selector — "Aria · ElevenLabs" in settings position only */}
           <select style={{
             background: C.bg3, border: `1px solid ${C.bdr}`,
-            color: C.t2, fontSize: 11, borderRadius: R.r1,
+            color: C.t2, fontSize: 14, borderRadius: R.r1,
             padding: "3px 8px", fontFamily: "inherit", flexShrink: 0,
           }}>
             <option>Aria · ElevenLabs</option>
@@ -276,7 +276,7 @@ export default function VideoEditorTab() {
               padding: "5px 12px", borderRadius: R.r1,
               background: revoiceState === "done" ? C.green : revoiceState === "running" ? C.bg4 : C.acc,
               border: "none", color: "#fff",
-              fontSize: 11, fontFamily: "inherit",
+              fontSize: 14, fontFamily: "inherit",
               cursor: revoiceState === "running" ? "not-allowed" : "pointer",
               flexShrink: 0,
               transition: `background ${DUR.fast} ${EASE}`,
@@ -292,7 +292,7 @@ export default function VideoEditorTab() {
             placeholder="Edit selected word…"
             style={{
               background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1,
-              color: C.t1, fontSize: 11, padding: "4px 10px",
+              color: C.t1, fontSize: 14, padding: "4px 10px",
               fontFamily: "inherit", outline: "none", width: 160, flexShrink: 0,
             }}
           />
@@ -309,7 +309,7 @@ export default function VideoEditorTab() {
               display: "flex", alignItems: "center",
               height: "33.33%", padding: "0 16px", gap: 10,
             }}>
-              <div style={{ width: 56, fontSize: 9, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", flexShrink: 0 }}>{track.label}</div>
+              <div style={{ width: 56, fontSize: 12, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", flexShrink: 0 }}>{track.label}</div>
               <div style={{
                 flex: 1, height: 26, borderRadius: R.r1,
                 background: C.bg4, border: `1px solid ${C.bdr}`,
@@ -321,7 +321,7 @@ export default function VideoEditorTab() {
                     left: seg.l, width: seg.w,
                     borderRadius: 4, background: track.color,
                     display: "flex", alignItems: "center",
-                    padding: "0 6px", fontSize: 9, color: "rgba(255,255,255,.7)",
+                    padding: "0 6px", fontSize: 12, color: "rgba(255,255,255,.7)",
                     whiteSpace: "nowrap", overflow: "hidden",
                     cursor: "pointer",
                   }}>

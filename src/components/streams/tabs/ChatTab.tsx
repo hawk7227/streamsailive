@@ -93,13 +93,13 @@ export default function ChatTab() {
       {/* Brand + New */}
       <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.bdr}` }}>
         <div style={{ fontFamily: "'DM Serif Display', serif", fontStyle: "italic", fontSize: 16, color: C.t1, marginBottom: 4 }}>Streams</div>
-        <div style={{ fontSize: 10, color: C.t4, marginBottom: 12 }}>New conversation</div>
+        <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>New conversation</div>
         <button
           onClick={() => setMsgs(SEED_MSGS)}
           style={{
             width: "100%", padding: "8px 0", borderRadius: R.r1,
             background: C.acc, border: "none", color: "#fff",
-            fontSize: 11, fontFamily: "inherit", cursor: "pointer",
+            fontSize: 14, fontFamily: "inherit", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}
         >
@@ -116,7 +116,7 @@ export default function ChatTab() {
         <button key={nav.label} style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "10px 16px", border: "none", background: "transparent",
-          color: C.t3, fontSize: 12, fontFamily: "inherit", cursor: "pointer",
+          color: C.t3, fontSize: 15, fontFamily: "inherit", cursor: "pointer",
           width: "100%", textAlign: "left",
         }}>
           <span>{nav.icon}</span> {nav.label}
@@ -124,12 +124,12 @@ export default function ChatTab() {
       ))}
 
       {/* Recents */}
-      <div style={{ padding: "8px 16px 4px", fontSize: 9, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Recents</div>
+      <div style={{ padding: "8px 16px 4px", fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Recents</div>
       {SESSIONS.map(s => (
         <button key={s.id} style={{
           display: "block", textAlign: "left", padding: "8px 16px",
           border: "none", background: s.id === "1" ? C.surf2 : "transparent",
-          color: s.id === "1" ? C.t1 : C.t3, fontSize: 11, fontFamily: "inherit",
+          color: s.id === "1" ? C.t1 : C.t3, fontSize: 14, fontFamily: "inherit",
           cursor: "pointer", width: "100%",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           borderLeft: s.id === "1" ? `2px solid ${C.acc}` : "2px solid transparent",
@@ -151,12 +151,12 @@ export default function ChatTab() {
 
         {/* AI assistant header — badge + title + subtitle */}
         <div style={{ padding: "14px 32px 0", flexShrink: 0 }} className="streams-chat-header">
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 10, color: C.acc2, marginBottom: 8 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
             <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
             Chat · image · video · build
           </div>
           <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: C.t1, marginBottom: 4 }}>AI assistant</div>
-          <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>Generate images, videos, voice and code directly from conversation.</div>
+          <div style={{ fontSize: 14, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>Generate images, videos, voice and code directly from conversation.</div>
         </div>
 
         {/* Mobile top bar */}
@@ -168,9 +168,9 @@ export default function ChatTab() {
           <button onClick={() => setSidebar(!sidebarOpen)} style={{
             background: "transparent", border: `1px solid ${C.bdr}`,
             borderRadius: R.r1, padding: "6px 10px", color: C.t3,
-            fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 15, cursor: "pointer", fontFamily: "inherit",
           }}>☰</button>
-          <span style={{ fontSize: 11, color: C.t3 }}>New conversation</span>
+          <span style={{ fontSize: 14, color: C.t3 }}>New conversation</span>
         </div>
 
         {/* Messages */}
@@ -191,7 +191,7 @@ export default function ChatTab() {
                 width: 28, height: 28, borderRadius: R.pill, flexShrink: 0,
                 background: msg.role === "user" ? C.bg4 : C.acc,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 600, color: "#fff",
+                fontSize: 13, fontWeight: 600, color: "#fff",
                 border: msg.role === "user" ? `1px solid ${C.bdr}` : "none",
               }}>
                 {msg.role === "user" ? "U" : "S"}
@@ -199,7 +199,7 @@ export default function ChatTab() {
 
               <div>
                 {msg.role === "assistant" && (
-                  <div style={{ fontSize: 10, color: C.t4, marginBottom: 4, letterSpacing: ".04em" }}>
+                  <div style={{ fontSize: 13, color: C.t4, marginBottom: 4, letterSpacing: ".04em" }}>
                     Streams, now
                   </div>
                 )}
@@ -208,7 +208,7 @@ export default function ChatTab() {
                   borderRadius: msg.role === "user" ? `${R.r2}px 4px ${R.r2}px ${R.r2}px` : `4px ${R.r2}px ${R.r2}px ${R.r2}px`,
                   background: msg.role === "user" ? C.acc : C.surf,
                   border: msg.role === "user" ? "none" : `1px solid ${C.bdr}`,
-                  color: C.t1, fontSize: 13, lineHeight: 1.65,
+                  color: C.t1, fontSize: 16, lineHeight: 1.65,
                 }}>
                   {msg.text}
                   {msg.streaming && (
@@ -253,7 +253,7 @@ export default function ChatTab() {
                   border: `1px solid ${mode === m ? C.acc : C.bdr}`,
                   background: mode === m ? C.accDim : "transparent",
                   color: mode === m ? C.acc2 : C.t3,
-                  fontSize: 11, fontFamily: "inherit", cursor: "pointer",
+                  fontSize: 14, fontFamily: "inherit", cursor: "pointer",
                   transition: `all ${DUR.fast} ${EASE}`,
                 }}
               >
@@ -282,7 +282,7 @@ export default function ChatTab() {
               rows={1}
               style={{
                 flex: 1, background: "transparent", border: "none", outline: "none",
-                fontFamily: "inherit", fontSize: 13, color: C.t1, resize: "none",
+                fontFamily: "inherit", fontSize: 16, color: C.t1, resize: "none",
                 lineHeight: 1.5, minHeight: 24,
               }}
             />
@@ -294,7 +294,7 @@ export default function ChatTab() {
                 padding: "6px 14px", borderRadius: R.r1,
                 background: input.trim() && !streaming ? C.acc : C.bg4,
                 border: "none", color: input.trim() && !streaming ? "#fff" : C.t4,
-                fontSize: 11, fontFamily: "inherit", fontWeight: 500,
+                fontSize: 14, fontFamily: "inherit", fontWeight: 500,
                 cursor: input.trim() && !streaming ? "pointer" : "not-allowed",
                 transition: `all ${DUR.fast} ${EASE}`, flexShrink: 0,
               }}

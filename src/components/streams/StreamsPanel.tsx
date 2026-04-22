@@ -56,7 +56,7 @@ export default function StreamsPanel() {
         <nav style={{
           display:        "flex",
           alignItems:     "center",
-          height:         52,
+          height:         56,
           flexShrink:     0,
           borderBottom:   `1px solid ${C.bdr}`,
           background:     C.bg,
@@ -67,7 +67,7 @@ export default function StreamsPanel() {
           <div style={{
             fontFamily:    "'DM Serif Display', serif",
             fontStyle:     "italic",
-            fontSize:      20,
+            fontSize: 20,
             color:         C.t1,
             letterSpacing: "-.01em",
             flexShrink:    0,
@@ -90,7 +90,7 @@ export default function StreamsPanel() {
                   display:        "flex",
                   alignItems:     "center",
                   gap:            6,
-                  padding:        "6px 14px",
+                  padding:        "8px 16px",
                   borderRadius:   0,
                   border:         "none",
                   borderBottom:   active === tab.id
@@ -98,7 +98,7 @@ export default function StreamsPanel() {
                     : "2px solid transparent",
                   background:     active === tab.id ? C.surf2 : "transparent",
                   color:          active === tab.id ? C.t1 : C.t3,
-                  fontSize:       12,
+                  fontSize: 15,
                   fontFamily:     "inherit",
                   fontWeight:     active === tab.id ? 500 : 400,
                   cursor:         "pointer",
@@ -106,7 +106,7 @@ export default function StreamsPanel() {
                   letterSpacing:  ".02em",
                 }}
               >
-                <span style={{ fontSize: 13 }}>{tab.icon}</span>
+                <span style={{ fontSize: 16 }}>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
@@ -128,7 +128,7 @@ export default function StreamsPanel() {
           className="streams-mobile-nav"
           style={{
             display:        "none",
-            height:         64,
+            height:         72,
             flexShrink:     0,
             borderTop:      `1px solid ${C.bdr}`,
             background:     C.bg,
@@ -155,7 +155,7 @@ export default function StreamsPanel() {
               }}
             >
               <span style={{
-                fontSize:   18,
+                fontSize: 18,
                 lineHeight: 1,
                 color:      active === tab.id ? C.acc2 : C.t4,
                 transition: `color ${DUR.fast} ${EASE}`,
@@ -163,7 +163,7 @@ export default function StreamsPanel() {
                 {tab.icon}
               </span>
               <span style={{
-                fontSize:   9,
+                fontSize: 12,
                 color:      active === tab.id ? C.acc2 : C.t4,
                 fontFamily: "inherit",
                 transition: `color ${DUR.fast} ${EASE}`,
