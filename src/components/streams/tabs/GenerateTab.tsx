@@ -154,7 +154,7 @@ export default function GenerateTab() {
     stopPolling();
     setGenState("submitting");
     const tempId = Date.now().toString();
-    setGrid([{id: tempId, status:"waiting"}]);
+    setGrid((prev: GridItem[]) => [...prev, {id: tempId, status:"waiting"}]);
 
     try {
       // Select correct route and body based on mode
@@ -199,7 +199,7 @@ export default function GenerateTab() {
       }
 
       generationRef.current = { generationId: data.generationId, responseUrl: data.responseUrl! };
-      setGrid([{id: data.generationId, status:"running"}]);
+      setGrid((prev: GridItem[]) => prev.map((g: GridItem) => g.id === tempId ? {id: data.generationId, status:"running", generationId: data.generationId} : g));
       setGenState("queued");
 
       // Poll every 6 seconds
@@ -214,12 +214,11 @@ export default function GenerateTab() {
         if (statusData.status === "completed") {
           stopPolling();
           setGenState("done");
-          setGrid([{
-            id: ref.generationId,
-            status: "done",
-            outputUrl:    (statusData as Record<string,unknown>).artifactUrl as string | undefined,
-            generationId: ref.generationId,
-          }]);
+          setGrid((prev: GridItem[]) => prev.map((g: GridItem) =>
+            g.generationId === ref.generationId || g.id === ref.generationId
+              ? { ...g, id: ref.generationId, status: "done", outputUrl: (statusData as Record<string,unknown>).artifactUrl as string | undefined, generationId: ref.generationId }
+              : g
+          ));
         }
         if (statusData.status === "failed") {
           stopPolling();
@@ -663,6 +662,15 @@ export default function GenerateTab() {
     {/* Right — grid + stitch */}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:C.bg}} className="streams-gen-right">
       <div style={{flex:1,overflowY:"auto",padding:16}}>
+        {grid.length > 0 && (
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+            <button onClick={()=>{setGrid([]);setStitch([]);setStitchUrl(null);setStitchState("idle");}} style={{
+              padding:"4px 12px", borderRadius:R.r1, background:"transparent",
+              border:`1px solid ${C.bdr}`, color:C.t4, fontSize:13, fontFamily:"inherit",
+              cursor:"pointer",
+            }}>Clear grid</button>
+          </div>
+        )}
         {grid.length===0?(
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.t4,fontSize: 14,flexDirection:"column",gap:8}}>
             <span style={{fontSize: 28,opacity:.2}}>✦</span>Generate clips — they appear here
@@ -724,7 +732,7 @@ export default function GenerateTab() {
       // Collect real output_urls from grid items (stored on grid item when generation completes)
       const clipUrls = stitch
         .map((id: string) => grid.find((g: GridItem) => g.id === id)?.outputUrl)
-        .filter((url): url is string => typeof url === "string" && url.startsWith("http"));
+        .filter((url: string | undefined): url is string => typeof url === "string" && url.startsWith("http"));
 
       if (clipUrls.length < 2) {
         alert("Stitch requires at least 2 completed clips with output URLs. Generate clips first.");

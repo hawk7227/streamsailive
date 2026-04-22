@@ -41,7 +41,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
-import { falPoll, extractVideoUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-client";
+import { falPoll, extractVideoUrl, extractAudioUrl, extractMusicUrl, extractImageUrl } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
 
@@ -239,8 +239,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     providerVideoUrl = extractMusicUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
   } else if (genType === "voice") {
     providerVideoUrl = extractAudioUrl(pollResult.raw);
+  } else if (genType === "image") {
+    // FLUX: { images: [{ url }] } — use extractImageUrl
+    providerVideoUrl = extractImageUrl(pollResult.raw) ?? extractVideoUrl(pollResult.raw);
   } else {
-    // video, image, motion, video_t2v, video_i2v — try video first, fall back to audio
+    // video_t2v, video_i2v, video_motion — try video first
     providerVideoUrl = extractVideoUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
   }
 

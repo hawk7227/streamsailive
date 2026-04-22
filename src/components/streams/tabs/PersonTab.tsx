@@ -70,6 +70,7 @@ const EDIT_OPS: {
 export default function PersonTab() {
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
   const [analysisId,   setAnalysisId]   = useState<string | null>(null);
+  const [genLogId,     setGenLogId]     = useState<string | null>(null);
   const [ingestError,  setIngestError]  = useState<string | null>(null);
   const [pollCount,    setPollCount]    = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,6 +91,9 @@ export default function PersonTab() {
         return;
       }
       setAnalysisId(data.analysisId);
+      // genLogId linked via person_analysis.generation_log_id in production
+      // Using analysisId as temporary link until real generationLogId is available
+      setGenLogId(data.analysisId);
       setIngestState("processing");
 
       // Poll ingest/status every 8s

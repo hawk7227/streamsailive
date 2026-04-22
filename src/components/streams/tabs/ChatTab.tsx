@@ -37,13 +37,18 @@ const SEED_MSGS: Msg[] = [
   { id: "m4", role: "assistant", text: "Updated — sharp blazer, tailored trousers. Same motion, same light, same city energy." },
 ];
 
+type LibraryItem = { id: string; generation_type: string; output_url: string; created_at: string };
+
 export default function ChatTab() {
   const [msgs,      setMsgs]      = useState<Msg[]>(SEED_MSGS);
   const [input,     setInput]     = useState("");
   const [mode,      setMode]      = useState<Mode>("Chat");
   const [streaming, setStreaming] = useState(false);
-  const [sidebarOpen, setSidebar] = useState(false);
-  const [activeNav,    setActiveNav]  = useState("Sessions");
+  const [sidebarOpen,  setSidebar]     = useState(false);
+  const [activeNav,    setActiveNav]   = useState("Sessions");
+  const [convId,       setConvId]      = useState(() => crypto.randomUUID());
+  const [library,      setLibrary]     = useState<LibraryItem[]>([]);
+  const [libraryLoading, setLibLoad]  = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,7 +71,7 @@ export default function ChatTab() {
       const res = await fetch("/api/ai-assistant", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ message: text, mode: mode.toLowerCase() }),
+        body:    JSON.stringify({ message: text, mode: mode.toLowerCase(), conversationId: convId }),
       });
 
       if (!res.ok || !res.body) {
@@ -144,7 +149,7 @@ export default function ChatTab() {
         <div style={{ fontFamily: "'DM Serif Display', serif", fontStyle: "italic", fontSize: 16, color: C.t1, marginBottom: 4 }}>Streams</div>
         <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>New conversation</div>
         <button
-          onClick={() => setMsgs(SEED_MSGS)}
+          onClick={() => { setMsgs(SEED_MSGS); setConvId(crypto.randomUUID()); }}
           style={{
             width: "100%", padding: "8px 0", borderRadius: R.r1,
             background: C.acc, border: "none", color: "#fff",
@@ -162,7 +167,16 @@ export default function ChatTab() {
         { icon: "▤", label: "Library"  },
         { icon: "⊞", label: "Images"   },
       ].map(nav => (
-        <button key={nav.label} onClick={() => setActiveNav(nav.label)} style={{
+        <button key={nav.label} onClick={() => {
+                setActiveNav(nav.label);
+                if (nav.label === "Library" && library.length === 0) {
+                  setLibLoad(true);
+                  fetch("/api/streams/library?limit=20")
+                    .then(r => r.json())
+                    .then((d: { items?: LibraryItem[] }) => { setLibrary(d.items ?? []); setLibLoad(false); })
+                    .catch(() => setLibLoad(false));
+                }
+              }} style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "10px 16px", border: "none",
           background: activeNav === nav.label ? C.surf2 : "transparent",
@@ -177,7 +191,7 @@ export default function ChatTab() {
 
       {/* Recents */}
       <div style={{ padding: "8px 16px 4px", fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Recents</div>
-      {SESSIONS.map(s => (
+      {activeNav === "Sessions" && SESSIONS.map(s => (
         <button key={s.id} style={{
           display: "block", textAlign: "left", padding: "8px 16px",
           border: "none", background: s.id === "1" ? C.surf2 : "transparent",
@@ -189,6 +203,52 @@ export default function ChatTab() {
           {s.title}
         </button>
       ))}
+      {activeNav === "Library" && (
+        <div style={{ padding: "0 8px" }}>
+          {libraryLoading && <div style={{ padding: "12px 8px", fontSize: 13, color: C.t4 }}>Loading…</div>}
+          {!libraryLoading && library.length === 0 && <div style={{ padding: "12px 8px", fontSize: 13, color: C.t4 }}>No generations yet</div>}
+          {library.map((item: LibraryItem) => {
+            const typeIcon: Record<string, string> = {
+              video_t2v: "🎬", video_i2v: "🎬", image: "🖼", voice: "🎙", music: "🎵",
+            };
+            const icon = typeIcon[item.generation_type] ?? "✦";
+            const hasOutput = !!item.output_url;
+            return (
+              <div key={item.id} style={{
+                padding: "8px 10px", borderRadius: R.r1, marginBottom: 5, cursor: "pointer",
+                background: C.surf, border: `1px solid ${C.bdr}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* Type icon or video thumbnail placeholder */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 6, flexShrink: 0,
+                    background: hasOutput ? C.bg4 : C.bg3,
+                    border: `1px solid ${C.bdr}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 16,
+                  }}>
+                    {icon}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: C.acc2, fontSize: 12, fontWeight: 500, textTransform: "capitalize" }}>
+                      {item.generation_type.replace("_", " ")}
+                    </div>
+                    <div style={{ color: C.t4, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {new Date(item.created_at).toLocaleDateString(undefined, { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}
+                    </div>
+                  </div>
+                  {hasOutput && (
+                    <a href={item.output_url} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 12, color: C.t4, textDecoration: "none", flexShrink: 0 }}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    >↗</a>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 

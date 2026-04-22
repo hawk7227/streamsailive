@@ -2,8 +2,8 @@
   "build": {
     "project": "StreamsAI",
     "version": "0.4.0",
-    "timestamp": "2026-04-22T23:07:49Z",
-    "commit": "fe3fc52",
+    "timestamp": "2026-04-22T23:28:24Z",
+    "commit": "cf94a92",
     "branch": "main",
     "status": "passing"
   },
@@ -40,7 +40,10 @@
       "/api/streams/library",
       "/api/streams/stitch",
       "/api/streams/share",
-      "/s/[slug]"
+      "/s/[slug]",
+      "/api/streams/video/edit-body",
+      "/api/streams/video/edit-emotion",
+      "/api/streams/settings/test-key"
     ],
     "implemented_unproven": [
       "/api/streams/video/ingest",

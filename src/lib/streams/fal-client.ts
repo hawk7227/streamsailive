@@ -283,6 +283,27 @@ export function extractMusicUrl(raw: unknown): string | null {
   return extractAudioUrl(raw);
 }
 
+export function extractImageUrl(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  // FLUX Kontext / FLUX Dev: { images: [{ url, content_type }] }
+  if (Array.isArray(r.images) && r.images[0]) {
+    const img = r.images[0] as Record<string, unknown>;
+    if (typeof img.url === "string") return img.url;
+  }
+  // Recraft / others: { image: { url } }
+  if (r.image && typeof (r.image as Record<string,unknown>).url === "string") {
+    return (r.image as Record<string,unknown>).url as string;
+  }
+  // Seedream / fallback: { url: string }
+  if (typeof r.url === "string") return r.url;
+  // image_url direct
+  if (typeof r.image_url === "string") return r.image_url;
+
+  return null;
+}
+
 export function extractTranscript(raw: unknown): Word[] | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
