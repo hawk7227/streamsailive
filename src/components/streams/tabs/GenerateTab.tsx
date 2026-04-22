@@ -623,7 +623,7 @@ export default function GenerateTab() {
           }
         </div>
         {stitch.length>=2&&<div style={{padding:"0 14px",display:"flex",alignItems:"center",flexShrink:0}}>
-          <button style={{padding:"8px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",cursor:"pointer"}}>Stitch → fal</button>
+          <button onClick={()=>alert("Stitch pipeline: fal-ai/ffmpeg-api/merge-videos — backend route needed")} style={{padding:"8px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",cursor:"pointer"}}>Stitch → fal</button>
         </div>}
       </div>
     </div>

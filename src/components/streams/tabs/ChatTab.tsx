@@ -43,6 +43,7 @@ export default function ChatTab() {
   const [mode,      setMode]      = useState<Mode>("Chat");
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebar] = useState(false);
+  const [activeNav,    setActiveNav]  = useState("Sessions");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,11 +114,14 @@ export default function ChatTab() {
         { icon: "▤", label: "Library"  },
         { icon: "⊞", label: "Images"   },
       ].map(nav => (
-        <button key={nav.label} style={{
+        <button key={nav.label} onClick={() => setActiveNav(nav.label)} style={{
           display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 16px", border: "none", background: "transparent",
-          color: C.t3, fontSize: 15, fontFamily: "inherit", cursor: "pointer",
+          padding: "10px 16px", border: "none",
+          background: activeNav === nav.label ? C.surf2 : "transparent",
+          color: activeNav === nav.label ? C.t1 : C.t3,
+          fontSize: 15, fontFamily: "inherit", cursor: "pointer",
           width: "100%", textAlign: "left",
+          borderLeft: activeNav === nav.label ? `2px solid ${C.acc}` : "2px solid transparent",
         }}>
           <span>{nav.icon}</span> {nav.label}
         </button>
