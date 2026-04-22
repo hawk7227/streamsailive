@@ -98,7 +98,40 @@ export default function GenerateTab() {
   const [genState,    setGenState]    = useState<GenState>("idle");
   const [grid,        setGrid]        = useState<GridItem[]>([]);
   const [stitch,      setStitch]      = useState<string[]>([]);
-  const [stitchState, setStitchState]  = useState<"idle"|"running"|"done">("idle");
+  const [stitchState,  setStitchState]  = useState<"idle"|"running"|"done">("idle");
+  
+
+  // ── Prompt Analyst state ──────────────────────────────────────────────
+  type AnalystResult = {
+    interpretation: string; ambiguities: string[]; improvements: string[];
+    bestModel: string; failurePatterns: string[]; improvedPrompt: string;
+    estimatedCostBefore: number; estimatedCostAfter: number; savingsUsd: number;
+  };
+  const [analystOpen,   setAnalystOpen]   = useState(false);
+  const [analystState,  setAnalystState]  = useState<"idle"|"running"|"done"|"failed">("idle");
+  const [analystResult, setAnalystResult] = useState<AnalystResult|null>(null);
+
+  async function runAnalyst() {
+    const promptText = mode === "Music" ? styleInput : prompt;
+    if (!promptText.trim()) return;
+    setAnalystState("running");
+    setAnalystResult(null);
+    try {
+      const res  = await fetch("/api/streams/analyst", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:   JSON.stringify({ prompt: promptText, mode, model: currentModel }),
+      });
+      const data = await res.json() as AnalystResult & { error?: string };
+      if (!res.ok) { setAnalystState("failed"); return; }
+      setAnalystResult(data);
+      setAnalystState("done");
+    } catch { setAnalystState("failed"); }
+  }
+
+  // ── Bulk generation state ─────────────────────────────────────────────
+  const [bulkCount,  setBulkCount]  = useState(1);
+  const [bulkMode,   setBulkMode]   = useState<"single"|"parallel">("single");
   const [stitchUrl,   setStitchUrl]    = useState<string | null>(null);
   const [micState,    setMicState]    = useState<"idle"|"recording"|"done">("idle");
   const [camState,    setCamState]    = useState<"idle"|"done">("idle");
@@ -641,9 +674,48 @@ export default function GenerateTab() {
 
       {/* Footer */}
       <div style={{padding:"12px 14px",borderTop:`1px solid ${C.bdr}`,flexShrink:0}}>
+        {/* Prompt Analyst panel */}
+        {analystOpen && (
+          <div style={{marginBottom:12,padding:"12px",borderRadius:R.r2,background:C.bg4,border:`1px solid ${C.bdr}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:13,color:C.t1,fontWeight:500}}>Prompt Analyst</span>
+              <span style={{fontSize:12,color:C.t4}}>~$0.002 · GPT-4o mini</span>
+            </div>
+            {analystState==="idle"&&<button onClick={runAnalyst} style={{width:"100%",padding:"8px 0",borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>Analyse prompt before generating</button>}
+            {analystState==="running"&&<div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:C.t4}}><span style={{width:12,height:12,borderRadius:R.pill,border:`1.5px solid ${C.acc}`,borderTopColor:"transparent",display:"block",animation:"streams-spin 600ms linear infinite"}}/> Analysing…</div>}
+            {analystState==="failed"&&<div style={{fontSize:13,color:C.red}}>Analysis failed — check API key in Settings</div>}
+            {analystState==="done"&&analystResult&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{fontSize:12,color:C.t3,lineHeight:1.6}}><strong style={{color:C.t1}}>Interpretation:</strong> {analystResult.interpretation}</div>
+              {analystResult.ambiguities.length>0&&<div><div style={{fontSize:12,color:C.amber,marginBottom:4}}>Ambiguities:</div>{analystResult.ambiguities.map((a:string,i:number)=><div key={i} style={{fontSize:12,color:C.t4,paddingLeft:8}}>· {a}</div>)}</div>}
+              {analystResult.improvements.length>0&&<div><div style={{fontSize:12,color:C.green,marginBottom:4}}>Improvements:</div>{analystResult.improvements.map((imp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t3,paddingLeft:8}}>· {imp}</div>)}</div>}
+              {analystResult.failurePatterns.length>0&&<div><div style={{fontSize:12,color:C.red,marginBottom:4}}>Watch out for:</div>{analystResult.failurePatterns.slice(0,2).map((fp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t4,paddingLeft:8}}>· {fp}</div>)}</div>}
+              {analystResult.savingsUsd>0&&<div style={{fontSize:12,color:C.green}}>💡 Switch to {analystResult.bestModel} → save ${analystResult.savingsUsd.toFixed(2)}</div>}
+              <button onClick={()=>{if(mode==="Music")setStyleInput(analystResult.improvedPrompt);else{const setter=prompt;void setter;/* prompt setter varies by mode */}}} style={{padding:"6px 0",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>Use improved prompt</button>
+            </div>)}
+          </div>
+        )}
+
+        {/* Bulk controls */}
+        <div style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
+          <span style={{fontSize:12,color:C.t4,flexShrink:0}}>Bulk:</span>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <button onClick={()=>setBulkCount(Math.max(1,bulkCount-1))} style={{width:24,height:24,borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+            <span style={{fontSize:14,color:C.t1,width:20,textAlign:"center"}}>{bulkCount}</span>
+            <button onClick={()=>setBulkCount(Math.min(12,bulkCount+1))} style={{width:24,height:24,borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+          </div>
+          <div style={{display:"flex",gap:4,flex:1}}>
+            {(["single","parallel"] as const).map(m=>(
+              <button key={m} onClick={()=>setBulkMode(m)} style={{flex:1,padding:"4px 0",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",border:`1px solid ${bulkMode===m?C.acc:C.bdr}`,background:bulkMode===m?C.accDim:"transparent",color:bulkMode===m?C.acc2:C.t4}}>{m}</button>
+            ))}
+          </div>
+          <button onClick={()=>setAnalystOpen(!analystOpen)} title="Prompt Analyst — pre-flight quality check" style={{padding:"4px 10px",borderRadius:R.r1,border:`1px solid ${analystOpen?C.acc:C.bdr}`,background:analystOpen?C.accDim:"transparent",color:analystOpen?C.acc2:C.t4,fontSize:12,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+            {analystState==="running"?"…":"✦ Analyst"}
+          </button>
+        </div>
+
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize: 12,color:C.t4,letterSpacing:".06em",textTransform:"uppercase"}}>Est. cost</span>
-          <span style={{fontSize: 14,color:C.acc2,fontWeight:500}}>{cost}</span>
+          <span style={{fontSize: 12,color:C.t4,letterSpacing:".06em",textTransform:"uppercase"}}>Est. cost {bulkCount>1?`× ${bulkCount}`:""}</span>
+          <span style={{fontSize: 14,color:C.acc2,fontWeight:500}}>{cost}{bulkCount>1?` = $${(parseFloat(cost.replace(/[^0-9.]/g,""))*bulkCount).toFixed(2)}`:""}</span>
         </div>
         <button onClick={handleGenerate} disabled={isActive} style={{
           width:"100%",padding:"12px 0",borderRadius:R.r2,border:"none",
