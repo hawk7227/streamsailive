@@ -19,14 +19,37 @@ const STYLE_TAGS = ["cinematic","golden hour","photorealistic","urban"];
 const SUBJECTS   = ["woman · blazer","city street","bokeh background"];
 
 export default function ReferenceTab() {
-  const [source,   setSource]   = useState<Source>("Upload");
-  const [urlInput, setUrlInput] = useState("");
-  const [analysis, setAnalysis] = useState<AnalysisState>("idle");
-  const [actions,  setActions]  = useState<Record<string, ActionState>>({} as Record<string, ActionState>);
+  const [source,       setSource]      = useState<Source>("Upload");
+  const [urlInput,     setUrlInput]    = useState("");
+  const [analysis,     setAnalysis]    = useState<AnalysisState>("idle");
+  const [analysisData, setAnalysisData]= useState<Record<string, unknown> | null>(null);
+  const [analyzeError, setAnalyzeError]= useState<string | null>(null);
+  const [actions,      setActions]     = useState<Record<string, ActionState>>({} as Record<string, ActionState>);
 
-  function runAnalysis() {
+  async function runAnalysis() {
+    const url = source === "Upload" ? urlInput : urlInput.trim();
+    if (!url) return;
     setAnalysis("analyzing");
-    setTimeout(() => setAnalysis("done"), 3200);
+    setAnalyzeError(null);
+    setAnalysisData(null);
+    try {
+      const res  = await fetch("/api/streams/reference/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ sourceType: source.toLowerCase(), sourceUrl: url }),
+      });
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok) {
+        setAnalyzeError((data.error as string) ?? "Analysis failed");
+        setAnalysis("idle");
+        return;
+      }
+      setAnalysisData(data);
+      setAnalysis("done");
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : "Analysis failed");
+      setAnalysis("idle");
+    }
   }
 
   function doAction(name: string) {
@@ -77,6 +100,13 @@ export default function ReferenceTab() {
               ))}
             </div>
 
+            {source === "Upload" && (
+              <div style={{ marginBottom: 10 }}>
+                <input value={urlInput} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrlInput(e.target.value)}
+                  placeholder="Paste image URL or Supabase storage URL"
+                  style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 10px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 8 }} />
+              </div>
+            )}
             {source === "Upload" && (
               <div onClick={runAnalysis} style={{
                 border: `1px dashed ${C.bdr2}`, borderRadius: R.r2,
@@ -182,11 +212,11 @@ export default function ReferenceTab() {
               {/* Variation prompts */}
               <div>
                 <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>Variation prompts</div>
-                {[
+                {((analysisData?.variation_prompts as string[]) ?? [
                   "Cinematic street portrait, woman in bold red coat, 85mm equiv, overcast light, urban background",
                   "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
                   "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
-                ].map((vp, i) => (
+                ]).map((vp: string, i: number) => (
                   <div key={i} onClick={() => {}} style={{ padding: "6px 10px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: "pointer", lineHeight: 1.5 }}>
                     {vp}
                   </div>
