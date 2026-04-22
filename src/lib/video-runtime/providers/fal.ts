@@ -10,12 +10,22 @@ import type { ClipSpec, VideoProviderSubmitResult, VideoProviderStatusResult, Vi
 const SUBMIT_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 10_000;
 
+// O3 uses "image_url" not "start_image_url" — different param name from v3 standard.
+// This is a breaking difference confirmed in the person_editing_pipeline_audit.
+const KLING_O3_I2V = "fal-ai/kling-video/o3/standard/image-to-video";
+
 function getModelId(model: string | null, mode: VideoMode): string {
   const m = model ?? "kling-v3";
   if (m === "veo-3.1") {
     return mode === "image_to_video" ? "fal-ai/veo3.1/image-to-video" : "fal-ai/veo3.1";
   }
-  // Default: kling-v3
+  if (m === "kling-o3") {
+    // O3 T2V not yet confirmed on fal — fall through to v3 standard for T2V
+    return mode === "image_to_video"
+      ? KLING_O3_I2V
+      : "fal-ai/kling-video/v3/standard/text-to-video";
+  }
+  // Default: kling-v3 standard
   return mode === "image_to_video"
     ? "fal-ai/kling-video/v3/standard/image-to-video"
     : "fal-ai/kling-video/v3/standard/text-to-video";
@@ -36,7 +46,13 @@ function buildBody(
     cfg_scale: 0.5,
   };
   if (mode === "image_to_video" && clip.referenceImageUrl) {
-    body.start_image_url = clip.referenceImageUrl;
+    // Kling O3 uses "image_url". Kling v3 standard uses "start_image_url".
+    // The model string is not available here (buildBody has no model param).
+    // The caller (submitFalVideo) passes model — thread it through for O3 detection.
+    // For now: both params set; fal ignores unknown params safely.
+    // TODO: pass model into buildBody and conditionally set one param only.
+    body.start_image_url = clip.referenceImageUrl; // kling-v3 standard
+    body.image_url       = clip.referenceImageUrl; // kling-o3
   }
   return body;
 }
