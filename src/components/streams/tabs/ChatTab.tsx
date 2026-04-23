@@ -56,10 +56,25 @@ export default function ChatTab() {
   const [attachUrl,    setAttachUrl]    = useState("");
   const [libraryLoading, setLibLoad]  = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
+
+  // Rule 3.1 — keep input above iOS software keyboard
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const offset = window.innerHeight - vv.height;
+      if (inputContainerRef.current) {
+        inputContainerRef.current.style.transform = `translateY(-${offset}px)`;
+      }
+    };
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
 
   async function handleSend() {
     const text = input.trim();
@@ -280,14 +295,19 @@ export default function ChatTab() {
             const icon = typeIcon[item.generation_type] ?? "✦";
             const hasOutput = !!item.output_url;
             return (
-              <div key={item.id} style={{
-                padding: "8px 8px", borderRadius: R.r1, marginBottom: 5, cursor: "pointer",
-                background: C.surf, border: `1px solid ${C.bdr}`,
-              }}>
+              <div key={item.id}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") setExpandedLib(expandedLib === item.id ? null : item.id); }}
+                onClick={() => setExpandedLib(expandedLib === item.id ? null : item.id)}
+                style={{
+                  padding: "8px 8px", borderRadius: R.r1, marginBottom: 5, cursor: "pointer",
+                  background: C.surf, border: `1px solid ${C.bdr}`,
+                }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {/* Type icon or video thumbnail placeholder */}
                   <div style={{
-                    width: 36, height: 36, borderRadius: 6, flexShrink: 0,
+                    width: 36, height: 36, borderRadius: 8, flexShrink: 0,
                     background: hasOutput ? C.bg4 : C.bg3,
                     border: `1px solid ${C.bdr}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -341,15 +361,30 @@ export default function ChatTab() {
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
 
-      {/* Sidebar — desktop */}
-      <div className="streams-chat-sidebar">{Sidebar}</div>
+      {/* Sidebar — drawer on mobile, inline on desktop */}
+      <div className={`streams-chat-sidebar${sidebarOpen ? " open" : ""}`}>{Sidebar}</div>
+
+      {/* Mobile drawer overlay */}
+      <div
+        onClick={() => setSidebar(false)}
+        aria-hidden="true"
+        style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.5)",
+          zIndex: 299,
+          opacity: sidebarOpen ? 1 : 0,
+          pointerEvents: sidebarOpen ? "auto" : "none",
+          transition: `opacity 200ms ease`,
+        }}
+        className="streams-chat-overlay"
+      />
 
       {/* Main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* AI assistant header — badge + title + subtitle */}
         <div style={{ padding: "16px 32px 0", flexShrink: 0 }} className="streams-chat-header">
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 8px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
             <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
             Chat · image · video · build
           </div>
@@ -363,7 +398,9 @@ export default function ChatTab() {
           borderBottom: `1px solid ${C.bdr}`,
           alignItems: "center", gap: 10,
         }}>
-          <button onClick={() => setSidebar(!sidebarOpen)} style={{
+          <button
+            aria-label="Open conversation history"
+            onClick={() => setSidebar(!sidebarOpen)} style={{
             background: "transparent", border: `1px solid ${C.bdr}`,
             borderRadius: R.r1, padding: "6px 8px", color: C.t3,
             fontSize: 15, cursor: "pointer", fontFamily: "inherit",
@@ -372,47 +409,33 @@ export default function ChatTab() {
         </div>
 
         {/* Messages */}
-        <div style={{
-          flex: 1, overflowY: "auto",
-          padding: "24px 32px",
-          display: "flex", flexDirection: "column", gap: 20,
-        }} className="streams-chat-msgs">
+        <div
+          aria-live="polite"
+          aria-atomic="false"
+          style={{
+            flex: 1, overflowY: "auto",
+            padding: "24px 32px",
+            paddingBottom: 24,
+            display: "flex", flexDirection: "column", gap: 20,
+          }} className="streams-chat-msgs">
           {msgs.map((msg: Msg) => (
             <div key={msg.id} style={{
               display: "flex",
-              flexDirection: msg.role === "user" ? "row-reverse" : "row",
-              gap: 10, maxWidth: 680,
+              flexDirection: "column",
+              maxWidth: 680,
               alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+              alignItems: msg.role === "user" ? "flex-end" : "flex-start",
             }}>
-              {/* Avatar */}
-              <div style={{
-                width: 28, height: 28, borderRadius: R.pill, flexShrink: 0,
-                background: msg.role === "user" ? C.bg4 : C.acc,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 600, color: "#fff",
-                border: msg.role === "user" ? `1px solid ${C.bdr}` : "none",
-              }}>
-                {msg.role === "user" ? "U" : "S"}
-              </div>
-
               <div>
-                {msg.role === "assistant" && (
-                  <div style={{ fontSize: 13, color: C.t4, marginBottom: 4, letterSpacing: ".04em" }}>
-                    Streams, now
-                  </div>
-                )}
                 <div style={{
-                  padding: "8px 16px",
-                  borderRadius: msg.role === "user" ? `${R.r2}px 4px ${R.r2}px ${R.r2}px` : `4px ${R.r2}px ${R.r2}px ${R.r2}px`,
-                  background: msg.role === "user" ? C.acc : C.surf,
-                  border: msg.role === "user" ? "none" : `1px solid ${C.bdr}`,
                   color: C.t1, fontSize: 16, lineHeight: 1.65,
+                  textAlign: msg.role === "user" ? "right" : "left",
                 }}>
                   {msg.text}
                   {msg.streaming && (
                     <span style={{
                       display: "inline-block", width: 5, height: 13,
-                      background: C.acc2, borderRadius: 2, marginLeft: 2,
+                      background: C.acc2, borderRadius: 4, marginLeft: 4,
                       animation: "streams-blink 1s ease infinite",
                     }} />
                   )}
@@ -421,15 +444,14 @@ export default function ChatTab() {
                 {msg.role === "assistant" && !msg.mediaUrl && (
                     /generat|creat|make.*video|make.*image/i.test(msg.text)
                   ) && (
-                    <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+                    <div style={{ display:"flex", gap: 8, marginTop: 8, flexWrap:"wrap" }}>
                       {["Generate video", "Generate image", "Generate voice"].map(action => (
                         <button key={action} onClick={() => {
-                          // Copy last user message as prompt into input
                           const lastUser = msgs.slice().reverse().find((m: Msg) => m.role === "user");
                           if (lastUser) setInput(lastUser.text);
                         }}
                         title={`Open Generate tab → ${action}`}
-                        style={{ padding:"4px 10px", borderRadius:R.pill,
+                        style={{ padding:"4px 12px", borderRadius:R.pill,
                           background:C.accDim, border:`1px solid ${C.accBr}`,
                           color:C.acc2, fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>
                           {action} →
@@ -455,8 +477,9 @@ export default function ChatTab() {
         </div>
 
         {/* Input area */}
-        <div style={{
-          padding: "12px 32px 20px",
+        <div ref={inputContainerRef} style={{
+          padding: "12px 32px",
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
           borderTop: `1px solid ${C.bdr}`,
           background: C.bg,
           flexShrink: 0,
@@ -484,10 +507,10 @@ export default function ChatTab() {
           {/* Attach URL row */}
           {attachMode && (
             <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-              <input value={attachUrl} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setAttachUrl(e.target.value)}
+            <input value={attachUrl} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setAttachUrl(e.target.value)}
                 placeholder="Paste image or video URL…"
-                style={{ flex:1, background:C.bg3, border:`1px solid ${C.bdr}`, borderRadius:R.r1,
-                  padding:"6px 10px", color:C.t1, fontSize:14, fontFamily:"inherit", outline:"none" }}
+                style={{ flex:1, background:C.bg3, border:"none", borderRadius:R.r1,
+                  padding:"8px 12px", color:C.t1, fontSize:14, fontFamily:"inherit", outline:"none" }}
                 onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>)=>{
                   if (e.key==="Enter" && attachUrl.trim()) {
                     setInput((p:string) => p + (p?" ":"") + attachUrl.trim());
@@ -504,19 +527,24 @@ export default function ChatTab() {
           {/* Input row */}
           <div style={{
             display: "flex", gap: 8, alignItems: "flex-end",
-            background: C.bg3, border: `1px solid ${C.bdr}`,
+            background: C.bg3,
             borderRadius: R.r3, padding: "8px 12px",
           }}>
             {/* Attach */}
-            <button title="Attach URL" onClick={() => setAttachMode((m:boolean)=>!m)} style={{
-              background: attachMode ? C.accDim : "transparent",
-              border: attachMode ? `1px solid ${C.accBr}` : "none",
-              borderRadius: R.r1, color: attachMode ? C.acc2 : C.t4,
-              fontSize: 14, cursor: "pointer", padding: "2px 6px", flexShrink: 0,
-            }}>⊕</button>
+            <button
+              aria-label="Attach URL"
+              title="Attach URL"
+              onClick={() => setAttachMode((m:boolean)=>!m)}
+              style={{
+                background: attachMode ? C.accDim : "transparent",
+                border: attachMode ? `1px solid ${C.accBr}` : "none",
+                borderRadius: R.r1, color: attachMode ? C.acc2 : C.t4,
+                fontSize: 14, cursor: "pointer", padding: "4px 8px", flexShrink: 0,
+              }}>⊕</button>
 
             <textarea
               value={input}
+              maxLength={2000}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                 setInput(e.target.value);
                 e.target.style.height = "auto";
@@ -552,12 +580,52 @@ export default function ChatTab() {
 
       <style>{`
         @keyframes streams-blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        @media (max-width: 768px) {
-          .streams-chat-sidebar { display: none !important; }
-          .streams-chat-mobile-bar { display: flex !important; }
-          .streams-chat-msgs { padding: 16px !important; }
-          .streams-chat-header { padding: 8px 16px 0 !important; }
-          .streams-chat-input { padding: 8px 16px 16px !important; }
+
+        /* Sidebar: drawer on mobile */
+        .streams-chat-sidebar {
+          position: fixed;
+          top: 0; left: 0;
+          height: 100dvh;
+          width: 280px;
+          z-index: 300;
+          transform: translateX(-100%);
+          transition: transform 200ms cubic-bezier(.4,0,.2,1);
+        }
+        .streams-chat-sidebar.open {
+          transform: translateX(0);
+        }
+
+        /* Overlay: mobile only */
+        .streams-chat-overlay {
+          display: block;
+        }
+
+        /* Mobile bar: hidden by default */
+        .streams-chat-mobile-bar {
+          display: none;
+        }
+
+        @media (max-width: 767px) {
+          .streams-chat-mobile-bar { display: flex; }
+          .streams-chat-msgs { padding: 16px; }
+          .streams-chat-header { padding: 8px 16px 0; }
+          .streams-chat-input { padding: 8px 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+        }
+
+        /* Desktop: sidebar becomes inline */
+        @media (min-width: 768px) {
+          .streams-chat-sidebar {
+            position: relative;
+            height: 100%;
+            width: 260px;
+            transform: none;
+            transition: none;
+            z-index: auto;
+            flex-shrink: 0;
+          }
+          .streams-chat-overlay {
+            display: none;
+          }
         }
       `}</style>
     </div>
