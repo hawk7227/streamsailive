@@ -47,7 +47,7 @@ const PIPE_NODES = [
  {
  ep: "minimax/v2.6",
  name: "Generate instrumental",
- tip: "Style prompt → MiniMax v2.6 with is_instrumental:true. $0.15 per generation. Up to 6 min output. Preset: prompt = STYLE ONLY (genre, mood, BPM, key — 10–300 chars). Never put lyrics in the style prompt. Faster streaming under 25s end-to-end.",
+ tip: "Style prompt → Streams music engine with is_instrumental:true. $0.15 per generation. Up to 6 min output. Preset: prompt = STYLE ONLY (genre, mood, BPM, key — 10–300 chars). Never put lyrics in the style prompt. Faster streaming under 25s end-to-end.",
  },
  {
  ep: "elevenlabs IVC",
@@ -62,7 +62,7 @@ const PIPE_NODES = [
  {
  ep: "ffmpeg/merge-audios",
  name: "Mix vocals + track",
- tip: "fal-ai/ffmpeg-api/merge-audios — combine vocal track + instrumental into final mix. Never use merge-videos for this — merge-videos is for concatenating full video clips end-to-end. merge-audios is the correct endpoint for audio-only operations. Cost: $0.001.",
+ tip: "Streams audio mix — combine vocal track + instrumental into final mix. Never use merge-videos for this — merge-videos is for concatenating full video clips end-to-end. merge-audios is the correct endpoint for audio-only operations. Cost: $0.001.",
  },
  {
  ep: "omnihuman/v1.5",

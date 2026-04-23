@@ -23,14 +23,14 @@ interface PersonTabProps {
 type OpState = "idle" | "running" | "done";
 
 const INGEST_STEPS = [
-  { label: "fal ffmpeg-api · extract audio",                        done: true  },
-  { label: "elevenlabs/audio-isolation → voice.mp3 + ambient.mp3", done: true  },
-  { label: "ffmpeg-api · frame extraction · 1 per 2s",             done: true  },
-  { label: "GPT-4o Vision · frame-by-frame person analysis",        done: true  },
-  { label: "GPT-4o Vision · appearance_description (best frame)",   done: true  },
-  { label: "elevenlabs/speech-to-text (Scribe v2) · word timestamps", done: true },
-  { label: "ElevenLabs IVC → voice_id stored",                      done: true  },
-  { label: "Write person_analysis row · all fields populated",       done: true  },
+  { label: "Extract audio from video",                               done: true  },
+  { label: "Isolate voice and ambient audio",                        done: true  },
+  { label: "Extract frames at 1 per 2s",                            done: true  },
+  { label: "Analyse each frame for person details",                  done: true  },
+  { label: "Identify best frame · appearance description",           done: true  },
+  { label: "Transcribe speech · word-level timestamps",              done: true  },
+  { label: "Clone voice profile · store voice ID",                   done: true  },
+  { label: "Write person profile · all fields populated",            done: true  },
 ];
 
 const EDIT_OPS: {
@@ -39,38 +39,38 @@ const EDIT_OPS: {
 }[] = [
   {
     id: "voice", title: "Voice / word edit",
-    sub: "User changes transcript text → TTS → duration check → trim segment → Sync Lipsync v2 redraws mouth region → ffmpeg compose back at timestamp.",
-    endpoints: ["fal-ai/elevenlabs/tts/eleven-v3","fal-ai/sync-lipsync/v2","fal-ai/ffmpeg-api/compose"],
+    sub: "User changes transcript text → TTS → duration check → trim segment → Streams Lipsync redraws mouth region → compose back at timestamp.",
+    endpoints: ["Streams TTS · voice synthesis","Streams Lipsync · mouth re-draw","Streams Compose · timeline merge"],
     cost: "~$0.18 · 3.6s segment", costColor: C.green,
   },
   {
     id: "body", title: "Full body reaction",
-    sub: "Stored face frame + new audio → OmniHuman v1.5 drives entire upper body. Audio rhythm controls posture, gestures, expressions. Single-person only.",
-    endpoints: ["fal-ai/bytedance/omnihuman/v1.5","fal-ai/ffmpeg-api/merge-audio-video"],
+    sub: "Stored face frame + new audio → Streams Body drives entire upper body. Audio rhythm controls posture, gestures, expressions. Single-person only.",
+    endpoints: ["Streams Body · upper body animation","Streams Merge · audio + video"],
     cost: "$0.16/sec · from stored frame", costColor: C.amber,
   },
   {
     id: "motion", title: "Motion style change",
-    sub: "User uploads motion reference video. appearance_description auto-fills character prompt (NOT image_url — motion-control takes text only). Motion control transfers the movement style.",
-    endpoints: ["fal-ai/kling-video/v3/standard/motion-control","fal-ai/ffmpeg-api/compose"],
+    sub: "User uploads motion reference video. Appearance description auto-fills character prompt. Motion control transfers the movement style.",
+    endpoints: ["Streams Motion · style transfer","Streams Compose · timeline merge"],
     cost: "~$0.56 · 5s shot only", costColor: C.acc2,
   },
   {
     id: "dub", title: "Language dub",
-    sub: "One-click re-voice entire video in any language. ElevenLabs dubbing handles translation + voice synthesis + lipsync in one call. Writes new video_versions row.",
-    endpoints: ["fal-ai/elevenlabs/dubbing"],
+    sub: "One-click re-voice entire video in any language. Streams Dub handles translation + voice synthesis + lipsync in one call. Writes new video version.",
+    endpoints: ["Streams Dub · translate + lipsync"],
     cost: "$0.90/min · full video", costColor: C.amber,
   },
   {
     id: "emotion", title: "Expression / emotion",
-    sub: "Change emotional delivery of existing footage. React-1 controls: emotion param, head mode, temperature. Zero retraining. Modifies existing video — no regeneration.",
-    endpoints: ["fal-ai/sync-lipsync/react-1"],
+    sub: "Change emotional delivery of existing footage. Controls: emotion, head mode, temperature. Zero retraining. Modifies existing video — no regeneration.",
+    endpoints: ["Streams Emotion · expression control"],
     cost: "low cost · modifies existing", costColor: C.green,
   },
   {
     id: "multishot", title: "Multi-shot motion",
     sub: "Multi-prompt — N shots in one call. No stitch needed. Each prompt maps to an editable motion beat immediately.",
-    endpoints: ["fal-ai/kling-video/v3/standard/text-to-video","multi_prompt: [{prompt, duration}]"],
+    endpoints: ["Streams Motion · multi-prompt","multi_prompt: [{prompt, duration}]"],
     cost: "one call · no stitching", costColor: C.acc2,
   },
 ];

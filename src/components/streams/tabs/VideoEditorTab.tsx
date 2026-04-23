@@ -209,7 +209,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
     } else if (label==="Motion beats.json") {
       dl(JSON.stringify(shots.map((s:Shot)=>({shot:s.num,time:s.time,prompt:shotPrompts[s.id]??s.prompt})),null,2),"motion-beats.json","application/json");
     } else {
-      toast.warn("This format requires server assembly — coming soon");
+      toast.warn("This format is not available for this content type");
     }
     setTimeout(()=>setDownloading(null), 600);
   }
@@ -466,7 +466,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </div>
  </div>
  <div style={{padding:"8px 16px",borderRadius:R.r2,background:C.bg3,border:`1px solid ${C.bdr}`,marginBottom:20,fontSize:13,color:C.t4}}>
- {analysisId?"Live data · Scribe v2 word-level timestamps":"Shell data · load a video in Person tab to see real transcript"}
+ {analysisId?"Word-level timestamps · Scribe v2":"No transcript loaded — upload a video in the Person tab to get started"}
  </div>
  {transcript.map((line:TranscriptLine, i:number)=>(
  <div key={i} style={{marginBottom:28,padding:"16px 18px",borderRadius:R.r2,background:C.bg2,border:`1px solid ${C.bdr}`}}>
