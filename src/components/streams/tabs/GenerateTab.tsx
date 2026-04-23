@@ -104,6 +104,11 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  const [lyricsInput, setLyricsInput] = useState("");
  const [styleAr, setStyleAr] = useState("1:1");
  const [imageSubMode, setImageSubMode] = useState<"generate"|"templates">("generate");
+ const [i2vImageUrl,    setI2vImageUrl]    = useState<string>("");
+ const [motionRefUrl,   setMotionRefUrl]   = useState<string>("");
+ const [coverAudioUrl,  setCoverAudioUrl]  = useState<string>("");
+ const [stability,      setStability]      = useState(50);
+ const [speed,          setSpeed]          = useState(100);
  const [selectedTpl, setSelectedTpl] = useState<string|null>(null);
 
  // Marketing creative templates — sizes rounded to nearest 8 per backend spec
@@ -305,12 +310,29 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  }
 
  const res = await fetch(route, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
- const data = await res.json() as { generationId?: string; responseUrl?: string; error?: string };
+ const data = await res.json() as { generationId?: string; responseUrl?: string; outputUrl?: string; error?: string };
 
- if (!res.ok || !data.generationId) {
+ if (!res.ok) {
  setGenState("failed");
- setGrid([{id: tempId, status:"done"}]);
- console.error("Generate failed:", data.error);
+ toast.error(data.error ?? "Generation failed");
+ setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
+ return;
+ }
+
+ // Sync modes (Image/Voice/Music) return outputUrl directly — no polling needed
+ if (data.outputUrl && !data.generationId) {
+ setGenState("done");
+ setGrid((prev:GridItem[]) => prev.map((g:GridItem) =>
+  g.id===tempId ? {...g,status:"done",outputUrl:data.outputUrl} : g
+ ));
+ onGenerationComplete?.(data.outputUrl!, tempId);
+ return;
+ }
+
+ if (!data.generationId) {
+ setGenState("failed");
+ toast.error("No generation ID returned");
+ setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
  return;
  }
 
@@ -463,11 +485,16 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {mode==="I2V"&&(<>
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Start image <span style={{color:C.red}}>required</span></div>
- <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"20px 16px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
- <div style={{fontSize: 20,color:C.t4,marginBottom:6,opacity:.4}}>↑</div>
- <div style={{fontSize: 14,color:C.t3}}>Drop start frame or URL</div>
- <div style={{fontSize: 13,color:C.t4,marginTop:2}}>jpg · png · webp</div>
- </div>
+ <FileUpload accept="image"
+  label={i2vImageUrl?"✓ Start frame loaded — swap":"Upload start frame"}
+  sublabel="jpg · png · webp · First frame for I2V"
+  compact
+  onUpload={(url:string)=>setI2vImageUrl(url)}/>
+ {i2vImageUrl&&(
+  <div style={{marginTop:8,borderRadius:R.r2,overflow:"hidden"}}>
+   <MediaPlayer src={i2vImageUrl} kind="image" aspectRatio="16/9" showDownload={false} label="Start frame"/>
+  </div>
+ )}
  </div>
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion prompt</div>
@@ -481,10 +508,11 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {mode==="Motion"&&(
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion reference video</div>
- <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"16px 16px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
- <div style={{fontSize: 14,color:C.t3}}>Upload reference video</div>
- <div style={{fontSize: 13,color:C.t4,marginTop:2}}>mp4 · mov</div>
- </div>
+ <FileUpload accept="video"
+  label={motionRefUrl?"✓ Reference loaded — swap":"Upload motion reference"}
+  sublabel="mp4 · mov · Style transfer source"
+  compact
+  onUpload={(url:string)=>setMotionRefUrl(url)}/>
  </div>
  )}
 
@@ -660,12 +688,18 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  </div>
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Stability <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0–1</span></div>
- <input type="range" min={0} max={100} defaultValue={50} step={1} style={{width:"100%",accentColor:C.acc}}/>
+ <input type="range" min={0} max={100} value={stability} step={1}
+  onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStability(Number(e.target.value))}
+  style={{width:"100%",accentColor:C.acc}}/>
+ <div style={{fontSize:12,color:C.t4,textAlign:"right",marginTop:2}}>{(stability/100).toFixed(2)}</div>
  <div style={{display:"flex",justifyContent:"space-between",fontSize: 12,color:C.t4,marginTop:2}}><span>Creative</span><span>Consistent</span></div>
  </div>
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Speed <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0.7–1.2</span></div>
- <input type="range" min={70} max={120} defaultValue={100} step={1} style={{width:"100%",accentColor:C.acc}}/>
+ <input type="range" min={70} max={120} value={speed} step={1}
+  onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSpeed(Number(e.target.value))}
+  style={{width:"100%",accentColor:C.acc}}/>
+ <div style={{fontSize:12,color:C.t4,textAlign:"right",marginTop:2}}>{(speed/100).toFixed(2)}×</div>
  </div>
  </>)}
 
@@ -1083,6 +1117,16 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {stitchState === "done" ? "✓ Stitched" : stitchState === "running" ? "Stitching…" : "Stitch → fal"}
 </button>
  </div>}
+ {stitchUrl && (
+  <div style={{margin:"8px 0",borderRadius:R.r2,overflow:"hidden",
+    border:`1px solid rgba(16,185,129,0.3)`}}>
+   <MediaPlayer src={stitchUrl} kind="video" aspectRatio="16/9" showDownload label="Stitched"/>
+   <div style={{padding:"6px 12px",background:"rgba(16,185,129,0.08)",
+     fontSize:13,color:C.green,fontWeight:500}}>
+    ✓ {grid.filter((g:GridItem)=>g.outputUrl).length} clips merged
+   </div>
+  </div>
+ )}
  </div>
  </div>
 
