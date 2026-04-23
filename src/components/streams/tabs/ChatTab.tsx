@@ -95,8 +95,14 @@ export default function ChatTab() {
       const decoder = new TextDecoder();
       let buffer = "";
 
+      // Read with timeout guard — abort if no bytes for 90s
+      const readWithTimeout = () => Promise.race([
+        reader.read(),
+        new Promise<{done:true; value:undefined}>((_,rej) => setTimeout(() => rej(new Error("SSE timeout")), 90_000)),
+      ]) as Promise<{done: boolean; value?: Uint8Array}>;
+
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readWithTimeout();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });

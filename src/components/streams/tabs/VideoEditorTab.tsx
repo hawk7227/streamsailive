@@ -129,8 +129,16 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
     try {
       const res = await fetch("/api/streams/video/edit-motion", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ generationLogId:genLogId, firstFrameUrl:"",
-          newPrompt:shotPrompts[shotId]??shot.prompt, startMs:0, endMs:5000, videoUrl:videoUrl??"" }),
+        body: JSON.stringify({
+          generationLogId: genLogId,
+          // firstFrameUrl: ideally the first frame extracted via ffmpeg
+          // Using videoUrl as fallback until frame extraction is implemented
+          firstFrameUrl:   videoUrl ?? "",
+          newPrompt:       shotPrompts[shotId] ?? shot.prompt,
+          startMs:         0,
+          endMs:           5000,
+          videoUrl:        videoUrl ?? "",
+        }),
       });
       if (res.ok) setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"done"}));
       else setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"idle"}));

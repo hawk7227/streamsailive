@@ -225,10 +225,11 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
       const tempIds = Array.from({length: bulkCount}, (_, i) => (Date.now() + i).toString());
       setGrid((prev: GridItem[]) => [...prev, ...tempIds.map(id => ({id, status:"waiting" as const}))]);
       try {
+        const bulkPromptText = mode === "Music" ? (styleInput || prompt) : prompt;
         const bulkBody = {
           mode:       bulkMode,
           generation: mode === "Image" ? "image" : "video",
-          items:      tempIds.map(() => ({ prompt: prompt || styleInput, aspectRatio: ar, duration })),
+          items:      tempIds.map(() => ({ prompt: bulkPromptText, aspectRatio: ar, duration })),
         };
         const res  = await fetch("/api/streams/bulk", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(bulkBody) });
         const data = await res.json() as { bulkJobId?: string; items?: {itemId:string;requestId:string|null;status:string}[]; error?: string };
@@ -824,7 +825,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
               {analystResult.improvements.length>0&&<div><div style={{fontSize:12,color:C.green,marginBottom:4}}>Improvements:</div>{analystResult.improvements.map((imp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t3,paddingLeft:8}}>· {imp}</div>)}</div>}
               {analystResult.failurePatterns.length>0&&<div><div style={{fontSize:12,color:C.red,marginBottom:4}}>Watch out for:</div>{analystResult.failurePatterns.slice(0,2).map((fp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t4,paddingLeft:8}}>· {fp}</div>)}</div>}
               {analystResult.savingsUsd>0&&<div style={{fontSize:12,color:C.green}}>💡 Switch to {analystResult.bestModel} → save ${analystResult.savingsUsd.toFixed(2)}</div>}
-              <button onClick={()=>{if(mode==="Music")setStyleInput(analystResult.improvedPrompt);else{const setter=prompt;void setter;/* prompt setter varies by mode */}}} style={{padding:"6px 0",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>Use improved prompt</button>
+              <button onClick={()=>{ if(mode==="Music") setStyleInput(analystResult.improvedPrompt); else setPrompt(analystResult.improvedPrompt); }} style={{padding:"6px 0",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>Use improved prompt</button>
             </div>)}
           </div>
         )}

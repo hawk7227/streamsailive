@@ -15,6 +15,7 @@ type IngestState = "idle" | "uploading" | "processing" | "done" | "failed";
 
 interface PersonTabProps {
   onIngestComplete?: (data: { analysisId: string; genLogId: string; voiceId?: string | null }) => void;
+  videoUrl?:         string | null;
 }
 type OpState = "idle" | "running" | "done";
 
@@ -71,7 +72,7 @@ const EDIT_OPS: {
   },
 ];
 
-export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
+export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: PersonTabProps = {}) {
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
   const [analysisId,   setAnalysisId]   = useState<string | null>(null);
   const [genLogId,     setGenLogId]     = useState<string | null>(null);
@@ -164,7 +165,7 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
     try {
       const bodyMap: Record<string, Record<string, unknown>> = {
         "voice":    { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: "" },
-        "body":     { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction" },
+        "body":     { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction", audioUrl: undefined },
         "motion":   { generationLogId: genLogId, firstFrameUrl: "", newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: "" },
         "dub":      { generationLogId: genLogId, videoUrl: "", targetLanguage: "es" },
         "emotion":  { generationLogId: genLogId, videoUrl: "", emotion: "happy" },

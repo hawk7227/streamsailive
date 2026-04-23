@@ -164,6 +164,7 @@ export default function StreamsPanel() {
           {active === "person"    && (
             <PersonTab
               onIngestComplete={onIngestComplete}
+              videoUrl={sharedVideoUrl}
             />
           )}
           {active === "settings"  && <SettingsTab />}
