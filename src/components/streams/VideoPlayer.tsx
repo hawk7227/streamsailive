@@ -327,6 +327,8 @@ export default function MediaPlayer({
         case "KeyP":  togglePip(); break;
         case "ArrowLeft":  e.preventDefault(); skip(-5); break;
         case "ArrowRight": e.preventDefault(); skip(5); break;
+        case "Comma":      e.preventDefault(); stepFrame(-1); break;  // , = prev frame
+        case "Period":     e.preventDefault(); stepFrame(1); break;   // . = next frame
       }
     }
     document.addEventListener("keydown", onKey);
@@ -366,6 +368,18 @@ export default function MediaPlayer({
     const v = videoRef.current;
     if (!v) return;
     v.currentTime = Math.max(0, Math.min(duration, v.currentTime + sec));
+  }
+
+  // Frame step — assumes 30fps, steps 1 frame at a time
+  function stepFrame(dir: 1 | -1) {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    setPlaying(false);
+    cancelAnimationFrame(rafRef.current);
+    const frameSec = 1 / 30;
+    v.currentTime = Math.max(0, Math.min(duration, v.currentTime + dir * frameSec));
+    setElapsed(v.currentTime);
   }
 
   function seek(e: React.MouseEvent<HTMLDivElement>) {
@@ -482,6 +496,8 @@ export default function MediaPlayer({
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <Btn onClick={togglePlay}>{playing ? "⏸" : "▶"}</Btn>
           <Btn onClick={() => skip(-5)}>⏪5</Btn>
+          <Btn onClick={() => stepFrame(-1)} title="Prev frame (,)">‹</Btn>
+          <Btn onClick={() => stepFrame(1)} title="Next frame (.)">›</Btn>
           <Btn onClick={() => skip(5)}>5⏩</Btn>
           <Btn onClick={toggleMute}>{muted ? "🔇" : "🔊"}</Btn>
           <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)", flex:1 }}>
@@ -489,7 +505,7 @@ export default function MediaPlayer({
           </span>
           {/* Keyboard hint */}
           <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>
-            Space·F·M·P
+            Space·F·M·P·,·.
           </span>
           <Btn onClick={togglePip} title="Picture-in-picture">⧉</Btn>
           <Btn onClick={toggleFullscreen} title="Fullscreen (F)">⛶</Btn>

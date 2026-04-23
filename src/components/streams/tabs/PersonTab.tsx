@@ -78,7 +78,7 @@ const EDIT_OPS: {
 export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: PersonTabProps = {}) {
   const { toast } = useToast();
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
-  type LibItem = { id:string; output_url:string; generation_type:string; created_at:string };
+  type LibItem = { id:string; output_url:string; generation_type:string; created_at:string; cost_usd?:number|null };
   const [libItems,    setLibItems]    = useState<LibItem[]>([]);
   const [libLoading,  setLibLoading]  = useState(false);
   const [libLoaded,   setLibLoaded]   = useState(false);
@@ -334,8 +334,11 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
                                 textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {item.generation_type.replace("_"," ")}
                   </div>
-                  <div style={{ fontSize: 12, color: C.t4 }}>
-                    {new Date(item.created_at).toLocaleDateString()}
+                  <div style={{ fontSize: 12, color: C.t4, display:"flex", gap:8 }}>
+                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                    {item.cost_usd != null && (
+                      <span style={{ color:"rgba(245,158,11,0.8)" }}>${item.cost_usd.toFixed(3)}</span>
+                    )}
                   </div>
                 </div>
               </div>

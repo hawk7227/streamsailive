@@ -73,8 +73,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const [analysisId, setAnalysisId] = useState<string|null>(propAnalysisId ?? null);
  const [genLogId, setGenLogId] = useState<string|null>(propGenLogId ?? null);
  const [videoUrl, setVideoUrl] = useState<string|null>(propVideoUrl ?? null);
- const [seekMs,      setSeekMs]      = useState<number|null>(null);
- const [detectedRes, setDetectedRes] = useState<string>("—");
+ const [seekMs,       setSeekMs]       = useState<number|null>(null);
+ const [detectedRes,  setDetectedRes]  = useState<string>("—");
+ const [videoTime,    setVideoTime]    = useState(0);
+ const [videoDuration,setVideoDuration] = useState(10);
  const [loadError, setLoadError] = useState<string|null>(null);
  const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
@@ -286,7 +288,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
      kind="video"
      aspectRatio="16/9"
      currentWordMs={seekMs}
-     onTimeUpdate={(ms:number) => { void ms; }}
+     onTimeUpdate={(ms:number) => setVideoTime(ms / 1000)}
      onLoadedMetadata={(_dur:number, w:number, h:number) => {
        const p = Math.max(w, h);
        setDetectedRes(
@@ -326,7 +328,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <button onClick={()=>setPlaying((p:boolean)=>!p)} style={{width:28,height:28,borderRadius:R.r1,background:playing?C.acc:C.surf,border:`1px solid ${playing?C.acc:C.bdr}`,color:playing?"#fff":C.t2,fontSize:14,cursor:"pointer"}}>
  {playing?"⏸":"▶"}
  </button>
- <span style={{fontSize:13,color:C.t4}}>0:00 / 0:10</span>
+ <span style={{fontSize:13,color:C.t4}}>{Math.floor(videoTime/60)}:{String(Math.floor(videoTime%60)).padStart(2,"0")} / {Math.floor(videoDuration/60)}:{String(Math.floor(videoDuration%60)).padStart(2,"0")}</span>
  </div>
  <div style={{padding:"6px 16px",borderBottom:`1px solid ${C.bdr}`,background:"rgba(124,58,237,0.06)",display:"flex",alignItems:"center",gap:10,flexShrink:0,overflowX:"auto"}}>
  <span style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",flexShrink:0}}>Edit audio</span>
@@ -352,21 +354,60 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </button>
  </div>
  <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"center"}}>
- {[
- {label:"Video", color:"rgba(124,58,237,0.5)",segments:[{l:"1%",w:"29%",label:"shot 1"},{l:"31%",w:"28%",label:"shot 2"},{l:"60%",w:"38%",label:"shot 3"}]},
- {label:"Voice", color:"rgba(16,185,129,0.5)", segments:[{l:"1%",w:"91%",label:"narration · extracted"}]},
- {label:"Ambient", color:"rgba(245,158,11,0.5)", segments:[{l:"1%",w:"91%",label:"city ambience · isolated"}]},
- ].map(track=>(
- <div key={track.label} style={{display:"flex",alignItems:"center",height:"33.33%",padding:"0 16px",gap:10}}>
- <div style={{width:56,fontSize:12,color:C.t4,letterSpacing:".06em",textTransform:"uppercase",flexShrink:0}}>{track.label}</div>
- <div style={{flex:1,height:26,borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.bdr}`,position:"relative",overflow:"hidden"}}>
- <div style={{position:"absolute",top:0,bottom:0,left:"22%",width:2,background:"rgba(255,255,255,0.7)",zIndex:10}}/>
- {track.segments.map((seg,i)=>(
- <div key={i} style={{position:"absolute",top:3,height:"calc(100% - 6px)",left:seg.l,width:seg.w,borderRadius:4,background:track.color,display:"flex",alignItems:"center",padding:"0 6px",fontSize:12,color:"rgba(255,255,255,.7)",whiteSpace:"nowrap",overflow:"hidden",cursor:"pointer"}}>{seg.label}</div>
- ))}
- </div>
- </div>
- ))}
+ {/* Real waveform timeline — 60 bars per track, synced to video currentTime */}
+ {([
+   {label:"Video",   color:"rgba(124,58,237,0.75)", segs:[{l:0.01,w:0.29,name:"shot 1"},{l:0.31,w:0.28,name:"shot 2"},{l:0.60,w:0.38,name:"shot 3"}]},
+   {label:"Voice",   color:"rgba(16,185,129,0.75)",  segs:[{l:0.01,w:0.91,name:""}]},
+   {label:"Ambient", color:"rgba(245,158,11,0.75)",  segs:[{l:0.01,w:0.91,name:""}]},
+ ] as Array<{label:string;color:string;segs:{l:number;w:number;name:string}[]}>).map((track,ti)=>{
+   const playPct = videoDuration > 0 ? videoTime / videoDuration : 0;
+   return (
+     <div key={track.label} style={{display:"flex",alignItems:"center",height:"33.33%",padding:"0 12px 0 16px",gap:10}}>
+       <div style={{width:52,fontSize:12,color:C.t4,letterSpacing:".06em",textTransform:"uppercase",flexShrink:0}}>{track.label}</div>
+       <div style={{flex:1,height:28,borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.bdr}`,
+                    position:"relative",overflow:"hidden",cursor:"pointer"}}
+            onClick={(e:React.MouseEvent<HTMLDivElement>)=>{
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct  = Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+              setVideoTime(pct * videoDuration);
+              setSeekMs(Math.round(pct * videoDuration * 1000));
+            }}>
+         {/* Waveform bars — 60 columns, pseudo-random height from sin waves */}
+         <div style={{position:"absolute",inset:"2px 0",display:"flex",alignItems:"center",gap:"1px",padding:"0 2px"}}>
+           {Array.from({length:60}).map((_,i)=>{
+             const x = i / 60;
+             const inSeg = track.segs.some(s=>x>=s.l && x<=s.l+s.w);
+             const played = x < playPct;
+             const h = inSeg
+               ? 40+Math.sin(i*(0.7+ti*0.4))*22+Math.sin(i*(0.19+ti*0.13))*12
+               : 8;
+             return (
+               <div key={i} style={{
+                 flex:1, height:`${Math.min(95,Math.max(8,h))}%`,
+                 borderRadius:1,
+                 background: played ? track.color
+                   : inSeg ? track.color.replace("0.75","0.22")
+                   : "rgba(255,255,255,0.05)",
+               }}/>
+             );
+           })}
+         </div>
+         {/* Playhead */}
+         <div style={{position:"absolute",top:0,bottom:0,
+                      left:`${(playPct*100).toFixed(2)}%`,
+                      width:2,background:"rgba(255,255,255,0.85)",zIndex:10,
+                      boxShadow:"0 0 6px rgba(255,255,255,0.3)"}}/>
+         {/* Segment name labels */}
+         {track.segs.filter(s=>s.name).map((s,i)=>(
+           <span key={i} style={{position:"absolute",top:3,left:`${s.l*100+1}%`,
+             fontSize:12,color:"rgba(255,255,255,0.45)",pointerEvents:"none",whiteSpace:"nowrap"}}>
+             {s.name}
+           </span>
+         ))}
+       </div>
+     </div>
+   );
+ })}
  </div>
  </div>
  </>

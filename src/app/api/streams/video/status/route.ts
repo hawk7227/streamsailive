@@ -301,13 +301,21 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const falDurationMs = Date.now() - uploadStart;
 
-  // 8d. Finalize generation_log — durable URL only, never the fal temporary URL
+  // 8d. Extract cost from fal result (returned as result.cost.total_cost or metrics.cost)
+  const rawResult  = pollResult.raw as Record<string, unknown> | null;
+  const costObj    = rawResult ? (rawResult.cost as Record<string,unknown> | undefined) : undefined;
+  const falCostUsd = costObj?.total_cost != null ? Number(costObj.total_cost)
+    : rawResult?.cost != null ? Number(rawResult.cost)
+    : null;
+
+  // 8e. Finalize generation_log — durable URL only, never the fal temporary URL
   await admin
     .from("generation_log")
     .update({
       output_url:      storageUrl,
       fal_status:      "done",
       fal_duration_ms: falDurationMs,
+      ...(falCostUsd != null && { cost_usd: falCostUsd }),
     })
     .eq("id", generationId);
 

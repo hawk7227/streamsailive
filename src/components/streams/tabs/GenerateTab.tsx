@@ -79,7 +79,7 @@ const COST: Record<string, string> = {
  "Voice-Voice v3":"~$0.10 / 1K","Music-Music":"~$0.45 total",
 };
 
-interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; }
+interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; progress?: number; queuePos?: number; }
 
 interface GenerateTabProps {
  voiceId?: string | null;
@@ -924,7 +924,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
  position:"relative",overflow:"hidden",
  }}>
- {item.status==="running"&&<div style={{position:"absolute",inset:0,background:"rgba(124,58,237,.06)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{width:24,height:24,borderRadius:R.pill,border:`2px solid ${C.acc}`,borderTopColor:"transparent",display:"block",animation:"streams-spin 600ms linear infinite"}}/></div>}
+ 
  {item.status==="done"&&<>
  <div style={{fontSize: 28,color:C.t4,opacity:.2}}>▶</div>
  <div style={{position:"absolute",bottom:8,right:8}}>
@@ -963,7 +963,26 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
                     </button>
                   </div>
                 )}
- {item.status==="waiting"&&<div style={{fontSize: 13,color:C.t4}}>Waiting…</div>}
+ {item.status==="waiting"&&(
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:"8px"}}>
+                    <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${C.bdr}`,borderTopColor:C.acc,animation:"streams-spin 700ms linear infinite"}}/>
+                    <div style={{fontSize:12,color:C.t4}}>Queued{item.queuePos!=null?` · #${item.queuePos}`:""}</div>
+                  </div>
+                )}
+                {item.status==="running"&&(
+                  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:12}}>
+                    {/* Progress bar */}
+                    <div style={{width:"80%",height:3,borderRadius:R.pill,background:"rgba(255,255,255,0.1)"}}>
+                      <div style={{height:"100%",borderRadius:R.pill,background:C.acc,
+                        width:`${item.progress??0}%`,
+                        transition:"width 0.5s ease",
+                        minWidth: item.progress ? "4%" : "0%"}}/>
+                    </div>
+                    <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>
+                      {item.progress ? `${item.progress}%` : "Generating…"}
+                    </div>
+                  </div>
+                )}
  </div>
  ))}
  </div>

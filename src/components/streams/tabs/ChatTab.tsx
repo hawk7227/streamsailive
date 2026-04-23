@@ -31,7 +31,7 @@ const SEED_MSGS: Msg[] = [
   { id: "m4", role: "assistant", text: "Updated — sharp blazer, tailored trousers. Same motion, same light, same city energy." },
 ];
 
-type LibraryItem = { id: string; generation_type: string; output_url: string; created_at: string };
+type LibraryItem = { id: string; generation_type: string; output_url: string; created_at: string; cost_usd?: number | null };
 
 export default function ChatTab() {
   const [msgs,      setMsgs]      = useState<Msg[]>(SEED_MSGS);
