@@ -78,7 +78,12 @@ const COST: Record<string, string> = {
 
 interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; }
 
-export default function GenerateTab() {
+interface GenerateTabProps {
+  voiceId?:              string | null;
+  onGenerationComplete?: (url: string) => void;
+}
+
+export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete }: GenerateTabProps = {}) {
   // Rule 1: Music is default per streams.html spec (Music chip has 'active' class on load)
   const [mode,        setMode]        = useState<Mode>("Music");
   const [model,       setModel]       = useState(0);
@@ -309,6 +314,8 @@ export default function GenerateTab() {
         if (statusData.status === "completed") {
           stopPolling();
           setGenState("done");
+          const artUrl = (statusData as Record<string,unknown>).artifactUrl as string | undefined;
+          if (artUrl) onGenerationComplete?.(artUrl);
           setGrid((prev: GridItem[]) => prev.map((g: GridItem) =>
             g.generationId === ref.generationId || g.id === ref.generationId
               ? { ...g, id: ref.generationId, status: "done", outputUrl: (statusData as Record<string,unknown>).artifactUrl as string | undefined, generationId: ref.generationId }
@@ -935,9 +942,25 @@ export default function GenerateTab() {
         body:    JSON.stringify({ clips: clipUrls }),
       });
       const data = await res.json() as { generationId?: string; responseUrl?: string; error?: string };
-      if (res.ok && data.generationId) {
-        setStitchState("done");
-        // In production: poll status route for stitched output_url
+      if (res.ok && data.generationId && data.responseUrl) {
+        // Poll status for the stitched output URL
+        const stitchPoll = setInterval(async () => {
+          const sr = await fetch("/api/streams/video/status", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ generationId: data.generationId, responseUrl: data.responseUrl }),
+          });
+          const sd = await sr.json() as { status?:string; artifactUrl?:string };
+          if (sd.status === "done" && sd.artifactUrl) {
+            clearInterval(stitchPoll);
+            setStitchState("done");
+            setStitchUrl(sd.artifactUrl);
+          } else if (sd.status === "failed") {
+            clearInterval(stitchPoll);
+            setStitchState("idle");
+          }
+        }, 5000);
+        // Timeout after 3 min
+        setTimeout(() => { clearInterval(stitchPoll); }, 180_000);
       } else {
         setStitchState("idle");
       }
@@ -953,6 +976,15 @@ export default function GenerateTab() {
   {stitchState === "running" && <span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-spin 600ms linear infinite"}}/>}
   {stitchState === "done" ? "✓ Stitched" : stitchState === "running" ? "Stitching…" : "Stitch → fal"}
 </button>
+{stitchUrl && (
+  <a href={stitchUrl} target="_blank" rel="noopener noreferrer" style={{
+    padding:"8px 12px", borderRadius:R.r1,
+    background:C.green, color:"#fff",
+    fontSize:13, fontFamily:"inherit",
+    textDecoration:"none", flexShrink:0,
+    display:"flex", alignItems:"center", gap:6,
+  }}>↓ Stitched video</a>
+)}
         </div>}
       </div>
     </div>

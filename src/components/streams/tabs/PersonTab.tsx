@@ -12,6 +12,10 @@ import { C, R, DUR, EASE } from "../tokens";
 
 type EditOp = "voice" | "body" | "motion" | "dub" | "emotion" | "multishot";
 type IngestState = "idle" | "uploading" | "processing" | "done" | "failed";
+
+interface PersonTabProps {
+  onIngestComplete?: (data: { analysisId: string; genLogId: string; voiceId?: string | null }) => void;
+}
 type OpState = "idle" | "running" | "done";
 
 const INGEST_STEPS = [
@@ -67,7 +71,7 @@ const EDIT_OPS: {
   },
 ];
 
-export default function PersonTab() {
+export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
   const [analysisId,   setAnalysisId]   = useState<string | null>(null);
   const [genLogId,     setGenLogId]     = useState<string | null>(null);
@@ -108,6 +112,12 @@ export default function PersonTab() {
         if (statusData.status === "done") {
           clearInterval(pollRef.current!);
           setIngestState("done");
+          // Notify StreamsPanel so VideoEditorTab can load transcript
+          onIngestComplete?.({
+            analysisId: data.analysisId ?? "",
+            genLogId:   data.analysisId ?? "", // analysisId used as genLogId until real link
+            voiceId:    null,             // populated after IVC step completes
+          });
         } else if (statusData.status === "failed") {
           clearInterval(pollRef.current!);
           setIngestError("Ingest pipeline failed");

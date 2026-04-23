@@ -2,8 +2,8 @@
   "build": {
     "project": "StreamsAI",
     "version": "0.4.0",
-    "timestamp": "2026-04-22T23:28:24Z",
-    "commit": "cf94a92",
+    "timestamp": "2026-04-23T00:06:33Z",
+    "commit": "5f6c39d",
     "branch": "main",
     "status": "passing"
   },
@@ -26,7 +26,8 @@
       "Settings"
     ],
     "mobile_first": true,
-    "design_tokens_locked": true
+    "design_tokens_locked": true,
+    "cross_tab_state": true
   },
   "api_routes": {
     "proven": [
