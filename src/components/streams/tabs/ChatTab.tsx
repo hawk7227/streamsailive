@@ -51,6 +51,7 @@ export default function ChatTab() {
   const msgHistoryRef = React.useRef<Record<string, Msg[]>>({ current: SEED_MSGS });
 
   const [library,      setLibrary]     = useState<LibraryItem[]>([]);
+  const [expandedLib,  setExpandedLib]  = useState<string|null>(null);
   const [libraryLoading, setLibLoad]  = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -194,7 +195,7 @@ export default function ChatTab() {
       ].map(nav => (
         <button key={nav.label} onClick={() => {
                 setActiveNav(nav.label);
-                if (nav.label === "Library" && library.length === 0) {
+                if ((nav.label === "Library" || nav.label === "Images") && library.length === 0) {
                   setLibLoad(true);
                   fetch("/api/streams/library?limit=20")
                     .then(r => r.json())
@@ -235,6 +236,19 @@ export default function ChatTab() {
           <div style={{ fontSize: 12, color: C.t4 }}>{s.time}</div>
         </button>
       ))}
+      {activeNav === "Images" && (
+        <div style={{ padding: "12px 8px" }}>
+          <div style={{ fontSize: 13, color: C.t4, marginBottom: 8 }}>Generated images</div>
+          {library.filter((i:LibraryItem) => i.generation_type === "image").length === 0 && (
+            <div style={{ fontSize: 13, color: C.t4 }}>No images yet — generate in Generate tab</div>
+          )}
+          {library.filter((i:LibraryItem) => i.generation_type === "image").map((item:LibraryItem) => (
+            <div key={item.id} style={{ marginBottom: 8, borderRadius: R.r1, overflow: "hidden", border: `1px solid ${C.bdr}` }}>
+              <MediaPlayer src={item.output_url} kind="image" aspectRatio="1/1" showDownload label="Image"/>
+            </div>
+          ))}
+        </div>
+      )}
       {activeNav === "Library" && (
         <div style={{ padding: "0 8px" }}>
           {libraryLoading && (
@@ -294,8 +308,8 @@ export default function ChatTab() {
                     >↗</a>
                   )}
                 </div>
-                {/* 4K thumbnail — inline preview */}
-                {hasOutput && (
+                {/* 4K preview — click thumbnail to expand player */}
+                {hasOutput && expandedLib === item.id && (
                   <div style={{ borderRadius: 4, overflow: "hidden", marginTop: 6 }}>
                     <MediaPlayer
                       src={item.output_url}
@@ -306,8 +320,14 @@ export default function ChatTab() {
                     />
                   </div>
                 )}
-                <div style={{ display:"none" }}>{/* spacer closed above */}
-                </div>
+                {hasOutput && expandedLib !== item.id && (
+                  <button onClick={(e:React.MouseEvent)=>{e.stopPropagation();setExpandedLib(item.id);}}
+                    style={{marginTop:6,width:"100%",padding:"4px 0",borderRadius:4,
+                      background:C.bg4,border:`1px solid ${C.bdr}`,color:C.t4,
+                      fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+                    ▶ Preview
+                  </button>
+                )}
               </div>
             );
           })}
@@ -396,7 +416,24 @@ export default function ChatTab() {
                   )}
                 </div>
                 {/* Inline media placeholder */}
-                {msg.mediaUrl && msg.mediaUrl !== "placeholder" && (
+                {msg.role === "assistant" && !msg.mediaUrl && (
+                    /generat|creat|make.*video|make.*image/i.test(msg.text)
+                  ) && (
+                    <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+                      {["Generate video", "Generate image", "Generate voice"].map(action => (
+                        <button key={action} onClick={() => {
+                          // Pre-fill prompt from last user message + switch to Generate tab
+                          void action; // tab switching handled by StreamsPanel
+                        }}
+                        style={{ padding:"4px 10px", borderRadius:R.pill,
+                          background:C.accDim, border:`1px solid ${C.accBr}`,
+                          color:C.acc2, fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>
+                          {action} →
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {msg.mediaUrl && msg.mediaUrl !== "placeholder" && (
                   <div style={{ width: "100%", maxWidth: 360, marginTop: 8 }}>
                     <MediaPlayer
                       src={msg.mediaUrl}
@@ -447,14 +484,21 @@ export default function ChatTab() {
             borderRadius: R.r3, padding: "8px 12px",
           }}>
             {/* Attach */}
-            <button style={{
+            <button title="Attach file URL" onClick={() => {
+              const url = window.prompt("Paste an image or video URL to attach:");
+              if (url?.trim()) setInput((prev:string) => prev + (prev?" ":"") + url.trim());
+            }} style={{
               background: "transparent", border: "none", color: C.t4,
               fontSize: 16, cursor: "pointer", padding: 2, flexShrink: 0,
             }}>⊕</button>
 
             <textarea
               value={input}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+              }}
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
               placeholder={`Message Streams — ${mode} mode`}
               rows={1}

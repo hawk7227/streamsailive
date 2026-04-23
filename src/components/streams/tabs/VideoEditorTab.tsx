@@ -66,6 +66,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const [editText, setEditText] = useState("");
  const [playing, setPlaying] = useState(false);
  const [revoiceState, setRevoiceState] = useState<"idle"|"running"|"done">("idle");
+  const [voiceChoice,  setVoiceChoice]  = useState("cloned");
  const [applyMotion, setApplyMotion] = useState<Record<string,"idle"|"running"|"done">>({});
  const [dubLang, setDubLang] = useState("Spanish");
  const [dubState, setDubState] = useState<"idle"|"running"|"done">("idle");
@@ -213,7 +214,16 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  }}>
  <div style={{width:"100%",aspectRatio:"16/9",borderRadius:4,marginBottom:6,overflow:"hidden"}}>
    {videoUrl
-     ? <MediaPlayer src={videoUrl} kind="video" aspectRatio="16/9" showDownload={false} label={shot.num}/>
+     ? <MediaPlayer
+         src={videoUrl} kind="video" aspectRatio="16/9" showDownload={false}
+         label={shot.num}
+         currentWordMs={activeShot===shot.id ? (()=>{
+           // Parse shot start time "M:SS-M:SS" → ms
+           const start = shot.time?.split("-")[0] ?? "0:00";
+           const [m,s] = start.split(":").map(Number);
+           return (m*60+s)*1000;
+         })() : undefined}
+       />
      : <div style={{width:"100%",height:"100%",background:C.bg4,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${C.bdr}`,borderRadius:4}}>
          <span style={{fontSize:13,color:C.t4,opacity:.4}}>▶</span>
        </div>
@@ -325,9 +335,9 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  {/* Timeline */}
  <div style={{height:180,flexShrink:0,borderTop:`1px solid ${C.bdr}`,background:C.bg2,display:"flex",flexDirection:"column"}}>
  <div style={{height:36,flexShrink:0,borderBottom:`1px solid ${C.bdr}`,padding:"0 16px",display:"flex",alignItems:"center",gap:10}}>
- <button onClick={()=>setPlaying((p:boolean)=>!p)} style={{width:28,height:28,borderRadius:R.r1,background:playing?C.acc:C.surf,border:`1px solid ${playing?C.acc:C.bdr}`,color:playing?"#fff":C.t2,fontSize:14,cursor:"pointer"}}>
- {playing?"⏸":"▶"}
- </button>
+ <span style={{fontSize:13,color:C.t4}}>
+   Space to play · , . for frames
+ </span>
  <span style={{fontSize:13,color:C.t4}}>{Math.floor(videoTime/60)}:{String(Math.floor(videoTime%60)).padStart(2,"0")} / {Math.floor(videoDuration/60)}:{String(Math.floor(videoDuration%60)).padStart(2,"0")}</span>
  </div>
  <div style={{padding:"6px 16px",borderBottom:`1px solid ${C.bdr}`,background:"rgba(124,58,237,0.06)",display:"flex",alignItems:"center",gap:10,flexShrink:0,overflowX:"auto"}}>
@@ -335,7 +345,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <div style={{display:"flex",flexWrap:"nowrap",gap:4,flex:1,overflowX:"auto"}}>
  {(selectedWord
  ? (transcript.find((l:TranscriptLine)=>l.words.includes(selectedWord??""))?.words ?? transcript[1]?.words ?? [])
- : (transcript[1]?.words ?? [])
+ : (transcript[0]?.words ?? [])
  ).map((w:string,i:number)=>(
  <span key={i} onClick={()=>{
  selectWord(w);
@@ -344,8 +354,12 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  }} style={{padding:"2px 8px",borderRadius:R.r1,fontSize:14,background:selectedWord===w?C.accDim:C.surf,border:`1px solid ${selectedWord===w?C.acc:C.bdr}`,color:selectedWord===w?C.t1:C.t2,cursor:"pointer",whiteSpace:"nowrap"}}>{w}</span>
  ))}
  </div>
- <select style={{background:C.bg3,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,borderRadius:R.r1,padding:"3px 8px",fontFamily:"inherit",flexShrink:0}}>
- <option>Aria · ElevenLabs</option><option>Rachel</option><option>Adam</option>
+ <select value={voiceChoice} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setVoiceChoice(e.target.value)}
+  style={{background:C.bg3,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,borderRadius:R.r1,padding:"3px 8px",fontFamily:"inherit",flexShrink:0}}>
+  <option value="cloned">Cloned voice</option>
+  <option value="aria">Aria</option>
+  <option value="rachel">Rachel</option>
+  <option value="adam">Adam</option>
  </select>
  <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)} placeholder="Edit selected word…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,color:C.t1,fontSize:14,padding:"4px 8px",fontFamily:"inherit",outline:"none",width:140,flexShrink:0}}/>
  <button onClick={handleReVoice} style={{padding:"4px 16px",borderRadius:R.r1,background:revoiceState==="done"?C.green:revoiceState==="running"?C.bg4:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:revoiceState==="running"?"not-allowed":"pointer",flexShrink:0,transition:`background ${DUR.fast} ${EASE}`,display:"flex",alignItems:"center",gap:5}}>

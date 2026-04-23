@@ -1065,15 +1065,6 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {stitchState === "running" && <span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-spin 600ms linear infinite"}}/>}
  {stitchState === "done" ? "✓ Stitched" : stitchState === "running" ? "Stitching…" : "Stitch → fal"}
 </button>
-{stitchUrl && (
- <a href={stitchUrl} target="_blank" rel="noopener noreferrer" style={{
- padding:"8px 12px", borderRadius:R.r1,
- background:C.green, color:"#fff",
- fontSize:13, fontFamily:"inherit",
- textDecoration:"none", flexShrink:0,
- display:"flex", alignItems:"center", gap:6,
- }}>↓ Stitched video</a>
-)}
  </div>}
  </div>
  </div>

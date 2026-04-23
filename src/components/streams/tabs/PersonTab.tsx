@@ -118,9 +118,9 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
         return;
       }
       setAnalysisId(data.analysisId);
-      // genLogId linked via person_analysis.generation_log_id in production
-      // Using analysisId as temporary link until real generationLogId is available
-      setGenLogId(data.analysisId);
+      // genLogId: use generationLogId if ingest route returns it, else analysisId as fallback
+      // The ingest route creates a generation_log row and returns its ID
+      setGenLogId((data as Record<string,unknown>).generationLogId as string ?? data.analysisId);
       setIngestState("processing");
 
       // Poll ingest/status every 8s
@@ -186,12 +186,14 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
     }
 
     try {
+      // propVideoUrl from StreamsPanel.sharedVideoUrl — all ops need source video
+      const srcVideo = propVideoUrl ?? "";
       const bodyMap: Record<string, Record<string, unknown>> = {
-        "voice":    { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: "" },
+        "voice":    { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: srcVideo },
         "body":     { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction", audioUrl: undefined },
-        "motion":   { generationLogId: genLogId, firstFrameUrl: "", newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: "" },
-        "dub":      { generationLogId: genLogId, videoUrl: "", targetLanguage: "es" },
-        "emotion":  { generationLogId: genLogId, videoUrl: "", emotion: "happy" },
+        "motion":   { generationLogId: genLogId, firstFrameUrl: srcVideo, newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: srcVideo },
+        "dub":      { generationLogId: genLogId, videoUrl: srcVideo, targetLanguage: "es" },
+        "emotion":  { generationLogId: genLogId, videoUrl: srcVideo, emotion: "happy" },
         "multishot":{ prompt: "continue the scene", duration: "5", aspectRatio: "16:9" },
       };
 
@@ -219,6 +221,9 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
           if (sd.status === "done" || sd.status === "completed") {
             clearInterval(omniInterval);
             setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" }));
+            if (sd.artifactUrl) {
+              setOpResults((prev: Record<string,string>) => ({ ...prev, [id]: sd.artifactUrl as string }));
+            }
           } else if (sd.status === "failed") {
             clearInterval(omniInterval);
             setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
@@ -448,7 +453,18 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
           </div>
         </div>
 
-        {/* Backend note */}
+        {/* Op result previews */}
+      {Object.entries(opResults).length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {Object.entries(opResults).map(([opId, url]) => (
+            <div key={opId} style={{ borderRadius:R.r2, overflow:"hidden", border:`1px solid ${C.bdr}` }}>
+              <MediaPlayer src={url as string} kind="video" aspectRatio="16/9" showDownload label={opId}/>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Backend note */}
         <div style={{
           padding: "12px 16px", borderRadius: R.r2,
           border: `1px solid ${C.bdr}`, background: C.bg3,

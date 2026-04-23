@@ -9,6 +9,7 @@ import MediaPlayer from "../VideoPlayer";
  */
 
 import { useState } from "react";
+import FileUpload from "../FileUpload";
 import { C, R, DUR, EASE } from "../tokens";
 
 type Source = "Upload" | "URL" | "YouTube";
@@ -57,9 +58,40 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
     }
   }
 
-  function doAction(name: string) {
+  const [actionResults, setActionResults] = useState<Record<string,string>>({});
+
+  async function doAction(name: string) {
+    if (!urlInput) return;
     setActions((a: Record<string, ActionState>) => ({ ...a, [name]: "running" }));
-    setTimeout(() => setActions((a: Record<string, ActionState>) => ({ ...a, [name]: "done" })), 2400);
+    const reconstructionPrompt = (analysisData?.reconstruction_prompt as string)
+      ?? "Cinematic street portrait, woman in tailored blazer, 85mm equiv, golden hour f/1.8, warm 4200K, urban bokeh background, photorealistic";
+
+    const promptMap: Record<string, string> = {
+      "Recreate":   reconstructionPrompt,
+      "Variation":  reconstructionPrompt + ", different composition, new angle",
+      "Style only": reconstructionPrompt + ", different subject, same visual style",
+      "Animate":    reconstructionPrompt,
+    };
+
+    try {
+      const isVideo = name === "Animate";
+      const route   = isVideo ? "/api/streams/video/generate" : "/api/streams/image/generate";
+      const body    = isVideo
+        ? { prompt: promptMap[name], duration: "5", aspectRatio: "16:9" }
+        : { model: "kontext", prompt: promptMap[name], aspectRatio: "1:1" };
+
+      const res  = await fetch(route, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      const data = await res.json() as { outputUrl?: string; generationId?: string; error?: string };
+
+      if (res.ok && data.outputUrl) {
+        setActionResults((r:Record<string,string>) => ({ ...r, [name]: data.outputUrl! }));
+        setActions((a: Record<string, ActionState>) => ({ ...a, [name]: "done" }));
+      } else {
+        setActions((a: Record<string, ActionState>) => ({ ...a, [name]: "idle" }));
+      }
+    } catch {
+      setActions((a: Record<string, ActionState>) => ({ ...a, [name]: "idle" }));
+    }
   }
 
   return (
@@ -113,15 +145,21 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
               </div>
             )}
             {source === "Upload" && (
-              <div onClick={runAnalysis} style={{
-                border: `1px dashed ${C.bdr2}`, borderRadius: R.r2,
-                padding: "24px 16px", textAlign: "center", cursor: "pointer",
-                background: C.bg3, transition: `border-color ${DUR.fast} ${EASE}`,
+              <FileUpload
+                accept="any"
+                label="Upload reference"
+                sublabel="image · video · up to 500MB"
+                onUpload={(url: string) => { setUrlInput(url); }}
+              />
+            )}
+            {source === "Upload" && urlInput && (
+              <button onClick={runAnalysis} style={{
+                marginTop: 8, width: "100%", padding: "8px 0", borderRadius: R.r1,
+                background: C.acc, border: "none", color: "#fff",
+                fontSize: 14, fontFamily: "inherit", cursor: "pointer",
               }}>
-                <div style={{ fontSize: 24, color: C.t4, marginBottom: 8, opacity: .5 }}>↑</div>
-                <div style={{ fontSize: 15, color: C.t2, fontWeight: 500 }}>Drop file or click</div>
-                <div style={{ fontSize: 13, color: C.t4, marginTop: 4 }}>image · video · up to 2GB</div>
-              </div>
+                Analyze →
+              </button>
             )}
 
             {(source === "URL" || source === "YouTube") && (
@@ -135,16 +173,20 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
                     padding: "8px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none",
                   }}
                 />
-                <button onClick={runAnalysis} style={{
-                  padding: "8px 12px", borderRadius: R.r1, background: C.acc,
-                  border: "none", color: "#fff", fontSize: 15, cursor: "pointer",
+                <button onClick={source === "YouTube" ? undefined : runAnalysis}
+                  disabled={source === "YouTube" || !urlInput.trim()}
+                  style={{
+                  padding: "8px 12px", borderRadius: R.r1,
+                  background: (source === "YouTube" || !urlInput.trim()) ? C.bg4 : C.acc,
+                  border: "none", color: (source === "YouTube" || !urlInput.trim()) ? C.t4 : "#fff",
+                  fontSize: 15, cursor: (source === "YouTube" || !urlInput.trim()) ? "not-allowed" : "pointer",
                 }}>→</button>
               </div>
             )}
 
             {source === "YouTube" && (
-              <div style={{ fontSize: 12, color: C.t4, marginTop: 8, lineHeight: 1.5 }}>
-                Server-side: yt-dlp → ffmpeg frame extract → audio isolation → Scribe v2 → GPT-4o Vision. 60–90s. Worker job — not HTTP route.
+              <div style={{ fontSize: 12, color: C.amber, marginTop: 8, lineHeight: 1.5, padding: "8px 12px", borderRadius: R.r1, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                YouTube requires a background worker (yt-dlp → ffmpeg → Scribe). Not available in HTTP routes — coming in next release.
               </div>
             )}
           </div>
@@ -222,7 +264,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
                   "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
                   "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
                 ]).map((vp: string, i: number) => (
-                  <div key={i} onClick={() => {}} style={{ padding: "6px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: "pointer", lineHeight: 1.5 }}>
+                  <div key={i} onClick={() => onSelectPrompt?.(vp)} style={{ padding: "6px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: onSelectPrompt ? "pointer" : "default", lineHeight: 1.5, transition:`background 150ms ease` }}>
                     {vp}
                   </div>
                 ))}
@@ -288,28 +330,19 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
             )}
           </div>
 
-          {/* Output grid */}
-          <div style={{ height: 100, flexShrink: 0, borderTop: `1px solid ${C.bdr}`, background: C.bg2, display: "flex", gap: 0 }}>
-            {["output_01","output_02","output_03"].map((label, i) => (
-              <div key={label} style={{
-                flex: 1, borderRight: i < 2 ? `1px solid ${C.bdr}` : "none",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexDirection: "column", gap: 6,
-                background: actions[["Recreate","Variation","Style only"][i]] === "done" ? C.accDim : "transparent",
-              }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: R.r1, background: C.bg3, border: `1px solid ${C.bdr}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {actions[["Recreate","Variation","Style only"][i]] === "running"
-                    ? <span style={{ width: 14, height: 14, borderRadius: R.pill, border: `2px solid ${C.acc}`, borderTopColor: "transparent", display: "block", animation: "streams-spin 600ms linear infinite" }} />
-                    : <span style={{ fontSize: 15, color: C.t4 }}>□</span>
-                  }
+          {/* Output grid — shows real generated results */}
+          {Object.keys(actionResults).length > 0 && (
+            <div style={{ flexShrink:0, borderTop:`1px solid ${C.bdr}`, background:C.bg2, padding:8, display:"flex", gap:8, overflowX:"auto" }}>
+              {Object.entries(actionResults).map(([name, url]) => (
+                <div key={name} style={{ minWidth:140, flexShrink:0 }}>
+                  <div style={{ fontSize:12, color:C.t4, marginBottom:4 }}>{name}</div>
+                  <div style={{ borderRadius:R.r1, overflow:"hidden" }}>
+                    <MediaPlayer src={url as string} kind={name==="Animate"?"video":"image"} aspectRatio="1/1" showDownload label={name}/>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: C.t4 }}>{label}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
