@@ -178,7 +178,7 @@ export default function ChatTab() {
                 }
               }} style={{
           display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 16px", border: "none",
+          padding: "8px 16px", border: "none",
           background: activeNav === nav.label ? C.surf2 : "transparent",
           color: activeNav === nav.label ? C.t1 : C.t3,
           fontSize: 15, fontFamily: "inherit", cursor: "pointer",
@@ -215,7 +215,7 @@ export default function ChatTab() {
             const hasOutput = !!item.output_url;
             return (
               <div key={item.id} style={{
-                padding: "8px 10px", borderRadius: R.r1, marginBottom: 5, cursor: "pointer",
+                padding: "8px 8px", borderRadius: R.r1, marginBottom: 5, cursor: "pointer",
                 background: C.surf, border: `1px solid ${C.bdr}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -263,7 +263,7 @@ export default function ChatTab() {
 
         {/* AI assistant header — badge + title + subtitle */}
         <div style={{ padding: "16px 32px 0", flexShrink: 0 }} className="streams-chat-header">
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 8px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
             <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
             Chat · image · video · build
           </div>
@@ -273,13 +273,13 @@ export default function ChatTab() {
 
         {/* Mobile top bar */}
         <div className="streams-chat-mobile-bar" style={{
-          display: "none", padding: "10px 16px",
+          display: "none", padding: "8px 16px",
           borderBottom: `1px solid ${C.bdr}`,
           alignItems: "center", gap: 10,
         }}>
           <button onClick={() => setSidebar(!sidebarOpen)} style={{
             background: "transparent", border: `1px solid ${C.bdr}`,
-            borderRadius: R.r1, padding: "6px 10px", color: C.t3,
+            borderRadius: R.r1, padding: "6px 8px", color: C.t3,
             fontSize: 15, cursor: "pointer", fontFamily: "inherit",
           }}>☰</button>
           <span style={{ fontSize: 14, color: C.t3 }}>New conversation</span>
@@ -316,7 +316,7 @@ export default function ChatTab() {
                   </div>
                 )}
                 <div style={{
-                  padding: "10px 16px",
+                  padding: "8px 16px",
                   borderRadius: msg.role === "user" ? `${R.r2}px 4px ${R.r2}px ${R.r2}px` : `4px ${R.r2}px ${R.r2}px ${R.r2}px`,
                   background: msg.role === "user" ? C.acc : C.surf,
                   border: msg.role === "user" ? "none" : `1px solid ${C.bdr}`,
@@ -378,7 +378,7 @@ export default function ChatTab() {
           <div style={{
             display: "flex", gap: 8, alignItems: "flex-end",
             background: C.bg3, border: `1px solid ${C.bdr}`,
-            borderRadius: R.r3, padding: "10px 12px",
+            borderRadius: R.r3, padding: "8px 12px",
           }}>
             {/* Attach */}
             <button style={{
@@ -423,8 +423,8 @@ export default function ChatTab() {
           .streams-chat-sidebar { display: none !important; }
           .streams-chat-mobile-bar { display: flex !important; }
           .streams-chat-msgs { padding: 16px !important; }
-          .streams-chat-header { padding: 10px 16px 0 !important; }
-          .streams-chat-input { padding: 10px 16px 16px !important; }
+          .streams-chat-header { padding: 8px 16px 0 !important; }
+          .streams-chat-input { padding: 8px 16px 16px !important; }
         }
       `}</style>
     </div>

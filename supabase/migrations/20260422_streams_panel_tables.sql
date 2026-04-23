@@ -175,3 +175,24 @@ CREATE INDEX IF NOT EXISTS idx_share_links_slug      ON share_links(slug);
 CREATE INDEX IF NOT EXISTS idx_share_links_workspace ON share_links(workspace_id);
 
 ALTER TABLE share_links ENABLE ROW LEVEL SECURITY;
+
+-- ── analyst_sessions ────────────────────────────────────────────────────────
+-- Stores prompt analyst results for audit trail and cost tracking.
+-- Non-blocking insert — analyst route continues if this fails.
+CREATE TABLE IF NOT EXISTS public.analyst_sessions (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id          UUID NOT NULL,
+  mode                  TEXT NOT NULL,
+  input_prompt          TEXT NOT NULL,
+  analysis              JSONB,
+  model_recommendation  TEXT,
+  cost_before_usd       NUMERIC(10,4),
+  cost_after_usd        NUMERIC(10,4),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS analyst_sessions_workspace_idx ON public.analyst_sessions(workspace_id);
+ALTER TABLE public.analyst_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "workspace_access" ON public.analyst_sessions
+  FOR ALL USING (workspace_id IN (
+    SELECT workspace_id FROM public.workspace_memberships WHERE user_id = auth.uid()
+  ));

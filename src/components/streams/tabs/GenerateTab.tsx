@@ -80,10 +80,12 @@ interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?:
 
 interface GenerateTabProps {
   voiceId?:              string | null;
+  initialPrompt?:        string | null;
   onGenerationComplete?: (url: string) => void;
+  onPromptConsumed?:     () => void;
 }
 
-export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete }: GenerateTabProps = {}) {
+export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGenerationComplete, onPromptConsumed }: GenerateTabProps = {}) {
   // Rule 1: Music is default per streams.html spec (Music chip has 'active' class on load)
   const [mode,        setMode]        = useState<Mode>("Music");
   const [model,       setModel]       = useState(0);
@@ -204,6 +206,14 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
   useEffect(() => {
     return () => { stopPolling(); };
   }, []);
+
+  // Consume initialPrompt from ReferenceTab variation prompt selection
+  useEffect(() => {
+    if (!initialPrompt) return;
+    setPrompt(initialPrompt);
+    setMode("Image");          // reference analysis → image generation
+    onPromptConsumed?.();
+  }, [initialPrompt]);         // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleGenerate() {
     if (isActive) return;
@@ -365,7 +375,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
 
       {/* Mode bar */}
       <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
-        <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 10px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
+        <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 8px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
         {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
           <button key={m} onClick={()=>{setMode(m);setModel(0);setUseCustom(false);}} style={{
             height:44,padding:"0 16px",border:"none",flexShrink:0,
@@ -381,7 +391,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
         <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10}}>
           {([["style-lyrics","Style + Lyrics"],["auto-lyrics","Auto-Lyrics"],["instrumental","Instrumental"],["cover","Cover"],["my-voice","My Voice"]] as [MusicSub,string][]).map(([id,label])=>(
             <button key={id} onClick={()=>setMusicSub(id)} style={{
-              padding:"4px 10px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
+              padding:"4px 8px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
               border:`1px solid ${musicSub===id?C.acc:C.bdr}`,
               background:musicSub===id?C.acc:"transparent",
               color:musicSub===id?"#fff":C.t3,
@@ -399,7 +409,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
             {models.map((m,i)=>(
               <button key={m} onClick={()=>setModel(i)} style={{
-                padding:"4px 10px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",
+                padding:"4px 8px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",
                 border:`1px solid ${model===i?C.acc:C.bdr}`,
                 background:model===i?C.accDim:"transparent",
                 color:model===i?C.acc2:C.t3,
@@ -418,7 +428,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={4} maxLength={2500}
               placeholder={mode==="Motion"?"Describe how the character looks (hair, clothing, build)…":"Describe the video…"}
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
         )}
 
@@ -436,7 +446,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
             <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion prompt</div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={3} placeholder="Slow cinematic push-in, golden hour stays consistent…"
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
         </>)}
 
@@ -499,7 +509,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                 );
               })}
               {selectedTpl&&(
-                <div style={{padding:"10px 12px",borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.accBr}`,fontSize:12,color:C.t3}}>
+                <div style={{padding:"8px 12px",borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.accBr}`,fontSize:12,color:C.t3}}>
                   Selected: <span style={{color:C.acc2}}>{TEMPLATES.find(t=>t.id===selectedTpl)?.label}</span> · {roundedW}×{roundedH}px · Recraft V4 Design
                 </div>
               )}
@@ -511,7 +521,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
               <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
                 rows={4} maxLength={2500} placeholder="Describe the image…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
             </div>
           )}
 
@@ -521,7 +531,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               <span>Size</span>
               {canCustomSize && (
                 <button onClick={()=>setUseCustom((u:boolean)=>!u)} style={{
-                  fontSize:12,padding:"2px 10px",borderRadius:R.pill,cursor:"pointer",fontFamily:"inherit",
+                  fontSize:12,padding:"2px 8px",borderRadius:R.pill,cursor:"pointer",fontFamily:"inherit",
                   border:`1px solid ${useCustom?C.acc:C.bdr}`,
                   background:useCustom?C.accDim:"transparent",
                   color:useCustom?C.acc2:C.t3,
@@ -540,7 +550,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                     <input
                       type="number" value={customW} min={64} max={4096} step={8}
                       onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setCustomW(e.target.value)}
-                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
+                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
                     />
                     <div style={{fontSize:12,color:C.acc2,marginTop:3}}>
                       → {roundedW > 0 ? `${roundedW}px` : "—"}
@@ -552,7 +562,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                     <input
                       type="number" value={customH} min={64} max={4096} step={8}
                       onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setCustomH(e.target.value)}
-                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
+                      style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none"}}
                     />
                     <div style={{fontSize:12,color:C.acc2,marginTop:3}}>
                       → {roundedH > 0 ? `${roundedH}px` : "—"}
@@ -599,7 +609,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
             </div>
             <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
               rows={5} placeholder="Enter text. Use [excited] or [whispers] inline for emotion."
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
           </div>
           <div>
             <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Stability <span style={{color:C.t4,textTransform:"none",letterSpacing:0}}>0–1</span></div>
@@ -621,7 +631,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
               <input value={topic} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setTopic(e.target.value)}
                 placeholder="A woman finding her power in the city at night"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <div>
               <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
@@ -629,7 +639,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
               <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
                 {STYLE_TPLS.map(t=>(
                   <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{
@@ -654,7 +664,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                    sub:camState==="done"?"face_reference.jpg stored · OmniHuman guidance_scale:1 ready":"Frontal, good light · 512×512px min · no sunglasses",onClick:handleCam},
                 ].map(btn=>(
                   <button key={btn.id} onClick={btn.onClick} style={{
-                    display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:R.r2,
+                    display:"flex",alignItems:"center",gap:12,padding:"8px 12px",borderRadius:R.r2,
                     border:`1px solid ${btn.state!=="idle"?C.acc:C.bdr}`,
                     background:btn.state!=="idle"?C.accDim:C.bg3,
                     cursor:"pointer",textAlign:"left",width:"100%",
@@ -672,16 +682,16 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
 
             {/* Rule 6: Pipeline card with exact presets baked in */}
             <div style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r2,overflow:"hidden"}}>
-              <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.bdr}`,fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>
+              <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.bdr}`,fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>
                 Generation pipeline — all presets pre-configured
               </div>
-              <div style={{padding:"10px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
+              <div style={{padding:"8px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
                 {PIPE_NODES.map(node=>(
                   <div
                     key={node.ep}
                     title={node.tip}
                     style={{
-                      padding:"8px 10px",borderRadius:R.r1,fontSize: 13,fontFamily:"inherit",
+                      padding:"8px 8px",borderRadius:R.r1,fontSize: 13,fontFamily:"inherit",
                       background:C.bg4,border:`1px solid ${node.hi?C.accBr:C.bdr}`,
                       cursor:"help",flex:"0 0 calc(50% - 3px)",
                     }}
@@ -692,7 +702,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                 ))}
               </div>
               {/* Preset box — Rule 6 compliance */}
-              <div style={{padding:"10px 12px",borderTop:`1px solid ${C.bdr}`,background:C.bg4,fontSize: 13,color:C.t3,lineHeight:1.7}}>
+              <div style={{padding:"8px 12px",borderTop:`1px solid ${C.bdr}`,background:C.bg4,fontSize: 13,color:C.t3,lineHeight:1.7}}>
                 <div><strong style={{color:C.t2}}>Voice preset (auto-applied):</strong> stability 0.30 · similarity_boost 0.85 · style 0.80 · speed 0.95</div>
                 <div style={{marginTop:4,color:C.t4}}>stability 0.30 = Creative mode — broad emotional range, natural vibrato, musical dynamics. Structure tags signal intensity. No speaker_boost on v3.</div>
                 <div style={{marginTop:4}}><strong style={{color:C.t2}}>Animate preset:</strong> guidance_scale 1 · audio_guidance_scale 2 · resolution 720p</div>
@@ -707,7 +717,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Topic / theme</div>
               <input value={topic} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setTopic(e.target.value)}
                 placeholder="A woman finding her power in the city at night"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <div>
               <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
@@ -715,7 +725,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
               <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
                 {STYLE_TPLS.map(t=>(
                   <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{padding:"3px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3}}>{t.label}</button>
@@ -734,13 +744,13 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
                 </div>
                 <textarea ref={lyricsRef} value={lyricsInput} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setLyricsInput(e.target.value)}
                   rows={5} placeholder={"[Verse]\nNeon lights on wet asphalt glow\n\n[Chorus]\nThis is my city, my time, my sky"}
-                  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 14,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+                  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 14,fontFamily:"inherit",resize:"none",outline:"none"}}/>
               </div>
             )}
             {musicSub==="cover"&&(
               <div>
                 <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Reference audio <span style={{color:C.t3,textTransform:"none",letterSpacing:0}}>— vocals required · min 15s</span></div>
-                <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
+                <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"16px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
                   <div style={{fontSize: 13,color:C.t3}}>Drop audio or click · wav · mp3</div>
                 </div>
               </div>
@@ -755,7 +765,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               </div>
               <input value={styleInput} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStyleInput(e.target.value)}
                 placeholder="Soulful R&B, warm, cinematic, 85 BPM, B minor…"
-                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}/>
             </div>
           )}
         </>)}
@@ -765,7 +775,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
           <div>
             <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Duration</div>
             <select value={duration} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setDuration(e.target.value as Duration)}
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"7px 10px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}>
+              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",outline:"none"}}>
               {(["3","4","5","8","10","15"] as Duration[]).map(d=><option key={d} value={d}>{d}s</option>)}
             </select>
           </div>
@@ -797,7 +807,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
       </div>
 
       {/* Footer */}
-      <div style={{padding:"12px 14px",borderTop:`1px solid ${C.bdr}`,flexShrink:0}}>
+      <div style={{padding:"12px 16px",borderTop:`1px solid ${C.bdr}`,flexShrink:0}}>
         {/* Prompt Analyst panel */}
         {analystOpen && (
           <div style={{marginBottom:12,padding:"12px",borderRadius:R.r2,background:C.bg4,border:`1px solid ${C.bdr}`}}>
@@ -832,7 +842,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
               <button key={m} onClick={()=>setBulkMode(m)} style={{flex:1,padding:"4px 0",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",border:`1px solid ${bulkMode===m?C.acc:C.bdr}`,background:bulkMode===m?C.accDim:"transparent",color:bulkMode===m?C.acc2:C.t4}}>{m}</button>
             ))}
           </div>
-          <button onClick={()=>setAnalystOpen(!analystOpen)} title="Prompt Analyst — pre-flight quality check" style={{padding:"4px 10px",borderRadius:R.r1,border:`1px solid ${analystOpen?C.acc:C.bdr}`,background:analystOpen?C.accDim:"transparent",color:analystOpen?C.acc2:C.t4,fontSize:12,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+          <button onClick={()=>setAnalystOpen(!analystOpen)} title="Prompt Analyst — pre-flight quality check" style={{padding:"4px 8px",borderRadius:R.r1,border:`1px solid ${analystOpen?C.acc:C.bdr}`,background:analystOpen?C.accDim:"transparent",color:analystOpen?C.acc2:C.t4,fontSize:12,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
             {analystState==="running"?"…":"✦ Analyst"}
           </button>
         </div>
@@ -902,11 +912,11 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
 
       {/* Stitch strip */}
       <div style={{height:80,flexShrink:0,borderTop:`1px solid ${C.bdr}`,background:C.bg2,display:"flex",alignItems:"stretch"}}>
-        <div style={{padding:"0 14px",borderRight:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <div style={{padding:"0 16px",borderRight:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Stitch sequence</span>
-          <span style={{fontSize: 12,padding:"2px 7px",borderRadius:R.pill,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t4}}>fal ffmpeg-api</span>
+          <span style={{fontSize: 12,padding:"2px 8px",borderRadius:R.pill,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t4}}>fal ffmpeg-api</span>
         </div>
-        <div style={{flex:1,overflowX:"auto",display:"flex",alignItems:"center",gap:8,padding:"0 14px"}}>
+        <div style={{flex:1,overflowX:"auto",display:"flex",alignItems:"center",gap:8,padding:"0 16px"}}>
           {stitch.length===0
             ?<span style={{fontSize: 13,color:C.t4}}>Generate clips — add to stitch — merge via fal ffmpeg API</span>
             :stitch.map((id:string,i:number)=>(
@@ -917,7 +927,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
             ))
           }
         </div>
-        {stitch.length>=2&&<div style={{padding:"0 14px",display:"flex",alignItems:"center",flexShrink:0}}>
+        {stitch.length>=2&&<div style={{padding:"0 16px",display:"flex",alignItems:"center",flexShrink:0}}>
           <button
   onClick={async () => {
     if (stitchState === "running" || stitch.length < 2) return;
@@ -966,7 +976,7 @@ export default function GenerateTab({ voiceId: propVoiceId, onGenerationComplete
       }
     } catch { setStitchState("idle"); }
   }}
-  style={{padding:"8px 14px",borderRadius:R.r1,
+  style={{padding:"8px 16px",borderRadius:R.r1,
     background: stitchState === "done" ? C.green : stitchState === "running" ? C.bg4 : C.acc,
     border:"none",color:"#fff",fontSize: 14,fontFamily:"inherit",
     cursor: stitchState === "running" ? "not-allowed" : "pointer",

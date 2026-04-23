@@ -185,7 +185,7 @@ export default function SettingsTab() {
             <span style={{ fontSize: 12, color: C.t4, padding: "2px 8px", borderRadius: R.pill, background: C.surf, border: `1px solid ${C.bdr}` }}>encrypted at rest</span>
           </div>
           {keys.map((key: ApiKey, i: number) => (
-            <div key={key.provider} style={{ padding: "14px 18px", borderBottom: i < keys.length - 1 ? `1px solid ${C.bdr}` : "none" }}>
+            <div key={key.provider} style={{ padding: "16px 18px", borderBottom: i < keys.length - 1 ? `1px solid ${C.bdr}` : "none" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 {/* Rule 3: Real provider names in Settings only */}
                 <div>
@@ -204,13 +204,13 @@ export default function SettingsTab() {
                     value={keyVals[i]}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyVals((v: string[]) => v.map((x: string, idx: number) => idx === i ? e.target.value : x))}
                     placeholder={key.placeholder}
-                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 36px 8px 10px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 36px 8px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none" }}
                   />
                   <button onClick={() => setShowKeys((s: boolean[]) => s.map((x: boolean, idx: number) => idx === i ? !x : x))} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.t4, cursor: "pointer", fontSize: 15 }}>
                     {showKeys[i] ? "◉" : "○"}
                   </button>
                 </div>
-                <button onClick={() => testKey(i)} disabled={key.status === "testing"} style={{ padding: "8px 14px", borderRadius: R.r1, background: C.surf, border: `1px solid ${C.bdr}`, color: C.t2, fontSize: 14, fontFamily: "inherit", cursor: "pointer", flexShrink: 0, transition: `all ${DUR.fast} ${EASE}` }}>
+                <button onClick={() => testKey(i)} disabled={key.status === "testing"} style={{ padding: "8px 16px", borderRadius: R.r1, background: C.surf, border: `1px solid ${C.bdr}`, color: C.t2, fontSize: 14, fontFamily: "inherit", cursor: "pointer", flexShrink: 0, transition: `all ${DUR.fast} ${EASE}` }}>
                   Test
                 </button>
               </div>
@@ -230,7 +230,7 @@ export default function SettingsTab() {
               <select
                 value={m.current}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setModels((md: typeof models) => md.map((x: typeof models[0], idx: number) => idx === i ? { ...x, current: e.target.value } : x))}
-                style={{ background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 10px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none" }}
+                style={{ background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none" }}
               >
                 {m.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
               </select>
@@ -239,13 +239,13 @@ export default function SettingsTab() {
         </div>
 
         {/* Quality preset */}
-        <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: "14px 18px" }}>
+        <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: "16px 18px" }}>
           <div style={{ fontSize: 15, fontWeight: 500, color: C.t1, marginBottom: 4 }}>Quality preset</div>
           <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>Maps to model tier + parameters across all generation modes.</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["fast","standard","pro"] as const).map(q => (
               <button key={q} onClick={() => setQuality(q)} style={{
-                flex: 1, padding: "10px 0", borderRadius: R.r2, border: `1px solid ${quality === q ? C.acc : C.bdr}`,
+                flex: 1, padding: "8px 0", borderRadius: R.r2, border: `1px solid ${quality === q ? C.acc : C.bdr}`,
                 background: quality === q ? C.accDim : C.surf, color: quality === q ? C.acc2 : C.t3,
                 fontSize: 15, fontFamily: "inherit", cursor: "pointer", fontWeight: quality === q ? 500 : 400,
                 transition: `all ${DUR.fast} ${EASE}`,
@@ -274,7 +274,7 @@ export default function SettingsTab() {
                   type="number"
                   value={row.val}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => row.set(e.target.value)}
-                  style={{ width: 80, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 10px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none", textAlign: "right" }}
+                  style={{ width: 80, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none", textAlign: "right" }}
                 />
               </div>
             </div>
@@ -296,7 +296,7 @@ export default function SettingsTab() {
 
         {/* Save error */}
         {saveError && (
-          <div style={{ padding: "10px 14px", borderRadius: R.r1, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: C.red, fontSize: 13 }}>
+          <div style={{ padding: "8px 16px", borderRadius: R.r1, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: C.red, fontSize: 13 }}>
             {saveError}
           </div>
         )}

@@ -173,7 +173,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
     }} className="streams-editor-left">
       <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <span style={{fontSize:12,color:C.t4,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>Editable Layers</span>
-        <span style={{fontSize:12,padding:"1px 7px",borderRadius:R.pill,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2}}>{shots.length} shots</span>
+        <span style={{fontSize:12,padding:"1px 8px",borderRadius:R.pill,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2}}>{shots.length} shots</span>
       </div>
       <div style={{padding:"8px 12px 4px",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Motion beats</span>
@@ -182,7 +182,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
       <div style={{flex:1,overflowY:"auto",padding:8}}>
         {shots.map((shot:Shot)=>(
           <div key={shot.id} onClick={()=>setActiveShot(shot.id)} style={{
-            padding:"8px 10px",borderRadius:R.r1,marginBottom:4,cursor:"pointer",
+            padding:"8px 8px",borderRadius:R.r1,marginBottom:4,cursor:"pointer",
             border:`1px solid ${activeShot===shot.id?C.acc:"transparent"}`,
             background:activeShot===shot.id?C.accDim:"transparent",
           }}>
@@ -202,7 +202,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
             />
             {shotPrompts[shot.id]!==shot.prompt&&(
               <button onClick={(e:React.MouseEvent)=>{e.stopPropagation();handleApplyMotion(shot.id);}} style={{
-                marginTop:4,padding:"3px 10px",borderRadius:R.r1,border:"none",fontSize:12,fontFamily:"inherit",cursor:"pointer",
+                marginTop:4,padding:"3px 8px",borderRadius:R.r1,border:"none",fontSize:12,fontFamily:"inherit",cursor:"pointer",
                 background:applyMotion[shot.id]==="done"?C.green:applyMotion[shot.id]==="running"?C.bg4:C.acc,
                 color:"#fff",display:"flex",alignItems:"center",gap:5,
               }}>
@@ -286,8 +286,8 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
           <select style={{background:C.bg3,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,borderRadius:R.r1,padding:"3px 8px",fontFamily:"inherit",flexShrink:0}}>
             <option>Aria · ElevenLabs</option><option>Rachel</option><option>Adam</option>
           </select>
-          <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)} placeholder="Edit selected word…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,color:C.t1,fontSize:14,padding:"4px 10px",fontFamily:"inherit",outline:"none",width:140,flexShrink:0}}/>
-          <button onClick={handleReVoice} style={{padding:"5px 14px",borderRadius:R.r1,background:revoiceState==="done"?C.green:revoiceState==="running"?C.bg4:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:revoiceState==="running"?"not-allowed":"pointer",flexShrink:0,transition:`background ${DUR.fast} ${EASE}`,display:"flex",alignItems:"center",gap:5}}>
+          <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)} placeholder="Edit selected word…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,color:C.t1,fontSize:14,padding:"4px 8px",fontFamily:"inherit",outline:"none",width:140,flexShrink:0}}/>
+          <button onClick={handleReVoice} style={{padding:"4px 16px",borderRadius:R.r1,background:revoiceState==="done"?C.green:revoiceState==="running"?C.bg4:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:revoiceState==="running"?"not-allowed":"pointer",flexShrink:0,transition:`background ${DUR.fast} ${EASE}`,display:"flex",alignItems:"center",gap:5}}>
             {revoiceState==="running"&&<span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
             {revoiceState==="done"?"✓ Done":revoiceState==="running"?"Processing…":"Re-voice"}
           </button>
@@ -326,7 +326,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
               <button onClick={()=>handleDownload("Subtitles.vtt")} style={{padding:"6px 16px",borderRadius:R.r1,background:downloading==="Subtitles.vtt"?C.green:C.surf,border:`1px solid ${C.bdr}`,color:downloading==="Subtitles.vtt"?"#fff":C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="Subtitles.vtt"?"✓":"Export .vtt"}</button>
             </div>
           </div>
-          <div style={{padding:"10px 16px",borderRadius:R.r2,background:C.bg3,border:`1px solid ${C.bdr}`,marginBottom:20,fontSize:13,color:C.t4}}>
+          <div style={{padding:"8px 16px",borderRadius:R.r2,background:C.bg3,border:`1px solid ${C.bdr}`,marginBottom:20,fontSize:13,color:C.t4}}>
             {analysisId?"Live data · Scribe v2 word-level timestamps":"Shell data · load a video in Person tab to see real transcript"}
           </div>
           {transcript.map((line:TranscriptLine, i:number)=>(
@@ -337,14 +337,14 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
                 {line.words.map((w:string, j:number)=>(
-                  <span key={j} onClick={()=>selectWord(w)} style={{padding:"4px 10px",borderRadius:R.r1,fontSize:15,background:selectedWord===w?C.accDim:C.surf,border:`1px solid ${selectedWord===w?C.acc:C.bdr}`,color:selectedWord===w?C.t1:C.t2,cursor:"pointer",transition:`all ${DUR.fast} ${EASE}`}}>{w}</span>
+                  <span key={j} onClick={()=>selectWord(w)} style={{padding:"4px 8px",borderRadius:R.r1,fontSize:15,background:selectedWord===w?C.accDim:C.surf,border:`1px solid ${selectedWord===w?C.acc:C.bdr}`,color:selectedWord===w?C.t1:C.t2,cursor:"pointer",transition:`all ${DUR.fast} ${EASE}`}}>{w}</span>
                 ))}
               </div>
               {selectedWord&&line.words.includes(selectedWord)&&(
-                <div style={{display:"flex",gap:8,alignItems:"center",padding:"10px 12px",borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.accBr}`}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 12px",borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.accBr}`}}>
                   <span style={{fontSize:13,color:C.t3,flexShrink:0}}>Replace:</span>
                   <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)}
-                    style={{flex:1,background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"6px 10px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+                    style={{flex:1,background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"6px 8px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none"}}/>
                   <button onClick={handleReVoice} style={{padding:"6px 16px",borderRadius:R.r1,border:"none",fontFamily:"inherit",fontSize:13,cursor:"pointer",background:revoiceState==="done"?C.green:C.acc,color:"#fff",display:"flex",alignItems:"center",gap:6}}>
                     {revoiceState==="running"&&<span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
                     {revoiceState==="done"?"✓ Done":"Re-voice"}
@@ -379,9 +379,9 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
                 <div style={{fontSize:15,fontWeight:500,color:C.t1}}>{section.title}</div>
                 <span style={{fontSize:12,padding:"2px 8px",borderRadius:R.pill,background:`${section.color}22`,border:`1px solid ${section.color}44`,color:section.color}}>{section.badge}</span>
               </div>
-              <div style={{padding:"14px 18px",display:"flex",gap:10}}>
+              <div style={{padding:"16px 18px",display:"flex",gap:10}}>
                 {section.actions.map(a=>(
-                  <button key={a.label} onClick={a.fn} style={{flex:1,padding:"10px 0",borderRadius:R.r2,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:"pointer",background:a.state==="done"?C.green:a.state==="running"?C.bg4:C.acc}}>{a.state==="done"?"✓ Done":a.label}</button>
+                  <button key={a.label} onClick={a.fn} style={{flex:1,padding:"8px 0",borderRadius:R.r2,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:"pointer",background:a.state==="done"?C.green:a.state==="running"?C.bg4:C.acc}}>{a.state==="done"?"✓ Done":a.label}</button>
                 ))}
               </div>
             </div>
@@ -392,9 +392,9 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
               <div style={{fontSize:15,fontWeight:500,color:C.t1}}>Add sound design</div>
               <div style={{fontSize:13,color:C.t4,marginTop:3}}>Synchronized to video frames — $0.001/sec</div>
             </div>
-            <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:10}}>
-              <input placeholder="cinematic swoosh, urban ambient, logo reveal pulse…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"10px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none",width:"100%"}}/>
-              <button onClick={()=>handleDownload("sound")} style={{padding:"10px 0",borderRadius:R.r2,background:downloading==="sound"?C.green:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="sound"?"✓ Processing…":"Add sound"}</button>
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
+              <input placeholder="cinematic swoosh, urban ambient, logo reveal pulse…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+              <button onClick={()=>handleDownload("sound")} style={{padding:"8px 0",borderRadius:R.r2,background:downloading==="sound"?C.green:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="sound"?"✓ Processing…":"Add sound"}</button>
             </div>
           </div>
           {/* Dubbing */}
@@ -403,12 +403,12 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
               <div style={{fontSize:15,fontWeight:500,color:C.t1}}>Language dubbing</div>
               <div style={{fontSize:13,color:C.t4,marginTop:3}}>Translation + synthesis + lipsync — $0.90/min</div>
             </div>
-            <div style={{padding:"14px 18px",display:"flex",gap:10,alignItems:"center"}}>
+            <div style={{padding:"16px 18px",display:"flex",gap:10,alignItems:"center"}}>
               <select value={dubLang} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setDubLang(e.target.value)}
-                style={{flex:1,background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"9px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                style={{flex:1,background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none"}}>
                 {["Spanish","French","German","Japanese","Portuguese","Italian","Hindi","Korean","Arabic"].map(l=><option key={l}>{l}</option>)}
               </select>
-              <button onClick={handleDub} style={{padding:"10px 20px",borderRadius:R.r2,border:"none",fontFamily:"inherit",fontSize:14,cursor:"pointer",background:dubState==="done"?C.green:dubState==="running"?C.bg4:C.acc,color:"#fff",display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={handleDub} style={{padding:"8px 20px",borderRadius:R.r2,border:"none",fontFamily:"inherit",fontSize:14,cursor:"pointer",background:dubState==="done"?C.green:dubState==="running"?C.bg4:C.acc,color:"#fff",display:"flex",alignItems:"center",gap:8}}>
                 {dubState==="running"&&<span style={{width:12,height:12,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
                 {dubState==="done"?"✓ Done":dubState==="running"?"Dubbing…":`Dub to ${dubLang}`}
               </button>
@@ -427,7 +427,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
         <div style={{fontSize:13,color:C.t3,marginBottom:24}}>Download any combination of assets from this project.</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {EXPORT_FORMATS.map(fmt=>(
-            <div key={`${fmt.label}${fmt.ext}`} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",borderRadius:R.r2,background:C.bg2,border:`1px solid ${C.bdr}`}}>
+            <div key={`${fmt.label}${fmt.ext}`} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px",borderRadius:R.r2,background:C.bg2,border:`1px solid ${C.bdr}`}}>
               <div>
                 <div style={{fontSize:15,color:C.t1,fontWeight:500}}>{fmt.label} <span style={{fontSize:13,color:C.acc2,fontWeight:400}}>{fmt.ext}</span></div>
                 <div style={{fontSize:13,color:C.t4,marginTop:3}}>{fmt.note}</div>
@@ -438,7 +438,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
             </div>
           ))}
         </div>
-        <button onClick={()=>handleDownload("all")} style={{width:"100%",marginTop:16,padding:"14px 0",borderRadius:R.r2,border:"none",background:downloading==="all"?C.green:C.acc,color:"#fff",fontSize:15,fontFamily:"inherit",fontWeight:500,cursor:"pointer",transition:`background ${DUR.fast} ${EASE}`}}>
+        <button onClick={()=>handleDownload("all")} style={{width:"100%",marginTop:16,padding:"16px 0",borderRadius:R.r2,border:"none",background:downloading==="all"?C.green:C.acc,color:"#fff",fontSize:15,fontFamily:"inherit",fontWeight:500,cursor:"pointer",transition:`background ${DUR.fast} ${EASE}`}}>
           {downloading==="all"?"✓ Preparing zip…":"↓ Download full project .zip"}
         </button>
       </div>
@@ -452,7 +452,26 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
           <button key={t} onClick={()=>setSubTab(t)} style={{height:46,padding:"0 18px",border:"none",borderBottom:subTab===t?`2px solid ${C.acc}`:"2px solid transparent",background:subTab===t?"rgba(124,58,237,0.06)":"transparent",color:subTab===t?C.t1:C.t3,fontSize:14,fontFamily:"inherit",cursor:"pointer",letterSpacing:".02em",flexShrink:0,transition:`all ${DUR.fast} ${EASE}`}}>{t}</button>
         ))}
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
-          <button style={{padding:"6px 16px",borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>↑ Upload</button>
+          <button
+  onClick={() => {
+    const url = window.prompt("Paste video URL to load into editor:");
+    if (!url?.trim()) return;
+    // Store URL locally and trigger ingest if no analysisId yet
+    setVideoUrl(url.trim());
+    if (!analysisId) {
+      fetch("/api/streams/video/ingest", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ videoUrl: url.trim() }),
+      })
+        .then(r => r.json())
+        .then((d: Record<string,unknown>) => {
+          if (d.analysisId) setAnalysisId(d.analysisId as string);
+        })
+        .catch(() => {/* non-fatal */});
+    }
+  }}
+  style={{padding:"6px 16px",borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}
+>↑ Upload</button>
           <button style={{padding:"6px 16px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize:13,fontFamily:"inherit",cursor:"pointer"}} onClick={()=>setSubTab("Export")}>Export video</button>
         </div>
       </div>

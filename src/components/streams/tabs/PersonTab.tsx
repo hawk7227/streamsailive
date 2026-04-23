@@ -162,14 +162,13 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
     }
 
     try {
-      // Build minimal body per operation type
       const bodyMap: Record<string, Record<string, unknown>> = {
-        "voice":   { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: "" },
-        "body":    { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction" },
-        "motion":  { generationLogId: genLogId, firstFrameUrl: "", newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: "" },
-        "dub":     { generationLogId: genLogId, videoUrl: "", targetLanguage: "es" },
-        "emotion": { generationLogId: genLogId, videoUrl: "", emotion: "happy" },
-        "multishot": { prompt: "continue the scene", duration: "5", aspectRatio: "16:9" },
+        "voice":    { generationLogId: genLogId, analysisId, originalText: "", newText: "edited text", startMs: 1000, endMs: 2000, videoUrl: "" },
+        "body":     { generationLogId: genLogId, analysisId, newText: "New dialogue for full body reaction" },
+        "motion":   { generationLogId: genLogId, firstFrameUrl: "", newPrompt: "new motion style", startMs: 0, endMs: 5000, videoUrl: "" },
+        "dub":      { generationLogId: genLogId, videoUrl: "", targetLanguage: "es" },
+        "emotion":  { generationLogId: genLogId, videoUrl: "", emotion: "happy" },
+        "multishot":{ prompt: "continue the scene", duration: "5", aspectRatio: "16:9" },
       };
 
       const res  = await fetch(route, {
@@ -177,13 +176,34 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(bodyMap[id] ?? {}),
       });
-      const data = await res.json() as { error?: string; status?: string };
+      const data = await res.json() as { error?: string; status?: string; responseUrl?: string; generationId?: string };
 
-      if (res.ok) {
-        setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" }));
-      } else {
+      if (!res.ok) {
         console.error(`${id} op failed:`, data.error);
         setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
+        return;
+      }
+
+      // OmniHuman (body) returns a fal responseUrl — poll status route for completion
+      if (id === "body" && data.responseUrl && data.generationId) {
+        const omniInterval = setInterval(async () => {
+          const sr = await fetch("/api/streams/video/status", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ generationId: data.generationId, responseUrl: data.responseUrl }),
+          });
+          const sd = await sr.json() as { status?:string; artifactUrl?:string };
+          if (sd.status === "done" || sd.status === "completed") {
+            clearInterval(omniInterval);
+            setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" }));
+          } else if (sd.status === "failed") {
+            clearInterval(omniInterval);
+            setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
+          }
+        }, 8000);
+        // Timeout after 5 min (OmniHuman can be slow)
+        setTimeout(() => clearInterval(omniInterval), 300_000);
+      } else {
+        setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" }));
       }
     } catch (err) {
       console.error(`${id} op error:`, err);
@@ -199,7 +219,7 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: 16 }}>
           <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Select video to edit</div>
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1, border: `1px dashed ${C.bdr2}`, borderRadius: R.r2, padding: "20px 14px", textAlign: "center", cursor: "pointer", background: C.bg3 }}>
+            <div style={{ flex: 1, border: `1px dashed ${C.bdr2}`, borderRadius: R.r2, padding: "20px 16px", textAlign: "center", cursor: "pointer", background: C.bg3 }}>
               <div style={{ fontSize: 20, color: C.t4, marginBottom: 6, opacity: .4 }}>↑</div>
               <div style={{ fontSize: 15, color: C.t2, fontWeight: 500 }}>Upload video</div>
               <div style={{ fontSize: 13, color: C.t4, marginTop: 4 }}>mp4 · mov · triggers 8-step ingest automatically</div>
@@ -216,17 +236,17 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
         {/* Card 1 — Ingest pipeline */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
           <div style={{
-            padding: "14px 18px", borderBottom: `1px solid ${C.bdr}`,
+            padding: "16px 18px", borderBottom: `1px solid ${C.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Ingest pipeline — runs once on video creation
             </div>
-            <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
+            <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
               auto-runs on every video
             </span>
           </div>
-          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
             {INGEST_STEPS.map((step, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
@@ -241,7 +261,7 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
 
           {/* Stored data summary */}
           <div style={{
-            margin: "0 18px 16px", padding: "12px 14px",
+            margin: "0 18px 16px", padding: "12px 16px",
             background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r2,
             fontSize: 14, color: C.t3, lineHeight: 1.7,
           }}>
@@ -260,13 +280,13 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
         {/* Card 2 — Edit operations */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
           <div style={{
-            padding: "14px 18px", borderBottom: `1px solid ${C.bdr}`,
+            padding: "16px 18px", borderBottom: `1px solid ${C.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Edit operations — each is a single fal API call
             </div>
-            <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
+            <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
               FAL_KEY only
             </span>
           </div>
@@ -276,7 +296,7 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
               <div key={op.id} style={{
                 background: opStates[op.id] === "done" ? C.accDim : C.bg3,
                 border: `1px solid ${opStates[op.id] === "done" ? C.accBr : C.bdr}`,
-                borderRadius: R.r2, padding: "14px",
+                borderRadius: R.r2, padding: "16px",
                 transition: `all ${DUR.base} ${EASE}`,
               }}>
                 <div style={{ fontSize: 15, fontWeight: 500, color: C.t1, marginBottom: 6 }}>{op.title}</div>
@@ -296,7 +316,7 @@ export default function PersonTab({ onIngestComplete }: PersonTabProps = {}) {
                     onClick={() => runOp(op.id)}
                     disabled={opStates[op.id] === "running"}
                     style={{
-                      padding: "5px 12px", borderRadius: R.r1, fontSize: 13, cursor: "pointer",
+                      padding: "4px 12px", borderRadius: R.r1, fontSize: 13, cursor: "pointer",
                       fontFamily: "inherit", border: "none",
                       background: opStates[op.id] === "done" ? C.green : C.acc,
                       color: "#fff",

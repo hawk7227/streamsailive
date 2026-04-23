@@ -35,6 +35,14 @@ export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
 
   // ── Cross-tab shared state ──────────────────────────────────────────────
+  const [sharedPrompt, setSharedPrompt] = useState<string|null>(null);
+
+  // Called by ReferenceTab when user selects a variation prompt
+  const onSelectPrompt = useCallback((prompt: string) => {
+    setSharedPrompt(prompt);
+    setActive("generate");   // switch to Generate tab
+  }, []);
+
   // Lifted here so PersonTab ingest flows into VideoEditorTab and GenerateTab.
   const [sharedAnalysisId, setSharedAnalysisId] = useState<string|null>(null);
   const [sharedGenLogId,   setSharedGenLogId]   = useState<string|null>(null);
@@ -147,10 +155,12 @@ export default function StreamsPanel() {
           {active === "generate"  && (
             <GenerateTab
               voiceId={sharedVoiceId}
+              initialPrompt={sharedPrompt}
               onGenerationComplete={onGenerationComplete}
+              onPromptConsumed={() => setSharedPrompt(null)}
             />
           )}
-          {active === "reference" && <ReferenceTab />}
+          {active === "reference" && <ReferenceTab onSelectPrompt={onSelectPrompt} />}
           {active === "person"    && (
             <PersonTab
               onIngestComplete={onIngestComplete}

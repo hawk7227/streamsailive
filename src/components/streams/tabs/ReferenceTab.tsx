@@ -18,7 +18,11 @@ const PALETTE = ["#F5A52A","#2C1A0E","#E8C87A","#8B5E3C","#F2EDE4"];
 const STYLE_TAGS = ["cinematic","golden hour","photorealistic","urban"];
 const SUBJECTS   = ["woman · blazer","city street","bokeh background"];
 
-export default function ReferenceTab() {
+interface ReferenceTabProps {
+  onSelectPrompt?: (prompt: string) => void;
+}
+
+export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {}) {
   const [source,       setSource]      = useState<Source>("Upload");
   const [urlInput,     setUrlInput]    = useState("");
   const [analysis,     setAnalysis]    = useState<AnalysisState>("idle");
@@ -61,7 +65,7 @@ export default function ReferenceTab() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
       {/* Header */}
-      <div style={{ padding: "14px 20px 0", flexShrink: 0 }}>
+      <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 8,
           padding: "4px 12px", borderRadius: R.pill,
@@ -87,7 +91,7 @@ export default function ReferenceTab() {
         }} className="streams-ref-left">
 
           {/* Source selector */}
-          <div style={{ padding: "14px 14px 10px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0 }}>
+          <div style={{ padding: "16px 16px 8px", borderBottom: `1px solid ${C.bdr}`, flexShrink: 0 }}>
             <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 8 }}>Source</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               {(["Upload","URL","YouTube"] as Source[]).map(s => (
@@ -104,13 +108,13 @@ export default function ReferenceTab() {
               <div style={{ marginBottom: 10 }}>
                 <input value={urlInput} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrlInput(e.target.value)}
                   placeholder="Paste image URL or Supabase storage URL"
-                  style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 10px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 8 }} />
+                  style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 8 }} />
               </div>
             )}
             {source === "Upload" && (
               <div onClick={runAnalysis} style={{
                 border: `1px dashed ${C.bdr2}`, borderRadius: R.r2,
-                padding: "24px 14px", textAlign: "center", cursor: "pointer",
+                padding: "24px 16px", textAlign: "center", cursor: "pointer",
                 background: C.bg3, transition: `border-color ${DUR.fast} ${EASE}`,
               }}>
                 <div style={{ fontSize: 24, color: C.t4, marginBottom: 8, opacity: .5 }}>↑</div>
@@ -127,7 +131,7 @@ export default function ReferenceTab() {
                   placeholder={source === "YouTube" ? "https://youtube.com/watch?v=…" : "https://…"}
                   style={{
                     flex: 1, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1,
-                    padding: "8px 10px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none",
+                    padding: "8px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none",
                   }}
                 />
                 <button onClick={runAnalysis} style={{
@@ -202,7 +206,7 @@ export default function ReferenceTab() {
                 <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>Reconstruction prompt</div>
                 <div contentEditable suppressContentEditableWarning style={{
                   background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1,
-                  padding: "8px 10px", fontSize: 14, color: C.t2, lineHeight: 1.5,
+                  padding: "8px 8px", fontSize: 14, color: C.t2, lineHeight: 1.5,
                   fontFamily: "inherit", minHeight: 60, outline: "none",
                 }}>
                   Cinematic street portrait, woman in tailored blazer, 85mm equiv, golden hour f/1.8, warm 4200K, urban bokeh background, photorealistic
@@ -217,7 +221,7 @@ export default function ReferenceTab() {
                   "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
                   "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
                 ]).map((vp: string, i: number) => (
-                  <div key={i} onClick={() => {}} style={{ padding: "6px 10px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: "pointer", lineHeight: 1.5 }}>
+                  <div key={i} onClick={() => {}} style={{ padding: "6px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: "pointer", lineHeight: 1.5 }}>
                     {vp}
                   </div>
                 ))}
@@ -232,7 +236,7 @@ export default function ReferenceTab() {
                   { name: "Animate",    icon: "▶", sub: "Generate motion"   },
                 ].map(action => (
                   <button key={action.name} onClick={() => doAction(action.name)} style={{
-                    padding: "10px 8px", borderRadius: R.r2, cursor: "pointer", fontFamily: "inherit",
+                    padding: "8px 8px", borderRadius: R.r2, cursor: "pointer", fontFamily: "inherit",
                     border: `1px solid ${actions[action.name] === "done" ? C.accBr : C.bdr}`,
                     background: actions[action.name] === "done" ? C.accDim : C.surf,
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
