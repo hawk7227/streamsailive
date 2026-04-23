@@ -609,6 +609,21 @@ def main():
     print(f" RESULT: {len(findings)} violations across {len(by_rule)} rules")
     print(f" Fix every violation above before pushing.")
     print(f"{'='*65}\n")
+
+    # Write report file for GitHub Actions artifact
+    try:
+        with open("audit-report.txt", "w") as f:
+            f.write(f"STREAMS AUDIT — {len(findings)} VIOLATIONS\n\n")
+            for rule in sorted(by_rule.keys()):
+                items = by_rule[rule]
+                f.write(f"[{rule}] {len(items)} violation(s)\n")
+                for path, line_no, msg in items:
+                    loc = f"{path}:{line_no}" if line_no else path
+                    f.write(f"  {loc}\n  → {msg}\n")
+                f.write("\n")
+    except:
+        pass
+
     return 1
 
 if __name__ == "__main__":
