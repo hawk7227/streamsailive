@@ -44,7 +44,13 @@ const EXPORT_FORMATS = [
 interface TranscriptLine { speaker:string; time:string; start_ms:number; words:string[]; }
 interface Shot { id:string; num:string; time:string; prompt:string; }
 
-export default function VideoEditorTab() {
+interface VideoEditorTabProps {
+  analysisId?: string | null;
+  genLogId?:   string | null;
+  videoUrl?:   string | null;
+}
+
+export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: propGenLogId, videoUrl: propVideoUrl }: VideoEditorTabProps) {
   const [subTab,       setSubTab]       = useState<SubTab>("Motion");
   const [activeShot,   setActiveShot]   = useState("s1");
   const [shots,        setShots]        = useState<Shot[]>(SHELL_SHOTS);
@@ -60,11 +66,16 @@ export default function VideoEditorTab() {
   const [dubLang,      setDubLang]      = useState("Spanish");
   const [dubState,     setDubState]     = useState<"idle"|"running"|"done">("idle");
   const [downloading,  setDownloading]  = useState<string|null>(null);
-  const [analysisId,   setAnalysisId]   = useState<string|null>(null);
-  const [genLogId,     setGenLogId]     = useState<string|null>(null);
-  const [videoUrl,     setVideoUrl]     = useState<string|null>(null);
+  const [analysisId,   setAnalysisId]   = useState<string|null>(propAnalysisId ?? null);
+  const [genLogId,     setGenLogId]     = useState<string|null>(propGenLogId ?? null);
+  const [videoUrl,     setVideoUrl]     = useState<string|null>(propVideoUrl ?? null);
   const [loadError,    setLoadError]    = useState<string|null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
+  // Sync prop changes (when PersonTab ingest completes after mount)
+  useEffect(() => { if (propAnalysisId) setAnalysisId(propAnalysisId); }, [propAnalysisId]);
+  useEffect(() => { if (propGenLogId)   setGenLogId(propGenLogId);     }, [propGenLogId]);
+  useEffect(() => { if (propVideoUrl)   setVideoUrl(propVideoUrl);     }, [propVideoUrl]);
 
   // Load real transcript from person_analysis if analysisId available
   useEffect(() => {

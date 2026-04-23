@@ -11,7 +11,7 @@
  * Cannot use next/font/google in client components.
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
 import VideoEditorTab from "./tabs/VideoEditorTab";
@@ -33,6 +33,27 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
 
 export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
+
+  // ── Cross-tab shared state ──────────────────────────────────────────────
+  // Lifted here so PersonTab ingest flows into VideoEditorTab and GenerateTab.
+  const [sharedAnalysisId, setSharedAnalysisId] = useState<string|null>(null);
+  const [sharedGenLogId,   setSharedGenLogId]   = useState<string|null>(null);
+  const [sharedVoiceId,    setSharedVoiceId]    = useState<string|null>(null);
+  const [sharedVideoUrl,   setSharedVideoUrl]   = useState<string|null>(null);
+
+  // Called by PersonTab when ingest completes
+  const onIngestComplete = useCallback((data: {
+    analysisId: string; genLogId: string; voiceId?: string|null;
+  }) => {
+    setSharedAnalysisId(data.analysisId);
+    setSharedGenLogId(data.genLogId);
+    if (data.voiceId) setSharedVoiceId(data.voiceId);
+  }, []);
+
+  // Called by GenerateTab/VideoEditorTab when a generation completes
+  const onGenerationComplete = useCallback((url: string) => {
+    setSharedVideoUrl(url);
+  }, []);
 
   return (
     <>
@@ -116,10 +137,25 @@ export default function StreamsPanel() {
         {/* ── Content ─────────────────────────────────────────── */}
         <main style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {active === "chat"      && <ChatTab />}
-          {active === "editor"    && <VideoEditorTab />}
-          {active === "generate"  && <GenerateTab />}
+          {active === "editor"    && (
+            <VideoEditorTab
+              analysisId={sharedAnalysisId}
+              genLogId={sharedGenLogId}
+              videoUrl={sharedVideoUrl}
+            />
+          )}
+          {active === "generate"  && (
+            <GenerateTab
+              voiceId={sharedVoiceId}
+              onGenerationComplete={onGenerationComplete}
+            />
+          )}
           {active === "reference" && <ReferenceTab />}
-          {active === "person"    && <PersonTab />}
+          {active === "person"    && (
+            <PersonTab
+              onIngestComplete={onIngestComplete}
+            />
+          )}
           {active === "settings"  && <SettingsTab />}
         </main>
 
