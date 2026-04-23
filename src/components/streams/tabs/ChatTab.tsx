@@ -237,7 +237,25 @@ export default function ChatTab() {
       ))}
       {activeNav === "Library" && (
         <div style={{ padding: "0 8px" }}>
-          {libraryLoading && <div style={{ padding: "12px 8px", fontSize: 13, color: C.t4 }}>Loading…</div>}
+          {libraryLoading && (
+          <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1,2,3].map(i => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap: 8, padding: "4px 0" }}>
+                <div style={{ width:36, height:36, borderRadius:6, flexShrink:0,
+                  background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                  backgroundSize:"200% 100%", animation:"streams-shimmer 1.4s ease infinite" }} />
+                <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
+                  <div style={{ height:12, borderRadius:R.r1, width:"60%",
+                    background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                    backgroundSize:"200% 100%", animation:"streams-shimmer 1.4s ease infinite" }} />
+                  <div style={{ height:10, borderRadius:R.r1, width:"40%",
+                    background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                    backgroundSize:"200% 100%", animation:"streams-shimmer 1.6s ease infinite" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
           {!libraryLoading && library.length === 0 && <div style={{ padding: "12px 8px", fontSize: 13, color: C.t4 }}>No generations yet</div>}
           {library.map((item: LibraryItem) => {
             const typeIcon: Record<string, string> = {

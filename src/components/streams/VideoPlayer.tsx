@@ -189,11 +189,16 @@ function AudioPlayer({ src, label, showDownload }: {
 // ── Shared sub-components ─────────────────────────────────────────────────
 function Skeleton() {
   return (
-    <div style={{ position:"absolute", inset:0, background:C.bg3,
-                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{
+      position:"absolute", inset:0,
+      background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+      backgroundSize:"200% 100%",
+      animation:"streams-shimmer 1.5s ease infinite",
+      display:"flex", alignItems:"center", justifyContent:"center",
+    }}>
       <div style={{ width:32, height:32, borderRadius:"50%",
-                    border:`3px solid ${C.bdr}`,
-                    borderTopColor:C.acc,
+                    border:`3px solid rgba(255,255,255,0.15)`,
+                    borderTopColor:"rgba(255,255,255,0.6)",
                     animation:"streams-spin 700ms linear infinite" }} />
     </div>
   );
@@ -493,6 +498,7 @@ export default function MediaPlayer({
 
       <style>{`
         @keyframes streams-spin { to { transform:rotate(360deg) } }
+        @keyframes streams-shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
       `}</style>
     </div>
   );

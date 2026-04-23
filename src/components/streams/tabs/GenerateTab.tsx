@@ -437,6 +437,10 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
  rows={4} maxLength={2500}
  placeholder={mode==="Motion"?"Describe how the character looks (hair, clothing, build)…":"Describe the video…"}
+ onKeyDown={(e:React.KeyboardEvent<HTMLTextAreaElement>)=>{
+   if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){e.preventDefault();handleGenerate();}
+   if(e.key==="Escape"){e.currentTarget.blur();}
+ }}
  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize: 15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
  </div>
  )}
@@ -546,6 +550,10 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
  <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
  rows={4} maxLength={2500} placeholder="Describe the image…"
+ onKeyDown={(e:React.KeyboardEvent<HTMLTextAreaElement>)=>{
+   if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){e.preventDefault();handleGenerate();}
+   if(e.key==="Escape"){e.currentTarget.blur();}
+ }}
  style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
  </div>
  )}
@@ -940,7 +948,21 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
      />
    </div>
  )}
- {item.status==="done"&&!item.outputUrl&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:20,color:C.green}}>✓</span></div>}
+ {item.status==="done"&&!item.outputUrl&&(
+                  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",
+                    alignItems:"center",justifyContent:"center",gap:8,background:"rgba(239,68,68,0.08)",
+                    border:`1px solid rgba(239,68,68,0.25)`,borderRadius:R.r1}}>
+                    <span style={{fontSize:13,color:C.red}}>✗ Failed</span>
+                    <button onClick={(e:React.MouseEvent)=>{
+                      e.stopPropagation();
+                      // Retry: re-trigger generate with same prompt
+                      handleGenerate();
+                    }} style={{padding:"4px 12px",borderRadius:R.r1,background:C.acc,border:"none",
+                      color:"#fff",fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+                      Retry
+                    </button>
+                  </div>
+                )}
  {item.status==="waiting"&&<div style={{fontSize: 13,color:C.t4}}>Waiting…</div>}
  </div>
  ))}

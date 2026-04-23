@@ -300,7 +300,27 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
                 Load recent videos →
               </button>
             )}
-            {libLoading && <div style={{ fontSize: 13, color: C.t4 }}>Loading…</div>}
+            {libLoading && (
+              <div style={{ display:"flex", flexDirection:"column", gap:6, padding:"4px 0" }}>
+                {[1,2,3].map(i => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8,
+                    padding:"8px 8px", borderRadius:R.r1,
+                    border:`1px solid ${C.bdr}`, background:C.bg4 }}>
+                    <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0,
+                      background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                      backgroundSize:"200% 100%", animation:`streams-shimmer ${1.2+i*0.15}s ease infinite` }} />
+                    <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
+                      <div style={{ height:12, borderRadius:R.r1, width:"55%",
+                        background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                        backgroundSize:"200% 100%", animation:`streams-shimmer ${1.3+i*0.1}s ease infinite` }} />
+                      <div style={{ height:10, borderRadius:R.r1, width:"35%",
+                        background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
+                        backgroundSize:"200% 100%", animation:`streams-shimmer ${1.5+i*0.1}s ease infinite` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {libItems.map((item: LibItem) => (
               <div key={item.id} onClick={() => handleIngest(item.output_url)}
                 style={{ padding: "8px 8px", borderRadius: R.r1, cursor: "pointer",
