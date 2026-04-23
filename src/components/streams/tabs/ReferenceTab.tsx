@@ -1,4 +1,5 @@
 "use client";
+import MediaPlayer from "../VideoPlayer";
 
 /**
  * ReferenceTab — Reference analyzer.
@@ -259,10 +260,25 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Preview area */}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 20 }}>
-            {analysis === "done" ? (
-              <div style={{ width: "100%", maxWidth: 480, aspectRatio: "16/9", borderRadius: R.r2, background: C.bg3, border: `1px solid ${C.bdr}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                <svg width="44" height="44" viewBox="0 0 36 36" fill="none"><rect x="2" y="2" width="32" height="32" rx="5" stroke="#3D2E8A" strokeWidth="1.5"/><path d="M2 25l9-9 6 6 6-8 11 11" stroke="#3D2E8A" strokeWidth="1.5" strokeLinecap="round"/><circle cx="11" cy="12" r="3" fill="#3D2E8A"/></svg>
-                <div style={{ fontSize: 13, color: C.t4 }}>Reference analyzed · GPT-4o Vision</div>
+            {urlInput ? (
+              <div style={{ width: "100%", maxWidth: 520 }}>
+                {urlInput ? (
+                  <MediaPlayer
+                    src={urlInput}
+                    kind={urlInput.match(/\.(mp4|mov|webm)$/i) ? "video" : "image"}
+                    aspectRatio="16/9"
+                    showDownload
+                    label="Reference"
+                  />
+                ) : (
+                  <div style={{ aspectRatio: "16/9", background: C.bg3, borderRadius: R.r2,
+                                border: `1px solid ${C.bdr}`, display: "flex",
+                                alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ fontSize: 13, color: C.t4, textAlign:"center" }}>
+                      {analysis === "analyzing" ? "Analyzing with GPT-4o Vision…" : "Add a URL or upload to see a 4K preview"}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: C.t4 }}>

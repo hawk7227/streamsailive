@@ -8,6 +8,9 @@
  */
 
 import { useState, useRef } from "react";
+import MediaPlayer from "../VideoPlayer";
+import FileUpload from "../FileUpload";
+import { useToast } from "../Toast";
 import { C, R, DUR, EASE } from "../tokens";
 
 type EditOp = "voice" | "body" | "motion" | "dub" | "emotion" | "multishot";
@@ -73,11 +76,13 @@ const EDIT_OPS: {
 ];
 
 export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: PersonTabProps = {}) {
+  const { toast } = useToast();
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
   type LibItem = { id:string; output_url:string; generation_type:string; created_at:string };
   const [libItems,    setLibItems]    = useState<LibItem[]>([]);
   const [libLoading,  setLibLoading]  = useState(false);
   const [libLoaded,   setLibLoaded]   = useState(false);
+  const [ingestVideoUrl, setIngestVideoUrl] = useState<string|null>(null);
 
   async function loadLibrary() {
     if (libLoaded) return;
@@ -97,6 +102,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function handleIngest(videoUrl: string) {
+    setIngestVideoUrl(videoUrl);
     setIngestState("uploading");
     setIngestError(null);
     try {
@@ -147,6 +153,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
     }
   }
 
+  const [opResults, setOpResults] = useState<Record<string,string>>({});
   const [opStates, setOpStates] = useState<Record<EditOp, OpState>>(
     Object.fromEntries(EDIT_OPS.map(op => [op.id, "idle"])) as Record<EditOp, OpState>
   );
@@ -234,19 +241,85 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
 
         {/* Video selector */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: 16 }}>
-          <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Select video to edit</div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1, border: `1px dashed ${C.bdr2}`, borderRadius: R.r2, padding: "20px 16px", textAlign: "center", cursor: "pointer", background: C.bg3 }}>
-              <div style={{ fontSize: 20, color: C.t4, marginBottom: 6, opacity: .4 }}>↑</div>
-              <div style={{ fontSize: 15, color: C.t2, fontWeight: 500 }}>Upload video</div>
-              <div style={{ fontSize: 13, color: C.t4, marginTop: 4 }}>mp4 · mov · triggers 8-step ingest automatically</div>
+          <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 12 }}>Select video to edit</div>
+
+          {/* Upload zone — shows FileUpload when idle/failed, MediaPlayer when done */}
+          {ingestState === "done" && ingestVideoUrl ? (
+            <div style={{ borderRadius: R.r2, overflow: "hidden", marginBottom: 12 }}>
+              <MediaPlayer
+                src={ingestVideoUrl}
+                kind="video"
+                aspectRatio="16/9"
+                showDownload
+                label="Ingested video"
+              />
+              <div style={{ padding: "8px 14px", background: "rgba(16,185,129,0.08)",
+                            border: `1px solid rgba(16,185,129,0.25)`,
+                            borderTop: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, color: C.green, fontWeight: 500 }}>✓ Ingest complete</span>
+                <span style={{ fontSize: 12, color: C.t4, marginLeft: "auto" }}>
+                  {analysisId?.slice(0,8)}…
+                </span>
+                <button onClick={() => { setIngestState("idle"); setIngestVideoUrl(null); setAnalysisId(null); }}
+                  style={{ fontSize: 12, color: C.t4, background: "none", border: "none",
+                           cursor: "pointer", fontFamily: "inherit" }}>
+                  Change
+                </button>
+              </div>
             </div>
-            <div style={{ flex: 1, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r2, padding: 12 }}>
-              <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 8 }}>From Library</div>
-              {["Video lady walking city","Generate brand assets"].map(t => (
-                <div key={t} style={{ padding: "6px 8px", borderRadius: R.r1, cursor: "pointer", fontSize: 14, color: C.t3, marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}` }}>{t}</div>
-              ))}
+          ) : ingestState === "processing" ? (
+            <div style={{ padding: "20px 16px", borderRadius: R.r2, background: C.bg3,
+                          border: `1px solid ${C.acc}`, textAlign: "center", marginBottom: 12 }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%",
+                            border: `2px solid ${C.acc}`, borderTopColor: "transparent",
+                            animation: "streams-spin 700ms linear infinite",
+                            margin: "0 auto 10px" }} />
+              <div style={{ fontSize: 13, color: C.acc2, fontWeight: 500 }}>
+                Processing… ({pollCount} polls)
+              </div>
+              <div style={{ fontSize: 12, color: C.t4, marginTop: 4 }}>8-step pipeline running</div>
             </div>
+          ) : (
+            <FileUpload
+              accept="video"
+              label={ingestState === "failed" ? "Retry — upload video" : "Upload video"}
+              sublabel="mp4 · mov · webm · up to 500MB — triggers 8-step ingest"
+              onUpload={(url: string) => handleIngest(url)}
+              onError={(msg: string) => toast.error(msg)}
+            />
+          )}
+
+          {/* Library picker */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: C.t4, letterSpacing: ".06em",
+                          textTransform: "uppercase", marginBottom: 8 }}>From Library</div>
+            {!libLoaded && !libLoading && (
+              <button onClick={loadLibrary}
+                style={{ fontSize: 13, color: C.acc2, background: "none", border: "none",
+                         cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                Load recent videos →
+              </button>
+            )}
+            {libLoading && <div style={{ fontSize: 13, color: C.t4 }}>Loading…</div>}
+            {libItems.map((item: LibItem) => (
+              <div key={item.id} onClick={() => handleIngest(item.output_url)}
+                style={{ padding: "8px 8px", borderRadius: R.r1, cursor: "pointer",
+                         marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}`,
+                         display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15 }}>
+                  {item.generation_type === "image" ? "🖼" : item.generation_type === "music" ? "🎵" : "🎬"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, color: C.t2, overflow: "hidden",
+                                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.generation_type.replace("_"," ")}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.t4 }}>
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

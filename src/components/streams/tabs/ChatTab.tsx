@@ -8,6 +8,7 @@
  * Backend: POST /api/ai-assistant (existing route, called as HTTP endpoint)
  */
 
+import MediaPlayer from "../VideoPlayer";
 import React, { useState, useRef, useEffect } from "react";
 import { C, R, S, DUR, EASE } from "../tokens";
 
@@ -275,6 +276,20 @@ export default function ChatTab() {
                     >↗</a>
                   )}
                 </div>
+                {/* 4K thumbnail — inline preview */}
+                {hasOutput && (
+                  <div style={{ borderRadius: 4, overflow: "hidden", marginTop: 6 }}>
+                    <MediaPlayer
+                      src={item.output_url}
+                      kind={item.generation_type === "image" ? "image" : item.generation_type === "voice" || item.generation_type === "music" ? "audio" : "video"}
+                      aspectRatio={item.generation_type === "image" ? "1/1" : "16/9"}
+                      showDownload
+                      label={item.generation_type}
+                    />
+                  </div>
+                )}
+                <div style={{ display:"none" }}>{/* spacer closed above */}
+                </div>
               </div>
             );
           })}
@@ -363,13 +378,15 @@ export default function ChatTab() {
                   )}
                 </div>
                 {/* Inline media placeholder */}
-                {msg.mediaType === "image" && msg.mediaUrl && (
-                  <div style={{ width: "100%", maxWidth: 260, aspectRatio: "1/1", marginTop: 8, borderRadius: R.r2, background: C.bg4, border: `1px solid ${C.bdr}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                      <rect x="2" y="2" width="32" height="32" rx="5" stroke="#3D2E8A" strokeWidth="1.5"/>
-                      <path d="M2 25l9-9 6 6 6-8 11 11" stroke="#3D2E8A" strokeWidth="1.5" strokeLinecap="round"/>
-                      <circle cx="11" cy="12" r="3" fill="#3D2E8A"/>
-                    </svg>
+                {msg.mediaUrl && msg.mediaUrl !== "placeholder" && (
+                  <div style={{ width: "100%", maxWidth: 360, marginTop: 8 }}>
+                    <MediaPlayer
+                      src={msg.mediaUrl}
+                      kind={msg.mediaType === "video" ? "video" : "image"}
+                      aspectRatio={msg.mediaType === "video" ? "16/9" : "1/1"}
+                      showDownload
+                      label="Generated"
+                    />
                   </div>
                 )}
               </div>

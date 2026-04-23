@@ -12,6 +12,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { ToastProvider } from "./Toast";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
 import VideoEditorTab from "./tabs/VideoEditorTab";
@@ -65,7 +66,7 @@ export default function StreamsPanel() {
   }, []);
 
   return (
-    <>
+    <ToastProvider>
       {/* Google Fonts — scoped to this panel */}
       <link
         rel="stylesheet"
@@ -231,6 +232,6 @@ export default function StreamsPanel() {
           }
         `}</style>
       </div>
-    </>
+    </ToastProvider>
   );
 }
