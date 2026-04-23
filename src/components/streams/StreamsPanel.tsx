@@ -70,7 +70,7 @@ export default function StreamsPanel() {
       {/* Google Fonts — scoped to this panel */}
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
       />
 
       <div style={{
@@ -78,7 +78,7 @@ export default function StreamsPanel() {
         flexDirection: "column",
         height:        "100dvh",
         overflow:      "hidden",
-        fontFamily:    "'IBM Plex Mono', monospace",
+        fontFamily:    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         background:    C.bg,
         color:         C.t1,
       }}>
@@ -134,7 +134,6 @@ export default function StreamsPanel() {
                   fontWeight:     active === tab.id ? 500 : 400,
                   cursor:         "pointer",
                   transition:     `color ${DUR.fast} ${EASE}, background ${DUR.fast} ${EASE}`,
-                  letterSpacing:  ".02em",
                 }}
               >
                 <span style={{ fontSize: 16 }}>{tab.icon}</span>
@@ -212,11 +211,10 @@ export default function StreamsPanel() {
                 {tab.icon}
               </span>
               <span style={{
-                fontSize: 12,
+                fontSize: 13,
                 color:      active === tab.id ? C.acc2 : C.t4,
                 fontFamily: "inherit",
                 transition: `color ${DUR.fast} ${EASE}`,
-                letterSpacing: ".04em",
               }}>
                 {tab.label}
               </span>

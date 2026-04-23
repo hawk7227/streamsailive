@@ -565,11 +565,12 @@ export default function ChatTab() {
               disabled={!input.trim() || streaming}
               style={{
                 padding: "6px 16px", borderRadius: R.r1,
-                background: input.trim() && !streaming ? C.acc : C.bg4,
-                border: "none", color: input.trim() && !streaming ? "#fff" : C.t4,
+                background: C.acc,
+                border: "none", color: "#fff",
                 fontSize: 14, fontFamily: "inherit", fontWeight: 500,
                 cursor: input.trim() && !streaming ? "pointer" : "not-allowed",
-                transition: `all ${DUR.fast} ${EASE}`, flexShrink: 0,
+                opacity: input.trim() && !streaming ? 1 : 0.4,
+                transition: `opacity ${DUR.fast} ${EASE}`, flexShrink: 0,
               }}
             >
               Send
