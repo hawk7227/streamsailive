@@ -73,12 +73,27 @@ export default function StreamsPanel() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
       />
 
-      <div style={{
+      {/* Scoped font reset — forces Inter on every element inside the panel
+          regardless of global CSS or browser UA stylesheet overrides */}
+      <style>{`
+        .streams-root, .streams-root *,
+        .streams-root input, .streams-root textarea,
+        .streams-root button, .streams-root select {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        }
+        .streams-root .streams-serif {
+          font-family: 'DM Serif Display', serif !important;
+        }
+        .streams-root .streams-mono {
+          font-family: 'IBM Plex Mono', monospace !important;
+        }
+      `}</style>
+
+      <div className="streams-root" style={{
         display:       "flex",
         flexDirection: "column",
         height:        "100dvh",
         overflow:      "hidden",
-        fontFamily:    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         background:    C.bg,
         color:         C.t1,
       }}>
@@ -95,8 +110,7 @@ export default function StreamsPanel() {
           gap:            8,
         }}>
           {/* Brand */}
-          <div style={{
-            fontFamily:    "'DM Serif Display', serif",
+          <div className="streams-serif" style={{
             fontStyle:     "italic",
             fontSize: 20,
             color:         C.t1,

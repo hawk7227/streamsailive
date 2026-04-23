@@ -179,7 +179,7 @@ export default function ChatTab() {
     }}>
       {/* Brand + New */}
       <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.bdr}` }}>
-        <div style={{ fontFamily: "'DM Serif Display', serif", fontStyle: "italic", fontSize: 16, color: C.t1, marginBottom: 4 }}>Streams</div>
+        <div className="streams-serif" style={{ fontStyle: "italic", fontSize: 16, color: C.t1, marginBottom: 4 }}>Streams</div>
         <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>New conversation</div>
         <button
           onClick={() => {
@@ -388,7 +388,7 @@ export default function ChatTab() {
             <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
             Chat · image · video · build
           </div>
-          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: C.t1, marginBottom: 4 }}>AI assistant</div>
+          <div className="streams-serif" style={{ fontSize: 20, color: C.t1, marginBottom: 4 }}>AI assistant</div>
           <div style={{ fontSize: 14, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>Generate images, videos, voice and code directly from conversation.</div>
         </div>
 
