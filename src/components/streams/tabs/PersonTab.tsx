@@ -177,11 +177,9 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
       return;
     }
 
-    // Without a real generationLogId + analysisId (pre-ingest), operations show
-    // what route would be called. Wired state runs once ingest completes.
     if (!analysisId || !genLogId) {
-      // Shell demo — show state transition without backend call
-      setTimeout(() => setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "done" })), 1800);
+      toast.warn("Ingest a video first — upload in the box above to enable editing");
+      setOpStates((s: Record<EditOp, OpState>) => ({ ...s, [id]: "idle" }));
       return;
     }
 

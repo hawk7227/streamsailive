@@ -52,6 +52,8 @@ export default function ChatTab() {
 
   const [library,      setLibrary]     = useState<LibraryItem[]>([]);
   const [expandedLib,  setExpandedLib]  = useState<string|null>(null);
+  const [attachMode,   setAttachMode]   = useState(false);
+  const [attachUrl,    setAttachUrl]    = useState("");
   const [libraryLoading, setLibLoad]  = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -422,9 +424,11 @@ export default function ChatTab() {
                     <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
                       {["Generate video", "Generate image", "Generate voice"].map(action => (
                         <button key={action} onClick={() => {
-                          // Pre-fill prompt from last user message + switch to Generate tab
-                          void action; // tab switching handled by StreamsPanel
+                          // Copy last user message as prompt into input
+                          const lastUser = msgs.slice().reverse().find((m: Msg) => m.role === "user");
+                          if (lastUser) setInput(lastUser.text);
                         }}
+                        title={`Open Generate tab → ${action}`}
                         style={{ padding:"4px 10px", borderRadius:R.pill,
                           background:C.accDim, border:`1px solid ${C.accBr}`,
                           color:C.acc2, fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>
@@ -477,6 +481,26 @@ export default function ChatTab() {
             ))}
           </div>
 
+          {/* Attach URL row */}
+          {attachMode && (
+            <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+              <input value={attachUrl} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setAttachUrl(e.target.value)}
+                placeholder="Paste image or video URL…"
+                style={{ flex:1, background:C.bg3, border:`1px solid ${C.bdr}`, borderRadius:R.r1,
+                  padding:"6px 10px", color:C.t1, fontSize:14, fontFamily:"inherit", outline:"none" }}
+                onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>)=>{
+                  if (e.key==="Enter" && attachUrl.trim()) {
+                    setInput((p:string) => p + (p?" ":"") + attachUrl.trim());
+                    setAttachUrl(""); setAttachMode(false);
+                  }
+                  if (e.key==="Escape") setAttachMode(false);
+                }}
+              />
+              <button onClick={()=>{ setInput((p:string)=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }}
+                style={{ padding:"6px 12px", borderRadius:R.r1, background:C.acc, border:"none",
+                  color:"#fff", fontSize:13, fontFamily:"inherit", cursor:"pointer" }}>Attach</button>
+            </div>
+          )}
           {/* Input row */}
           <div style={{
             display: "flex", gap: 8, alignItems: "flex-end",
@@ -484,12 +508,11 @@ export default function ChatTab() {
             borderRadius: R.r3, padding: "8px 12px",
           }}>
             {/* Attach */}
-            <button title="Attach file URL" onClick={() => {
-              const url = window.prompt("Paste an image or video URL to attach:");
-              if (url?.trim()) setInput((prev:string) => prev + (prev?" ":"") + url.trim());
-            }} style={{
-              background: "transparent", border: "none", color: C.t4,
-              fontSize: 16, cursor: "pointer", padding: 2, flexShrink: 0,
+            <button title="Attach URL" onClick={() => setAttachMode((m:boolean)=>!m)} style={{
+              background: attachMode ? C.accDim : "transparent",
+              border: attachMode ? `1px solid ${C.accBr}` : "none",
+              borderRadius: R.r1, color: attachMode ? C.acc2 : C.t4,
+              fontSize: 14, cursor: "pointer", padding: "2px 6px", flexShrink: 0,
             }}>⊕</button>
 
             <textarea

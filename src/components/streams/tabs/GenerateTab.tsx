@@ -356,13 +356,27 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  }
 
  function handleMic() {
- if (micState!=="idle") return;
- setMicState("recording");
- setTimeout(()=>setMicState("done"), 2400);
- }
+    if (micState !== "idle") return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("Microphone not available"); return;
+    }
+    setMicState("recording");
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e: BlobEvent) => chunks.push(e.data);
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+        setMicState("done");
+        toast.success("Voice sample captured — ready for IVC voice clone");
+      };
+      recorder.start();
+      setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, 60_000);
+    }).catch(() => { setMicState("idle"); toast.error("Microphone access denied"); });
+  }
 
- function handleCam() {
- if (camState!=="idle") return;
+  function handleCam() {
+    if (camState !== "idle") return;
  setCamState("done");
  }
 

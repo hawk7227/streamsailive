@@ -115,7 +115,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  async function handleReVoice() {
  if (!editText.trim() || revoiceState === "running") return;
  setRevoiceState("running");
- if (!analysisId || !genLogId) { setTimeout(()=>setRevoiceState("done"),2000); return; }
+ if (!analysisId || !genLogId) {
+      toast.warn("Load a video first — ingest it in the Person tab to enable word editing");
+      setRevoiceState("idle"); return;
+    }
  const line = transcript.find((l:TranscriptLine) => l.words.includes(selectedWord ?? ""));
  const wIdx = line?.words.indexOf(selectedWord ?? "") ?? 0;
  const startMs = (line?.start_ms ?? 0) + wIdx * 350;
@@ -157,7 +160,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  async function handleDub() {
  if (dubState==="running") return;
  setDubState("running");
- if (!genLogId) { setTimeout(()=>setDubState("done"),3000); return; }
+ if (!genLogId) {
+      toast.warn("No generation loaded — upload a video to enable dubbing");
+      setDubState("idle"); return;
+    }
  const langMap: Record<string,string> = {
  "Spanish":"es","French":"fr","German":"de","Japanese":"ja",
  "Portuguese":"pt","Italian":"it","Hindi":"hi","Korean":"ko","Arabic":"ar",
@@ -186,7 +192,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
  a.download = "transcript.json"; a.click();
  }
- setTimeout(()=>setDownloading(null), 1800);
+ setTimeout(()=>setDownloading(null), 600);
  }
 
  const activeShotData = shots.find((s:Shot)=>s.id===activeShot) ?? shots[0];
@@ -255,7 +261,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </div>
  <div style={{borderTop:`1px solid ${C.bdr}`,flexShrink:0,padding:"8px 12px 4px",display:"flex",justifyContent:"space-between"}}>
  <span style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Audio transcript</span>
- <span style={{fontSize:12,color:C.t4}}>{analysisId?"Scribe v2 · live":"shell data"}</span>
+ <span style={{fontSize:12,color:C.t4}}>{analysisId?"Scribe v2 · live":"no video loaded"}</span>
  </div>
  <div style={{flex:"0 0 140px",overflowY:"auto",padding:"4px 12px 8px"}}>
  {transcript.map((line:TranscriptLine, i:number)=>(
