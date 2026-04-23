@@ -163,7 +163,10 @@ function AudioPlayer({ src, label, showDownload }: {
         {showDownload && <DownloadBtn href={src} small />}
       </div>
       {/* Waveform-style scrub bar */}
-      <div ref={barRef} onClick={handleBar} style={{
+      <div ref={barRef} onClick={handleBar}
+        role="button" tabIndex={0} aria-label="Seek audio"
+        onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==="Enter"||e.key===" ")handleBar(e as unknown as React.MouseEvent<HTMLDivElement>);}}
+        style={{
         height:32, background:C.bg4, borderRadius:R.r1,
         cursor:"pointer", position:"relative", overflow:"hidden",
       }}>
@@ -178,7 +181,7 @@ function AudioPlayer({ src, label, showDownload }: {
             const h = 20 + Math.sin(i * 0.8) * 8 + Math.sin(i * 0.3) * 6;
             const active = (i / 80) * 100 < pct;
             return <div key={i} style={{ flex:1, height:`${h}px`,
-              background: active ? C.acc : C.t4, borderRadius:1 }} />;
+              background: active ? C.acc : C.t4, borderRadius:0 }} />;
           })}
         </div>
       </div>
@@ -480,16 +483,19 @@ export default function MediaPlayer({
 
         {/* Scrub bar */}
         <div ref={barRef} onClick={seek}
+             role="button" tabIndex={0} aria-label="Seek video"
+             onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==="Enter"||e.key===" ")seek(e as unknown as React.MouseEvent<HTMLDivElement>);}}
              style={{ height:3, borderRadius:R.pill, background:"rgba(255,255,255,0.15)",
                       marginBottom:8, cursor:"pointer", position:"relative" }}>
           {/* Buffered */}
           <div style={{ position:"absolute", top:0, left:0, height:"100%",
                         width:`${bufPct}%`, background:"rgba(255,255,255,0.25)",
                         borderRadius:R.pill }} />
-          {/* Played */}
+          {/* Played — scaleX instead of width to avoid layout animation */}
           <div style={{ position:"absolute", top:0, left:0, height:"100%",
-                        width:`${pct}%`, background:"#fff", borderRadius:R.pill,
-                        transition:"width 0.08s linear" }} />
+                        width:"100%", background:"#fff", borderRadius:R.pill,
+                        transform:`scaleX(${pct/100})`, transformOrigin:"left",
+                        transition:"transform 0.08s linear" }} />
           {/* Thumb */}
           <div style={{ position:"absolute", top:"50%", left:`${pct}%`,
                         transform:"translate(-50%,-50%)",

@@ -945,7 +945,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  display:"flex",alignItems:"center",justifyContent:"center",gap:8,
  }}>
  {isActive&&<span style={{width:12,height:12,borderRadius:R.pill,border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"inline-block",animation:"streams-spin 600ms linear infinite"}}/>}
- ✦ {btnLabel}
+ <span role="status" aria-live="polite" aria-atomic="true">✦ {btnLabel}</span>
  </button>
  </div>
  </div>
@@ -1030,7 +1030,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
                       background:item.previewUrl?"linear-gradient(transparent,rgba(0,0,0,0.75))":"rgba(0,0,0,0.5)"}}>
                       <div style={{width:"80%",height:3,borderRadius:R.pill,background:"rgba(255,255,255,0.15)",marginBottom:5}}>
                         <div style={{height:"100%",borderRadius:R.pill,background:C.acc,
-                          width:`${item.progress??0}%`,transition:"width 0.5s ease"}}/>
+                          width:"100%",transform:`scaleX(${(item.progress??0)/100})`,transformOrigin:"left",transition:"transform 0.5s ease"}}/>
                       </div>
                       <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>
                         {item.progress?`${item.progress}%`:"Generating…"}

@@ -374,9 +374,12 @@ def check_clickable_divs(files):
     """K.7 — Clickable divs need role/tabIndex/onKeyDown."""
     pattern = re.compile(r'<div[^>]*onClick=')
     for path in files:
-        for i, line in enumerate(lines(path), 1):
+        lns = lines(path)
+        for i, line in enumerate(lns, 1):
             if pattern.search(line):
-                if 'role=' not in line or 'tabIndex' not in line:
+                # Check this line AND the next 3 lines for role/tabIndex
+                ctx = " ".join(lns[i-1:min(len(lns), i+3)])
+                if 'role=' not in ctx or 'tabIndex' not in ctx:
                     fail("K.7", path, i,
                          f"Clickable div missing role/tabIndex: {line.strip()[:100]}")
 

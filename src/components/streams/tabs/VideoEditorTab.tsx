@@ -232,7 +232,11 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </div>
  <div style={{flex:1,overflowY:"auto",padding:8}}>
  {shots.map((shot:Shot)=>(
- <div key={shot.id} onClick={()=>setActiveShot(shot.id)} style={{
+ <div key={shot.id}
+ role="button" tabIndex={0}
+ onClick={()=>setActiveShot(shot.id)}
+ onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==="Enter"||e.key===" ")setActiveShot(shot.id);}}
+ style={{
  padding:"8px 8px",borderRadius:R.r1,marginBottom:4,cursor:"pointer",
  border:`1px solid ${activeShot===shot.id?C.acc:"transparent"}`,
  background:activeShot===shot.id?C.accDim:"transparent",
@@ -365,7 +369,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </span>
  <span style={{fontSize:13,color:C.t4}}>{Math.floor(videoTime/60)}:{String(Math.floor(videoTime%60)).padStart(2,"0")} / {Math.floor(videoDuration/60)}:{String(Math.floor(videoDuration%60)).padStart(2,"0")}</span>
  </div>
- <div style={{padding:"8px 16px",borderBottom:`1px solid ${C.bdr}`,background:"rgba(124,58,237,0.06)",display:"flex",alignItems:"center",gap:10,flexShrink:0,overflowX:"auto"}}>
+ <div className="streams-editor-audio-bar" style={{padding:"8px 16px",borderBottom:`1px solid ${C.bdr}`,background:"rgba(124,58,237,0.06)",display:"flex",alignItems:"center",gap:10,flexShrink:0,overflowX:"auto"}}>
  <span style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",flexShrink:0}}>Edit audio</span>
  <div style={{display:"flex",flexWrap:"nowrap",gap:4,flex:1,overflowX:"auto"}}>
  {(selectedWord
@@ -386,7 +390,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
   <option value="rachel">Rachel</option>
   <option value="adam">Adam</option>
  </select>
- <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)} placeholder="Edit selected word…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,color:C.t1,fontSize:14,padding:"4px 8px",fontFamily:"inherit",outline:"none",width:140,flexShrink:0}}/>
+ <input value={editText} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setEditText(e.target.value)} placeholder="Edit selected word…" style={{background:C.bg3,border:"none",borderRadius:R.r1,color:C.t1,fontSize:14,padding:"4px 8px",fontFamily:"inherit",outline:"none",width:140,flexShrink:0}}/>
  <button onClick={handleReVoice} style={{padding:"4px 16px",borderRadius:R.r1,background:revoiceState==="done"?C.green:revoiceState==="running"?C.bg4:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:revoiceState==="running"?"not-allowed":"pointer",flexShrink:0,transition:`background ${DUR.fast} ${EASE}`,display:"flex",alignItems:"center",gap:5}}>
  {revoiceState==="running"&&<span style={{width:10,height:10,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
  {revoiceState==="done"?"✓ Done":revoiceState==="running"?"Processing…":"Re-voice"}
@@ -423,7 +427,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
              return (
                <div key={i} style={{
                  flex:1, height:`${Math.min(95,Math.max(8,h))}%`,
-                 borderRadius:1,
+                 borderRadius:0,
                  background: played ? track.color
                    : inSeg ? track.color.replace("0.75","0.22")
                    : "rgba(255,255,255,0.05)",
@@ -532,7 +536,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <div style={{fontSize:13,color:C.t4,marginTop:3}}>Synchronized to video frames — $0.001/sec</div>
  </div>
  <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
- <input placeholder="cinematic swoosh, urban ambient, logo reveal pulse…" style={{background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+ <input maxLength={500} placeholder="cinematic swoosh, urban ambient, logo reveal pulse…" style={{background:C.bg3,border:"none",borderRadius:R.r1,padding:"8px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",outline:"none",width:"100%"}}/>
  <button onClick={()=>handleDownload("sound")} style={{padding:"8px 0",borderRadius:R.r2,background:downloading==="sound"?C.green:C.acc,border:"none",color:"#fff",fontSize:14,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="sound"?"✓ Processing…":"Add sound"}</button>
  </div>
  </div>
@@ -614,7 +618,17 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  {subTab==="Export" && ExportView}
  <style>{`
  @keyframes streams-editor-spin { to{transform:rotate(360deg)} }
- @media(max-width:768px){ .streams-editor-left{display:none!important} }
+ .streams-editor-audio-bar {
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+ }
+ .streams-editor-audio-bar::-webkit-scrollbar { display: none; }
+ @media(max-width:767px){
+   .streams-root .streams-editor-left { display: none; }
+ }
+ @media(min-width:768px){
+   .streams-root .streams-editor-left { display: flex; }
+ }
  `}</style>
  </div>
  );

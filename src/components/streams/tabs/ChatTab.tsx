@@ -272,7 +272,7 @@ export default function ChatTab() {
           <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
             {[1,2,3].map(i => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap: 8, padding: "4px 0" }}>
-                <div style={{ width:36, height:36, borderRadius:6, flexShrink:0,
+                <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
                   background:`linear-gradient(90deg, ${C.bg3} 25%, ${C.bg4} 50%, ${C.bg3} 75%)`,
                   backgroundSize:"200% 100%", animation:"streams-shimmer 1.4s ease infinite" }} />
                 <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>

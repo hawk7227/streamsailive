@@ -264,7 +264,11 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
                   "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
                   "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
                 ]).map((vp: string, i: number) => (
-                  <div key={i} onClick={() => onSelectPrompt?.(vp)} style={{ padding: "8px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: onSelectPrompt ? "pointer" : "default", lineHeight: 1.5, transition:`background 150ms ease` }}>
+                  <div key={i}
+                    role="button" tabIndex={onSelectPrompt ? 0 : -1}
+                    onClick={() => onSelectPrompt?.(vp)}
+                    onKeyDown={(e: React.KeyboardEvent) => { if (e.key==="Enter"||e.key===" ") onSelectPrompt?.(vp); }}
+                    style={{ padding: "8px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: onSelectPrompt ? "pointer" : "default", lineHeight: 1.5, transition:`background 150ms ease` }}>
                     {vp}
                   </div>
                 ))}
@@ -332,7 +336,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
 
           {/* Output grid — shows real generated results */}
           {Object.keys(actionResults).length > 0 && (
-            <div style={{ flexShrink:0, borderTop:`1px solid ${C.bdr}`, background:C.bg2, padding:8, display:"flex", gap:8, overflowX:"auto" }}>
+            <div className="streams-ref-scroll" style={{ flexShrink:0, borderTop:`1px solid ${C.bdr}`, background:C.bg2, padding:8, display:"flex", gap:8, overflowX:"auto" }}>
               {Object.entries(actionResults).map(([name, url]) => (
                 <div key={name} style={{ minWidth:140, flexShrink:0 }}>
                   <div style={{ fontSize:12, color:C.t4, marginBottom:4 }}>{name}</div>
@@ -348,9 +352,14 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
 
       <style>{`
         @keyframes streams-spin { to { transform: rotate(360deg); } }
-        @media (max-width: 768px) {
-          .streams-ref-shell { flex-direction: column !important; }
-          .streams-ref-left  { width: 100% !important; border-right: none !important; border-bottom: 1px solid ${C.bdr}; }
+        .streams-ref-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .streams-ref-scroll::-webkit-scrollbar { display: none; }
+        @media (max-width: 767px) {
+          .streams-root .streams-ref-shell { flex-direction: column; }
+          .streams-root .streams-ref-left  { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
         }
       `}</style>
     </div>

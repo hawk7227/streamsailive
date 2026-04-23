@@ -65,6 +65,21 @@ const TEXT_COLORS: Record<ToastType, string> = {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // N.3 — reposition above keyboard when iOS viewport shrinks
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      if (containerRef.current) {
+        const offset = window.innerHeight - vv.height;
+        containerRef.current.style.bottom = `${24 + offset}px`;
+      }
+    };
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
 
   const add = useCallback((type: ToastType, message: string) => {
     const id = crypto.randomUUID();
@@ -94,7 +109,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={ctx}>
       {children}
       {/* Toast container — fixed bottom-right */}
-      <div style={{
+      <div ref={containerRef} style={{
         position:"fixed", bottom:24, right:24, zIndex:400,
         display:"flex", flexDirection:"column", gap:8,
         pointerEvents:"none",

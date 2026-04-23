@@ -325,7 +325,10 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
               </div>
             )}
             {libItems.map((item: LibItem) => (
-              <div key={item.id} onClick={() => handleIngest(item.output_url)}
+              <div key={item.id}
+                role="button" tabIndex={0}
+                onClick={() => handleIngest(item.output_url)}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key==="Enter"||e.key===" ") handleIngest(item.output_url); }}
                 style={{ padding: "8px 8px", borderRadius: R.r1, cursor: "pointer",
                          marginBottom: 4, background: C.bg4, border: `1px solid ${C.bdr}`,
                          display: "flex", alignItems: "center", gap: 8 }}>
@@ -474,8 +477,8 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
 
       <style>{`
         @keyframes streams-spin { to { transform: rotate(360deg); } }
-        @media (max-width: 768px) {
-          .streams-ops-grid { grid-template-columns: 1fr !important; }
+        @media (max-width: 767px) {
+          .streams-root .streams-ops-grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
