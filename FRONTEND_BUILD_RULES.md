@@ -702,4 +702,17 @@ STUBS AND FAKES
 □ No "coming soon" in rendered UI
 □ All useState consumed in render
 □ All props consumed in component
+
+DEPLOYMENT — REQUIRED AFTER EVERY PUSH
+□ git status — zero untracked files that are imported by committed code
+□ git rev-parse --show-toplevel — confirms correct repo root
+□ git branch — confirms on main
+□ git remote -v — confirms correct remote URL
+□ npx tsc --noEmit — zero streams/ errors
+□ git push origin main
+□ git log --oneline -3 — latest commit hash matches what was just committed
+□ Vercel deployment status checked — must show "Ready" before moving on
+□ If "Error" — build log read in full, cause identified, fix verified locally, pushed again
+□ Loop repeats until Vercel shows "Ready"
+□ No new work begins while deployment is in failed state
 ```

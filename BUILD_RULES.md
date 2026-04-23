@@ -203,6 +203,27 @@ Any file imported by another file must exist in git. Verify with `git status` be
 **Rule 12.3 — Audit script runs before every push.**
 The pattern-match audit (stubs, tokens, font floor, Rule 3, typecheck) runs before `git push`. Zero findings required to push.
 
+**Rule 12.4 — Every push must be verified green on Vercel before moving on.**
+After every `git push origin main`, the Vercel deployment status is checked. Work does not continue until the deployment shows "Ready". If the deployment shows "Error", the build log is read immediately, the cause is identified, fixed, and pushed again. This loop repeats until the deployment is green. No new feature work, no new commits, no new sessions begin while a deployment is in a failed state. A red deployment is a blocker with the same priority as a production outage.
+
+**Rule 12.5 — Build log is read on every failure before any fix is attempted.**
+When a deployment fails, the full Vercel build log is read before any code is changed. Fixes applied without reading the log address symptoms not causes. The log identifies the exact file, line, and error. That is what gets fixed.
+
+**Rule 12.6 — The fix is verified locally before the follow-up push.**
+After identifying the failure from the build log, the fix is verified in the local environment before pushing. For TypeScript errors: `npx tsc --noEmit` passes. For missing files: `git status` shows the file is tracked. For build script errors: the build script is run locally with equivalent env vars. Pushing a guess is not acceptable.
+
+**Rule 12.7 — All new files are staged and confirmed in `git status` before push.**
+Before every `git push`, `git status` is run and every file that is imported by committed code is confirmed to be tracked (not listed under "Untracked files"). An import of an untracked file is a guaranteed Vercel build failure. This was the cause of the rate-limiter and circuit-breaker build failures — both files were written locally but never staged.
+
+**Rule 12.8 — The correct repository and branch are confirmed before every push.**
+Before every `git push`, confirm: the working directory is the correct repo root (`git rev-parse --show-toplevel`), the current branch is `main` (`git branch`), and the remote URL points to the correct GitHub repository (`git remote -v`). Pushing to the wrong repo or wrong branch silently loses work and does not trigger a Vercel deployment. This was the cause of the `streamsailive-main` / `master` branch incident.
+
+**Rule 12.9 — `git log --oneline -3` is checked after every push to confirm the commit landed.**
+After `git push origin main` returns success, `git log --oneline -3` is run to confirm the latest commit hash matches what was just committed. If GitHub shows a different HEAD commit, the push did not land correctly and must be retried.
+
+**Rule 12.10 — A deployment that was green and is now red is treated as a regression.**
+If a deployment was previously green and a new push turns it red, all other work stops. The regression is bisected: the diff of the failing commit is read, the specific change that broke the build is identified, a fix or revert is pushed, and the deployment is confirmed green before anything else continues.
+
 ---
 
 ## AUDIT CHECKLIST — run before every push
