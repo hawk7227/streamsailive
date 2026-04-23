@@ -397,7 +397,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
               Edit operations — each is a single fal API call
             </div>
             <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
-              FAL_KEY only
+              API key only
             </span>
           </div>
 

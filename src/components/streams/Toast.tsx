@@ -104,7 +104,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           return (
             <div key={t.id} style={{
               display:"flex", alignItems:"flex-start", gap:10,
-              padding:"10px 14px",
+              padding:"8px 16px",
               borderRadius:R.r2,
               background:col.bg,
               border:`1px solid ${col.border}`,

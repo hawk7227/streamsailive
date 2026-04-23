@@ -207,14 +207,14 @@ function Skeleton() {
 function ResBadge({ res, w, h }: { res: Res; w?: number; h?: number }) {
   return (
     <div style={{ position:"absolute", top:8, left:8, display:"flex", gap:4 }}>
-      <span style={{ fontSize:11, fontWeight:700, letterSpacing:".06em",
+      <span style={{ fontSize:12, fontWeight:700, letterSpacing:".06em",
                      padding:"2px 6px", borderRadius:R.r1,
                      background:RES_COLOR[res],
                      color:"#fff", backdropFilter:"blur(4px)" }}>
         {res}
       </span>
       {w && h && (
-        <span style={{ fontSize:11, padding:"2px 6px", borderRadius:R.r1,
+        <span style={{ fontSize:12, padding:"2px 6px", borderRadius:R.r1,
                        background:"rgba(0,0,0,0.55)", color:"rgba(255,255,255,0.7)",
                        backdropFilter:"blur(4px)" }}>
           {w}×{h}
@@ -488,7 +488,7 @@ export default function MediaPlayer({
             {fmtTime(elapsed)} / {fmtTime(duration)}
           </span>
           {/* Keyboard hint */}
-          <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>
+          <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>
             Space·F·M·P
           </span>
           <Btn onClick={togglePip} title="Picture-in-picture">⧉</Btn>
