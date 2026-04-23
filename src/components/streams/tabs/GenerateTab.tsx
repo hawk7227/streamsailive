@@ -79,7 +79,7 @@ const COST: Record<string, string> = {
  "Voice-Voice v3":"~$0.10 / 1K","Music-Music":"~$0.45 total",
 };
 
-interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; progress?: number; queuePos?: number; }
+interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?: string; generationId?: string; progress?: number; queuePos?: number; previewUrl?: string; }
 
 interface GenerateTabProps {
  voiceId?: string | null;
@@ -984,16 +984,19 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
                   </div>
                 )}
                 {item.status==="running"&&(
-                  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:12}}>
-                    {/* Progress bar */}
-                    <div style={{width:"80%",height:3,borderRadius:R.pill,background:"rgba(255,255,255,0.1)"}}>
-                      <div style={{height:"100%",borderRadius:R.pill,background:C.acc,
-                        width:`${item.progress??0}%`,
-                        transition:"width 0.5s ease",
-                        minWidth: item.progress ? "4%" : "0%"}}/>
-                    </div>
-                    <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>
-                      {item.progress ? `${item.progress}%` : "Generating…"}
+                  <div style={{position:"absolute",inset:0}}>
+                    {item.previewUrl&&<img src={item.previewUrl} alt="preview"
+                      style={{width:"100%",height:"100%",objectFit:"cover",opacity:0.65}}/>}
+                    <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",
+                      alignItems:"center",justifyContent:"flex-end",padding:12,
+                      background:item.previewUrl?"linear-gradient(transparent,rgba(0,0,0,0.75))":"rgba(0,0,0,0.5)"}}>
+                      <div style={{width:"80%",height:3,borderRadius:R.pill,background:"rgba(255,255,255,0.15)",marginBottom:5}}>
+                        <div style={{height:"100%",borderRadius:R.pill,background:C.acc,
+                          width:`${item.progress??0}%`,transition:"width 0.5s ease"}}/>
+                      </div>
+                      <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+                        {item.progress?`${item.progress}%`:"Generating…"}
+                      </div>
                     </div>
                   </div>
                 )}

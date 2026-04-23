@@ -262,6 +262,8 @@ export default function MediaPlayer({
   const [vDims,    setVDims]    = useState<{w:number;h:number}|null>(null);
   const [controls, setControls] = useState(true);
   const [loading,  setLoading]  = useState(true);
+  const [shuttle,  setShuttle]  = useState(0);
+  const shuttleRef = useRef(0);
   const hideTimer  = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   // Image / audio delegate
@@ -327,8 +329,11 @@ export default function MediaPlayer({
         case "KeyP":  togglePip(); break;
         case "ArrowLeft":  e.preventDefault(); skip(-5); break;
         case "ArrowRight": e.preventDefault(); skip(5); break;
-        case "Comma":      e.preventDefault(); stepFrame(-1); break;  // , = prev frame
-        case "Period":     e.preventDefault(); stepFrame(1); break;   // . = next frame
+        case "Comma":      e.preventDefault(); stepFrame(-1); break;
+        case "Period":     e.preventDefault(); stepFrame(1); break;
+        case "KeyJ": e.preventDefault(); setShuttle((s:number)=>Math.max(s-1,-4)); break;
+        case "KeyK": e.preventDefault(); setShuttle(0); videoRef.current?.pause(); setPlaying(false); break;
+        case "KeyL": e.preventDefault(); setShuttle((s:number)=>Math.min(s+1,4)); break;
       }
     }
     document.addEventListener("keydown", onKey);

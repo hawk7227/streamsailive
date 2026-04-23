@@ -202,6 +202,11 @@ export default function SettingsTab() {
                   <input
                     type={showKeys[i] ? "text" : "password"}
                     value={keyVals[i]}
+                    onFocus={()=>{
+                      if(keyVals[i].startsWith("••••")){
+                        setKeyVals((v:string[])=>v.map((x:string,idx:number)=>idx===i?"":x));
+                      }
+                    }}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyVals((v: string[]) => v.map((x: string, idx: number) => idx === i ? e.target.value : x))}
                     placeholder={key.placeholder}
                     style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 36px 8px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none" }}

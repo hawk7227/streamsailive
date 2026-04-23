@@ -1,76 +1,50 @@
 {
-  "build": {
-    "project": "StreamsAI",
-    "version": "0.4.0",
-    "timestamp": "2026-04-23T02:55:33Z",
-    "commit": "378b2d9",
-    "branch": "main",
-    "status": "passing"
-  },
-  "compliance": {
-    "systemStatus": "/system-status",
-    "apiSystemStatus": "/api/system-status",
-    "buildReport": "/build-report.json",
-    "guardrailsGreen": true,
-    "noFeatureWorkBeforeGuardrails": true
-  },
-  "streams_panel": {
-    "route": "/streams",
-    "standalone": true,
-    "tabs": [
-      "Chat",
-      "Editor",
-      "Generate",
-      "Reference",
-      "Person",
-      "Settings"
+  "generatedAt": "2026-04-23T16:02:46.213Z",
+  "commit": "9659cd14932034973cf7221a09ade0e12a689364",
+  "branch": "main",
+  "environment": "unknown",
+  "env": {
+    "required": [
+      {
+        "key": "OPENAI_API_KEY",
+        "present": true
+      },
+      {
+        "key": "NEXT_PUBLIC_SUPABASE_URL",
+        "present": true
+      }
     ],
-    "mobile_first": true,
-    "design_tokens_locked": true,
-    "cross_tab_state": true
-  },
-  "api_routes": {
-    "proven": [
-      "/api/streams/video/generate",
-      "/api/streams/video/status",
-      "/api/streams/image/generate",
-      "/api/streams/voice/generate",
-      "/api/streams/music/generate",
-      "/api/streams/settings",
-      "/api/streams/reference/analyze",
-      "/api/streams/library",
-      "/api/streams/stitch",
-      "/api/streams/share",
-      "/s/[slug]",
-      "/api/streams/video/edit-body",
-      "/api/streams/video/edit-emotion",
-      "/api/streams/settings/test-key"
-    ],
-    "implemented_unproven": [
-      "/api/streams/video/ingest",
-      "/api/streams/video/ingest/status",
-      "/api/streams/video/edit-voice",
-      "/api/streams/video/edit-motion",
-      "/api/streams/video/dub",
-      "/api/streams/video/ingest/status"
+    "optional": [
+      {
+        "key": "SUPABASE_SERVICE_ROLE_KEY",
+        "present": false
+      },
+      {
+        "key": "SUPABASE_SERVICE_ROLE",
+        "present": false
+      },
+      {
+        "key": "FAL_API_KEY",
+        "present": false
+      },
+      {
+        "key": "ADMIN_SECRET_KEY",
+        "present": false
+      },
+      {
+        "key": "RUNWAY_API_KEY",
+        "present": false
+      },
+      {
+        "key": "KLING_API_KEY",
+        "present": false
+      },
+      {
+        "key": "ELEVENLABS_API_KEY",
+        "present": false
+      }
     ]
   },
-  "db_migration": {
-    "file": "20260422_streams_panel_tables.sql",
-    "tables": [
-      "generation_log",
-      "workspace_settings",
-      "person_analysis",
-      "reference_analyses",
-      "video_versions",
-      "bulk_jobs",
-      "bulk_job_items",
-      "share_links"
-    ],
-    "status": "written_needs_run_in_supabase"
-  },
-  "fal_endpoints_registered": 40,
-  "rule_violations": 0,
-  "last_audit": "2026-04-22",
-  "auto_refresh_ms": 30000
+  "ok": true,
+  "issues": []
 }

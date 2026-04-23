@@ -78,6 +78,8 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const [detectedRes,  setDetectedRes]  = useState<string>("—");
  const [videoTime,    setVideoTime]    = useState(0);
  const [videoDuration,setVideoDuration] = useState(10);
+ const [timelineZoom,   setTimelineZoom]   = useState(1);
+ const [timelineOffset, setTimelineOffset] = useState(0);
  const [loadError, setLoadError] = useState<string|null>(null);
  const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
@@ -178,22 +180,39 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  } catch { setDubState("idle"); }
  }
 
- function handleDownload(label: string) {
- setDownloading(label);
- // Open real URL for formats that map to stored outputs
- if (videoUrl) {
- if (label === "Final video.mp4" || label === "Voice only.mp3") {
- window.open(videoUrl, "_blank");
- }
- }
- // Transcript: build from state and download
- if (label === "Transcript.json") {
- const blob = new Blob([JSON.stringify(transcript, null, 2)], { type: "application/json" });
- const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
- a.download = "transcript.json"; a.click();
- }
- setTimeout(()=>setDownloading(null), 600);
- }
+  function handleDownload(label: string) {
+    setDownloading(label);
+    const dl = (content: string, filename: string, mime: string) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+      a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+    };
+    if ((label==="Final video.mp4"||label==="Voice only.mp3") && videoUrl) {
+      window.open(videoUrl, "_blank");
+    } else if (label==="Transcript.json") {
+      dl(JSON.stringify(transcript,null,2), "transcript.json", "application/json");
+    } else if (label==="Subtitles.srt") {
+      let n=1;
+      const srt = transcript.map((line:TranscriptLine) => {
+        const s=line.start_ms/1000, e=s+line.words.length*0.45;
+        const f=(x:number)=>[Math.floor(x/3600),Math.floor((x%3600)/60),Math.floor(x%60)].map((v:number)=>String(v).padStart(2,"0")).join(":")+","+String(Math.round((x%1)*1000)).padStart(3,"0");
+        return [n++, f(s)+" --> "+f(e), line.words.join(" ")].join("\n")+"\n";
+      }).join("\n");
+      dl(srt,"transcript.srt","text/plain");
+    } else if (label==="Subtitles.vtt") {
+      const f=(x:number)=>String(Math.floor(x/60)).padStart(2,"0")+":"+(x%60).toFixed(3).padStart(6,"0");
+      const vtt=["WEBVTT","", ...transcript.map((line:TranscriptLine)=>{
+        const s=line.start_ms/1000, e=s+line.words.length*0.45;
+        return f(s)+" --> "+f(e)+"\n"+line.words.join(" ");
+      })].join("\n");
+      dl(vtt,"transcript.vtt","text/vtt");
+    } else if (label==="Motion beats.json") {
+      dl(JSON.stringify(shots.map((s:Shot)=>({shot:s.num,time:s.time,prompt:shotPrompts[s.id]??s.prompt})),null,2),"motion-beats.json","application/json");
+    } else {
+      toast.warn("This format requires server assembly — coming soon");
+    }
+    setTimeout(()=>setDownloading(null), 600);
+  }
 
  const activeShotData = shots.find((s:Shot)=>s.id===activeShot) ?? shots[0];
 

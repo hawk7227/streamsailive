@@ -23,6 +23,10 @@
  */
 
 import { FAL_API_KEY } from "@/lib/env";
+import { checkBreaker, recordSuccess, recordFailure } from "./circuit-breaker";
+
+const MAX_RETRIES   = 3;
+const RETRY_BASE_MS = 800;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -145,38 +149,41 @@ export async function falSubmit(
     return { ok: false, error: (e as Error).message };
   }
 
-  const url = `${FAL_QUEUE_BASE}/${endpoint}`;
-
-  try {
-    const res = await fetch(url, {
-      method:  "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Key ${key}`,
-      },
-      body:   JSON.stringify(input),
-      signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { ok: false, error: `fal submit HTTP ${res.status}: ${body.slice(0, 200)}` };
-    }
-
-    const data = await res.json() as Record<string, unknown>;
-    const responseUrl = (data.response_url ?? data.request_id) as string | undefined;
-
-    if (!responseUrl) {
-      return { ok: false, error: "fal submit: no response_url in response" };
-    }
-
-    return { ok: true, responseUrl };
-  } catch (err) {
-    return {
-      ok:    false,
-      error: err instanceof Error ? err.message : "fal submit: unknown error",
-    };
+  const breakerCheck = checkBreaker(endpoint);
+  if (breakerCheck.open) {
+    return { ok: false, error: `fal circuit open — retry in ${Math.ceil(breakerCheck.retryAfterMs / 1000)}s` };
   }
+
+  const url = `${FAL_QUEUE_BASE}/${endpoint}`;
+  let lastErr = "fal submit: unknown error";
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_BASE_MS * Math.pow(2, attempt - 1)));
+    try {
+      const res = await fetch(url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Key ${key}` },
+        body:    JSON.stringify(input),
+        signal:  AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        lastErr = `fal submit HTTP ${res.status}: ${body.slice(0, 200)}`;
+        recordFailure(endpoint);
+        if (res.status < 500) return { ok: false, error: lastErr };
+        continue;
+      }
+      const data        = await res.json() as Record<string, unknown>;
+      const responseUrl = (data.response_url ?? data.request_id) as string | undefined;
+      if (!responseUrl) return { ok: false, error: "fal submit: no response_url in response" };
+      recordSuccess(endpoint);
+      return { ok: true, responseUrl };
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : "fal submit: unknown error";
+      recordFailure(endpoint);
+    }
+  }
+  return { ok: false, error: lastErr };
 }
 
 /**

@@ -232,6 +232,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Remove negative_prompt — not supported by motion-control
   }
 
+  // ── Cost enforcement ─────────────────────────────────────────────────────
+  const { data: wSettings } = await admin
+    .from("workspace_settings").select("cost_limit_daily_usd").eq("workspace_id", workspaceId).maybeSingle();
+  const limitUsd = wSettings?.cost_limit_daily_usd ?? null;
+  if (limitUsd != null && limitUsd > 0) {
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const { data: rows } = await admin.from("generation_log").select("cost_usd")
+      .eq("workspace_id", workspaceId).gte("created_at", todayStart.toISOString());
+    const spent = (rows ?? []).reduce((s: number, r: {cost_usd: number|null}) => s + (r.cost_usd ?? 0), 0);
+    if (spent >= limitUsd) {
+      return NextResponse.json({ error: `Daily cost limit $${limitUsd.toFixed(2)} reached. Spent: $${spent.toFixed(2)}` }, { status: 402 });
+    }
+  }
+
   const submitResult = await falSubmit(endpoint, falInput);
 
   if (!submitResult.ok) {
