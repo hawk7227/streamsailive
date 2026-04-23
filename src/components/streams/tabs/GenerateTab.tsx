@@ -17,6 +17,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import MediaPlayer from "../VideoPlayer";
 import FileUpload from "../FileUpload";
+import BottomSheet from "../BottomSheet";
 import { useToast } from "../Toast";
 import { C, R, DUR, EASE } from "../tokens";
 
@@ -131,6 +132,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  const [customH, setCustomH] = useState("1024");
 
  const [genState, setGenState] = useState<GenState>("idle");
+ const [resultsOpen, setResultsOpen] = useState(false);
  const [grid, setGrid] = useState<GridItem[]>([]);
  const [stitch, setStitch] = useState<string[]>([]);
  const [stitchState, setStitchState] = useState<"idle"|"running"|"done">("idle");
@@ -325,6 +327,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  setGrid((prev:GridItem[]) => prev.map((g:GridItem) =>
   g.id===tempId ? {...g,status:"done",outputUrl:data.outputUrl} : g
  ));
+ if (window.innerWidth < 768) setResultsOpen(true);
  onGenerationComplete?.(data.outputUrl!, tempId);
  return;
  }
@@ -352,6 +355,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  if (statusData.status === "completed") {
  stopPolling();
  setGenState("done");
+ if (window.innerWidth < 768) setResultsOpen(true);
  const artUrl = (statusData as Record<string,unknown>).artifactUrl as string | undefined;
  if (artUrl) onGenerationComplete?.(artUrl);
  setGrid((prev: GridItem[]) => prev.map((g: GridItem) =>
@@ -419,7 +423,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  }} className="streams-gen-left">
 
  {/* Mode bar */}
- <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
+ <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
  <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 8px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
  {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
  <button key={m} onClick={()=>{setMode(m);setModel(0);setUseCustom(false);}} style={{
@@ -433,7 +437,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
 
  {/* Music sub-mode bar — only visible for Music mode */}
  {mode==="Music" && (
- <div style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10}}>
+ <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10}}>
  {([["style-lyrics","Style + Lyrics"],["auto-lyrics","Auto-Lyrics"],["instrumental","Instrumental"],["cover","Cover"],["my-voice","My Voice"]] as [MusicSub,string][]).map(([id,label])=>(
  <button key={id} onClick={()=>setMusicSub(id)} style={{
  padding:"4px 8px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
@@ -1130,12 +1134,52 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  </div>
  </div>
 
+ {/* Mobile results — BottomSheet (Rule 1.3) */}
+ <BottomSheet open={resultsOpen} onClose={() => setResultsOpen(false)} label="Generation results">
+   <div style={{padding:"0 16px 16px"}}>
+     {grid.length === 0 ? (
+       <div style={{textAlign:"center",color:C.t4,fontSize:13,padding:"32px 0"}}>No results yet</div>
+     ) : (
+       <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:12}}>
+         {grid.map((item) => (
+           <div key={item.id} style={{borderRadius:R.r2,overflow:"hidden",background:C.bg3}}>
+             {item.status==="done" && item.outputUrl ? (
+               <MediaPlayer
+                 src={item.outputUrl}
+                 kind={item.outputUrl.match(/\.(mp3|wav|ogg)$/i)?"audio":item.outputUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i)?"image":"video"}
+                 aspectRatio="1/1"
+                 showDownload
+                 label="Result"
+               />
+             ) : (
+               <div style={{aspectRatio:"1/1",display:"flex",alignItems:"center",justifyContent:"center",color:C.t4,fontSize:12}}>
+                 {item.status==="running"?"Generating…":"Waiting…"}
+               </div>
+             )}
+           </div>
+         ))}
+       </div>
+     )}
+   </div>
+ </BottomSheet>
+
  <style>{`
  @keyframes streams-spin { to{transform:rotate(360deg)} }
  @keyframes streams-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.4)} 50%{box-shadow:0 0 0 8px rgba(124,58,237,0)} }
- @media(max-width:768px){
- .streams-gen-left { flex:0 0 100% !important; border-right:none !important; }
- .streams-gen-right { display:none !important; }
+
+ /* Scrollbar suppression on tab rows — Rule 2.3 */
+ .streams-gen-tabs {
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+ }
+ .streams-gen-tabs::-webkit-scrollbar { display: none; }
+
+ @media(max-width:767px){
+   .streams-gen-left { flex: 0 0 100%; border-right: none; }
+   .streams-gen-right { display: none; }
+ }
+ @media(min-width:768px){
+   .streams-gen-right { display: flex; }
  }
  `}</style>
  </div>
