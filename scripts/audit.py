@@ -512,8 +512,8 @@ def check_input_borders(files):
 def check_typescript():
     """Rule 12.1 — Zero TypeScript errors in streams files."""
     result = subprocess.run(
-        ["npx", "tsc", "--noEmit"],
-        capture_output=True, text=True, timeout=120
+        "npx tsc --noEmit",
+        capture_output=True, text=True, timeout=120, shell=True
     )
     output = result.stdout + result.stderr
     skip = {"TS7026","TS2875","TS2503","TS2307","Cannot find module","Cannot find namespace"}
