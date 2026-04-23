@@ -19,11 +19,12 @@ type SystemStatusResponse = {
   ok: boolean;
   timestamp: string;
   checks: {
-    env: CheckResult;
-    openai: CheckResult;
+    env:      CheckResult;
+    openai:   CheckResult;
     supabase: CheckResult;
-    fal: CheckResult;
+    fal:      CheckResult;
     realtime: CheckResult;
+    streams:  CheckResult;
   };
 };
 
@@ -195,7 +196,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const env = checkEnv();
   const fal = checkFal();
 
-  const checks = { env, openai, supabase, fal, realtime };
+  // Streams panel health check
+  let streamsCheck: { status: "pass"|"warn"|"fail"; message?: string } = { status: "warn", message: "not checked" };
+  try {
+    const adminForStreams = createAdminClient();
+    streamsCheck = await streamsHealthCheck(adminForStreams);
+  } catch { streamsCheck = { status: "warn", message: "check failed" }; }
+
+  const checks = { env, openai, supabase, fal, realtime, streams: streamsCheck };
   const ok = Object.values(checks).every((c) => c.status !== "fail");
 
   const body: SystemStatusResponse = {

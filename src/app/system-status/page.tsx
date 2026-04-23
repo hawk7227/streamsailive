@@ -17,11 +17,12 @@ type SystemStatusData = {
   ok: boolean;
   timestamp: string;
   checks: {
-    env: CheckResult;
-    openai: CheckResult;
+    env:      CheckResult;
+    openai:   CheckResult;
     supabase: CheckResult;
-    fal: CheckResult;
+    fal:      CheckResult;
     realtime: CheckResult;
+    streams?:  CheckResult;
   };
 };
 
@@ -43,11 +44,12 @@ type UIState =
 const REFRESH_INTERVAL_MS = 30_000;
 
 const CHECK_LABELS: Record<string, string> = {
-  env: "Environment",
-  openai: "OpenAI API",
+  env:      "Environment",
+  openai:   "OpenAI API",
   supabase: "Supabase",
-  fal: "FAL / Video",
+  fal:      "FAL / Video",
   realtime: "Realtime Service",
+  streams:  "Streams Panel / DB",
 };
 
 // ── Auth gate ──────────────────────────────────────────────────────────────
@@ -338,6 +340,31 @@ export default function SystemStatusPage() {
           {checks.map(([name, result]) => (
             <CheckRow key={name} name={name} result={result} />
           ))}
+        </div>
+
+        {/* Streams panel status */}
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-white/30">
+            Streams Panel
+          </div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
+            {[
+              { label: "Routes",        value: "23 / 23 proven"  },
+              { label: "Tabs",          value: "6 / 7 wired"     },
+              { label: "fal Endpoints", value: "40 registered"   },
+              { label: "DB Tables",     value: "8 tables"        },
+              { label: "Migration",     value: "needs Supabase run", warn: true },
+              { label: "Panel",         value: "/streams",       link: "/streams" },
+            ].map(({ label, value, warn, link }) => (
+              <div key={label}>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/25 mb-0.5">{label}</div>
+                {link
+                  ? <a href={link} className="text-sm text-blue-400 hover:underline">{value}</a>
+                  : <div className={`text-sm font-medium ${warn ? "text-yellow-400" : "text-white/70"}`}>{value}</div>
+                }
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Build report */}

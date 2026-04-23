@@ -23,13 +23,6 @@ interface Msg {
   streaming?: boolean;
 }
 
-const SESSIONS = [
-  { id: "1", title: "New conversation",         time: "now"      },
-  { id: "2", title: "Generate brand assets",    time: "2h ago"   },
-  { id: "3", title: "Video lady walking city",  time: "yesterday" },
-  { id: "4", title: "Explain the pipeline",     time: "2d ago"   },
-];
-
 const SEED_MSGS: Msg[] = [
   { id: "m1", role: "user",      text: "generate an image of a lady walking in the city" },
   { id: "m2", role: "assistant", text: "A cinematic street scene — warm golden hour, a woman in motion against a blur of city life. Generated at full resolution.", mediaUrl: "placeholder", mediaType: "image" as const },
@@ -47,6 +40,13 @@ export default function ChatTab() {
   const [sidebarOpen,  setSidebar]     = useState(false);
   const [activeNav,    setActiveNav]   = useState("Sessions");
   const [convId,       setConvId]      = useState(() => crypto.randomUUID());
+  // ── Session history ──────────────────────────────────────────────────
+  type Session = { id: string; title: string; time: string };
+  const [sessions,      setSessions]    = useState<Session[]>([
+    { id: "current", title: "New conversation", time: "now" },
+  ]);
+  const [activeSession, setActiveSession] = useState("current");
+
   const [library,      setLibrary]     = useState<LibraryItem[]>([]);
   const [libraryLoading, setLibLoad]  = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -61,6 +61,12 @@ export default function ChatTab() {
 
     const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
     setMsgs((p: Msg[]) => [...p, userMsg]);
+    // Update session title from first user message
+    setSessions((prev: Session[]) => prev.map((s: Session) =>
+      s.id === activeSession && s.title === "New conversation"
+        ? { ...s, title: text.slice(0, 36) + (text.length > 36 ? "…" : "") }
+        : s
+    ));
     setInput("");
     setStreaming(true);
 
@@ -149,7 +155,14 @@ export default function ChatTab() {
         <div style={{ fontFamily: "'DM Serif Display', serif", fontStyle: "italic", fontSize: 16, color: C.t1, marginBottom: 4 }}>Streams</div>
         <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>New conversation</div>
         <button
-          onClick={() => { setMsgs(SEED_MSGS); setConvId(crypto.randomUUID()); }}
+          onClick={() => {
+            const newId = crypto.randomUUID();
+            const newSession: Session = { id: newId, title: "New conversation", time: "now" };
+            setSessions((prev: Session[]) => [newSession, ...prev.slice(0, 9)]);
+            setActiveSession(newId);
+            setMsgs(SEED_MSGS);
+            setConvId(newId);
+          }}
           style={{
             width: "100%", padding: "8px 0", borderRadius: R.r1,
             background: C.acc, border: "none", color: "#fff",
@@ -191,16 +204,17 @@ export default function ChatTab() {
 
       {/* Recents */}
       <div style={{ padding: "8px 16px 4px", fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Recents</div>
-      {activeNav === "Sessions" && SESSIONS.map(s => (
-        <button key={s.id} style={{
+      {activeNav === "Sessions" && sessions.map((s: Session) => (
+        <button key={s.id} onClick={() => setActiveSession(s.id)} style={{
           display: "block", textAlign: "left", padding: "8px 16px",
-          border: "none", background: s.id === "1" ? C.surf2 : "transparent",
-          color: s.id === "1" ? C.t1 : C.t3, fontSize: 14, fontFamily: "inherit",
+          border: "none", background: s.id === activeSession ? C.surf2 : "transparent",
+          color: s.id === activeSession ? C.t1 : C.t3, fontSize: 14, fontFamily: "inherit",
           cursor: "pointer", width: "100%",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          borderLeft: s.id === "1" ? `2px solid ${C.acc}` : "2px solid transparent",
+          borderLeft: s.id === activeSession ? `2px solid ${C.acc}` : "2px solid transparent",
         }}>
-          {s.title}
+          <div style={{ fontSize: 13, marginBottom: 1 }}>{s.title}</div>
+          <div style={{ fontSize: 12, color: C.t4 }}>{s.time}</div>
         </button>
       ))}
       {activeNav === "Library" && (
