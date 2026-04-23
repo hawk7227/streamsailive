@@ -233,7 +233,7 @@ export default function VideoEditorTab() {
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
         {LeftPanel}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:"#000"}}>
-          <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.bdr}`,background:C.bg2,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <div style={{padding:"8px 16px",borderBottom:`1px solid ${C.bdr}`,background:C.bg2,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             <span style={{fontSize:12,padding:"3px 8px",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontWeight:600,letterSpacing:".06em"}}>
               SHOT {shots.findIndex((s:Shot)=>s.id===activeShot)+1} · {activeShotData.time}
             </span>
@@ -269,7 +269,7 @@ export default function VideoEditorTab() {
               ? (transcript.find((l:TranscriptLine)=>l.words.includes(selectedWord??""))?.words ?? transcript[1]?.words ?? [])
               : (transcript[1]?.words ?? [])
             ).map((w:string,i:number)=>(
-              <span key={i} onClick={()=>selectWord(w)} style={{padding:"2px 7px",borderRadius:R.r1,fontSize:14,background:selectedWord===w?C.accDim:C.surf,border:`1px solid ${selectedWord===w?C.acc:C.bdr}`,color:selectedWord===w?C.t1:C.t2,cursor:"pointer",whiteSpace:"nowrap"}}>{w}</span>
+              <span key={i} onClick={()=>selectWord(w)} style={{padding:"2px 8px",borderRadius:R.r1,fontSize:14,background:selectedWord===w?C.accDim:C.surf,border:`1px solid ${selectedWord===w?C.acc:C.bdr}`,color:selectedWord===w?C.t1:C.t2,cursor:"pointer",whiteSpace:"nowrap"}}>{w}</span>
             ))}
           </div>
           <select style={{background:C.bg3,border:`1px solid ${C.bdr}`,color:C.t2,fontSize:14,borderRadius:R.r1,padding:"3px 8px",fontFamily:"inherit",flexShrink:0}}>
@@ -311,11 +311,11 @@ export default function VideoEditorTab() {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
             <div style={{fontFamily:"'DM Serif Display', serif",fontSize:20,color:C.t1}}>Full transcript</div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>handleDownload("Subtitles.srt")} style={{padding:"6px 14px",borderRadius:R.r1,background:downloading==="Subtitles.srt"?C.green:C.surf,border:`1px solid ${C.bdr}`,color:downloading==="Subtitles.srt"?"#fff":C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="Subtitles.srt"?"✓":"Export .srt"}</button>
-              <button onClick={()=>handleDownload("Subtitles.vtt")} style={{padding:"6px 14px",borderRadius:R.r1,background:downloading==="Subtitles.vtt"?C.green:C.surf,border:`1px solid ${C.bdr}`,color:downloading==="Subtitles.vtt"?"#fff":C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="Subtitles.vtt"?"✓":"Export .vtt"}</button>
+              <button onClick={()=>handleDownload("Subtitles.srt")} style={{padding:"6px 16px",borderRadius:R.r1,background:downloading==="Subtitles.srt"?C.green:C.surf,border:`1px solid ${C.bdr}`,color:downloading==="Subtitles.srt"?"#fff":C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="Subtitles.srt"?"✓":"Export .srt"}</button>
+              <button onClick={()=>handleDownload("Subtitles.vtt")} style={{padding:"6px 16px",borderRadius:R.r1,background:downloading==="Subtitles.vtt"?C.green:C.surf,border:`1px solid ${C.bdr}`,color:downloading==="Subtitles.vtt"?"#fff":C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>{downloading==="Subtitles.vtt"?"✓":"Export .vtt"}</button>
             </div>
           </div>
-          <div style={{padding:"10px 14px",borderRadius:R.r2,background:C.bg3,border:`1px solid ${C.bdr}`,marginBottom:20,fontSize:13,color:C.t4}}>
+          <div style={{padding:"10px 16px",borderRadius:R.r2,background:C.bg3,border:`1px solid ${C.bdr}`,marginBottom:20,fontSize:13,color:C.t4}}>
             {analysisId?"Live data · Scribe v2 word-level timestamps":"Shell data · load a video in Person tab to see real transcript"}
           </div>
           {transcript.map((line:TranscriptLine, i:number)=>(
@@ -441,8 +441,8 @@ export default function VideoEditorTab() {
           <button key={t} onClick={()=>setSubTab(t)} style={{height:46,padding:"0 18px",border:"none",borderBottom:subTab===t?`2px solid ${C.acc}`:"2px solid transparent",background:subTab===t?"rgba(124,58,237,0.06)":"transparent",color:subTab===t?C.t1:C.t3,fontSize:14,fontFamily:"inherit",cursor:"pointer",letterSpacing:".02em",flexShrink:0,transition:`all ${DUR.fast} ${EASE}`}}>{t}</button>
         ))}
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
-          <button style={{padding:"6px 14px",borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>↑ Upload</button>
-          <button style={{padding:"6px 14px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize:13,fontFamily:"inherit",cursor:"pointer"}} onClick={()=>setSubTab("Export")}>Export video</button>
+          <button style={{padding:"6px 16px",borderRadius:R.r1,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>↑ Upload</button>
+          <button style={{padding:"6px 16px",borderRadius:R.r1,background:C.acc,border:"none",color:"#fff",fontSize:13,fontFamily:"inherit",cursor:"pointer"}} onClick={()=>setSubTab("Export")}>Export video</button>
         </div>
       </div>
       {subTab==="Motion"     && MotionView}

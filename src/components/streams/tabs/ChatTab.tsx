@@ -262,7 +262,7 @@ export default function ChatTab() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* AI assistant header — badge + title + subtitle */}
-        <div style={{ padding: "14px 32px 0", flexShrink: 0 }} className="streams-chat-header">
+        <div style={{ padding: "16px 32px 0", flexShrink: 0 }} className="streams-chat-header">
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", borderRadius: R.pill, border: `1px solid ${C.accBr}`, background: C.accDim, fontSize: 13, color: C.acc2, marginBottom: 8 }}>
             <span style={{ width: 5, height: 5, borderRadius: R.pill, background: C.acc2, display: "inline-block" }} />
             Chat · image · video · build
@@ -316,7 +316,7 @@ export default function ChatTab() {
                   </div>
                 )}
                 <div style={{
-                  padding: "10px 14px",
+                  padding: "10px 16px",
                   borderRadius: msg.role === "user" ? `${R.r2}px 4px ${R.r2}px ${R.r2}px` : `4px ${R.r2}px ${R.r2}px ${R.r2}px`,
                   background: msg.role === "user" ? C.acc : C.surf,
                   border: msg.role === "user" ? "none" : `1px solid ${C.bdr}`,
@@ -403,7 +403,7 @@ export default function ChatTab() {
               onClick={handleSend}
               disabled={!input.trim() || streaming}
               style={{
-                padding: "6px 14px", borderRadius: R.r1,
+                padding: "6px 16px", borderRadius: R.r1,
                 background: input.trim() && !streaming ? C.acc : C.bg4,
                 border: "none", color: input.trim() && !streaming ? "#fff" : C.t4,
                 fontSize: 14, fontFamily: "inherit", fontWeight: 500,

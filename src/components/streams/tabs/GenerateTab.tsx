@@ -90,7 +90,25 @@ export default function GenerateTab() {
   const [topic,       setTopic]       = useState("");
   const [styleInput,  setStyleInput]  = useState("");
   const [lyricsInput, setLyricsInput] = useState("");
-  const [styleAr,     setStyleAr]     = useState("1:1");
+  const [styleAr,       setStyleAr]       = useState("1:1");
+  const [imageSubMode,  setImageSubMode]  = useState<"generate"|"templates">("generate");
+  const [selectedTpl,   setSelectedTpl]   = useState<string|null>(null);
+
+  // Marketing creative templates — sizes rounded to nearest 8 per backend spec
+  const TEMPLATES = [
+    { id:"ig_feed",       label:"Instagram Feed",  w:1080, h:1080, cat:"Social",      icon:"📷" },
+    { id:"ig_story",      label:"Instagram Story", w:1080, h:1920, cat:"Social",      icon:"📱" },
+    { id:"tiktok",        label:"TikTok",          w:1080, h:1920, cat:"Social",      icon:"🎵" },
+    { id:"fb_ad",         label:"Facebook Ad",     w:1200, h:628,  cat:"Advertising", icon:"📣" },
+    { id:"display_banner",label:"Display Banner",  w:728,  h:90,   cat:"Advertising", icon:"🖼" },
+    { id:"yt_thumb",      label:"YouTube Thumb",   w:1280, h:720,  cat:"Video",       icon:"▶" },
+    { id:"yt_banner",     label:"YouTube Banner",  w:2560, h:1440, cat:"Video",       icon:"📺" },
+    { id:"story_portrait",label:"Story Portrait",  w:296,  h:480,  cat:"Brand",       icon:"◈" },
+    { id:"logo_square",   label:"Logo / Icon",     w:512,  h:512,  cat:"Brand",       icon:"✦" },
+    { id:"og_image",      label:"OG / Link Preview",w:1200,h:630,  cat:"Web",         icon:"🔗" },
+    { id:"email_header",  label:"Email Header",    w:600,  h:200,  cat:"Web",         icon:"✉" },
+    { id:"linkedin_post", label:"LinkedIn Post",   w:1200, h:627,  cat:"Social",      icon:"💼" },
+  ] as const;
   const [useCustom,   setUseCustom]   = useState(false);
   const [customW,     setCustomW]     = useState("1024");
   const [customH,     setCustomH]     = useState("1024");
@@ -343,7 +361,7 @@ export default function GenerateTab() {
         <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 10px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
         {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
           <button key={m} onClick={()=>{setMode(m);setModel(0);setUseCustom(false);}} style={{
-            height:44,padding:"0 14px",border:"none",flexShrink:0,
+            height:44,padding:"0 16px",border:"none",flexShrink:0,
             borderBottom:mode===m?`2px solid ${C.acc}`:"2px solid transparent",
             background:mode===m?C.surf2:"transparent",
             color:mode===m?C.t1:C.t3,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
@@ -401,7 +419,7 @@ export default function GenerateTab() {
         {mode==="I2V"&&(<>
           <div>
             <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Start image <span style={{color:C.red}}>required</span></div>
-            <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"20px 14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
+            <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"20px 16px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
               <div style={{fontSize: 20,color:C.t4,marginBottom:6,opacity:.4}}>↑</div>
               <div style={{fontSize: 14,color:C.t3}}>Drop start frame or URL</div>
               <div style={{fontSize: 13,color:C.t4,marginTop:2}}>jpg · png · webp</div>
@@ -419,7 +437,7 @@ export default function GenerateTab() {
         {mode==="Motion"&&(
           <div>
             <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Motion reference video</div>
-            <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"16px 14px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
+            <div style={{border:`1px dashed ${C.bdr2}`,borderRadius:R.r2,padding:"16px 16px",textAlign:"center",cursor:"pointer",background:C.bg3}}>
               <div style={{fontSize: 14,color:C.t3}}>Upload reference video</div>
               <div style={{fontSize: 13,color:C.t4,marginTop:2}}>mp4 · mov</div>
             </div>
@@ -428,14 +446,69 @@ export default function GenerateTab() {
 
         {/* Image */}
         {mode==="Image"&&(<>
-          <div>
-            <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
-            <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
-              rows={4} maxLength={2500} placeholder="Describe the image…"
-              style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+          {/* Image sub-mode: Generate vs Templates */}
+          <div style={{display:"flex",gap:6,marginBottom:4}}>
+            {(["generate","templates"] as const).map(m=>(
+              <button key={m} onClick={()=>setImageSubMode(m)} style={{
+                flex:1,padding:"6px 0",borderRadius:R.r1,fontSize:13,fontFamily:"inherit",cursor:"pointer",
+                border:`1px solid ${imageSubMode===m?C.acc:C.bdr}`,
+                background:imageSubMode===m?C.acc:"transparent",
+                color:imageSubMode===m?"#fff":C.t3,fontWeight:imageSubMode===m?500:400,
+              }}>{m==="generate"?"Generate":"Templates"}</button>
+            ))}
           </div>
 
-          {/* Size: Aspect ratio OR Custom pixels */}
+          {imageSubMode==="templates"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {/* Group by category */}
+              {["Social","Advertising","Video","Brand","Web"].map(cat=>{
+                const catItems = TEMPLATES.filter(t=>t.cat===cat);
+                if(!catItems.length) return null;
+                return (
+                  <div key={cat}>
+                    <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{cat}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                      {catItems.map(tpl=>(
+                        <button key={tpl.id} onClick={()=>{
+                          setSelectedTpl(tpl.id);
+                          setCustomW(String(tpl.w));
+                          setCustomH(String(tpl.h));
+                          setUseCustom(true);
+                          setModel(IMAGE_MODELS.indexOf("Design")>=0?IMAGE_MODELS.indexOf("Design"):
+                                   IMAGE_MODELS.indexOf("Kontext")>=0?IMAGE_MODELS.indexOf("Kontext"):0);
+                        }} style={{
+                          padding:"8px 8px",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",
+                          border:`1px solid ${selectedTpl===tpl.id?C.acc:C.bdr}`,
+                          background:selectedTpl===tpl.id?C.accDim:"transparent",
+                          textAlign:"left",
+                        }}>
+                          <div style={{fontSize:16,marginBottom:3}}>{tpl.icon}</div>
+                          <div style={{color:selectedTpl===tpl.id?C.acc2:C.t1,fontWeight:500}}>{tpl.label}</div>
+                          <div style={{color:C.t4,fontSize:12}}>{tpl.w}×{tpl.h}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {selectedTpl&&(
+                <div style={{padding:"10px 12px",borderRadius:R.r1,background:C.bg4,border:`1px solid ${C.accBr}`,fontSize:12,color:C.t3}}>
+                  Selected: <span style={{color:C.acc2}}>{TEMPLATES.find(t=>t.id===selectedTpl)?.label}</span> · {roundedW}×{roundedH}px · Recraft V4 Design
+                </div>
+              )}
+            </div>
+          )}
+
+          {imageSubMode==="generate"&&(
+            <div>
+              <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Prompt</div>
+              <textarea value={prompt} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setPrompt(e.target.value)}
+                rows={4} maxLength={2500} placeholder="Describe the image…"
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.bdr}`,borderRadius:R.r1,padding:"8px 10px",color:C.t1,fontSize:15,fontFamily:"inherit",resize:"none",outline:"none"}}/>
+            </div>
+          )}
+
+          {/* Size: Aspect ratio OR Custom pixels — always visible */}
           <div>
             <div style={{fontSize:12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <span>Size</span>
@@ -494,7 +567,7 @@ export default function GenerateTab() {
               <div style={{display:"flex",gap:6}}>
                 {["21:9","16:9","4:3","1:1","9:16"].map(a=>(
                   <button key={a} onClick={()=>setStyleAr(a)} style={{
-                    flex:1,padding:"7px 0",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",
+                    flex:1,padding:"8px 0",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",
                     border:`1px solid ${styleAr===a?C.acc:C.bdr}`,
                     background:styleAr===a?C.accDim:"transparent",
                     color:styleAr===a?C.acc2:C.t3,
@@ -649,7 +722,7 @@ export default function GenerateTab() {
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:6}}>
                   {STRUCT_TAGS.map(tag=>(
-                    <button key={tag} onClick={()=>insertTag(tag)} style={{padding:"2px 7px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontFamily:"inherit"}}>{tag}</button>
+                    <button key={tag} onClick={()=>insertTag(tag)} style={{padding:"2px 8px",borderRadius:R.r1,fontSize:12,cursor:"pointer",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,fontFamily:"inherit"}}>{tag}</button>
                   ))}
                 </div>
                 <textarea ref={lyricsRef} value={lyricsInput} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setLyricsInput(e.target.value)}
