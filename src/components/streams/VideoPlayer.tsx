@@ -49,8 +49,8 @@ function detectRes(w: number, h: number): Res {
 }
 
 const RES_COLOR: Record<Res, string> = {
-  "4K":    "#7c3aed", "2K": "#059669", "1440p": "#059669",
-  "1080p": "#2563eb", "720p": "#475569", "480p": "#475569", "SD": "#374151",
+  "4K":    C.acc,   "2K": C.green, "1440p": C.green,
+  "1080p": C.blue,  "720p": C.t3,  "480p": C.t3,   "SD": C.t4,
 };
 
 function fmtTime(s: number): string {
@@ -207,7 +207,7 @@ function Skeleton() {
 function ResBadge({ res, w, h }: { res: Res; w?: number; h?: number }) {
   return (
     <div style={{ position:"absolute", top:8, left:8, display:"flex", gap:4 }}>
-      <span style={{ fontSize:12, fontWeight:700, letterSpacing:".06em",
+      <span style={{ fontSize:12, fontWeight:500,
                      padding:"2px 6px", borderRadius:R.r1,
                      background:RES_COLOR[res],
                      color:"#fff", backdropFilter:"blur(4px)" }}>

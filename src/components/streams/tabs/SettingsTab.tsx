@@ -235,7 +235,7 @@ export default function SettingsTab() {
               <select
                 value={m.current}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setModels((md: typeof models) => md.map((x: typeof models[0], idx: number) => idx === i ? { ...x, current: e.target.value } : x))}
-                style={{ background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none" }}
+                style={{ background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 8px", color: C.t1, fontSize: 14, fontFamily: "inherit", outline: "none" }}
               >
                 {m.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
               </select>
@@ -279,7 +279,7 @@ export default function SettingsTab() {
                   type="number"
                   value={row.val}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => row.set(e.target.value)}
-                  style={{ width: 80, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "6px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none", textAlign: "right" }}
+                  style={{ width: 80, background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none", textAlign: "right" }}
                 />
               </div>
             </div>
@@ -290,7 +290,7 @@ export default function SettingsTab() {
               <div style={{ fontSize: 13, color: C.t4, marginTop: 2 }}>Shown on shared links. Disable for brand accounts.</div>
             </div>
             <button onClick={() => setWatermark(!watermark)} style={{
-              padding: "6px 16px", borderRadius: R.pill, border: `1px solid ${watermark ? C.acc : C.bdr}`,
+              padding: "8px 16px", borderRadius: R.pill, border: `1px solid ${watermark ? C.acc : C.bdr}`,
               background: watermark ? C.acc : "transparent", color: watermark ? "#fff" : C.t3,
               fontSize: 14, fontFamily: "inherit", cursor: "pointer", transition: `all ${DUR.fast} ${EASE}`,
             }}>

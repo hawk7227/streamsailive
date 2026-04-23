@@ -129,7 +129,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
             <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               {(["Upload","URL","YouTube"] as Source[]).map(s => (
                 <button key={s} onClick={() => setSource(s)} style={{
-                  flex: 1, padding: "6px 0", borderRadius: R.r1, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+                  flex: 1, padding: "8px 0", borderRadius: R.r1, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
                   border: `1px solid ${source === s ? C.acc : C.bdr}`,
                   background: source === s ? C.acc : "transparent",
                   color: source === s ? "#fff" : C.t3,
@@ -264,7 +264,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
                   "Same subject, dramatic low-angle, late dusk, neon reflections, shallow DOF",
                   "Wide establishing shot, woman silhouette against city skyline, golden hour backlight",
                 ]).map((vp: string, i: number) => (
-                  <div key={i} onClick={() => onSelectPrompt?.(vp)} style={{ padding: "6px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: onSelectPrompt ? "pointer" : "default", lineHeight: 1.5, transition:`background 150ms ease` }}>
+                  <div key={i} onClick={() => onSelectPrompt?.(vp)} style={{ padding: "8px 8px", borderRadius: R.r1, marginBottom: 4, fontSize: 13, color: C.t3, background: C.bg4, border: `1px solid ${C.bdr}`, cursor: onSelectPrompt ? "pointer" : "default", lineHeight: 1.5, transition:`background 150ms ease` }}>
                     {vp}
                   </div>
                 ))}

@@ -358,7 +358,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
             <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Ingest pipeline — runs once on video creation
             </div>
-            <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
+            <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: R.pill, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", color: C.green }}>
               auto-runs on every video
             </span>
           </div>
@@ -402,7 +402,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
             <div style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>
               Edit operations — each is a single fal API call
             </div>
-            <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
+            <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: R.pill, background: C.accDim, border: `1px solid ${C.accBr}`, color: C.acc2 }}>
               API key only
             </span>
           </div>
@@ -420,7 +420,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
                   {op.endpoints.map(ep => (
                     <div key={ep} style={{
-                      fontSize: 12, padding: "3px 8px", borderRadius: R.r1,
+                      fontSize: 12, padding: "4px 8px", borderRadius: R.r1,
                       background: C.bg4, border: `1px solid ${C.bdr}`,
                       color: C.t3, fontFamily: "inherit",
                     }}>{ep}</div>

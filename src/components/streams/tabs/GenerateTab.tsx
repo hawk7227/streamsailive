@@ -526,7 +526,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{display:"flex",gap:6,marginBottom:4}}>
  {(["generate","templates"] as const).map(m=>(
  <button key={m} onClick={()=>setImageSubMode(m)} style={{
- flex:1,padding:"6px 0",borderRadius:R.r1,fontSize:13,fontFamily:"inherit",cursor:"pointer",
+ flex:1,padding:"8px 0",borderRadius:R.r1,fontSize:13,fontFamily:"inherit",cursor:"pointer",
  border:`1px solid ${imageSubMode===m?C.acc:C.bdr}`,
  background:imageSubMode===m?C.acc:"transparent",
  color:imageSubMode===m?"#fff":C.t3,fontWeight:imageSubMode===m?500:400,
@@ -728,7 +728,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
  {STYLE_TPLS.map(t=>(
  <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{
- padding:"3px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
+ padding:"4px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
  background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3,
  }}>{t.label}</button>
  ))}
@@ -813,7 +813,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  style={{width:"100%",background:C.bg3,border:"none",borderRadius:R.r1,padding:"8px 8px",color:C.t1,fontSize:15,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
  <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
  {STYLE_TPLS.map(t=>(
- <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{padding:"3px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3}}>{t.label}</button>
+ <button key={t.label} onClick={()=>setStyleInput(t.val)} style={{padding:"4px 8px",borderRadius:R.pill,fontSize: 12,cursor:"pointer",fontFamily:"inherit",background:C.surf,border:`1px solid ${C.bdr}`,color:C.t3}}>{t.label}</button>
  ))}
  </div>
  </div>
@@ -869,7 +869,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{display:"flex",gap:6}}>
  {(["16:9","9:16","1:1"] as AR[]).map(a=>(
  <button key={a} onClick={()=>setAr(a)} style={{
- flex:1,padding:"6px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
+ flex:1,padding:"8px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
  border:`1px solid ${ar===a?C.acc:C.bdr}`,
  background:ar===a?C.accDim:"transparent",color:ar===a?C.acc2:C.t3,
  }}>{a}</button>
@@ -881,7 +881,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{display:"flex",gap:6}}>
  {[true,false].map(v=>(
  <button key={String(v)} onClick={()=>setAudio(v)} style={{
- flex:1,padding:"6px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
+ flex:1,padding:"8px 0",borderRadius:R.r1,fontSize: 14,fontFamily:"inherit",cursor:"pointer",
  border:`1px solid ${audio===v?C.acc:C.bdr}`,
  background:audio===v?C.accDim:"transparent",color:audio===v?C.acc2:C.t3,
  }}>{v?"On":"Off"}</button>
@@ -909,7 +909,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {analystResult.improvements.length>0&&<div><div style={{fontSize:12,color:C.green,marginBottom:4}}>Improvements:</div>{analystResult.improvements.map((imp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t3,paddingLeft:8}}>· {imp}</div>)}</div>}
  {analystResult.failurePatterns.length>0&&<div><div style={{fontSize:12,color:C.red,marginBottom:4}}>Watch out for:</div>{analystResult.failurePatterns.slice(0,2).map((fp:string,i:number)=><div key={i} style={{fontSize:12,color:C.t4,paddingLeft:8}}>· {fp}</div>)}</div>}
  {analystResult.savingsUsd>0&&<div style={{fontSize:12,color:C.green}}>💡 Switch to {analystResult.bestModel} → save ${analystResult.savingsUsd.toFixed(2)}</div>}
- <button onClick={()=>{ if(mode==="Music") setStyleInput(analystResult.improvedPrompt); else setPrompt(analystResult.improvedPrompt); }} style={{padding:"6px 0",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>Use improved prompt</button>
+ <button onClick={()=>{ if(mode==="Music") setStyleInput(analystResult.improvedPrompt); else setPrompt(analystResult.improvedPrompt); }} style={{padding:"8px 0",borderRadius:R.r1,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>Use improved prompt</button>
  </div>)}
  </div>
  )}
@@ -981,7 +981,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <div style={{fontSize: 28,color:C.t4,opacity:.2}}>▶</div>
  <div style={{position:"absolute",bottom:8,right:8}}>
  <button onClick={()=>addToStitch(item.id)} style={{
- padding:"3px 8px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
+ padding:"4px 8px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
  background:stitch.includes(item.id)?C.acc:C.bg4,
  border:`1px solid ${stitch.includes(item.id)?C.acc:C.bdr}`,
  color:stitch.includes(item.id)?"#fff":C.t3,
@@ -1125,7 +1125,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
   <div style={{margin:"8px 0",borderRadius:R.r2,overflow:"hidden",
     border:`1px solid rgba(16,185,129,0.3)`}}>
    <MediaPlayer src={stitchUrl} kind="video" aspectRatio="16/9" showDownload label="Stitched"/>
-   <div style={{padding:"6px 12px",background:"rgba(16,185,129,0.08)",
+   <div style={{padding:"8px 12px",background:"rgba(16,185,129,0.08)",
      fontSize:13,color:C.green,fontWeight:500}}>
     ✓ {grid.filter((g:GridItem)=>g.outputUrl).length} clips merged
    </div>

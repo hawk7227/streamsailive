@@ -156,7 +156,7 @@ export default function FileUpload({
           onClick={() => inputRef.current?.click()}
           disabled={disabled || state === "uploading"}
           style={{
-            padding:"6px 16px", borderRadius:R.r1, background:C.surf,
+            padding:"8px 16px", borderRadius:R.r1, background:C.surf,
             border:`1px solid ${borderColor}`, color:C.t2, fontSize:13,
             fontFamily:"inherit", cursor:"pointer", display:"flex",
             alignItems:"center", gap:6,

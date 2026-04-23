@@ -68,11 +68,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const add = useCallback((type: ToastType, message: string) => {
     const id = crypto.randomUUID();
-    setToasts((prev: Toast[]) => [...prev.slice(-4), { id, type, message }]);
+    setToasts((prev: Toast[]) => [...prev.slice(-2), { id, type, message }]);
     timers.current[id] = setTimeout(() => {
       setToasts((prev: Toast[]) => prev.filter((t: Toast) => t.id !== id));
       delete timers.current[id];
-    }, type === "error" ? 6000 : 3500);
+    }, type === "error" ? 6000 : 4000);
   }, []);
 
   const dismiss = useCallback((id: string) => {
@@ -95,7 +95,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       {/* Toast container — fixed bottom-right */}
       <div style={{
-        position:"fixed", bottom:24, right:24, zIndex:9999,
+        position:"fixed", bottom:24, right:24, zIndex:400,
         display:"flex", flexDirection:"column", gap:8,
         pointerEvents:"none",
       }}>

@@ -79,13 +79,19 @@ export default function StreamsPanel() {
         .streams-root, .streams-root *,
         .streams-root input, .streams-root textarea,
         .streams-root button, .streams-root select {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         .streams-root .streams-serif {
-          font-family: 'DM Serif Display', serif !important;
+          font-family: 'DM Serif Display', serif;
         }
         .streams-root .streams-mono {
-          font-family: 'IBM Plex Mono', monospace !important;
+          font-family: 'IBM Plex Mono', monospace;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .streams-root *, .streams-root *::before, .streams-root *::after {
+            animation-duration: 0.01ms;
+            transition-duration: 0.01ms;
+          }
         }
       `}</style>
 
@@ -114,7 +120,6 @@ export default function StreamsPanel() {
             fontStyle:     "italic",
             fontSize: 20,
             color:         C.t1,
-            letterSpacing: "-.01em",
             flexShrink:    0,
             marginRight:   20,
           }}>
@@ -238,9 +243,10 @@ export default function StreamsPanel() {
 
         {/* Responsive styles — scoped to streams panel */}
         <style>{`
-          @media (max-width: 768px) {
-            .streams-desktop-nav { display: none !important; }
-            .streams-mobile-nav  { display: flex !important; }
+          .streams-root .streams-mobile-nav { display: none; }
+          @media (max-width: 767px) {
+            .streams-root .streams-desktop-nav { display: none; }
+            .streams-root .streams-mobile-nav  { display: flex; }
           }
         `}</style>
       </div>

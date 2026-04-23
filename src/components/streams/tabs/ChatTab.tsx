@@ -402,7 +402,7 @@ export default function ChatTab() {
             aria-label="Open conversation history"
             onClick={() => setSidebar(!sidebarOpen)} style={{
             background: "transparent", border: `1px solid ${C.bdr}`,
-            borderRadius: R.r1, padding: "6px 8px", color: C.t3,
+            borderRadius: R.r1, padding: "8px 8px", color: C.t3,
             fontSize: 15, cursor: "pointer", fontFamily: "inherit",
           }}>☰</button>
           <span style={{ fontSize: 14, color: C.t3 }}>New conversation</span>
@@ -520,7 +520,7 @@ export default function ChatTab() {
                 }}
               />
               <button onClick={()=>{ setInput((p:string)=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }}
-                style={{ padding:"6px 12px", borderRadius:R.r1, background:C.acc, border:"none",
+                style={{ padding:"8px 12px", borderRadius:R.r1, background:C.acc, border:"none",
                   color:"#fff", fontSize:13, fontFamily:"inherit", cursor:"pointer" }}>Attach</button>
             </div>
           )}
@@ -564,7 +564,7 @@ export default function ChatTab() {
               onClick={handleSend}
               disabled={!input.trim() || streaming}
               style={{
-                padding: "6px 16px", borderRadius: R.r1,
+                padding: "8px 16px", borderRadius: R.r1,
                 background: C.acc,
                 border: "none", color: "#fff",
                 fontSize: 14, fontFamily: "inherit", fontWeight: 500,
