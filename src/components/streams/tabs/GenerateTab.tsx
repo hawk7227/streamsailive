@@ -81,7 +81,7 @@ interface GridItem { id: string; status: "waiting"|"running"|"done"; outputUrl?:
 interface GenerateTabProps {
   voiceId?:              string | null;
   initialPrompt?:        string | null;
-  onGenerationComplete?: (url: string) => void;
+  onGenerationComplete?: (url: string, generationId?: string) => void;
   onPromptConsumed?:     () => void;
 }
 
@@ -494,6 +494,22 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
                           setUseCustom(true);
                           setModel(IMAGE_MODELS.indexOf("Design")>=0?IMAGE_MODELS.indexOf("Design"):
                                    IMAGE_MODELS.indexOf("Kontext")>=0?IMAGE_MODELS.indexOf("Kontext"):0);
+                          // Pre-fill a format-appropriate default prompt
+                          const tplPrompts: Record<string,string> = {
+                            ig_feed:        "Product lifestyle photo, clean white background, natural lighting, minimal composition",
+                            ig_story:       "Vertical lifestyle moment, bold typography space at top, vibrant editorial style",
+                            tiktok:         "Dynamic vertical scene, high energy, bold colors, strong visual hook",
+                            fb_ad:          "Attention-grabbing ad creative, clear subject, professional quality, brand-forward",
+                            display_banner: "Clean horizontal banner, strong headline space, product or brand focal point",
+                            yt_thumb:       "Cinematic thumbnail, expressive face or bold graphic, high contrast, text space left",
+                            yt_banner:      "Widescreen channel art, brand colors, clean horizontal composition",
+                            story_portrait: "Intimate vertical portrait, soft lighting, editorial quality, model-forward",
+                            logo_square:    "Minimal logo mark on clean background, bold geometric design, brand identity",
+                            og_image:       "Clean open graph preview, brand-safe composition, clear subject, professional",
+                            email_header:   "Horizontal email banner, clean design, warm inviting tone, subtle brand presence",
+                            linkedin_post:  "Professional content graphic, clean layout, authoritative and polished",
+                          };
+                          if (tplPrompts[tpl.id] && !prompt.trim()) setPrompt(tplPrompts[tpl.id]);
                         }} style={{
                           padding:"8px 8px",borderRadius:R.r1,fontSize:12,fontFamily:"inherit",cursor:"pointer",
                           border:`1px solid ${selectedTpl===tpl.id?C.acc:C.bdr}`,

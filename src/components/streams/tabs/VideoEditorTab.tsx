@@ -165,8 +165,17 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
 
   function handleDownload(label: string) {
     setDownloading(label);
-    if (videoUrl && label === "Final video.mp4") {
-      window.open(videoUrl, "_blank");
+    // Open real URL for formats that map to stored outputs
+    if (videoUrl) {
+      if (label === "Final video.mp4" || label === "Voice only.mp3") {
+        window.open(videoUrl, "_blank");
+      }
+    }
+    // Transcript: build from state and download
+    if (label === "Transcript.json") {
+      const blob = new Blob([JSON.stringify(transcript, null, 2)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+      a.download = "transcript.json"; a.click();
     }
     setTimeout(()=>setDownloading(null), 1800);
   }

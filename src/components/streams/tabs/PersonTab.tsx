@@ -74,6 +74,22 @@ const EDIT_OPS: {
 
 export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: PersonTabProps = {}) {
   const [ingestState,  setIngestState]  = useState<IngestState>("idle");
+  type LibItem = { id:string; output_url:string; generation_type:string; created_at:string };
+  const [libItems,    setLibItems]    = useState<LibItem[]>([]);
+  const [libLoading,  setLibLoading]  = useState(false);
+  const [libLoaded,   setLibLoaded]   = useState(false);
+
+  async function loadLibrary() {
+    if (libLoaded) return;
+    setLibLoading(true);
+    try {
+      const res  = await fetch("/api/streams/library?type=video&status=done&limit=20");
+      const data = await res.json() as { items?: LibItem[] };
+      setLibItems(data.items ?? []);
+      setLibLoaded(true);
+    } catch { /* non-fatal */ }
+    finally { setLibLoading(false); }
+  }
   const [analysisId,   setAnalysisId]   = useState<string | null>(null);
   const [genLogId,     setGenLogId]     = useState<string | null>(null);
   const [ingestError,  setIngestError]  = useState<string | null>(null);

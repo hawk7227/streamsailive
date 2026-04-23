@@ -59,8 +59,9 @@ export default function StreamsPanel() {
   }, []);
 
   // Called by GenerateTab/VideoEditorTab when a generation completes
-  const onGenerationComplete = useCallback((url: string) => {
+  const onGenerationComplete = useCallback((url: string, generationId?: string) => {
     setSharedVideoUrl(url);
+    if (generationId) setSharedGenLogId(generationId);
   }, []);
 
   return (

@@ -8,7 +8,7 @@
  * Backend: POST /api/ai-assistant (existing route, called as HTTP endpoint)
  */
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { C, R, S, DUR, EASE } from "../tokens";
 
 type Mode = "Chat" | "Image" | "Video" | "Build";
@@ -46,6 +46,8 @@ export default function ChatTab() {
     { id: "current", title: "New conversation", time: "now" },
   ]);
   const [activeSession, setActiveSession] = useState("current");
+  // Message history keyed by session id — allows switching sessions without losing context
+  const msgHistoryRef = React.useRef<Record<string, Msg[]>>({ current: SEED_MSGS });
 
   const [library,      setLibrary]     = useState<LibraryItem[]>([]);
   const [libraryLoading, setLibLoad]  = useState(false);
@@ -162,8 +164,11 @@ export default function ChatTab() {
         <div style={{ fontSize: 13, color: C.t4, marginBottom: 12 }}>New conversation</div>
         <button
           onClick={() => {
+            // Save current session before starting new one
+            msgHistoryRef.current[activeSession] = msgs;
             const newId = crypto.randomUUID();
             const newSession: Session = { id: newId, title: "New conversation", time: "now" };
+            msgHistoryRef.current[newId] = SEED_MSGS;
             setSessions((prev: Session[]) => [newSession, ...prev.slice(0, 9)]);
             setActiveSession(newId);
             setMsgs(SEED_MSGS);
@@ -211,7 +216,13 @@ export default function ChatTab() {
       {/* Recents */}
       <div style={{ padding: "8px 16px 4px", fontSize: 12, color: C.t4, letterSpacing: ".08em", textTransform: "uppercase" }}>Recents</div>
       {activeNav === "Sessions" && sessions.map((s: Session) => (
-        <button key={s.id} onClick={() => setActiveSession(s.id)} style={{
+        <button key={s.id} onClick={() => {
+          // Save current session messages before switching
+          msgHistoryRef.current[activeSession] = msgs;
+          setActiveSession(s.id);
+          // Restore the target session's messages (or seed if new)
+          setMsgs(msgHistoryRef.current[s.id] ?? SEED_MSGS);
+        }} style={{
           display: "block", textAlign: "left", padding: "8px 16px",
           border: "none", background: s.id === activeSession ? C.surf2 : "transparent",
           color: s.id === activeSession ? C.t1 : C.t3, fontSize: 14, fontFamily: "inherit",

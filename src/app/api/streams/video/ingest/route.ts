@@ -78,7 +78,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     ingest_status:      "processing",
   });
 
-  // ── Step 1: Submit audio extraction to fal ffmpeg ─────────────────────────
+  // ── Step 1: Submit video metadata + thumbnail extraction ──────────────────────
+  // ffmpeg-api/metadata returns duration, frame count, thumbnail URL.
+  // Used for: frame count → step 3 frame interval, thumbnail → GPT-4o Vision steps 4+5
+  // Note: audio comes from Step 2 (elevenlabs/audio-isolation) not from metadata.
   const audioExtractResult = await falSubmit(FAL_ENDPOINTS.FFMPEG_METADATA, {
     video_url: body.videoUrl,
   });
