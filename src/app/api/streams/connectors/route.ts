@@ -23,7 +23,6 @@ import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { encryptCredential, credentialKeyConfigured } from "@/lib/streams/credentials";
 import {
   listConnectedAccounts,
-  validateAndRefreshAccount,
   type Provider,
 } from "@/lib/streams/connectors/index";
 
@@ -35,6 +34,14 @@ async function resolveUser() {
   if (error || !user) return { user: null, workspaceId: null, admin: null };
   const admin = createAdminClient();
   try {
+    // Fast path: direct workspace lookup, skip ensurePersonalWorkspace overhead
+    const { data: workspace } = await admin
+      .from("workspaces")
+      .select("id")
+      .eq("owner_id", user.id)
+      .maybeSingle();
+    if (workspace?.id) return { user, workspaceId: workspace.id, admin };
+    // Fallback to full resolution
     const sel = await getCurrentWorkspaceSelection(admin, user);
     return { user, workspaceId: sel.current.workspace.id, admin };
   } catch {

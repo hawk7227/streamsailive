@@ -43,6 +43,21 @@ export default function SettingsTab() {
   const [watermark,setWatermark]= useState(true);
   const [saved,    setSaved]    = useState(false);
 
+  // Load existing keys from localStorage on mount — restore valid keys across reloads
+  useEffect(() => {
+    const providerMap = ["fal", "elevenlabs", "openai", "runway"] as const;
+    const loaded = providerMap.map(p => {
+      try { return localStorage.getItem(`streams:${p}_key`) ?? ""; }
+      catch { return ""; }
+    });
+    // Only populate if keys exist — show masked placeholder
+    if (loaded.some(v => v)) {
+      setKeyVals(loaded);
+      // Mark as valid if key exists in localStorage
+      setKeys(k => k.map((key, i) => loaded[i] ? { ...key, status: "valid" as const } : key));
+    }
+  }, []);
+
   async function testKey(i: number) {
     const keyVal = keyVals[i].trim();
     if (!keyVal) return;
@@ -65,6 +80,8 @@ export default function SettingsTab() {
       const valid = await validateRunwayKey(keyVal);
       setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
         idx === i ? { ...key, status: valid ? "valid" : "invalid" } : key));
+      // Auto-save valid key immediately — no need to click Save
+      if (valid) setProviderKey(provider, keyVal);
       return;
     }
 
@@ -78,6 +95,8 @@ export default function SettingsTab() {
       const newStatus: "valid" | "invalid" = (res.ok && data.valid) ? "valid" : "invalid";
       setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
         idx === i ? { ...key, status: newStatus } : key));
+      // Auto-save valid key to localStorage immediately — no need to click Save
+      if (newStatus === "valid") setProviderKey(provider, keyVal);
     } catch {
       setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
         idx === i ? { ...key, status: "invalid" } : key));
