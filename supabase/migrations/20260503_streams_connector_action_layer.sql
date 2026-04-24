@@ -404,14 +404,26 @@ ALTER TABLE connector_approval_queue ENABLE ROW LEVEL SECURITY;
 -- Seed: Phase 7 proof record
 -- ─────────────────────────────────────────────────────────────────────────────
 
-INSERT INTO proof_records (
-  subject_type, subject_ref, claim, status, proof_type, proof_detail, proved_by
-) VALUES (
-  'phase',
-  'Phase7/ConnectorActionLayer',
-  'Connector Action Layer schema exists: connected_accounts, connector_permissions, connector_action_logs, connector_approval_queue with encryption support and RLS',
-  'ImplementedButUnproven',
-  'source',
-  'Migration 20260503_streams_connector_action_layer.sql applied. pgcrypto enabled. 4 tables + 2 helper functions + touch trigger. FK constraints added to project_bindings. Status is ImplementedButUnproven until first real OAuth connection is made and validated.',
-  'system'
-) ON CONFLICT DO NOTHING;
+-- Seed proof record only if Phase 1 (proof_records table) exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'proof_records'
+  ) THEN
+    INSERT INTO proof_records (
+      subject_type, subject_ref, claim, status, proof_type, proof_detail, proved_by
+    ) VALUES (
+      'phase',
+      'Phase7/ConnectorActionLayer',
+      'Connector Action Layer schema exists: connected_accounts, connector_permissions, connector_action_logs, connector_approval_queue with encryption support and RLS',
+      'ImplementedButUnproven',
+      'source',
+      'Migration 20260503_streams_connector_action_layer.sql applied. pgcrypto enabled. 4 tables + 2 helper functions + touch trigger. FK constraints added to project_bindings. Status is ImplementedButUnproven until first real OAuth connection is made and validated.',
+      'system'
+    ) ON CONFLICT DO NOTHING;
+    RAISE NOTICE 'Phase 7 proof record inserted.';
+  ELSE
+    RAISE NOTICE 'proof_records does not exist — run Phase 1 migration first to enable proof tracking.';
+  END IF;
+END $$;
