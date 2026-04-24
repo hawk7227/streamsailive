@@ -221,9 +221,11 @@ const PATTERN_CHECKS = [
   },
   {
     rule: "Rule 2.3", severity: "critical",
+    // Only flag overflowX:auto when scrollbarWidth:none is NOT also present on the same line
     pattern: /overflowX:\s*['"]auto['"]/,
+    skipIf: /scrollbarWidth:\s*['"]none['"]/,
     dirs: ["src/components/streams/tabs/GenerateTab"],
-    message: "Native scroll arrows on tab row — Rule 2.3",
+    message: "Native scroll arrows on tab row — missing scrollbar-width:none — Rule 2.3",
   },
   {
     rule: "Rule 1.2", severity: "critical",
@@ -267,6 +269,8 @@ for (const check of PATTERN_CHECKS) {
         const contentLines = content.split("\n");
         contentLines.forEach((line, idx) => {
           if (check.pattern.test(line)) {
+            // Skip if the line also matches the skipIf pattern (compliant usage)
+            if (check.skipIf && check.skipIf.test(line)) return;
             auditFindings.push({
               rule:     check.rule,
               file:     filePath.replace(ROOT + "/", ""),
