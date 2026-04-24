@@ -11,7 +11,7 @@
  * Cannot use next/font/google in client components.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ToastProvider } from "./Toast";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
@@ -37,13 +37,28 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
 export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
 
+  // V.3 — read ?tab= on mount so deep links and hard-reload restore tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab") as Tab | null;
+    if (t && TABS.some(tab => tab.id === t)) setActive(t);
+  }, []);
+
+  // Write ?tab= on every switch — replaceState keeps history clean
+  const switchTab = useCallback((tab: Tab) => {
+    setActive(tab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", tab);
+    window.history.replaceState(null, "", `?${params.toString()}`);
+  }, []);
+
   // ── Cross-tab shared state ──────────────────────────────────────────────
   const [sharedPrompt, setSharedPrompt] = useState<string|null>(null);
 
   // Called by ReferenceTab when user selects a variation prompt
   const onSelectPrompt = useCallback((prompt: string) => {
     setSharedPrompt(prompt);
-    setActive("generate");   // switch to Generate tab
+    switchTab("generate");   // switch to Generate tab
   }, []);
 
   // Lifted here so PersonTab ingest flows into VideoEditorTab and GenerateTab.
@@ -137,7 +152,7 @@ export default function StreamsPanel() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActive(tab.id)}
+                onClick={() => switchTab(tab.id)}
                 style={{
                   display:        "flex",
                   alignItems:     "center",
@@ -210,7 +225,7 @@ export default function StreamsPanel() {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActive(tab.id)}
+              onClick={() => switchTab(tab.id)}
               style={{
                 display:        "flex",
                 flexDirection:  "column",
