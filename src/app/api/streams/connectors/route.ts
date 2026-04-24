@@ -1,25 +1,14 @@
 /**
- * GET  /api/streams/connectors          — list connected accounts (safe, no credentials)
- * POST /api/streams/connectors          — connect a new account
+ * GET  /api/streams/connectors  — list connected accounts
+ * POST /api/streams/connectors  — save a new connector credential
  *
- * POST body: {
- *   provider:          'github' | 'vercel' | 'supabase'
- *   credential:        string    — raw token/key (encrypted before storage, never stored plain)
- *   projectId?:        string    — if omitted, workspace-level connection
- *   providerAccountId?: string   — e.g. GitHub username, Vercel team slug
- *   scopes?:           string[]
- *   // For Supabase, credential is JSON: { projectRef, serviceRoleKey }
- * }
- *
- * The raw credential is encrypted with AES-256-GCM before insert.
- * It is immediately validated against the provider before being stored.
- * If validation fails the connection is rejected.
+ * resolveUser uses THREE fast paths, none of which call getCurrentWorkspaceSelection.
+ * Each DB call has an explicit 8s timeout — function fails fast instead of hanging 30s.
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient }      from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { encryptCredential, credentialKeyConfigured } from "@/lib/streams/credentials";
 import {
   listConnectedAccounts,
@@ -28,58 +17,131 @@ import {
 
 export const maxDuration = 30;
 
-async function resolveUser() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, workspaceId: null, admin: null };
-  const admin = createAdminClient();
-  try {
-    // Fast path: direct workspace lookup, skip ensurePersonalWorkspace overhead
-    const { data: workspace } = await admin
-      .from("workspaces")
-      .select("id")
-      .eq("owner_id", user.id)
-      .maybeSingle();
-    if (workspace?.id) return { user, workspaceId: workspace.id, admin };
-    // Fallback to full resolution
-    const sel = await getCurrentWorkspaceSelection(admin, user);
-    return { user, workspaceId: sel.current.workspace.id, admin };
-  } catch {
-    return { user: null, workspaceId: null, admin: null };
+// Wrap any promise with an explicit timeout so we fail fast, never hang
+function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+async function resolveUser(): Promise<{
+  user: { id: string } | null;
+  workspaceId: string | null;
+  admin: ReturnType<typeof createAdminClient> | null;
+  errorMsg?: string;
+}> {
+  // ── Step 1: validate env vars immediately ─────────────────────────────────
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return {
+      user: null, workspaceId: null, admin: null,
+      errorMsg: `Missing env vars: ${!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL " : ""}${!serviceKey ? "SUPABASE_SERVICE_ROLE_KEY" : ""}`.trim(),
+    };
   }
+
+  // ── Step 2: get user from session (8s timeout) ────────────────────────────
+  let user: { id: string } | null = null;
+  try {
+    const supabase = await createClient();
+    const result = await withTimeout(
+      supabase.auth.getUser(),
+      8000,
+      "auth.getUser"
+    );
+    if (result.error || !result.data.user) {
+      return { user: null, workspaceId: null, admin: null, errorMsg: "Not authenticated" };
+    }
+    user = result.data.user;
+  } catch (e) {
+    return { user: null, workspaceId: null, admin: null, errorMsg: `Auth failed: ${(e as Error).message}` };
+  }
+
+  const admin = createAdminClient();
+
+  // ── Step 3a: owned workspace (fastest — single index scan) ────────────────
+  try {
+    const res1 = await withTimeout(
+      admin.from("workspaces").select("id").eq("owner_id", user.id).maybeSingle() as unknown as Promise<{data:{id:string}|null}>,
+      8000,
+      "workspace owner lookup"
+    );
+    const data = res1.data;
+    if (data?.id) return { user, workspaceId: data.id, admin };
+  } catch { /* fall through */ }
+
+  // ── Step 3b: workspace membership (second fastest) ────────────────────────
+  try {
+    const res2 = await withTimeout(
+      admin.from("workspace_members").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle() as unknown as Promise<{data:{workspace_id:string}|null}>,
+      8000,
+      "workspace member lookup"
+    );
+    const data = res2.data;
+    if (data?.workspace_id) return { user, workspaceId: data.workspace_id as string, admin };
+  } catch { /* fall through */ }
+
+  // ── Step 3c: profile current_workspace_id (last resort) ──────────────────
+  try {
+    const res3 = await withTimeout(
+      admin.from("profiles").select("current_workspace_id").eq("id", user.id).maybeSingle() as unknown as Promise<{data:{current_workspace_id:string}|null}>,
+      8000,
+      "profile workspace lookup"
+    );
+    const data = res3.data;
+    if (data?.current_workspace_id) return { user, workspaceId: data.current_workspace_id as string, admin };
+  } catch { /* fall through */ }
+
+  return { user: null, workspaceId: null, admin: null, errorMsg: "No workspace found for user" };
 }
 
 const VALID_PROVIDERS: Provider[] = ["github", "vercel", "supabase"];
 
 export async function GET(): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin, errorMsg } = await resolveUser();
   if (!user || !workspaceId || !admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const isEnvError = errorMsg?.includes("Missing env vars") || errorMsg?.includes("timed out");
+    return NextResponse.json(
+      { error: errorMsg ?? "Unauthorized" },
+      { status: isEnvError ? 503 : 401 }
+    );
   }
 
-  const accounts = await listConnectedAccounts(admin, workspaceId);
-  return NextResponse.json({ data: accounts });
+  try {
+    const accounts = await withTimeout(
+      listConnectedAccounts(admin, workspaceId),
+      10000,
+      "listConnectedAccounts"
+    );
+    return NextResponse.json({ data: accounts });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 503 });
+  }
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin, errorMsg } = await resolveUser();
   if (!user || !workspaceId || !admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const isEnvError = errorMsg?.includes("Missing env vars") || errorMsg?.includes("timed out");
+    return NextResponse.json(
+      { error: errorMsg ?? "Unauthorized" },
+      { status: isEnvError ? 503 : 401 }
+    );
   }
 
   if (!credentialKeyConfigured()) {
     return NextResponse.json(
-      { error: "STREAMS_CREDENTIAL_KEY not configured. Add to environment variables." },
+      { error: "STREAMS_CREDENTIAL_KEY not set on this server. Add it to DigitalOcean environment variables." },
       { status: 503 }
     );
   }
 
   let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const { provider, credential, projectId, providerAccountId, scopes } = body;
 
@@ -89,59 +151,69 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 400 }
     );
   }
-
   if (!credential || typeof credential !== "string" || credential.trim().length < 10) {
     return NextResponse.json(
-      { error: "credential is required and must be a valid token or key" },
+      { error: "credential must be a valid token (at least 10 chars)" },
       { status: 400 }
     );
   }
 
-  // Encrypt credential immediately — raw value never touches DB
   let encryptedCredential: string;
   try {
-    encryptedCredential = await encryptCredential(credential.trim());
-  } catch (err) {
+    encryptedCredential = await withTimeout(
+      encryptCredential(credential.trim()),
+      5000,
+      "encryptCredential"
+    );
+  } catch (e) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Encryption failed" },
+      { error: `Encryption failed: ${(e as Error).message}` },
       { status: 500 }
     );
   }
 
-  // Insert with status 'active' — will validate next
   const rotationDue = new Date();
-  rotationDue.setDate(rotationDue.getDate() + 90); // 90-day rotation reminder
+  rotationDue.setDate(rotationDue.getDate() + 90);
 
-  const { data: inserted, error: insertError } = await admin
-    .from("connected_accounts")
-    .upsert({
-      workspace_id:          workspaceId,
-      user_id:               user.id,
-      provider:              provider as Provider,
-      provider_account_id:   providerAccountId as string ?? null,
-      scopes:                Array.isArray(scopes) ? scopes : [],
-      encrypted_credentials: encryptedCredential,
-      status:                "active",
-      project_id:            projectId as string ?? null,
-      rotation_due_at:       rotationDue.toISOString(),
-      connected_by:          user.id,
-    }, { onConflict: "workspace_id,provider" })
-    .select("id")
-    .single();
+  try {
+    const upsertQuery = admin
+      .from("connected_accounts")
+      .upsert({
+        workspace_id:          workspaceId,
+        user_id:               user.id,
+        provider:              provider as Provider,
+        provider_account_id:   (providerAccountId as string) ?? null,
+        scopes:                Array.isArray(scopes) ? scopes : [],
+        encrypted_credentials: encryptedCredential,
+        status:                "active",
+        project_id:            (projectId as string) ?? null,
+        rotation_due_at:       rotationDue.toISOString(),
+        connected_by:          user.id,
+      }, { onConflict: "workspace_id,provider" })
+      .select("id")
+      .single();
+    const upsertResult = await withTimeout(
+      upsertQuery as unknown as Promise<{data:{id:string}|null; error:{message:string}|null}>,
+      10000,
+      "upsert connected_accounts"
+    );
+    const { data: inserted, error: insertError } = upsertResult;
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+    if (!inserted) {
+      return NextResponse.json({ error: "Insert returned no data" }, { status: 500 });
+    }
+
+    return NextResponse.json(
+      { data: { accountId: inserted.id, provider, status: "active", message: `${provider} connected successfully` } },
+      { status: 201 }
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Database error: ${(e as Error).message}` },
+      { status: 503 }
+    );
   }
-
-  return NextResponse.json(
-    {
-      data: {
-        accountId: inserted.id,
-        provider,
-        status:    "active",
-        message:   `${provider} connected successfully`,
-      }
-    },
-    { status: 201 }
-  );
 }
