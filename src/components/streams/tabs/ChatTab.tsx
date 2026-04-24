@@ -68,6 +68,103 @@ async function saveToLibrary(opts: { type: "image"|"video"|"voice"|"music"; outp
   } catch { /* non-fatal */ }
 }
 
+// ── Inline markdown renderer ───────────────────────────────────────────────
+// Handles: **bold**, *italic*, `code`, # headings, - bullets, 1. numbered lists
+// No external library — avoids bundle bloat
+function renderMarkdown(text: string, streaming: boolean): React.ReactNode {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+
+  function inlineStyles(line: string): React.ReactNode[] {
+    // Split on **bold**, *italic*, `code` patterns
+    const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith("**") && part.endsWith("**"))
+        return <strong key={idx} style={{ fontWeight: 500 }}>{part.slice(2, -2)}</strong>;
+      if (part.startsWith("*") && part.endsWith("*"))
+        return <em key={idx}>{part.slice(1, -1)}</em>;
+      if (part.startsWith("`") && part.endsWith("`"))
+        return <code key={idx} style={{ fontFamily:"monospace", background:"rgba(0,0,0,0.06)", padding:"1px 5px", borderRadius:4, fontSize:"0.9em" }}>{part.slice(1,-1)}</code>;
+      return part;
+    });
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Blank line
+    if (!trimmed) { nodes.push(<br key={i} />); i++; continue; }
+
+    // Headings
+    const h3 = trimmed.match(/^###\s+(.*)/);
+    const h2 = trimmed.match(/^##\s+(.*)/);
+    const h1 = trimmed.match(/^#\s+(.*)/);
+    if (h1) { nodes.push(<div key={i} style={{ fontSize:18, fontWeight:500, marginTop:12, marginBottom:4 }}>{inlineStyles(h1[1])}</div>); i++; continue; }
+    if (h2) { nodes.push(<div key={i} style={{ fontSize:16, fontWeight:500, marginTop:10, marginBottom:4 }}>{inlineStyles(h2[1])}</div>); i++; continue; }
+    if (h3) { nodes.push(<div key={i} style={{ fontSize:15, fontWeight:500, marginTop:8, marginBottom:2 }}>{inlineStyles(h3[1])}</div>); i++; continue; }
+
+    // Bullet list — collect consecutive
+    if (/^[-*]\s/.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^[-*]\s/.test(lines[i].trim())) {
+        items.push(<li key={i} style={{ marginBottom:2 }}>{inlineStyles(lines[i].trim().slice(2))}</li>);
+        i++;
+      }
+      nodes.push(<ul key={`ul-${i}`} style={{ margin:"6px 0", paddingLeft:20, listStyleType:"disc" }}>{items}</ul>);
+      continue;
+    }
+
+    // Numbered list — collect consecutive
+    if (/^\d+\.\s/.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i].trim())) {
+        nodes.push(<li key={i} style={{ marginBottom:3 }}>{inlineStyles(lines[i].trim().replace(/^\d+\.\s/,""))}</li>);
+        i++;
+      }
+      nodes.push(<ol key={`ol-${i}`} style={{ margin:"6px 0", paddingLeft:20 }}>{items}</ol>);
+      continue;
+    }
+
+    // Code block
+    if (trimmed.startsWith("```")) {
+      const lang = trimmed.slice(3);
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      nodes.push(
+        <pre key={i} style={{ background:"rgba(0,0,0,0.05)", borderRadius:8, padding:"10px 14px", overflowX:"auto", fontSize:14, fontFamily:"monospace", margin:"8px 0", lineHeight:1.5 }}>
+          {lang && <div style={{ fontSize:12, color:"rgba(0,0,0,0.4)", marginBottom:6 }}>{lang}</div>}
+          <code>{codeLines.join("\n")}</code>
+        </pre>
+      );
+      continue;
+    }
+
+    // Normal paragraph
+    nodes.push(<p key={i} style={{ margin:"2px 0", lineHeight:1.75 }}>{inlineStyles(trimmed)}</p>);
+    i++;
+  }
+
+  // Append blinking cursor during stream on the last node
+  if (streaming && nodes.length > 0) {
+    const last = nodes[nodes.length - 1];
+    nodes[nodes.length - 1] = (
+      <React.Fragment key="last-with-cursor">
+        {last}
+        <span style={{ display:"inline-block", width:2, height:16, background:"rgba(0,0,0,0.7)", borderRadius:1, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
+      </React.Fragment>
+    );
+  }
+
+  return nodes;
+}
+
 export default function ChatTab() {
   const [msgs,          setMsgs]         = useState<Msg[]>([]);
   const [lightboxUrl,   setLightboxUrl]  = useState<string | null>(null);
@@ -279,7 +376,7 @@ export default function ChatTab() {
           const res = await fetch("https://api.openai.com/v1/images/generations", {
             method: "POST", signal: ctrl.signal,
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}` },
-            body: JSON.stringify({ model: "gpt-image-1", prompt: text, n: 1, size: "1024x1024", quality: "standard" }),
+            body: JSON.stringify({ model: "gpt-image-1", prompt: text, n: 1, size: "1024x1024", quality: "medium" }),
           });
           advancePhase(aiId, "image_generating", "generating");
           const data = await res.json() as { data?: Array<{ url?: string; b64_json?: string }>; error?: { message: string } };
@@ -526,9 +623,12 @@ export default function ChatTab() {
 
                   {/* Text stream (chat/build) */}
                   {msg.text && (
-                    <div style={{ maxWidth:msg.role==="user"?"72%":"100%", color:CT.t1, fontSize:16, lineHeight:1.75, overflowWrap:"break-word", textAlign:msg.role==="user"?"right":"left", whiteSpace:"pre-wrap" }}>
-                      {msg.text}
-                      {msg.streaming && msg.text && (
+                    <div style={{ maxWidth:msg.role==="user"?"72%":"100%", color:CT.t1, fontSize:16, lineHeight:1.75, overflowWrap:"break-word", textAlign:msg.role==="user"?"right":"left" }}>
+                      {msg.role === "user"
+                        ? msg.text
+                        : renderMarkdown(msg.text, !!(msg.streaming && msg.text))
+                      }
+                      {msg.role === "user" && msg.streaming && msg.text && (
                         <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:1, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
                       )}
                     </div>
