@@ -333,10 +333,26 @@ export default function SettingsTab() {
                     }}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyVals((v: string[]) => v.map((x: string, idx: number) => idx === i ? e.target.value : x))}
                     placeholder={key.placeholder}
-                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 36px 8px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, padding: "8px 72px 8px 8px", color: C.t1, fontSize: 15, fontFamily: "inherit", outline: "none" }}
                   />
-                  <button onClick={() => setShowKeys((s: boolean[]) => s.map((x: boolean, idx: number) => idx === i ? !x : x))} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.t4, cursor: "pointer", fontSize: 15 }}>
-                    {showKeys[i] ? "◉" : "○"}
+                  {/* Eye toggle */}
+                  <button
+                    aria-label={showKeys[i] ? "Hide key" : "Show key"}
+                    onClick={() => setShowKeys((s: boolean[]) => s.map((x: boolean, idx: number) => idx === i ? !x : x))}
+                    style={{ position: "absolute", right: 36, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.t3, cursor: "pointer", fontSize: 15, padding: "4px", lineHeight: 1 }}>
+                    {showKeys[i] ? "🔒" : "👁"}
+                  </button>
+                  {/* Copy button */}
+                  <button
+                    aria-label="Copy key"
+                    onClick={async () => {
+                      if (keyVals[i]) {
+                        await navigator.clipboard.writeText(keyVals[i]);
+                        // Brief visual feedback via key status flash
+                      }
+                    }}
+                    style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.t3, cursor: "pointer", fontSize: 13, padding: "4px", lineHeight: 1 }}>
+                    ⎘
                   </button>
                 </div>
                 <button onClick={() => testKey(i)} disabled={key.status === "testing"} style={{ padding: "8px 16px", borderRadius: R.r1, background: C.surf, border: `1px solid ${C.bdr}`, color: C.t2, fontSize: 14, fontFamily: "inherit", cursor: "pointer", flexShrink: 0, transition: `all ${DUR.fast} ${EASE}` }}>
