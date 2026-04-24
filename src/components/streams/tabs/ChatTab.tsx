@@ -908,46 +908,174 @@ export default function ChatTab() {
           )}
         </div>
 
-        {/* Input bar */}
-        <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:CT.bg, flexShrink:0, padding:"16px 24px", paddingBottom:"calc(20px + env(safe-area-inset-bottom))" }}>
-          <div style={{ maxWidth:760, margin:"0 auto" }}>
-            {attachMode && (
-              <div style={{ display:"flex", gap:S.s2, marginBottom:S.s2 }}>
-                <input value={attachUrl} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setAttachUrl(e.target.value)} placeholder="Paste image or video URL…"
-                  style={{ flex:1, background:"#f4f4f5", border:"none", borderRadius:R.r2, padding:"9px 14px", color:CT.t1, fontSize:15, fontFamily:"inherit", outline:"none" }}
-                  onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>)=>{ if(e.key==="Enter"&&attachUrl.trim()){setInput(p=>p+(p?" ":"")+attachUrl.trim());setAttachUrl("");setAttachMode(false);} if(e.key==="Escape") setAttachMode(false); }}/>
-                <button onClick={()=>{setInput(p=>p+(p?" ":"")+attachUrl.trim());setAttachUrl("");setAttachMode(false);}} style={{ padding:"9px 18px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>Attach</button>
-              </div>
-            )}
-            <div className="streams-chat-chips2" style={{ display:"flex", gap:S.s2, marginBottom:14, overflowX:"auto", scrollbarWidth:"none" as React.CSSProperties["scrollbarWidth"] }}>
-              {(["Chat","Image","Video","Build"] as Mode[]).map(m=>(
-                <button key={m} onClick={()=>setMode(m)} style={{ padding:"6px 16px", borderRadius:R.pill, border:`1.5px solid ${mode===m?CT.chipActive:CT.chipBorder}`, background:mode===m?CT.chipActive:"transparent", color:mode===m?"#fff":CT.t2, fontSize:13, fontFamily:"inherit", cursor:"pointer", flexShrink:0, minHeight:34, transition:`all ${DUR.fast} ${EASE}` }}>{m}</button>
+        {/* ── Input bar ── */}
+        <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:"#fff", flexShrink:0, padding:"14px 20px", paddingBottom:"calc(16px + env(safe-area-inset-bottom))" }}>
+          <div style={{ maxWidth:760, margin:"0 auto", display:"flex", flexDirection:"column", gap:10 }}>
+
+            {/* Mode badges — bright colored, each mode has its own identity */}
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {([
+                { m:"Chat",  color:"#2563eb", bg:"rgba(37,99,235,0.10)",  active:"#2563eb" },
+                { m:"Image", color:"#7c3aed", bg:"rgba(124,58,237,0.10)", active:"#7c3aed" },
+                { m:"Video", color:"#dc2626", bg:"rgba(220,38,38,0.10)",  active:"#dc2626" },
+                { m:"Build", color:"#059669", bg:"rgba(5,150,105,0.10)",  active:"#059669" },
+              ] as Array<{m:Mode;color:string;bg:string;active:string}>).map(({ m, color, bg, active }) => (
+                <button key={m} onClick={() => setMode(m)}
+                  aria-label={`Switch to ${m} mode`}
+                  aria-pressed={mode === m}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: R.pill,
+                    border: `1.5px solid ${mode===m ? active : "rgba(0,0,0,0.10)"}`,
+                    background: mode===m ? active : bg,
+                    color: mode===m ? "#fff" : color,
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    minHeight: 30,
+                    letterSpacing: ".01em",
+                    transition: `all ${DUR.fast} ${EASE}`,
+                    boxShadow: mode===m ? `0 2px 8px ${active}40` : "none",
+                  }}>
+                  {m}
+                </button>
               ))}
             </div>
-            <div style={{ display:"flex", alignItems:"flex-end", gap:10 }}>
-              <button aria-label="Attach URL" onClick={()=>setAttachMode(v=>!v)} style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:attachMode?"rgba(217,91,42,0.08)":"rgba(0,0,0,0.04)", border:`1.5px solid ${attachMode?CT.send:"rgba(0,0,0,0.12)"}`, borderRadius:"50%", color:attachMode?CT.send:CT.t3, fontSize:18, cursor:"pointer", transition:`all ${DUR.fast} ${EASE}` }}>⊕</button>
-              <div style={{ flex:1, border:`1.5px solid ${inputFocused?"#7C3AED":"rgba(0,0,0,0.18)"}`, borderRadius:24, padding:"13px 18px", background:"#fafafa", transition:`border-color ${DUR.fast} ${EASE}`, boxShadow:inputFocused?"0 0 0 3px rgba(124,58,237,0.08)":"none" }}>
-                <textarea ref={textareaRef} value={input} maxLength={4000} aria-label="Message input" aria-multiline="true"
-                  onFocus={()=>setInputFocused(true)} onBlur={()=>setInputFocused(false)}
-                  onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>{ setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,180)+"px"; }}
-                  onKeyDown={(e:React.KeyboardEvent<HTMLTextAreaElement>)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void handleSend();} }}
-                  placeholder={`Message Streams — ${mode} mode`} rows={1}
-                  style={{ width:"100%", background:"transparent", border:"none", outline:"none", fontFamily:"inherit", fontSize:16, color:CT.t1, resize:"none", lineHeight:1.6, minHeight:26 }}/>
+
+            {/* Attach URL expander */}
+            {attachMode && (
+              <div style={{ display:"flex", gap:8 }}>
+                <input value={attachUrl}
+                  onChange={(e:React.ChangeEvent<HTMLInputElement>) => setAttachUrl(e.target.value)}
+                  placeholder="Paste image or video URL…"
+                  style={{ flex:1, background:"#f4f4f5", border:"1.5px solid rgba(0,0,0,0.12)", borderRadius:R.r2, padding:"9px 14px", color:CT.t1, fontSize:15, fontFamily:"inherit", outline:"none" }}
+                  onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key==="Enter" && attachUrl.trim()) { setInput(p=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }
+                    if (e.key==="Escape") setAttachMode(false);
+                  }}/>
+                <button onClick={() => { setInput(p=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }}
+                  style={{ padding:"9px 18px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>
+                  Attach
+                </button>
               </div>
+            )}
+
+            {/* Main row: [+] [textarea] [send/stop] */}
+            <div style={{ display:"flex", alignItems:"flex-end", gap:10 }}>
+
+              {/* Plus / upload button */}
+              <button
+                aria-label="Attach URL"
+                onClick={() => setAttachMode(v => !v)}
+                style={{
+                  width: 42, height: 42, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: attachMode ? "rgba(217,91,42,0.10)" : "rgba(0,0,0,0.05)",
+                  border: `1.5px solid ${attachMode ? CT.send : "rgba(0,0,0,0.14)"}`,
+                  borderRadius: "50%",
+                  color: attachMode ? CT.send : "rgba(0,0,0,0.45)",
+                  cursor: "pointer",
+                  transition: `all ${DUR.fast} ${EASE}`,
+                  fontSize: 22,
+                  lineHeight: 1,
+                  fontWeight: 400,
+                }}>
+                +
+              </button>
+
+              {/* Text area */}
+              <div style={{
+                flex: 1,
+                border: `1.5px solid ${inputFocused ? "#7C3AED" : "rgba(0,0,0,0.16)"}`,
+                borderRadius: 22,
+                padding: "12px 18px",
+                background: inputFocused ? "#fff" : "#f9f9f9",
+                transition: `all ${DUR.fast} ${EASE}`,
+                boxShadow: inputFocused ? "0 0 0 3px rgba(124,58,237,0.10)" : "none",
+              }}>
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  maxLength={4000}
+                  aria-label="Message input"
+                  aria-multiline="true"
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => setInputFocused(false)}
+                  onChange={(e:React.ChangeEvent<HTMLTextAreaElement>) => {
+                    setInput(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 180) + "px";
+                  }}
+                  onKeyDown={(e:React.KeyboardEvent<HTMLTextAreaElement>) => {
+                    if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
+                  }}
+                  placeholder={`Message Streams…`}
+                  rows={1}
+                  style={{
+                    width: "100%", background: "transparent", border: "none",
+                    outline: "none", fontFamily: "inherit", fontSize: 16,
+                    color: CT.t1, resize: "none", lineHeight: 1.6, minHeight: 26,
+                  }}/>
+              </div>
+
+              {/* Send / Stop button */}
               {streaming ? (
-                <button onClick={handleStop} aria-label="Stop generation" style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.06)", border:"1.5px solid rgba(0,0,0,0.14)", borderRadius:"50%", color:CT.t2, cursor:"pointer", fontSize:14 }}>■</button>
+                /* STOP — red pulsing ring — clearly "something is happening, click to stop" */
+                <button
+                  onClick={handleStop}
+                  aria-label="Stop generation"
+                  style={{
+                    width: 42, height: 42, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "#dc2626",
+                    border: "none",
+                    borderRadius: "50%",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    animation: "streams-stop-pulse 1.4s ease infinite",
+                  }}>
+                  ■
+                </button>
               ) : (
-                <button onClick={()=>void handleSend()} disabled={!input.trim()} aria-label="Send message"
-                  style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:input.trim()?CT.send:"rgba(0,0,0,0.10)", border:"none", borderRadius:"50%", color:input.trim()?"#fff":"rgba(0,0,0,0.30)", cursor:input.trim()?"pointer":"default", fontSize:20, transition:`background ${DUR.base} ${EASE}, color ${DUR.base} ${EASE}`, boxShadow:input.trim()?"0 2px 8px rgba(217,91,42,0.35)":"none" }}>↑</button>
+                /* SEND — always orange and alive. Empty = softer glow. Has text = full glow + shadow */
+                <button
+                  onClick={() => void handleSend()}
+                  disabled={!input.trim()}
+                  aria-label="Send message"
+                  style={{
+                    width: 42, height: 42, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: input.trim()
+                      ? "linear-gradient(135deg, #d95b2a, #f97316)"
+                      : "linear-gradient(135deg, #f5b89a, #fbcfb0)",
+                    border: "none",
+                    borderRadius: "50%",
+                    color: "#fff",
+                    cursor: input.trim() ? "pointer" : "default",
+                    fontSize: 20,
+                    lineHeight: 1,
+                    transition: `all ${DUR.base} ${EASE}`,
+                    boxShadow: input.trim()
+                      ? "0 3px 12px rgba(217,91,42,0.50)"
+                      : "0 1px 4px rgba(217,91,42,0.15)",
+                    animation: input.trim() ? "none" : "streams-send-breathe 2.5s ease infinite",
+                  }}>
+                  ↑
+                </button>
               )}
             </div>
+
           </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes streams-blink2 { 0%,100%{opacity:1} 50%{opacity:0} }
-        @keyframes streams-pulse2  { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes streams-blink2      { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes streams-pulse2      { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes streams-stop-pulse  { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.5)} 50%{box-shadow:0 0 0 7px rgba(220,38,38,0)} }
+        @keyframes streams-send-breathe{ 0%,100%{opacity:0.55;transform:scale(1)} 50%{opacity:0.80;transform:scale(1.04)} }
         .streams-chat-chips2::-webkit-scrollbar { display:none; }
         .streams-chat-sb2 { position:fixed;top:0;left:0;height:100dvh;width:260px;z-index:300;transform:translateX(-100%);transition:transform ${DUR.base} ${EASE};border-right:1px solid rgba(0,0,0,0.08); }
         .streams-chat-sb2.open { transform:translateX(0); }
@@ -955,7 +1083,7 @@ export default function ChatTab() {
         @media (max-width:767px) {
           .streams-chat-mhdr2 { display:flex; }
           .streams-chat-msgs2 { padding:20px 16px 0; }
-          .streams-chat-input2 { padding:12px 16px;padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+          .streams-chat-input2 { padding:10px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
         }
         @media (min-width:768px) {
           .streams-chat-sb2 { position:relative;height:100%;transform:none;transition:none;z-index:auto;flex-shrink:0; }
