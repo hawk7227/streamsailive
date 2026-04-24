@@ -188,3 +188,9 @@ export const GITHUB_TOKEN = optionalKey("GITHUB_TOKEN");
 export const DO_API_TOKEN = optionalKey("DO_API_TOKEN");
 export const DO_APP_ID = optionalKey("DO_APP_ID");
 export const ADMIN_SECRET = optionalKey("ADMIN_SECRET");
+
+// ── Connector OAuth ───────────────────────────────────────────────────────────
+export const GITHUB_CLIENT_ID     = optionalKey("GITHUB_CLIENT_ID");
+export const GITHUB_CLIENT_SECRET = optionalKey("GITHUB_CLIENT_SECRET");
+export const GITHUB_CALLBACK_URL  = optionalKey("GITHUB_CALLBACK_URL");
+export const CONNECTOR_ENCRYPTION_KEY = optionalKey("CONNECTOR_ENCRYPTION_KEY");
