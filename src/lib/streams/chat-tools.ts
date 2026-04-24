@@ -100,10 +100,32 @@ const githubTools: Record<string, ToolExecutor> = {
 
   github_read_file: async ({ owner, repo, path, branch = "main" }) => {
     try {
-      const res = await githubRequest(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`) as { content?: string; encoding?: string; size?: number; name?: string };
+      const res = await githubRequest(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`) as {
+        content?: string; encoding?: string; size?: number; name?: string; type?: string; download_url?: string;
+      };
+      // Directory — list it instead
+      if (Array.isArray(res)) {
+        const items = (res as Array<{ name: string; type: string; size: number; path: string }>)
+          .map(f => ({ name: f.name, type: f.type, size: f.size, path: f.path }));
+        return { success: true, data: { note: "This is a directory, not a file", items } };
+      }
+      // File too large for inline (GitHub returns download_url for large files)
+      if (!res.content && res.download_url) {
+        try {
+          const dlRes = await fetch(res.download_url, { signal: AbortSignal.timeout(15_000) });
+          const text  = await dlRes.text();
+          return { success: true, data: { path, size: res.size, content: text.slice(0, 50000), note: res.size && res.size > 50000 ? `File is ${res.size} bytes — showing first 50KB` : undefined } };
+        } catch {
+          return { success: false, error: `File too large to read inline (${res.size} bytes). Download at: ${res.download_url}` };
+        }
+      }
       if (res.encoding === "base64" && res.content) {
-        const content = atob(res.content.replace(/\n/g, ""));
-        return { success: true, data: { path, size: res.size, content: content.slice(0, 50000) } };
+        try {
+          const content = atob(res.content.replace(/\n/g, ""));
+          return { success: true, data: { path, size: res.size, content: content.slice(0, 50000), truncated: (res.size ?? 0) > 50000 } };
+        } catch {
+          return { success: false, error: `Could not decode file content (encoding: ${res.encoding})` };
+        }
       }
       return { success: true, data: res };
     } catch (e) { return { success: false, error: (e as Error).message }; }
