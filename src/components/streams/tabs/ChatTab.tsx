@@ -264,18 +264,46 @@ export default function ChatTab() {
     } catch { /* empty */ } finally { setLibLoad(false); }
   }, [libraryLoading]);
 
-  // ── RAF streaming buffer ───────────────────────────────────────────────────
+  // ── RAF streaming buffer ─────────────────────────────────────────────────
+  // Paced at ~180 chars/frame max → smooth readable flow, never dumps all at once.
+  // Equivalent to Claude's ~30 tok/sec visual pacing at 60fps.
+  const userScrolledRef = useRef(false);   // scroll lock: user touched scroll → stop auto-scroll
+
+  // Reset scroll lock when user sends a new message
+  function resetScrollLock() { userScrolledRef.current = false; }
+
+  // Listen for user scroll to lock auto-scroll
+  useEffect(() => {
+    const el = document.querySelector(".streams-chat-scroll");
+    if (!el) return;
+    const onScroll = () => {
+      // If user scrolled up from the bottom, lock auto-scroll
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      if (!atBottom) userScrolledRef.current = true;
+      else           userScrolledRef.current = false;   // back at bottom → unlock
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const CHARS_PER_FRAME = 180; // ~180 chars/frame @ 60fps ≈ 10,800 chars/sec — smooth but not instant
+
   function startTokenFlush(id: string) {
     streamingIdRef.current = id;
     tokenBufRef.current = "";
     function flush() {
-      const tok = tokenBufRef.current;
-      if (tok) {
-        tokenBufRef.current = "";
+      const buf = tokenBufRef.current;
+      if (buf) {
+        // Drain at most CHARS_PER_FRAME per animation frame — paced streaming
+        const tok = buf.slice(0, CHARS_PER_FRAME);
+        tokenBufRef.current = buf.slice(CHARS_PER_FRAME);
         setMsgs(p => p.map(m => m.id === id
           ? { ...m, text: m.text + tok, phase: undefined, firstOutput: true }
           : m));
-        endRef.current?.scrollIntoView({ behavior: "smooth" });
+        // Auto-scroll only if user hasn't scrolled up
+        if (!userScrolledRef.current) {
+          endRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
       }
       if (streamingIdRef.current === id) rafRef.current = requestAnimationFrame(flush);
     }
@@ -304,9 +332,17 @@ export default function ChatTab() {
   // ── Finish helpers ────────────────────────────────────────────────────────
   function finishMsg(id: string) {
     stopTokenFlush(id);
-    setMsgs(p => p.map(m => m.id === id
-      ? { ...m, streaming: false, phase: undefined, firstOutput: true }
-      : m));
+    setMsgs(p => {
+      const updated = p.map(m => m.id === id
+        ? { ...m, streaming: false, phase: undefined, firstOutput: true }
+        : m);
+      // Auto-title after first exchange completes
+      const userMsgs = updated.filter(m => m.role === "user");
+      if (userMsgs.length === 1 && userMsgs[0]?.text) {
+        maybeGenerateTitle(activeSession, userMsgs[0].text);
+      }
+      return updated;
+    });
     setStreaming(false);
     abortRef.current = null;
   }
@@ -344,7 +380,11 @@ export default function ChatTab() {
     const text = input.trim();
     if (!text || streaming) return;
 
-    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", text }]);
+    resetScrollLock(); // unlock auto-scroll for new message
+    const isFirstMsg = msgs.filter(m => m.role === "user").length === 0;
+    const userId = Date.now().toString();
+
+    setMsgs(p => [...p, { id: userId, role: "user", text }]);
     setSessions(prev => prev.map(s =>
       s.id === activeSession && s.title === "New conversation"
         ? { ...s, title: text.slice(0, 36) + (text.length > 36 ? "…" : "") } : s));
@@ -763,6 +803,7 @@ export default function ChatTab() {
 
         {/* Messages */}
         <div role="log" aria-live="polite" aria-atomic="false" aria-label="Conversation messages"
+          className="streams-chat-scroll"
           style={{ flex:1, overflowY:"auto", overscrollBehavior:"contain", paddingBottom:inputBarH+S.s4 }}>
 
           {msgs.length===0 && (
