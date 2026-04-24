@@ -27,7 +27,7 @@ import { C, R, S, DUR, EASE } from "../tokens";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type BuilderPanel = "tasks" | "audit" | "runtime";
+type BuilderPanel = "tasks" | "audit" | "runtime" | "artifacts" | "memory";
 
 type TaskStatus =
   | "backlog" | "todo" | "in_progress" | "blocked"
@@ -73,6 +73,25 @@ type AuditSummary = {
 type RuntimeActionType =
   | "run_audit" | "write_decision" | "log_issue" | "resolve_issue"
   | "pin_fact" | "write_handoff" | "register_artifact";
+
+// ── Artifact types ────────────────────────────────────────────────────────────
+type ArtifactType  = "code"|"doc"|"image"|"video"|"svg"|"react"|"html"|"schema"|"prompt_pack";
+type ArtifactState = "draft"|"stable"|"deprecated"|"archived";
+
+interface ArtifactRow {
+  id: string; name: string; slug: string; description: string|null;
+  artifactType: ArtifactType; state: ArtifactState;
+  proofState: string; origin: string; previewUrl: string|null;
+  tags: string[]; createdAt: string; updatedAt: string;
+}
+
+// ── Memory types ──────────────────────────────────────────────────────────────
+interface MemoryRule     { id: string; ruleText: string; priority: number; category: string; }
+interface DecisionEntry  { id: string; decisionSummary: string; rationale: string|null; decidedAt: string; }
+interface IssueEntry     { id: string; issueSummary: string; status: string; category: string; occurredAt: string; }
+interface PinnedFact     { factKey: string; factValue: string; isSensitive: boolean; }
+interface LatestHandoff  { handoffText: string; lastCommit: string|null; lastVercelStatus: string|null; violationCount: number; pendingItems: string[]; }
+interface ProjectMemory  { rules: MemoryRule[]; recentDecisions: DecisionEntry[]; openIssues: IssueEntry[]; pinnedFacts: PinnedFact[]; latestHandoff: LatestHandoff|null; }
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
@@ -136,6 +155,18 @@ export default function BuilderTab() {
   const [actionError,   setActionError]  = useState<string | null>(null);
   const [payloadError,  setPayloadError] = useState<string | null>(null);
 
+  // ── Artifacts state ────────────────────────────────────────────────────────
+  const [artifacts,      setArtifacts]      = useState<ArtifactRow[]>([]);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [artifactsError, setArtifactsError]  = useState<string | null>(null);
+  const [artifactFilter, setArtifactFilter]  = useState<ArtifactType | "all">("all");
+
+  // ── Memory state ───────────────────────────────────────────────────────────
+  const [memory,        setMemory]        = useState<ProjectMemory | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryError,   setMemoryError]   = useState<string | null>(null);
+  const [memorySection, setMemorySection] = useState<"facts"|"rules"|"decisions"|"issues"|"handoff">("facts");
+
   const createInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load tasks ───────────────────────────────────────────────────────────────
@@ -179,6 +210,48 @@ export default function BuilderTab() {
   useEffect(() => {
     if (panel === "audit") void loadAudit();
   }, [panel, loadAudit]);
+
+  // ── Load artifacts ────────────────────────────────────────────────────────
+  const loadArtifacts = useCallback(async () => {
+    setArtifactsLoading(true);
+    setArtifactsError(null);
+    try {
+      const params = new URLSearchParams({ limit: "50" });
+      if (artifactFilter !== "all") params.set("type", artifactFilter);
+      const res = await fetch(`/api/streams/artifacts?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const json = await res.json() as { data?: ArtifactRow[] };
+      setArtifacts(json.data ?? []);
+    } catch (e) {
+      setArtifactsError(e instanceof Error ? e.message : "Failed to load artifacts");
+    } finally {
+      setArtifactsLoading(false);
+    }
+  }, [artifactFilter]);
+
+  useEffect(() => {
+    if (panel === "artifacts") void loadArtifacts();
+  }, [panel, artifactFilter, loadArtifacts]);
+
+  // ── Load memory ───────────────────────────────────────────────────────────
+  const loadMemory = useCallback(async () => {
+    setMemoryLoading(true);
+    setMemoryError(null);
+    try {
+      const res = await fetch("/api/streams/memory", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const json = await res.json() as { memory?: ProjectMemory };
+      setMemory(json.memory ?? null);
+    } catch (e) {
+      setMemoryError(e instanceof Error ? e.message : "Failed to load memory");
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (panel === "memory") void loadMemory();
+  }, [panel, loadMemory]);
 
   // ── Create task ──────────────────────────────────────────────────────────────
   async function handleCreateTask(e: React.FormEvent) {
@@ -315,9 +388,11 @@ export default function BuilderTab() {
 
   // ── Sub-nav ──────────────────────────────────────────────────────────────────
   const panels: Array<{ id: BuilderPanel; label: string; badge?: number }> = [
-    { id: "tasks",   label: "Tasks",   badge: tasks.filter(t => t.status === "in_review").length || undefined },
-    { id: "audit",   label: "Audit",   badge: audit?.approvalGates.pendingCount || undefined },
-    { id: "runtime", label: "Runtime"  },
+    { id: "tasks",     label: "Tasks",     badge: tasks.filter(t => t.status === "in_review").length || undefined },
+    { id: "audit",     label: "Audit",     badge: audit?.approvalGates.pendingCount || undefined },
+    { id: "artifacts", label: "Artifacts"  },
+    { id: "memory",    label: "Memory"     },
+    { id: "runtime",   label: "Runtime"    },
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -994,6 +1069,312 @@ export default function BuilderTab() {
                   {actionResult}
                 </pre>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── ARTIFACTS PANEL ── */}
+      {panel === "artifacts" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Type filter */}
+          <div style={{
+            display: "flex", gap: S.s1, padding: `${S.s2}px ${S.s6}px`,
+            borderBottom: `1px solid ${C.bdr}`, overflowX: "auto", flexShrink: 0,
+            scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+          }} className="streams-builder-filters">
+            {(["all","code","doc","image","video","svg","react","html","schema","prompt_pack"] as const).map(t => (
+              <button key={t} onClick={() => setArtifactFilter(t)} style={{
+                padding: "4px 10px", borderRadius: R.pill, flexShrink: 0,
+                border: `1px solid ${artifactFilter === t ? C.acc : C.bdr}`,
+                background: artifactFilter === t ? C.accDim : "transparent",
+                color: artifactFilter === t ? C.acc2 : C.t3,
+                fontSize: 12, fontFamily: "inherit", cursor: "pointer", minHeight: 28,
+              }}>{t === "all" ? "All" : t}</button>
+            ))}
+          </div>
+
+          {artifactsError && (
+            <div style={{
+              margin: `${S.s2}px ${S.s6}px 0`, padding: "8px 12px", borderRadius: R.r1,
+              background: "rgba(239,68,68,0.08)", border: `1px solid rgba(239,68,68,0.2)`,
+              color: C.red, fontSize: 13, display: "flex", justifyContent: "space-between",
+            }}>
+              {artifactsError}
+              <button onClick={() => void loadArtifacts()} style={{ background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:13,fontFamily:"inherit" }}>Retry</button>
+            </div>
+          )}
+
+          <div style={{ flex: 1, overflowY: "auto", padding: `${S.s4}px ${S.s6}px` }}>
+
+            {artifactsLoading && (
+              <div style={{ display: "flex", flexDirection: "column", gap: S.s2 }}>
+                {[1,2,3].map(i => (
+                  <div key={i} style={{
+                    height: 56, borderRadius: R.r2,
+                    background: `linear-gradient(90deg,${C.bg3} 25%,${C.bg4} 50%,${C.bg3} 75%)`,
+                    backgroundSize: "200% 100%", animation: "streams-builder-shimmer 1.4s ease infinite",
+                  }} />
+                ))}
+              </div>
+            )}
+
+            {!artifactsLoading && artifacts.length === 0 && (
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"60%", color:C.t4, fontSize:14, gap:S.s2 }}>
+                <span style={{ fontSize:28, opacity:.2 }}>✦</span>
+                {artifactFilter === "all" ? "No artifacts registered yet" : `No ${artifactFilter} artifacts`}
+              </div>
+            )}
+
+            {!artifactsLoading && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: S.s2 }}>
+                {artifacts.map(a => {
+                  const stateColor: Record<ArtifactState, string> = {
+                    draft: C.t4, stable: C.green, deprecated: C.amber, archived: C.t4,
+                  };
+                  const typeIcon: Record<ArtifactType, string> = {
+                    code:"⟨⟩", doc:"📄", image:"🖼", video:"🎬", svg:"◈", react:"⚛", html:"🌐", schema:"⬡", prompt_pack:"✦",
+                  };
+                  return (
+                    <div key={a.id} style={{
+                      background: C.bg2, borderRadius: R.r2, border: `1px solid ${C.bdr}`,
+                      padding: "12px 14px",
+                    }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:S.s2, marginBottom:S.s2 }}>
+                        <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{typeIcon[a.artifactType]}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:500, color:C.t1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {a.name}
+                          </div>
+                          <div style={{ fontSize:12, color:C.t4, fontFamily:"ui-monospace,monospace", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {a.slug}
+                          </div>
+                        </div>
+                        <span style={{ fontSize:12, color:stateColor[a.state], flexShrink:0 }}>{a.state}</span>
+                      </div>
+                      {a.description && (
+                        <div style={{ fontSize:12, color:C.t3, lineHeight:1.5, marginBottom:S.s2 }}>{a.description}</div>
+                      )}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <span style={{ fontSize:12, color:C.t4 }}>
+                          {new Date(a.createdAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}
+                        </span>
+                        <span style={{
+                          fontSize:12, padding:"2px 8px", borderRadius:R.pill,
+                          background: a.proofState === "Proven" ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.05)",
+                          color: a.proofState === "Proven" ? C.green : C.t4,
+                          border: `1px solid ${a.proofState === "Proven" ? "rgba(16,185,129,0.25)" : C.bdr}`,
+                        }}>
+                          {a.proofState}
+                        </span>
+                      </div>
+                      {a.tags.length > 0 && (
+                        <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:S.s2 }}>
+                          {a.tags.slice(0,4).map(tag => (
+                            <span key={tag} style={{
+                              fontSize:12, padding:"2px 6px", borderRadius:R.r1,
+                              background:C.surf, border:`1px solid ${C.bdr}`, color:C.t4,
+                            }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── MEMORY PANEL ── */}
+      {panel === "memory" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Section tabs */}
+          <div style={{
+            display: "flex", gap: S.s1, padding: `${S.s2}px ${S.s6}px`,
+            borderBottom: `1px solid ${C.bdr}`, overflowX: "auto", flexShrink: 0,
+            scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+          }} className="streams-builder-filters">
+            {(["facts","rules","decisions","issues","handoff"] as const).map(sec => (
+              <button key={sec} onClick={() => setMemorySection(sec)} style={{
+                padding: "4px 10px", borderRadius: R.pill, flexShrink: 0,
+                border: `1px solid ${memorySection === sec ? C.acc : C.bdr}`,
+                background: memorySection === sec ? C.accDim : "transparent",
+                color: memorySection === sec ? C.acc2 : C.t3,
+                fontSize: 12, fontFamily: "inherit", cursor: "pointer", minHeight: 28,
+                textTransform: "capitalize",
+              }}>{sec}</button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: `${S.s4}px ${S.s6}px` }}>
+
+            {memoryLoading && (
+              <div style={{ color:C.t4, fontSize:14, textAlign:"center", padding:"32px 0" }}>Loading memory…</div>
+            )}
+
+            {memoryError && (
+              <div style={{
+                padding:"10px 14px", borderRadius:R.r2, marginBottom:S.s4,
+                background:"rgba(239,68,68,0.08)", border:`1px solid rgba(239,68,68,0.2)`,
+                color:C.red, fontSize:13, display:"flex", justifyContent:"space-between",
+              }}>
+                {memoryError}
+                <button onClick={() => void loadMemory()} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>Retry</button>
+              </div>
+            )}
+
+            {memory && !memoryLoading && (
+              <>
+                {/* Pinned facts */}
+                {memorySection === "facts" && (
+                  <div>
+                    {memory.pinnedFacts.length === 0 ? (
+                      <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No pinned facts — use the Runtime panel to pin facts</div>
+                    ) : (
+                      memory.pinnedFacts.map(f => (
+                        <div key={f.factKey} style={{
+                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          background:C.bg2, border:`1px solid ${C.bdr}`,
+                          display:"flex", alignItems:"flex-start", gap:S.s3,
+                        }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, color:C.acc2, fontWeight:500, marginBottom:2 }}>{f.factKey}</div>
+                            <div style={{ fontSize:13, color:f.isSensitive?C.t4:C.t1, fontFamily:f.isSensitive?"ui-monospace,monospace":"inherit" }}>
+                              {f.isSensitive ? "••••••" : f.factValue}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Rules */}
+                {memorySection === "rules" && (
+                  <div>
+                    {memory.rules.length === 0 ? (
+                      <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No memory rules set</div>
+                    ) : (
+                      memory.rules.map((r,i) => (
+                        <div key={r.id} style={{
+                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          background:C.bg2, border:`1px solid ${C.bdr}`,
+                          display:"flex", gap:S.s3, alignItems:"flex-start",
+                        }}>
+                          <span style={{ fontSize:12, color:C.t4, flexShrink:0, minWidth:20, fontFamily:"ui-monospace,monospace" }}>{i+1}</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, color:C.t1, lineHeight:1.6 }}>{r.ruleText}</div>
+                            <div style={{ fontSize:12, color:C.t4, marginTop:2 }}>{r.category} · priority {r.priority}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Decisions */}
+                {memorySection === "decisions" && (
+                  <div>
+                    {memory.recentDecisions.length === 0 ? (
+                      <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No decisions logged yet</div>
+                    ) : (
+                      memory.recentDecisions.map(d => (
+                        <div key={d.id} style={{
+                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s2,
+                          background:C.bg2, border:`1px solid ${C.bdr}`,
+                        }}>
+                          <div style={{ fontSize:13, color:C.t1, fontWeight:500, marginBottom:4 }}>{d.decisionSummary}</div>
+                          {d.rationale && <div style={{ fontSize:12, color:C.t3, lineHeight:1.5, marginBottom:4 }}>{d.rationale}</div>}
+                          <div style={{ fontSize:12, color:C.t4 }}>{new Date(d.decidedAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Issues */}
+                {memorySection === "issues" && (
+                  <div>
+                    {memory.openIssues.length === 0 ? (
+                      <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No open issues ✓</div>
+                    ) : (
+                      memory.openIssues.map(issue => (
+                        <div key={issue.id} style={{
+                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          background:C.bg2, border:`1px solid ${C.bdr}`,
+                          display:"flex", gap:S.s3, alignItems:"flex-start",
+                        }}>
+                          <span style={{
+                            width:8, height:8, borderRadius:R.pill, marginTop:5, flexShrink:0,
+                            background: issue.status==="open" ? C.red : C.amber,
+                          }}/>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, color:C.t1, lineHeight:1.5 }}>{issue.issueSummary}</div>
+                            <div style={{ fontSize:12, color:C.t4, marginTop:2 }}>{issue.category} · {new Date(issue.occurredAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Handoff */}
+                {memorySection === "handoff" && (
+                  <div>
+                    {!memory.latestHandoff ? (
+                      <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No handoff recorded — write one via Runtime → write_handoff</div>
+                    ) : (
+                      <>
+                        <div style={{
+                          padding:"12px 14px", borderRadius:R.r2, marginBottom:S.s4,
+                          background:C.bg2, border:`1px solid ${C.bdr}`,
+                          display:"grid", gridTemplateColumns:"1fr 1fr", gap:S.s3,
+                        }}>
+                          {[
+                            { label:"Last commit",   value: memory.latestHandoff.lastCommit ?? "—" },
+                            { label:"Vercel status", value: memory.latestHandoff.lastVercelStatus ?? "—" },
+                            { label:"Violations",    value: String(memory.latestHandoff.violationCount) },
+                            { label:"Pending items", value: String(memory.latestHandoff.pendingItems.length) },
+                          ].map(row => (
+                            <div key={row.label}>
+                              <div style={{ fontSize:12, color:C.t4, marginBottom:2 }}>{row.label}</div>
+                              <div style={{ fontSize:13, color:C.t1, fontFamily:"ui-monospace,monospace" }}>{row.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ fontSize:12, color:C.t4, letterSpacing:".06em", textTransform:"uppercase", marginBottom:S.s2 }}>Handoff text</div>
+                        <pre style={{
+                          background:C.bg2, borderRadius:R.r2, border:`1px solid ${C.bdr}`,
+                          padding:"12px 14px", color:C.t2, fontSize:13,
+                          fontFamily:"ui-monospace,monospace", whiteSpace:"pre-wrap",
+                          overflowWrap:"break-word", lineHeight:1.6,
+                        }}>
+                          {memory.latestHandoff.handoffText}
+                        </pre>
+                        {memory.latestHandoff.pendingItems.length > 0 && (
+                          <div style={{ marginTop:S.s4 }}>
+                            <div style={{ fontSize:12, color:C.t4, letterSpacing:".06em", textTransform:"uppercase", marginBottom:S.s2 }}>Pending items</div>
+                            {memory.latestHandoff.pendingItems.map((item,i) => (
+                              <div key={i} style={{
+                                padding:"8px 12px", borderRadius:R.r1, marginBottom:S.s1,
+                                background:C.bg2, border:`1px solid ${C.bdr}`,
+                                fontSize:13, color:C.t2, display:"flex", gap:S.s2,
+                              }}>
+                                <span style={{ color:C.t4, flexShrink:0 }}>{i+1}.</span>
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
