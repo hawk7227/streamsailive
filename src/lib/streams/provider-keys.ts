@@ -7,20 +7,16 @@
  *
  * sessionStorage scope: one browser tab session.
  * Keys are cleared when the tab closes — never persisted to disk.
- *
- * Keys stored:
- *   streams:fal_key         — fal.ai API key
- *   streams:elevenlabs_key  — ElevenLabs API key
- *   streams:openai_key      — OpenAI API key
  */
 
 const KEYS = {
   fal:         "streams:fal_key",
   elevenlabs:  "streams:elevenlabs_key",
   openai:      "streams:openai_key",
+  runway:      "streams:runway_key",
 } as const;
 
-type Provider = keyof typeof KEYS;
+export type Provider = keyof typeof KEYS;
 
 export function setProviderKey(provider: Provider, key: string): void {
   try {

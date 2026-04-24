@@ -22,6 +22,7 @@ const INITIAL_KEYS: ApiKey[] = [
   { label: "FAL Key",           provider: "fal.ai",        placeholder: "fal_……",        status: "untested", hint: "Routes all video, image, audio, and ffmpeg operations. Primary inference key." },
   { label: "ElevenLabs API Key", provider: "ElevenLabs",   placeholder: "sk_……",         status: "untested", hint: "Voice TTS, audio isolation, Scribe v2 STT, IVC voice cloning, dubbing." },
   { label: "OpenAI API Key",     provider: "OpenAI",        placeholder: "sk-……",         status: "untested", hint: "GPT-4o Vision for frame analysis, assistant chat, image generation." },
+  { label: "Runway API Key",     provider: "Runway",        placeholder: "key_……",        status: "untested", hint: "Runway Gen4 Turbo — high-quality video generation alternative to fal." },
 ];
 
 const DEFAULT_MODELS = [
@@ -33,8 +34,8 @@ const DEFAULT_MODELS = [
 
 export default function SettingsTab() {
   const [keys,     setKeys]     = useState<ApiKey[]>(INITIAL_KEYS);
-  const [keyVals,  setKeyVals]  = useState<string[]>(["","",""]);
-  const [showKeys, setShowKeys] = useState<boolean[]>([false,false,false]);
+  const [keyVals,  setKeyVals]  = useState<string[]>(["","","",""]);
+  const [showKeys, setShowKeys] = useState<boolean[]>([false,false,false,false]);
   const [models,   setModels]   = useState(DEFAULT_MODELS);
   const [daily,    setDaily]    = useState("10.00");
   const [monthly,  setMonthly]  = useState("200.00");
@@ -49,13 +50,23 @@ export default function SettingsTab() {
     setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
       idx === i ? { ...key, status: "testing" } : key));
 
-    const providerMap: Record<number, "fal" | "elevenlabs" | "openai"> = {
+    const providerMap: Record<number, "fal" | "elevenlabs" | "openai" | "runway"> = {
       0: "fal",
       1: "elevenlabs",
       2: "openai",
+      3: "runway",
     };
     const provider = providerMap[i];
     if (!provider) return;
+
+    // Runway: validate direct from browser (no test-key route for it)
+    if (provider === "runway") {
+      const { validateRunwayKey } = await import("@/lib/streams/runway-direct");
+      const valid = await validateRunwayKey(keyVal);
+      setKeys((k: ApiKey[]) => k.map((key: ApiKey, idx: number) =>
+        idx === i ? { ...key, status: valid ? "valid" : "invalid" } : key));
+      return;
+    }
 
     try {
       const res  = await fetch("/api/streams/settings/test-key", {
@@ -227,6 +238,7 @@ export default function SettingsTab() {
           if (i === 0) body.fal_key_hint        = hint;
           if (i === 1) body.elevenlabs_key_hint  = hint;
           if (i === 2) body.openai_key_hint      = hint;
+          if (i === 3) body.runway_key_hint       = hint;
         }
       });
 
@@ -246,8 +258,7 @@ export default function SettingsTab() {
       setTimeout(() => setSaved(false), 2500);
 
       // Persist full keys to sessionStorage for direct provider calls
-      // Keys are never sent to Vercel/server — only hints (last 4 chars) are stored in DB
-      const providerMap = ["fal", "elevenlabs", "openai"] as const;
+      const providerMap = ["fal", "elevenlabs", "openai", "runway"] as const;
       keyVals.forEach((val: string, i: number) => {
         if (val.trim()) setProviderKey(providerMap[i], val.trim());
       });
