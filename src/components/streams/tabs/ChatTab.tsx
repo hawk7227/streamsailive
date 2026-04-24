@@ -926,9 +926,9 @@ export default function ChatTab() {
                   style={{
                     padding: "5px 14px",
                     borderRadius: R.pill,
-                    border: `1.5px solid ${mode===m ? active : "rgba(0,0,0,0.10)"}`,
-                    background: mode===m ? active : bg,
-                    color: mode===m ? "#fff" : color,
+                    border: `1.5px solid ${active}`,
+                    background: mode===m ? active : color,
+                    color: "#fff",
                     fontSize: 13,
                     fontFamily: "inherit",
                     cursor: "pointer",
@@ -936,7 +936,7 @@ export default function ChatTab() {
                     minHeight: 30,
                     letterSpacing: ".01em",
                     transition: `all ${DUR.fast} ${EASE}`,
-                    boxShadow: mode===m ? `0 2px 8px ${active}40` : "none",
+                    boxShadow: mode===m ? `0 2px 8px ${active}60` : `0 1px 4px ${active}30`,
                   }}>
                   {m}
                 </button>
@@ -1047,9 +1047,7 @@ export default function ChatTab() {
                   style={{
                     width: 42, height: 42, flexShrink: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: input.trim()
-                      ? "linear-gradient(135deg, #d95b2a, #f97316)"
-                      : "linear-gradient(135deg, #f5b89a, #fbcfb0)",
+                    background: "linear-gradient(135deg, #d95b2a, #f97316)",
                     border: "none",
                     borderRadius: "50%",
                     color: "#fff",
@@ -1057,10 +1055,8 @@ export default function ChatTab() {
                     fontSize: 20,
                     lineHeight: 1,
                     transition: `all ${DUR.base} ${EASE}`,
-                    boxShadow: input.trim()
-                      ? "0 3px 12px rgba(217,91,42,0.50)"
-                      : "0 1px 4px rgba(217,91,42,0.15)",
-                    animation: input.trim() ? "none" : "streams-send-breathe 2.5s ease infinite",
+                    boxShadow: "0 3px 12px rgba(217,91,42,0.50)",
+                    animation: "none",
                   }}>
                   ↑
                 </button>
