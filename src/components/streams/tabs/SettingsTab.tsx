@@ -85,6 +85,8 @@ export default function SettingsTab() {
   const [connecting,      setConnecting]      = useState<string | null>(null);
   const [connectToken,    setConnectToken]    = useState<Record<string, string>>({});
   const [connectError,    setConnectError]    = useState<string | null>(null);
+  const [disconnecting,   setDisconnecting]   = useState<string | null>(null);
+  const [validating,      setValidating]      = useState<string | null>(null);
 
   // Load settings on mount
   useEffect(() => {
@@ -166,6 +168,36 @@ export default function SettingsTab() {
     } finally {
       setConnecting(null);
     }
+  }
+
+  async function handleDisconnect(accountId: string, provider: string) {
+    setDisconnecting(provider);
+    setConnectError(null);
+    try {
+      const res = await fetch(`/api/streams/connectors/${accountId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (res.ok) {
+        setConnectors(prev => prev.filter(c => c.id !== accountId));
+      } else {
+        setConnectError("Disconnect failed — check your permissions");
+      }
+    } catch { setConnectError("Disconnect failed"); }
+    finally { setDisconnecting(null); }
+  }
+
+  async function handleValidate(accountId: string, provider: string) {
+    setValidating(provider);
+    try {
+      const res = await fetch(`/api/streams/connectors/${accountId}?action=validate`, {
+        method: "POST", credentials: "include",
+      });
+      if (res.ok) {
+        const d = await res.json() as { data?: ConnectorAccount };
+        if (d.data) setConnectors(prev => prev.map(c => c.id === accountId ? d.data! : c));
+      }
+    } catch { /* non-fatal — validate failure doesn't break the UI */ }
+    finally { setValidating(null); }
   }
 
   async function handleSave() {
@@ -413,6 +445,38 @@ export default function SettingsTab() {
                     {connecting === provider ? "Connecting…" : isConnected ? "Update" : "Connect"}
                   </button>
                 </div>
+                {isConnected && account && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button
+                      onClick={() => void handleValidate(account.id, provider)}
+                      disabled={validating === provider}
+                      style={{
+                        padding: "5px 12px", borderRadius: R.r1, fontSize: 12,
+                        background: "transparent",
+                        border: `1px solid ${C.bdr}`,
+                        color: C.t3, fontFamily: "inherit", cursor: "pointer",
+                        minHeight: 30,
+                        opacity: validating === provider ? 0.5 : 1,
+                      }}
+                    >
+                      {validating === provider ? "Validating…" : "↻ Validate"}
+                    </button>
+                    <button
+                      onClick={() => void handleDisconnect(account.id, provider)}
+                      disabled={disconnecting === provider}
+                      style={{
+                        padding: "5px 12px", borderRadius: R.r1, fontSize: 12,
+                        background: "transparent",
+                        border: `1px solid rgba(239,68,68,0.25)`,
+                        color: C.red, fontFamily: "inherit", cursor: "pointer",
+                        minHeight: 30,
+                        opacity: disconnecting === provider ? 0.5 : 1,
+                      }}
+                    >
+                      {disconnecting === provider ? "Disconnecting…" : "Disconnect"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
