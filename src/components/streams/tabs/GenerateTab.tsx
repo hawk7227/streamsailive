@@ -423,7 +423,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  }} className="streams-gen-left">
 
  {/* Mode bar */}
- <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg}}>
+ <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,background:C.bg,scrollbarWidth:"none",msOverflowStyle:"none"} as React.CSSProperties}>
  <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",padding:"0 8px",display:"flex",alignItems:"center",flexShrink:0}}>Mode</span>
  {(["T2V","I2V","Motion","Image","Voice","Music"] as Mode[]).map(m=>(
  <button key={m} onClick={()=>{setMode(m);setModel(0);setUseCustom(false);}} style={{
@@ -437,7 +437,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
 
  {/* Music sub-mode bar — only visible for Music mode */}
  {mode==="Music" && (
- <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10}}>
+ <div className="streams-gen-tabs" style={{display:"flex",overflowX:"auto",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,padding:"0 8px",gap:5,background:C.bg2,paddingTop:10,paddingBottom:10,scrollbarWidth:"none",msOverflowStyle:"none"} as React.CSSProperties}>
  {([["style-lyrics","Style + Lyrics"],["auto-lyrics","Auto-Lyrics"],["instrumental","Instrumental"],["cover","Cover"],["my-voice","My Voice"]] as [MusicSub,string][]).map(([id,label])=>(
  <button key={id} onClick={()=>setMusicSub(id)} style={{
  padding:"4px 8px",borderRadius:R.pill,fontSize: 13,fontFamily:"inherit",cursor:"pointer",flexShrink:0,
@@ -1050,7 +1050,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  <span style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase"}}>Stitch sequence</span>
  <span style={{fontSize: 12,padding:"2px 8px",borderRadius:R.pill,background:C.surf,border:`1px solid ${C.bdr}`,color:C.t4}}>fal ffmpeg-api</span>
  </div>
- <div style={{flex:1,overflowX:"auto",display:"flex",alignItems:"center",gap:8,padding:"0 16px"}}>
+ <div style={{flex:1,overflowX:"auto",display:"flex",alignItems:"center",gap:8,padding:"0 16px",scrollbarWidth:"none",msOverflowStyle:"none"} as React.CSSProperties}>
  {stitch.length===0
  ?<span style={{fontSize: 13,color:C.t4}}>Generate clips — add to stitch — merge via fal ffmpeg API</span>
  :stitch.map((id:string,i:number)=>(

@@ -200,13 +200,16 @@ const auditFindings = [];
 const PATTERN_CHECKS = [
   {
     rule: "Rule 4.1", severity: "critical",
-    pattern: /background:\s*C\.acc/,
+    // Match background:C.acc inside a message bubble — must be on a div/span
+    // that wraps msg.text, not on buttons or badges
+    pattern: /(?:role.*user|userMsg|user-msg).*background:\s*C\.acc|background:\s*C\.acc.*(?:role.*user|userMsg|user-msg)/,
     dirs: ["src/components/streams/tabs/ChatTab"],
     message: "Chat bubble using accent color background — Rule 4.1",
   },
   {
     rule: "Rule 4.2", severity: "critical",
-    pattern: /background:\s*C\.surf.*border/,
+    // Match background+border on an AI message wrapper — must be adjacent to msg.role
+    pattern: /(?:assistant|ai-msg|aiMsg).*(?:background:\s*C\.surf.*border|border.*background:\s*C\.surf)|(?:background:\s*C\.surf.*border.*1px|border.*1px.*background:\s*C\.surf).*(?:msg|message|assistant)/,
     dirs: ["src/components/streams/tabs/ChatTab"],
     message: "AI message card with background + border — Rule 4.2",
   },
