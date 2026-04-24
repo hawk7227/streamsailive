@@ -151,18 +151,19 @@ export default function SettingsTab() {
         credentials: "include",
         body: JSON.stringify({ provider, credential: token }),
       });
-      const d = await res.json() as { data?: ConnectorAccount; error?: string };
+      const d = await res.json() as { data?: { accountId?: string }; error?: string };
       if (!res.ok || d.error) {
         setConnectError(d.error ?? "Connection failed");
-      } else if (d.data) {
-        setConnectors(prev => {
-          const exists = prev.find(c => c.provider === provider);
-          return exists
-            ? prev.map(c => c.provider === provider ? d.data! : c)
-            : [...prev, d.data!];
-        });
-        setConnectToken(prev => ({ ...prev, [provider]: "" }));
+        return;
       }
+      // Reload full list from server — POST returns trimmed shape,
+      // GET returns full SafeAccountInfo with providerAccountId
+      const reload = await fetch("/api/streams/connectors", { credentials: "include" });
+      if (reload.ok) {
+        const j = await reload.json() as { data?: ConnectorAccount[] };
+        if (j.data) setConnectors(j.data);
+      }
+      setConnectToken(prev => ({ ...prev, [provider]: "" }));
     } catch (e) {
       setConnectError(e instanceof Error ? e.message : "Connection failed");
     } finally {
