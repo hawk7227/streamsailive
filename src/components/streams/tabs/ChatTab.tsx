@@ -21,6 +21,14 @@ import { streamDirectFromOpenAI } from "@/lib/streams/openai-direct";
 import { ActivityConversation } from "@/components/assistant/ActivityConversation";
 import { MediaGenerationStage } from "@/components/assistant/MediaGenerationStage";
 import { renderMarkdown } from "@/lib/streams/renderMarkdown";
+import {
+  loadSessions, saveSession, deleteSession, buildSession,
+  loadDraft, saveDraft,
+  generateTitle, formatSessionDate, getDateGroup,
+  searchSessions, listenSync,
+  type StoredSession, type StoredMessage, type SearchResult,
+} from "@/lib/streams/chat-store";
+import { getProviderKey } from "@/lib/streams/provider-keys";
 import type { ActivityPhase } from "@/lib/assistant-ui/activityConversations";
 import type { MediaGenerationState } from "@/components/assistant/MediaGenerationStage";
 
@@ -60,7 +68,7 @@ interface Msg {
   streaming?:     boolean;
 }
 
-type Session     = { id: string; title: string; time: string };
+type Session     = StoredSession;
 type LibraryItem = { id: string; generation_type: string; output_url: string; created_at: string; cost_usd?: number | null };
 
 async function saveToLibrary(opts: { type: "image"|"video"|"voice"|"music"; outputUrl: string; prompt: string; model?: string; provider?: string; }) {
@@ -80,9 +88,13 @@ export default function ChatTab() {
   const [streaming,     setStreaming]    = useState(false);
   const [sidebarOpen,   setSidebarOpen]  = useState(false);
   const [activeNav,     setActiveNav]    = useState<"Sessions"|"Library"|"Images">("Sessions");
-  const [sessions,      setSessions]     = useState<Session[]>([{ id: "current", title: "New conversation", time: "now" }]);
-  const [activeSession, setActiveSession] = useState("current");
-  const msgHistoryRef   = useRef<Record<string, Msg[]>>({ current: [] });
+  const [sessions,      setSessions]     = useState<Session[]>([]);
+  const [activeSession, setActiveSession] = useState("");
+  const [searchQuery,   setSearchQuery]  = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching,     setSearching]    = useState(false);
+  const msgHistoryRef   = useRef<Record<string, Msg[]>>({});
+  const titleGenRef     = useRef<Set<string>>(new Set());
   const [library,       setLibrary]      = useState<LibraryItem[]>([]);
   const [libraryLoading, setLibLoad]     = useState(false);
   const [expandedLib,   setExpandedLib]  = useState<string|null>(null);
@@ -103,6 +115,120 @@ export default function ChatTab() {
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputAreaRef      = useRef<HTMLDivElement>(null);
   const textareaRef       = useRef<HTMLTextAreaElement>(null);
+
+  // ── Load persisted sessions on mount + cross-tab sync ──────────────────
+  useEffect(() => {
+    const stored = loadSessions();
+    if (stored.length > 0) {
+      // Populate msgHistoryRef from stored sessions
+      stored.forEach(s => {
+        msgHistoryRef.current[s.id] = s.messages.map(m => ({
+          id:         m.id,
+          role:       m.role,
+          text:       m.text,
+          toolCalls:  m.toolCalls as Msg["toolCalls"],
+          mediaUrl:   m.mediaUrl,
+          mediaKind:  m.mediaKind as "image"|"video"|undefined,
+        }));
+      });
+      setSessions(stored);
+      const first = stored[0];
+      setActiveSession(first.id);
+      setMsgs(msgHistoryRef.current[first.id] ?? []);
+      // Restore draft for first session
+      const draft = loadDraft(first.id);
+      if (draft) setInput(draft);
+    } else {
+      // No history — create a fresh session
+      const newId = crypto.randomUUID();
+      const fresh: Session = buildSession(newId, "New conversation", [], undefined);
+      setSessions([fresh]);
+      setActiveSession(newId);
+    }
+
+    // Cross-tab sync via BroadcastChannel
+    const unsub = listenSync(msg => {
+      if (msg.type === "session_updated") {
+        setSessions(prev => {
+          const idx = prev.findIndex(s => s.id === msg.session.id);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = msg.session;
+            return updated.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+          }
+          return [msg.session, ...prev];
+        });
+        msgHistoryRef.current[msg.session.id] = msg.session.messages.map(m => ({
+          id: m.id, role: m.role, text: m.text,
+          toolCalls: m.toolCalls as Msg["toolCalls"], mediaUrl: m.mediaUrl,
+          mediaKind: m.mediaKind as "image"|"video"|undefined,
+        }));
+      }
+      if (msg.type === "session_deleted") {
+        setSessions(prev => prev.filter(s => s.id !== msg.id));
+      }
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Save current session to storage whenever msgs change ───────────────
+  useEffect(() => {
+    if (!activeSession || msgs.length === 0) return;
+    const currentSession = sessions.find(s => s.id === activeSession);
+    const storedMsgs: StoredMessage[] = msgs
+      .filter(m => !m.streaming && m.text.trim())
+      .map(m => ({
+        id:        m.id,
+        role:      m.role,
+        text:      m.text,
+        createdAt: new Date().toISOString(),
+        toolCalls: m.toolCalls,
+        mediaUrl:  m.mediaUrl,
+        mediaKind: m.mediaKind,
+      }));
+    if (storedMsgs.length === 0) return;
+    const updated = buildSession(
+      activeSession,
+      currentSession?.title ?? "New conversation",
+      storedMsgs,
+      currentSession?.createdAt,
+    );
+    saveSession(updated);
+    setSessions(prev => {
+      const idx = prev.findIndex(s => s.id === activeSession);
+      if (idx < 0) return [updated, ...prev];
+      const next = [...prev];
+      next[idx] = updated;
+      return next.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs]);
+
+  // ── Save draft as user types ────────────────────────────────────────────
+  useEffect(() => {
+    if (activeSession) saveDraft(activeSession, input);
+  }, [input, activeSession]);
+
+  // ── Auto-generate title after first AI response ─────────────────────────
+  const maybeGenerateTitle = useCallback((sessionId: string, firstUserMsg: string) => {
+    if (titleGenRef.current.has(sessionId)) return;
+    titleGenRef.current.add(sessionId);
+    const apiKey = getProviderKey("openai") ?? "";
+    void generateTitle(firstUserMsg, apiKey).then(title => {
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title } : s));
+      // Update in storage too
+      const stored = loadSessions();
+      const idx = stored.findIndex(s => s.id === sessionId);
+      if (idx >= 0) { stored[idx].title = title; saveSession(stored[idx]); }
+    });
+  }, []);
+
+  // ── Search ──────────────────────────────────────────────────────────────
+  const scrollToMessage = useCallback((msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
 
   useEffect(() => {
     const el = inputAreaRef.current; if (!el) return;
@@ -428,11 +554,70 @@ export default function ChatTab() {
   }
 
   function handleNewChat() {
+    // Save current msgs before switching
     msgHistoryRef.current[activeSession] = msgs;
     const newId = crypto.randomUUID();
     msgHistoryRef.current[newId] = [];
-    setSessions(prev => [{ id: newId, title: "New conversation", time: "now" }, ...prev.slice(0,9)]);
-    setActiveSession(newId); setMsgs([]); setSidebarOpen(false);
+    const fresh = buildSession(newId, "New conversation", []);
+    setSessions(prev => [fresh, ...prev]);
+    setActiveSession(newId);
+    setMsgs([]);
+    setInput("");
+    setSidebarOpen(false);
+  }
+
+  function handleSelectSession(id: string) {
+    // Save current before switching
+    msgHistoryRef.current[activeSession] = msgs;
+    setActiveSession(id);
+    setMsgs(msgHistoryRef.current[id] ?? []);
+    // Restore draft for this session
+    const draft = loadDraft(id);
+    setInput(draft);
+    setSidebarOpen(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  function handleDeleteSession(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    deleteSession(id);
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.id !== id);
+      if (id === activeSession && remaining.length > 0) {
+        handleSelectSession(remaining[0].id);
+      }
+      return remaining;
+    });
+  }
+
+  function handleSearch(q: string) {
+    setSearchQuery(q);
+    if (!q.trim()) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    const results = searchSessions(q);
+    setSearchResults(results);
+    setSearching(false);
+  }
+
+  // Group sessions by date for sidebar display
+  function groupSessionsByDate(list: Session[]): Array<{ group: string; items: Session[] }> {
+    const groups: Record<string, Session[]> = {};
+    for (const s of list) {
+      const g = getDateGroup(s.updatedAt);
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(s);
+    }
+    const ORDER = ["Today","Yesterday","Past 7 days","Past 30 days"];
+    return Object.entries(groups)
+      .sort(([a],[b]) => {
+        const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b);
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1;
+        if (bi >= 0) return 1;
+        return b.localeCompare(a);
+      })
+      .map(([group, items]) => ({ group, items }));
   }
 
   const Sidebar = (
@@ -441,21 +626,84 @@ export default function ChatTab() {
         <div style={{ fontSize:12, color:CT.t4, letterSpacing:".18em", textTransform:"uppercase", marginBottom:S.s3 }}>Streams</div>
         <button onClick={handleNewChat} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", padding:"9px 0", background:CT.send, border:"none", borderRadius:R.r2, color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>+ New chat</button>
       </div>
+
+      {/* Search bar */}
+      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${CT.border}`, flexShrink:0 }}>
+        <div style={{ position:"relative" }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:13, color:CT.t4, pointerEvents:"none" }}>🔍</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="Search conversations…"
+            style={{ width:"100%", padding:"7px 10px 7px 30px", background:"rgba(0,0,0,0.05)", border:`1px solid ${CT.border}`, borderRadius:R.r1, fontSize:13, fontFamily:"inherit", color:CT.t1, outline:"none", boxSizing:"border-box" }}
+          />
+        </div>
+      </div>
+
       <nav aria-label="Sidebar navigation" style={{ padding:S.s2, borderBottom:`1px solid ${CT.border}`, flexShrink:0 }}>
         {(["Sessions","Library","Images"] as const).map(id => (
-          <button key={id} onClick={() => { setActiveNav(id); if (id==="Library"||id==="Images") void loadLibrary(); }}
+          <button key={id} onClick={() => { setActiveNav(id); setSearchQuery(""); setSearchResults([]); if (id==="Library"||id==="Images") void loadLibrary(); }}
             style={{ display:"flex", alignItems:"center", width:"100%", padding:"8px 12px", background:activeNav===id?"rgba(0,0,0,0.06)":"transparent", border:"none", borderRadius:R.r1, color:activeNav===id?CT.t1:CT.t2, fontSize:14, fontFamily:"inherit", cursor:"pointer", textAlign:"left", minHeight:44 }}>{id}</button>
         ))}
       </nav>
       <div style={{ flex:1, overflowY:"auto" }}>
-        <div style={{ padding:"12px 16px 4px", fontSize:12, color:CT.t4, letterSpacing:".1em", textTransform:"uppercase" }}>Recents</div>
-        {activeNav==="Sessions" && sessions.map(s => (
-          <button key={s.id} onClick={() => { msgHistoryRef.current[activeSession]=msgs; setActiveSession(s.id); setMsgs(msgHistoryRef.current[s.id]??[]); setSidebarOpen(false); }}
-            style={{ display:"block", textAlign:"left", padding:"8px 16px", width:"100%", border:"none", background:s.id===activeSession?"rgba(0,0,0,0.06)":"transparent", color:s.id===activeSession?CT.t1:CT.t2, fontSize:14, fontFamily:"inherit", cursor:"pointer" }}>
-            <div style={{ fontSize:13, marginBottom:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.title}</div>
-            <div style={{ fontSize:12, color:CT.t4 }}>{s.time}</div>
-          </button>
-        ))}
+
+        {/* Search results */}
+        {searchQuery && activeNav==="Sessions" && (
+          <div>
+            <div style={{ padding:"8px 16px 4px", fontSize:12, color:CT.t4 }}>
+              {searching ? "Searching…" : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""}`}
+            </div>
+            {searchResults.length === 0 && !searching && (
+              <div style={{ padding:"12px 16px", fontSize:13, color:CT.t4 }}>No conversations found</div>
+            )}
+            {searchResults.map((r, ri) => (
+              <button key={`${r.session.id}-${r.message.id}-${ri}`}
+                onClick={() => {
+                  handleSelectSession(r.session.id);
+                  setTimeout(() => scrollToMessage(r.message.id), 150);
+                }}
+                style={{ display:"block", textAlign:"left", padding:"10px 16px", width:"100%", border:"none", borderBottom:`1px solid ${CT.border}`, background:"transparent", cursor:"pointer" }}>
+                <div style={{ fontSize:13, color:CT.t1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{r.session.title}</div>
+                <div style={{ fontSize:12, color:CT.t3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.4 }}>{r.context}</div>
+                <div style={{ fontSize:12, color:CT.t4, marginTop:2 }}>{formatSessionDate(r.session.updatedAt)} · click to go there</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Sessions grouped by date */}
+        {!searchQuery && activeNav==="Sessions" && (
+          sessions.length === 0
+            ? <div style={{ padding:"20px 16px", fontSize:13, color:CT.t4, textAlign:"center" }}>No conversations yet</div>
+            : groupSessionsByDate(sessions).map(({ group, items }) => (
+              <div key={group}>
+                <div style={{ padding:"10px 16px 4px", fontSize:12, color:CT.t4, letterSpacing:".1em", textTransform:"uppercase" }}>{group}</div>
+                {items.map(s => (
+                  <div key={s.id} style={{ position:"relative" }}>
+                    <button onClick={() => handleSelectSession(s.id)}
+                      style={{ display:"block", textAlign:"left", padding:"9px 40px 9px 16px", width:"100%", border:"none", background:s.id===activeSession?"rgba(0,0,0,0.06)":"transparent", cursor:"pointer" }}>
+                      <div style={{ fontSize:13, color:s.id===activeSession?CT.t1:CT.t2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{s.title}</div>
+                      {s.preview && <div style={{ fontSize:12, color:CT.t4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{s.preview}</div>}
+                      <div style={{ fontSize:12, color:CT.t4 }}>
+                        {formatSessionDate(s.updatedAt)}
+                        {s.msgCount > 0 && <span style={{ marginLeft:6 }}>· {s.msgCount} msg{s.msgCount !== 1 ? "s" : ""}</span>}
+                      </div>
+                    </button>
+                    {/* Delete button */}
+                    <button
+                      aria-label="Delete conversation"
+                      onClick={e => handleDeleteSession(e, s.id)}
+                      style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:CT.t4, cursor:"pointer", fontSize:14, padding:"4px", borderRadius:4, opacity:0.5, lineHeight:1 }}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))
+        )}
+
         {(activeNav==="Library"||activeNav==="Images") && (
           <div style={{ padding:S.s2 }}>
             {libraryLoading && <div style={{ padding:"12px 8px", fontSize:14, color:CT.t4 }}>Loading…</div>}
@@ -525,89 +773,93 @@ export default function ChatTab() {
           )}
 
           {msgs.length>0 && (
-            <div className="streams-chat-msgs2" style={{ maxWidth:820, margin:"0 auto", padding:"32px 32px 0", display:"flex", flexDirection:"column", gap:S.s5 }}>
+            <div className="streams-chat-msgs2" style={{ maxWidth:760, margin:"0 auto", padding:"40px 28px 0", display:"flex", flexDirection:"column", gap:28 }}>
               {msgs.map((msg:Msg) => (
-                <div key={msg.id} style={{ display:"flex", flexDirection:"column", alignItems:msg.role==="user"?"flex-end":"flex-start" }}>
+                <div key={msg.id} id={`msg-${msg.id}`} style={{ display:"flex", flexDirection:"column", alignItems:msg.role==="user"?"flex-end":"flex-start" }}>
 
+                  {/* AI label with avatar */}
                   {msg.role==="assistant" && (
-                    <div style={{ fontSize:12, letterSpacing:".14em", textTransform:"uppercase", color:CT.t4, marginBottom:S.s2 }}>STREAMS</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                      <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#d95b2a)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        <span style={{ fontSize:13, color:"#fff", lineHeight:1 }}>S</span>
+                      </div>
+                      <span style={{ fontSize:14, color:CT.t2 }}>Streams</span>
+                    </div>
                   )}
 
-                  {/* ── ActivityConversation — mounts immediately, hides on firstOutput ── */}
+                  {/* ActivityConversation */}
                   {msg.role==="assistant" && msg.phase && !msg.firstOutput && (
-                    <ActivityConversation
-                      phase={msg.phase}
-                      userText={msgs.filter(m=>m.role==="user").slice(-1)[0]?.text}
-                      mode={msg.mediaKind ? (msg.mediaKind as "image"|"video") : undefined}
-                      active={msg.streaming}
-                      firstOutputVisible={msg.firstOutput}
-                    />
+                    <div style={{ paddingLeft:36 }}>
+                      <ActivityConversation
+                        phase={msg.phase}
+                        userText={msgs.filter(m=>m.role==="user").slice(-1)[0]?.text}
+                        mode={msg.mediaKind ? (msg.mediaKind as "image"|"video") : undefined}
+                        active={msg.streaming}
+                        firstOutputVisible={msg.firstOutput}
+                      />
+                    </div>
                   )}
 
-                  {/* ── Tool call status pills — show as tools execute ── */}
+                  {/* Tool call pills */}
                   {msg.role==="assistant" && msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:msg.text ? S.s3 : 0 }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:msg.text ? 12 : 0, paddingLeft:36 }}>
                       {msg.toolCalls.map((tc, ti) => (
                         <div key={`${tc.name}-${ti}`} style={{
-                          display:"inline-flex", alignItems:"center", gap:6,
-                          padding:"4px 10px", borderRadius:R.pill,
-                          background: tc.status==="done" ? "rgba(0,120,0,0.06)" : tc.status==="error" ? "rgba(200,0,0,0.06)" : CT.statusBg,
-                          border:`1px solid ${tc.status==="done"?"rgba(0,120,0,0.15)":tc.status==="error"?"rgba(200,0,0,0.15)":"rgba(0,0,0,0.08)"}`,
-                          alignSelf:"flex-start", fontSize:12,
-                          color: tc.status==="done"?"rgba(0,100,0,0.8)":tc.status==="error"?"rgba(160,0,0,0.8)":CT.t3,
-                          maxWidth:"100%",
+                          display:"inline-flex", alignItems:"center", gap:7,
+                          padding:"5px 12px", borderRadius:R.pill,
+                          background: tc.status==="done" ? "rgba(16,185,129,0.08)" : tc.status==="error" ? "rgba(239,68,68,0.08)" : "rgba(0,0,0,0.04)",
+                          border: `1px solid ${tc.status==="done"?"rgba(16,185,129,0.22)":tc.status==="error"?"rgba(239,68,68,0.22)":"rgba(0,0,0,0.09)"}`,
+                          alignSelf:"flex-start", fontSize:13,
+                          color: tc.status==="done"?"#059669":tc.status==="error"?"#dc2626":CT.t3,
                         }}>
-                          {tc.status==="running" && (
-                            <span style={{ width:6, height:6, borderRadius:"50%", background:CT.send, flexShrink:0, animation:"streams-pulse2 1.2s ease infinite" }}/>
-                          )}
-                          {tc.status==="done"   && <span style={{ fontSize:12 }}>✓</span>}
-                          {tc.status==="error"  && <span style={{ fontSize:12 }}>✗</span>}
+                          {tc.status==="running" && <span style={{ width:7, height:7, borderRadius:"50%", background:CT.send, flexShrink:0, animation:"streams-pulse2 1.2s ease infinite" }}/>}
+                          {tc.status==="done"  && <span>✓</span>}
+                          {tc.status==="error" && <span>✗</span>}
                           <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tc.label}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* ── MediaGenerationStage — renders IN the message, exact spot where output appears ── */}
+                  {/* MediaGenerationStage */}
                   {msg.role==="assistant" && msg.mediaKind && msg.mediaStage && (
-                    <div style={{ width:"100%", maxWidth:460, marginTop: msg.phase && !msg.firstOutput ? S.s3 : 0 }}>
-                      <MediaGenerationStage
-                        kind={msg.mediaKind}
-                        state={msg.mediaStage}
-                        outputUrl={msg.mediaUrl}
-                        active={msg.streaming || msg.mediaStage === "complete"}
-                      />
+                    <div style={{ width:"100%", maxWidth:480, paddingLeft:36, marginTop: msg.phase && !msg.firstOutput ? 12 : 0 }}>
+                      <MediaGenerationStage kind={msg.mediaKind} state={msg.mediaStage} outputUrl={msg.mediaUrl} active={msg.streaming || msg.mediaStage==="complete"} />
                     </div>
                   )}
 
-                  {/* Text stream (chat/build) */}
-                  {msg.text && (
-                    <div style={{ maxWidth:msg.role==="user"?"72%":"100%", color:CT.t1, fontSize:16, lineHeight:1.75, overflowWrap:"break-word", textAlign:msg.role==="user"?"right":"left" }}>
-                      {msg.role === "user"
-                        ? msg.text
-                        : renderMarkdown(msg.text, !!(msg.streaming && msg.text))
-                      }
-                      {msg.role === "user" && msg.streaming && msg.text && (
+                  {/* User bubble */}
+                  {msg.text && msg.role==="user" && (
+                    <div style={{ maxWidth:"72%", background:"#f0f0f0", borderRadius:"18px 18px 4px 18px", padding:"13px 18px", color:CT.t1, fontSize:16, lineHeight:1.7, overflowWrap:"break-word" }}>
+                      {msg.text}
+                      {msg.streaming && msg.text && (
                         <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:1, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
                       )}
                     </div>
                   )}
 
-                  {/* Completed image (if mediaStage=complete but using legacy MediaPlayer for lightbox) */}
+                  {/* AI response */}
+                  {msg.text && msg.role==="assistant" && (
+                    <div style={{ width:"100%", paddingLeft:36, color:CT.t1, fontSize:16, lineHeight:1.8, overflowWrap:"break-word" }}>
+                      {renderMarkdown(msg.text, !!(msg.streaming && msg.text))}
+                    </div>
+                  )}
+
+                  {/* Generated image */}
                   {msg.role==="assistant" && msg.mediaUrl && msg.mediaKind==="image" && msg.mediaStage==="complete" && (
-                    <div
-                      role="button" aria-label="View full size" tabIndex={0}
+                    <div role="button" aria-label="View full size" tabIndex={0}
                       onClick={() => setLightboxUrl(msg.mediaUrl!)}
                       onKeyDown={(e:React.KeyboardEvent) => { if(e.key==="Enter"||e.key===" ") setLightboxUrl(msg.mediaUrl!); }}
-                      style={{ cursor:"zoom-in", borderRadius:R.r2, overflow:"hidden", display:"inline-block", maxWidth:400, width:"100%", boxShadow:"0 4px 20px rgba(0,0,0,0.10)", marginTop:-4 }}>
+                      style={{ cursor:"zoom-in", borderRadius:R.r3, overflow:"hidden", display:"inline-block", maxWidth:440, width:"100%", boxShadow:"0 4px 24px rgba(0,0,0,0.10)", marginLeft:36 }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={msg.mediaUrl} alt="Generated" style={{ width:"100%", height:"auto", display:"block" }}/>
-                      <div style={{ padding:"5px 10px", background:"rgba(0,0,0,0.04)", fontSize:12, color:CT.t4, display:"flex", gap:8 }}>
+                      <div style={{ padding:"7px 12px", background:"rgba(0,0,0,0.03)", fontSize:13, color:CT.t4, display:"flex", gap:10 }}>
                         <span>🔍 Enlarge</span>
                         <a href={msg.mediaUrl} download onClick={e=>e.stopPropagation()} style={{ color:CT.send, textDecoration:"none" }}>↓ Download</a>
                       </div>
                     </div>
                   )}
+
                 </div>
               ))}
               <div ref={endRef} style={{ height:1 }}/>
@@ -615,36 +867,37 @@ export default function ChatTab() {
           )}
         </div>
 
-        {/* Input */}
+        {/* Input bar */}
         <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:CT.bg, flexShrink:0, padding:"16px 24px", paddingBottom:"calc(20px + env(safe-area-inset-bottom))" }}>
-          <div style={{ maxWidth:820, margin:"0 auto" }}>
+          <div style={{ maxWidth:760, margin:"0 auto" }}>
             {attachMode && (
               <div style={{ display:"flex", gap:S.s2, marginBottom:S.s2 }}>
                 <input value={attachUrl} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setAttachUrl(e.target.value)} placeholder="Paste image or video URL…"
-                  style={{ flex:1, background:"#f4f4f5", border:"none", borderRadius:R.r2, padding:"8px 12px", color:CT.t1, fontSize:16, fontFamily:"inherit", outline:"none" }}
+                  style={{ flex:1, background:"#f4f4f5", border:"none", borderRadius:R.r2, padding:"9px 14px", color:CT.t1, fontSize:15, fontFamily:"inherit", outline:"none" }}
                   onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>)=>{ if(e.key==="Enter"&&attachUrl.trim()){setInput(p=>p+(p?" ":"")+attachUrl.trim());setAttachUrl("");setAttachMode(false);} if(e.key==="Escape") setAttachMode(false); }}/>
-                <button onClick={()=>{setInput(p=>p+(p?" ":"")+attachUrl.trim());setAttachUrl("");setAttachMode(false);}} style={{ padding:"8px 16px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>Attach</button>
+                <button onClick={()=>{setInput(p=>p+(p?" ":"")+attachUrl.trim());setAttachUrl("");setAttachMode(false);}} style={{ padding:"9px 18px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>Attach</button>
               </div>
             )}
-            <div className="streams-chat-chips2" style={{ display:"flex", gap:S.s2, marginBottom:S.s3, overflowX:"auto", scrollbarWidth:"none" as React.CSSProperties["scrollbarWidth"] }}>
+            <div className="streams-chat-chips2" style={{ display:"flex", gap:S.s2, marginBottom:14, overflowX:"auto", scrollbarWidth:"none" as React.CSSProperties["scrollbarWidth"] }}>
               {(["Chat","Image","Video","Build"] as Mode[]).map(m=>(
-                <button key={m} onClick={()=>setMode(m)} style={{ padding:"6px 14px", borderRadius:R.pill, border:`1px solid ${mode===m?CT.chipActive:CT.chipBorder}`, background:mode===m?CT.chipActive:"transparent", color:mode===m?"#fff":CT.t2, fontSize:13, fontFamily:"inherit", cursor:"pointer", flexShrink:0, minHeight:32, transition:`background ${DUR.fast} ${EASE}, border-color ${DUR.fast} ${EASE}, color ${DUR.fast} ${EASE}` }}>{m}</button>
+                <button key={m} onClick={()=>setMode(m)} style={{ padding:"6px 16px", borderRadius:R.pill, border:`1.5px solid ${mode===m?CT.chipActive:CT.chipBorder}`, background:mode===m?CT.chipActive:"transparent", color:mode===m?"#fff":CT.t2, fontSize:13, fontFamily:"inherit", cursor:"pointer", flexShrink:0, minHeight:34, transition:`all ${DUR.fast} ${EASE}` }}>{m}</button>
               ))}
             </div>
-            <div style={{ display:"flex", alignItems:"flex-end", gap:S.s2 }}>
-              <button aria-label="Attach URL" onClick={()=>setAttachMode(v=>!v)} style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:attachMode?"rgba(217,91,42,0.08)":"transparent", border:`1px solid ${attachMode?CT.send:CT.chipBorder}`, borderRadius:R.r2, color:attachMode?CT.send:CT.t3, fontSize:18, cursor:"pointer" }}>⊕</button>
-              <div style={{ flex:1, border:`2px solid ${inputFocused?CT.inputFocus:CT.inputBorder}`, borderRadius:24, padding:"12px 16px", background:CT.bg, transition:`border-color ${DUR.fast} ${EASE}` }}>
-                <textarea ref={textareaRef} value={input} maxLength={2000} aria-label="Message input" aria-multiline="true"
+            <div style={{ display:"flex", alignItems:"flex-end", gap:10 }}>
+              <button aria-label="Attach URL" onClick={()=>setAttachMode(v=>!v)} style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:attachMode?"rgba(217,91,42,0.08)":"rgba(0,0,0,0.04)", border:`1.5px solid ${attachMode?CT.send:"rgba(0,0,0,0.12)"}`, borderRadius:"50%", color:attachMode?CT.send:CT.t3, fontSize:18, cursor:"pointer", transition:`all ${DUR.fast} ${EASE}` }}>⊕</button>
+              <div style={{ flex:1, border:`1.5px solid ${inputFocused?"#7C3AED":"rgba(0,0,0,0.18)"}`, borderRadius:24, padding:"13px 18px", background:"#fafafa", transition:`border-color ${DUR.fast} ${EASE}`, boxShadow:inputFocused?"0 0 0 3px rgba(124,58,237,0.08)":"none" }}>
+                <textarea ref={textareaRef} value={input} maxLength={4000} aria-label="Message input" aria-multiline="true"
                   onFocus={()=>setInputFocused(true)} onBlur={()=>setInputFocused(false)}
-                  onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>{ setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,160)+"px"; }}
+                  onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>{ setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,180)+"px"; }}
                   onKeyDown={(e:React.KeyboardEvent<HTMLTextAreaElement>)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void handleSend();} }}
                   placeholder={`Message Streams — ${mode} mode`} rows={1}
-                  style={{ width:"100%", background:"transparent", border:"none", outline:"none", fontFamily:"inherit", fontSize:16, color:CT.t1, resize:"none", lineHeight:1.5, minHeight:24 }}/>
+                  style={{ width:"100%", background:"transparent", border:"none", outline:"none", fontFamily:"inherit", fontSize:16, color:CT.t1, resize:"none", lineHeight:1.6, minHeight:26 }}/>
               </div>
-              {streaming?(
-                <button onClick={handleStop} aria-label="Stop generation" style={{ width:44,height:44,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:`2px solid ${CT.chipBorder}`,borderRadius:R.pill,color:CT.t2,cursor:"pointer",fontSize:14 }}>■</button>
-              ):(
-                <button onClick={()=>void handleSend()} disabled={!input.trim()} aria-label="Send message" style={{ width:44,height:44,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:input.trim()?CT.send:"#e4e4e7",border:"none",borderRadius:R.pill,color:"#fff",cursor:input.trim()?"pointer":"not-allowed",fontSize:20,transition:`background ${DUR.fast} ${EASE}` }}>↑</button>
+              {streaming ? (
+                <button onClick={handleStop} aria-label="Stop generation" style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.06)", border:"1.5px solid rgba(0,0,0,0.14)", borderRadius:"50%", color:CT.t2, cursor:"pointer", fontSize:14 }}>■</button>
+              ) : (
+                <button onClick={()=>void handleSend()} disabled={!input.trim()} aria-label="Send message"
+                  style={{ width:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:input.trim()?CT.send:"rgba(0,0,0,0.10)", border:"none", borderRadius:"50%", color:input.trim()?"#fff":"rgba(0,0,0,0.30)", cursor:input.trim()?"pointer":"default", fontSize:20, transition:`background ${DUR.base} ${EASE}, color ${DUR.base} ${EASE}`, boxShadow:input.trim()?"0 2px 8px rgba(217,91,42,0.35)":"none" }}>↑</button>
               )}
             </div>
           </div>
@@ -653,6 +906,7 @@ export default function ChatTab() {
 
       <style>{`
         @keyframes streams-blink2 { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes streams-pulse2  { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .streams-chat-chips2::-webkit-scrollbar { display:none; }
         .streams-chat-sb2 { position:fixed;top:0;left:0;height:100dvh;width:260px;z-index:300;transform:translateX(-100%);transition:transform ${DUR.base} ${EASE};border-right:1px solid rgba(0,0,0,0.08); }
         .streams-chat-sb2.open { transform:translateX(0); }
