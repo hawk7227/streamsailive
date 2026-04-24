@@ -12,6 +12,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { C } from "@/components/streams/tokens";
 
 export default function StreamsLayout({
   children,
@@ -31,11 +32,11 @@ export default function StreamsLayout({
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: "#080C1E" }}
+        style={{ background: C.bg }}
       >
         <div
           className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }}
+          style={{ borderColor: C.acc, borderTopColor: "transparent" }}
         />
       </div>
     );
@@ -48,7 +49,7 @@ export default function StreamsLayout({
   return (
     <div
       className="flex flex-col min-h-screen w-full overflow-hidden"
-      style={{ background: "#080C1E", color: "#F0F2FF" }}
+      style={{ background: C.bg, color: C.t1 }}
     >
       {children}
     </div>

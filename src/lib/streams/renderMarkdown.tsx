@@ -57,15 +57,15 @@ function CSVPreview({ code, sep = "," }: { code: string; sep?: string }) {
   const data = React.useMemo(()=>{
     const body=rows.slice(1);
     if(sortCol===null)return body;
-    return [...body].sort((a,b)=>{const av=a[sortCol]??"",bv=b[sortCol]??"";const n=Number(av)-Number(bv);const cmp=isNaN(n)?av.localeCompare(bv):n;return sortAsc?cmp:-cmp;});
+    return [...body].sort((a: string[],b: string[])=>{const av=a[sortCol!]??"",bv=b[sortCol!]??"";const n=Number(av)-Number(bv);const cmp=isNaN(n)?av.localeCompare(bv):n;return sortAsc?cmp:-cmp;});
   },[rows,sortCol,sortAsc]);
-  const sort=(col:number)=>{if(sortCol===col)setSortAsc(v=>!v);else{setSortCol(col);setSortAsc(true);}};
+  const sort=(col:number)=>{if(sortCol===col)setSortAsc((v: boolean)=>!v);else{setSortCol(col);setSortAsc(true);}};
   return <div style={{overflowX:"auto",maxHeight:400,overflowY:"auto"}}>
     <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
       <thead style={{position:"sticky",top:0,background:"#f6f8fa",zIndex:1}}>
-        <tr>{header.map((h,i)=><th key={i} onClick={()=>sort(i)} style={{padding:"8px 12px",border:"1px solid rgba(0,0,0,0.10)",textAlign:"left",cursor:"pointer",userSelect:"none",fontWeight:500,whiteSpace:"nowrap"}}>{h}{sortCol===i?(sortAsc?" ↑":" ↓"):""}</th>)}</tr>
+        <tr>{header.map((h: string,i: number)=><th key={i} onClick={()=>sort(i)} style={{padding:"8px 12px",border:"1px solid rgba(0,0,0,0.10)",textAlign:"left",cursor:"pointer",userSelect:"none",fontWeight:500,whiteSpace:"nowrap"}}>{h}{sortCol===i?(sortAsc?" ↑":" ↓"):""}</th>)}</tr>
       </thead>
-      <tbody>{data.map((row,ri)=><tr key={ri} style={{background:ri%2?"rgba(0,0,0,0.015)":"#fff"}}>{row.map((cell,ci)=><td key={ci} style={{padding:"6px 12px",border:"1px solid rgba(0,0,0,0.07)",fontSize:13}}>{cell}</td>)}</tr>)}</tbody>
+      <tbody>{data.map((row: string[],ri: number)=><tr key={ri} style={{background:ri%2?"rgba(0,0,0,0.015)":"#fff"}}>{row.map((cell: string,ci: number)=><td key={ci} style={{padding:"6px 12px",border:"1px solid rgba(0,0,0,0.07)",fontSize:13}}>{cell}</td>)}</tr>)}</tbody>
     </table>
     <div style={{padding:"5px 12px",fontSize:12,color:"rgba(0,0,0,0.38)"}}>{data.length} rows · {header.length} cols · click header to sort</div>
   </div>;
@@ -82,7 +82,7 @@ function JSONNode({ data, depth=0, k }: { data: unknown; depth?: number; k?: str
   if(!isObj&&!isArr)return<span style={{color:vc(data),fontFamily:"monospace",fontSize:13}}>{JSON.stringify(data)}</span>;
   return<span>
     {k!==undefined&&<span style={{color:"#6f42c1",fontFamily:"monospace",fontSize:13}}>"{k}": </span>}
-    <button onClick={()=>setOpen(v=>!v)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"monospace",fontSize:13,padding:0,color:"rgba(0,0,0,0.55)"}}>
+    <button onClick={()=>setOpen((v: boolean)=>!v)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"monospace",fontSize:13,padding:0,color:"rgba(0,0,0,0.55)"}}>
       {open?"▾":"▸"} {br[0]}{!open&&<span style={{color:"rgba(0,0,0,0.38)"}}>{entries.length} {isArr?"items":"keys"}{br[1]}</span>}
     </button>
     {open&&<div style={{paddingLeft:18,borderLeft:"1px solid rgba(0,0,0,0.08)",marginLeft:4}}>
@@ -317,7 +317,7 @@ function ArtifactBlock({ lang, code, idx }: { lang: string; code: string; idx: n
           {/* Expand / collapse */}
           <button
             aria-label={expanded ? "Collapse preview" : "Expand preview"}
-            onClick={() => setExpanded(v => !v)}
+            onClick={() => setExpanded((v: boolean) => !v)}
             title={expanded ? "Collapse" : "Expand"}
             style={{
               width: 26, height: 26,
@@ -603,7 +603,7 @@ function renderBlock(block: Block, idx: number): React.ReactNode {
         return <div key={idx} style={{margin:"10px 0"}}><AudioPlayer src={code} /></div>;
 
       if (FILE_LANGS.has(lang))
-        return <FileArtifact key={idx} filename={`document.${lang}`} code={code} lang={lang} />;
+        return <React.Fragment key={idx}><FileArtifact filename={`document.${lang}`} code={code} lang={lang} /></React.Fragment>;
 
       if (lang === "csv" || lang === "tsv")
         return <div key={idx} style={{border:"1px solid rgba(0,0,0,0.10)",borderRadius:8,overflow:"hidden",margin:"10px 0"}}>
@@ -624,9 +624,9 @@ function renderBlock(block: Block, idx: number): React.ReactNode {
         </div>;
 
       if (PREVIEWABLE.has(lang))
-        return <ArtifactBlock key={idx} lang={lang} code={code} idx={idx} />;
+        return <React.Fragment key={idx}><ArtifactBlock lang={lang} code={code} idx={idx} /></React.Fragment>;
 
-      return <PlainCodeBlock key={idx} lang={block.lang} code={code} />;
+      return <React.Fragment key={idx}><PlainCodeBlock lang={block.lang} code={code} /></React.Fragment>;
     }
 
     case "bq":

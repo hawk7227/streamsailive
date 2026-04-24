@@ -27,6 +27,8 @@ import { getLatestDeployment, pollDeployment } from "@/lib/connector";
 import { createAuditRecord, createApprovalGate, proveSubject } from "@/lib/audit";
 import { logConnectorAction } from "@/lib/connector";
 
+declare const process: { env: Record<string, string | undefined> };
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface AuditFinding {

@@ -15,6 +15,9 @@ import {
   type Provider,
 } from "@/lib/streams/connectors/index";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const process: { env: Record<string, string | undefined> };
+
 export const maxDuration = 30;
 
 // Wrap any promise with an explicit timeout so we fail fast, never hang
@@ -47,7 +50,8 @@ async function resolveUser(): Promise<{
   let user: { id: string } | null = null;
   try {
     const supabase = await createClient();
-    const result = await withTimeout(
+    type AuthResult = Awaited<ReturnType<typeof supabase.auth.getUser>>;
+    const result = await withTimeout<AuthResult>(
       supabase.auth.getUser(),
       8000,
       "auth.getUser"
@@ -65,7 +69,7 @@ async function resolveUser(): Promise<{
   // ── Step 3a: owned workspace (fastest — single index scan) ────────────────
   try {
     const res1 = await withTimeout(
-      admin.from("workspaces").select("id").eq("owner_id", user.id).maybeSingle() as unknown as Promise<{data:{id:string}|null}>,
+      admin.from("workspaces").select("id").eq("owner_id", user!.id).maybeSingle() as unknown as Promise<{data:{id:string}|null}>,
       8000,
       "workspace owner lookup"
     );
@@ -76,7 +80,7 @@ async function resolveUser(): Promise<{
   // ── Step 3b: workspace membership (second fastest) ────────────────────────
   try {
     const res2 = await withTimeout(
-      admin.from("workspace_members").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle() as unknown as Promise<{data:{workspace_id:string}|null}>,
+      admin.from("workspace_members").select("workspace_id").eq("user_id", user!.id).limit(1).maybeSingle() as unknown as Promise<{data:{workspace_id:string}|null}>,
       8000,
       "workspace member lookup"
     );
@@ -87,7 +91,7 @@ async function resolveUser(): Promise<{
   // ── Step 3c: profile current_workspace_id (last resort) ──────────────────
   try {
     const res3 = await withTimeout(
-      admin.from("profiles").select("current_workspace_id").eq("id", user.id).maybeSingle() as unknown as Promise<{data:{current_workspace_id:string}|null}>,
+      admin.from("profiles").select("current_workspace_id").eq("id", user!.id).maybeSingle() as unknown as Promise<{data:{current_workspace_id:string}|null}>,
       8000,
       "profile workspace lookup"
     );

@@ -1155,7 +1155,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
 </button>
  </div>}
  {stitchError && (
-   <div style={{margin:"4px 16px 0",fontSize:13,color:C.red,padding:"6px 10px",
+   <div style={{margin:"4px 16px 0",fontSize:13,color:C.red,padding:"8px 10px",
      borderRadius:R.r1,background:"rgba(239,68,68,0.08)",border:`1px solid rgba(239,68,68,0.2)`}}>
      {stitchError}
      <button onClick={()=>setStitchError(null)}

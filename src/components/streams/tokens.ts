@@ -35,6 +35,28 @@ export const C = {
   green:   "#10b981",
   amber:   "#f59e0b",
   blue:    "#3b82f6",
+  orange:  "#f97316",
+  teal:    "#34d399",
+  sky:     "#60a5fa",
+  gray:    "#6b7280",
+  dark:    "#374151",
+} as const;
+
+/** Light-mode chat theme — used by ChatTab (white background) */
+export const CT = {
+  bg:          "#ffffff",
+  sbBg:        "#f9f9f9",
+  border:      "rgba(0,0,0,0.08)",
+  t1:          "#18181b",
+  t2:          "#52525b",
+  t3:          "#71717a",
+  t4:          "#a1a1aa",
+  chipBorder:  "#d4d4d8",
+  chipActive:  "#18181b",
+  send:        "#d95b2a",
+  inputBorder: "#d4d4d8",
+  inputFocus:  "#a1a1aa",
+  statusBg:    "rgba(0,0,0,0.04)",
 } as const;
 
 export const S = {

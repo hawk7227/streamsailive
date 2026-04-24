@@ -31,22 +31,7 @@ import {
 import { getProviderKey } from "@/lib/streams/provider-keys";
 import type { ActivityPhase } from "@/lib/assistant-ui/activityConversations";
 import type { MediaGenerationState } from "@/components/assistant/MediaGenerationStage";
-
-const CT = {
-  bg:          "#ffffff",
-  sbBg:        "#f9f9f9",
-  border:      "rgba(0,0,0,0.08)",
-  t1:          "#18181b",
-  t2:          "#52525b",
-  t3:          "#71717a",
-  t4:          "#a1a1aa",
-  chipBorder:  "#d4d4d8",
-  chipActive:  "#18181b",
-  send:        "#d95b2a",
-  inputBorder: "#d4d4d8",
-  inputFocus:  "#a1a1aa",
-  statusBg:    "rgba(0,0,0,0.04)",
-} as const;
+import { C, CT } from "../tokens";
 
 type Mode    = "Chat" | "Image" | "Video" | "Build";
 type MsgRole = "user" | "assistant";
@@ -122,7 +107,7 @@ export default function ChatTab() {
     if (stored.length > 0) {
       // Populate msgHistoryRef from stored sessions
       stored.forEach(s => {
-        msgHistoryRef.current[s.id] = s.messages.map(m => ({
+        msgHistoryRef.current[s.id] = s.messages.map((m: StoredMessage) => ({
           id:         m.id,
           role:       m.role,
           text:       m.text,
@@ -149,7 +134,7 @@ export default function ChatTab() {
     // Cross-tab sync via BroadcastChannel
     const unsub = listenSync(msg => {
       if (msg.type === "session_updated") {
-        setSessions(prev => {
+        setSessions((prev: Session[]) => {
           const idx = prev.findIndex(s => s.id === msg.session.id);
           if (idx >= 0) {
             const updated = [...prev];
@@ -158,14 +143,14 @@ export default function ChatTab() {
           }
           return [msg.session, ...prev];
         });
-        msgHistoryRef.current[msg.session.id] = msg.session.messages.map(m => ({
+        msgHistoryRef.current[msg.session.id] = msg.session.messages.map((m: StoredMessage) => ({
           id: m.id, role: m.role, text: m.text,
           toolCalls: m.toolCalls as Msg["toolCalls"], mediaUrl: m.mediaUrl,
           mediaKind: m.mediaKind as "image"|"video"|undefined,
         }));
       }
       if (msg.type === "session_deleted") {
-        setSessions(prev => prev.filter(s => s.id !== msg.id));
+        setSessions((prev: Session[]) => prev.filter(s => s.id !== msg.id));
       }
     });
     return unsub;
@@ -175,10 +160,10 @@ export default function ChatTab() {
   // ── Save current session to storage whenever msgs change ───────────────
   useEffect(() => {
     if (!activeSession || msgs.length === 0) return;
-    const currentSession = sessions.find(s => s.id === activeSession);
+    const currentSession = sessions.find((s: Session) => s.id === activeSession);
     const storedMsgs: StoredMessage[] = msgs
-      .filter(m => !m.streaming && m.text.trim())
-      .map(m => ({
+      .filter((m: Msg) => !m.streaming && m.text.trim())
+      .map((m: Msg) => ({
         id:        m.id,
         role:      m.role,
         text:      m.text,
@@ -195,7 +180,7 @@ export default function ChatTab() {
       currentSession?.createdAt,
     );
     saveSession(updated);
-    setSessions(prev => {
+    setSessions((prev: Session[]) => {
       const idx = prev.findIndex(s => s.id === activeSession);
       if (idx < 0) return [updated, ...prev];
       const next = [...prev];
@@ -216,7 +201,7 @@ export default function ChatTab() {
     titleGenRef.current.add(sessionId);
     const apiKey = getProviderKey("openai") ?? "";
     void generateTitle(firstUserMsg, apiKey).then(title => {
-      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title } : s));
+      setSessions((prev: Session[]) => prev.map(s => s.id === sessionId ? { ...s, title } : s));
       // Update in storage too
       const stored = loadSessions();
       const idx = stored.findIndex(s => s.id === sessionId);
@@ -297,7 +282,7 @@ export default function ChatTab() {
         // Drain at most CHARS_PER_FRAME per animation frame — paced streaming
         const tok = buf.slice(0, CHARS_PER_FRAME);
         tokenBufRef.current = buf.slice(CHARS_PER_FRAME);
-        setMsgs(p => p.map(m => m.id === id
+        setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === id
           ? { ...m, text: m.text + tok, phase: undefined, firstOutput: true }
           : m));
         // Auto-scroll only if user hasn't scrolled up
@@ -316,7 +301,7 @@ export default function ChatTab() {
     const remaining = tokenBufRef.current;
     tokenBufRef.current = "";
     if (remaining) {
-      setMsgs(p => p.map(m => m.id === id
+      setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === id
         ? { ...m, text: m.text + remaining, phase: undefined, firstOutput: true }
         : m));
     }
@@ -324,7 +309,7 @@ export default function ChatTab() {
 
   // ── Phase helper ──────────────────────────────────────────────────────────
   function advancePhase(id: string, phase: ActivityPhase, mediaStage?: MediaGenerationState) {
-    setMsgs(p => p.map(m => m.id === id
+    setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === id
       ? { ...m, phase, ...(mediaStage ? { mediaStage } : {}) }
       : m));
   }
@@ -332,12 +317,12 @@ export default function ChatTab() {
   // ── Finish helpers ────────────────────────────────────────────────────────
   function finishMsg(id: string) {
     stopTokenFlush(id);
-    setMsgs(p => {
-      const updated = p.map(m => m.id === id
+    setMsgs((p: Msg[]) => {
+      const updated = p.map((m: Msg) => m.id === id
         ? { ...m, streaming: false, phase: undefined, firstOutput: true }
         : m);
       // Auto-title after first exchange completes
-      const userMsgs = updated.filter(m => m.role === "user");
+      const userMsgs = updated.filter((m: Msg) => m.role === "user");
       if (userMsgs.length === 1 && userMsgs[0]?.text) {
         maybeGenerateTitle(activeSession, userMsgs[0].text);
       }
@@ -349,7 +334,7 @@ export default function ChatTab() {
 
   function errorMsg(id: string, text: string) {
     stopTokenFlush(id);
-    setMsgs(p => p.map(m => m.id === id
+    setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === id
       ? { ...m, text, streaming: false, phase: undefined, firstOutput: true, mediaStage: "error" }
       : m));
     setStreaming(false);
@@ -357,7 +342,7 @@ export default function ChatTab() {
   }
 
   function completeMedia(id: string, mediaUrl: string, kind: "image"|"video") {
-    setMsgs(p => p.map(m => m.id === id
+    setMsgs((p: Msg[]) => p.map((m: Msg) => m.id === id
       ? { ...m, mediaUrl, mediaKind: kind, mediaStage: "complete", streaming: false, phase: undefined, firstOutput: true }
       : m));
     setStreaming(false);
@@ -368,7 +353,7 @@ export default function ChatTab() {
   function handleStop() {
     abortRef.current?.abort();
     stopTokenFlush(streamingIdRef.current ?? "");
-    setMsgs(p => p.map(m => m.streaming
+    setMsgs((p: Msg[]) => p.map((m: Msg) => m.streaming
       ? { ...m, streaming: false, phase: undefined, firstOutput: true }
       : m));
     setStreaming(false);
@@ -381,11 +366,11 @@ export default function ChatTab() {
     if (!text || streaming) return;
 
     resetScrollLock(); // unlock auto-scroll for new message
-    const isFirstMsg = msgs.filter(m => m.role === "user").length === 0;
+    const isFirstMsg = msgs.filter((m: Msg) => m.role === "user").length === 0;
     const userId = Date.now().toString();
 
-    setMsgs(p => [...p, { id: userId, role: "user", text }]);
-    setSessions(prev => prev.map(s =>
+    setMsgs((p: Msg[]) => [...p, { id: userId, role: "user", text }]);
+    setSessions((prev: Session[]) => prev.map(s =>
       s.id === activeSession && s.title === "New conversation"
         ? { ...s, title: text.slice(0, 36) + (text.length > 36 ? "…" : "") } : s));
     setInput(""); setStreaming(true);
@@ -403,7 +388,7 @@ export default function ChatTab() {
     if (mode === "Image") {
       // Immediately mount: ActivityConversation (chat_thinking→image_submitting)
       // AND MediaGenerationStage (starting) in the same message node
-      setMsgs(p => [...p, {
+      setMsgs((p: Msg[]) => [...p, {
         id: aiId, role: "assistant", text: "",
         phase: "image_submitting",
         mediaStage: "starting",
@@ -463,7 +448,7 @@ export default function ChatTab() {
               if (!url.startsWith("data:"))
                 void saveToLibrary({ type: "image", outputUrl: url, prompt: text, provider: "openai", model: "gpt-image-1" });
             }, 400);
-          } else { errorMsg(aiId, "OpenAI image completed but no URL returned."); }
+          } else { errorMsg(aiId, "Image generation completed but no URL returned."); }
         } catch (err) {
           if ((err as Error).name === "AbortError") { finishMsg(aiId); return; }
           errorMsg(aiId, err instanceof Error ? err.message : "Image generation failed");
@@ -471,13 +456,13 @@ export default function ChatTab() {
         return;
       }
 
-      errorMsg(aiId, "No image key — go to Settings → API Keys and add a fal or OpenAI key.");
+      errorMsg(aiId, "No image key — go to Settings → API Keys to add one.");
       return;
     }
 
     // ── VIDEO ─────────────────────────────────────────────────────────────────
     if (mode === "Video") {
-      setMsgs(p => [...p, {
+      setMsgs((p: Msg[]) => [...p, {
         id: aiId, role: "assistant", text: "",
         phase: "video_submitting",
         mediaStage: "starting",
@@ -519,13 +504,13 @@ export default function ChatTab() {
     // ── CHAT / BUILD — OpenAI direct stream with RAF buffer ──────────────────
     const isBuild = mode === "Build";
     // Immediately show ActivityConversation — no MediaGenerationStage for text
-    setMsgs(p => [...p, {
+    setMsgs((p: Msg[]) => [...p, {
       id: aiId, role: "assistant", text: "",
       phase: isBuild ? "build_starting" : "chat_thinking",
       streaming: true,
     }]);
 
-    const history = msgs.slice(-12).map(m => ({ role: m.role as "user"|"assistant", content: m.text }));
+    const history = msgs.slice(-12).map((m: Msg) => ({ role: m.role as "user"|"assistant", content: m.text }));
     let firstDelta = true;
 
     // Tool label map — human-readable names for each tool
@@ -550,7 +535,7 @@ export default function ChatTab() {
       const label = TOOL_LABELS[name] ?? name.replace(/_/g, " ");
       // Advance to tool_running phase so ActivityConversation shows correct messages
       if (status === "running") advancePhase(aiId, "tool_running");
-      setMsgs(p => p.map(m => {
+      setMsgs((p: Msg[]) => p.map((m: Msg) => {
         if (m.id !== aiId) return m;
         const existing = m.toolCalls ?? [];
         const idx = existing.findIndex(t => t.name === name && t.status === "running");
@@ -599,7 +584,7 @@ export default function ChatTab() {
     const newId = crypto.randomUUID();
     msgHistoryRef.current[newId] = [];
     const fresh = buildSession(newId, "New conversation", []);
-    setSessions(prev => [fresh, ...prev]);
+    setSessions((prev: Session[]) => [fresh, ...prev]);
     setActiveSession(newId);
     setMsgs([]);
     setInput("");
@@ -622,7 +607,7 @@ export default function ChatTab() {
   function handleDeleteSession(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     deleteSession(id);
-    setSessions(prev => {
+    setSessions((prev: Session[]) => {
       const remaining = prev.filter(s => s.id !== id);
       if (id === activeSession && remaining.length > 0) {
         handleSelectSession(remaining[0].id);
@@ -664,7 +649,7 @@ export default function ChatTab() {
     <div style={{ height:"100%", display:"flex", flexDirection:"column", background:CT.sbBg, overflow:"hidden" }}>
       <div style={{ padding:"16px 16px 12px", borderBottom:`1px solid ${CT.border}`, flexShrink:0 }}>
         <div style={{ fontSize:12, color:CT.t4, letterSpacing:".18em", textTransform:"uppercase", marginBottom:S.s3 }}>Streams</div>
-        <button onClick={handleNewChat} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", padding:"9px 0", background:CT.send, border:"none", borderRadius:R.r2, color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>+ New chat</button>
+        <button onClick={handleNewChat} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", padding:"8px 0", background:CT.send, border:"none", borderRadius:R.r2, color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>+ New chat</button>
       </div>
 
       {/* Search bar */}
@@ -674,9 +659,9 @@ export default function ChatTab() {
           <input
             type="text"
             value={searchQuery}
-            onChange={e => handleSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearch(e.target.value)}
             placeholder="Search conversations…"
-            style={{ width:"100%", padding:"7px 10px 7px 30px", background:"rgba(0,0,0,0.05)", border:`1px solid ${CT.border}`, borderRadius:R.r1, fontSize:13, fontFamily:"inherit", color:CT.t1, outline:"none", boxSizing:"border-box" }}
+            style={{ width:"100%", padding:"8px 10px 7px 30px", background:"rgba(0,0,0,0.05)", border:`1px solid ${CT.border}`, borderRadius:R.r1, fontSize:13, fontFamily:"inherit", color:CT.t1, outline:"none", boxSizing:"border-box" }}
           />
         </div>
       </div>
@@ -698,13 +683,13 @@ export default function ChatTab() {
             {searchResults.length === 0 && !searching && (
               <div style={{ padding:"12px 16px", fontSize:13, color:CT.t4 }}>No conversations found</div>
             )}
-            {searchResults.map((r, ri) => (
+            {searchResults.map((r: SearchResult, ri: number) => (
               <button key={`${r.session.id}-${r.message.id}-${ri}`}
                 onClick={() => {
                   handleSelectSession(r.session.id);
                   setTimeout(() => scrollToMessage(r.message.id), 150);
                 }}
-                style={{ display:"block", textAlign:"left", padding:"10px 16px", width:"100%", border:"none", borderBottom:`1px solid ${CT.border}`, background:"transparent", cursor:"pointer" }}>
+                style={{ display:"block", textAlign:"left", padding:"8px 16px", width:"100%", border:"none", borderBottom:`1px solid ${CT.border}`, background:"transparent", cursor:"pointer" }}>
                 <div style={{ fontSize:13, color:CT.t1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{r.session.title}</div>
                 <div style={{ fontSize:12, color:CT.t3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.4 }}>{r.context}</div>
                 <div style={{ fontSize:12, color:CT.t4, marginTop:2 }}>{formatSessionDate(r.session.updatedAt)} · click to go there</div>
@@ -719,11 +704,11 @@ export default function ChatTab() {
             ? <div style={{ padding:"20px 16px", fontSize:13, color:CT.t4, textAlign:"center" }}>No conversations yet</div>
             : groupSessionsByDate(sessions).map(({ group, items }) => (
               <div key={group}>
-                <div style={{ padding:"10px 16px 4px", fontSize:12, color:CT.t4, letterSpacing:".1em", textTransform:"uppercase" }}>{group}</div>
+                <div style={{ padding:"8px 16px 4px", fontSize:12, color:CT.t4, letterSpacing:".1em", textTransform:"uppercase" }}>{group}</div>
                 {items.map(s => (
                   <div key={s.id} style={{ position:"relative" }}>
                     <button onClick={() => handleSelectSession(s.id)}
-                      style={{ display:"block", textAlign:"left", padding:"9px 40px 9px 16px", width:"100%", border:"none", background:s.id===activeSession?"rgba(0,0,0,0.06)":"transparent", cursor:"pointer" }}>
+                      style={{ display:"block", textAlign:"left", padding:"8px 40px 9px 16px", width:"100%", border:"none", background:s.id===activeSession?"rgba(0,0,0,0.06)":"transparent", cursor:"pointer" }}>
                       <div style={{ fontSize:13, color:s.id===activeSession?CT.t1:CT.t2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{s.title}</div>
                       {s.preview && <div style={{ fontSize:12, color:CT.t4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>{s.preview}</div>}
                       <div style={{ fontSize:12, color:CT.t4 }}>
@@ -734,7 +719,7 @@ export default function ChatTab() {
                     {/* Delete button */}
                     <button
                       aria-label="Delete conversation"
-                      onClick={e => handleDeleteSession(e, s.id)}
+                      onClick={(e: React.MouseEvent) => handleDeleteSession(e, s.id)}
                       style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:CT.t4, cursor:"pointer", fontSize:14, padding:"4px", borderRadius:4, opacity:0.5, lineHeight:1 }}>
                       ×
                     </button>
@@ -750,7 +735,7 @@ export default function ChatTab() {
             {!libraryLoading && library.length===0 && (
               <div style={{ padding:"12px 8px", fontSize:13, color:CT.t4 }}>{activeNav==="Images"?"No images yet":"No generations yet"}</div>
             )}
-            {!libraryLoading && library.filter(i => activeNav==="Images"?i.generation_type==="image":true).map((item:LibraryItem) => {
+            {!libraryLoading && library.filter((i: LibraryItem) => activeNav==="Images"?i.generation_type==="image":true).map((item:LibraryItem) => {
               const icons: Record<string,string> = { video_t2v:"🎬",video_i2v:"🎬",image:"🖼",voice:"🎙",music:"🎵" };
               return (
                 <div key={item.id} role="button" tabIndex={0}
@@ -786,9 +771,9 @@ export default function ChatTab() {
       {/* Lightbox */}
       {lightboxUrl && (
         <div role="dialog" aria-label="Image lightbox" aria-modal="true" onClick={() => setLightboxUrl(null)}
-          style={{ position:"fixed", inset:0, zIndex:500, background:"rgba(0,0,0,0.9)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out", padding:20 }}>
+          style={{ position:"fixed", inset:0, zIndex:400, background:"rgba(0,0,0,0.9)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out", padding:20 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightboxUrl} alt="Full size" onClick={e=>e.stopPropagation()} style={{ maxWidth:"100%", maxHeight:"90vh", borderRadius:R.r2, boxShadow:"0 24px 80px rgba(0,0,0,0.6)", cursor:"default" }}/>
+          <img src={lightboxUrl} alt="Full size" onClick={(e: React.MouseEvent)=>e.stopPropagation()} style={{ maxWidth:"100%", maxHeight:"90vh", borderRadius:R.r2, boxShadow:"0 24px 80px rgba(0,0,0,0.6)", cursor:"default" }}/>
           <button aria-label="Close lightbox" onClick={() => setLightboxUrl(null)}
             style={{ position:"absolute", top:20, right:20, width:40, height:40, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.15)", border:"none", borderRadius:R.pill, color:"#fff", fontSize:20, cursor:"pointer" }}>×</button>
         </div>
@@ -797,7 +782,7 @@ export default function ChatTab() {
       <div ref={inputContainerRef} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:CT.bg }}>
 
         <div className="streams-chat-mhdr2" style={{ padding:"12px 16px", borderBottom:`1px solid ${CT.border}`, alignItems:"center", gap:S.s3 }}>
-          <button aria-label="Open sidebar" onClick={() => setSidebarOpen(v=>!v)} style={{ background:"transparent", border:`1px solid ${CT.border}`, borderRadius:R.r1, color:CT.t2, cursor:"pointer", fontFamily:"inherit", minWidth:44, minHeight:44, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>☰</button>
+          <button aria-label="Open sidebar" onClick={() => setSidebarOpen((v: boolean)=>!v)} style={{ background:"transparent", border:`1px solid ${CT.border}`, borderRadius:R.r1, color:CT.t2, cursor:"pointer", fontFamily:"inherit", minWidth:44, minHeight:44, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>☰</button>
           <span style={{ fontSize:15, color:CT.t1 }}>Streams</span>
         </div>
 
@@ -833,7 +818,7 @@ export default function ChatTab() {
                     <div style={{ paddingLeft:36 }}>
                       <ActivityConversation
                         phase={msg.phase}
-                        userText={msgs.filter(m=>m.role==="user").slice(-1)[0]?.text}
+                        userText={msgs.filter((m: Msg)=>m.role==="user").slice(-1)[0]?.text}
                         mode={msg.mediaKind ? (msg.mediaKind as "image"|"video") : undefined}
                         active={msg.streaming}
                         firstOutputVisible={msg.firstOutput}
@@ -847,11 +832,11 @@ export default function ChatTab() {
                       {msg.toolCalls.map((tc, ti) => (
                         <div key={`${tc.name}-${ti}`} style={{
                           display:"inline-flex", alignItems:"center", gap:7,
-                          padding:"5px 12px", borderRadius:R.pill,
+                          padding:"4px 12px", borderRadius:R.pill,
                           background: tc.status==="done" ? "rgba(16,185,129,0.08)" : tc.status==="error" ? "rgba(239,68,68,0.08)" : "rgba(0,0,0,0.04)",
                           border: `1px solid ${tc.status==="done"?"rgba(16,185,129,0.22)":tc.status==="error"?"rgba(239,68,68,0.22)":"rgba(0,0,0,0.09)"}`,
                           alignSelf:"flex-start", fontSize:13,
-                          color: tc.status==="done"?"#059669":tc.status==="error"?"#dc2626":CT.t3,
+                          color: tc.status==="done"?C.green:tc.status==="error"?C.red:CT.t3,
                         }}>
                           {tc.status==="running" && <span style={{ width:7, height:7, borderRadius:"50%", background:CT.send, flexShrink:0, animation:"streams-pulse2 1.2s ease infinite" }}/>}
                           {tc.status==="done"  && <span>✓</span>}
@@ -871,10 +856,10 @@ export default function ChatTab() {
 
                   {/* User bubble */}
                   {msg.text && msg.role==="user" && (
-                    <div style={{ maxWidth:"72%", background:"#f0f0f0", borderRadius:"18px 18px 4px 18px", padding:"13px 18px", color:CT.t1, fontSize:16, lineHeight:1.7, overflowWrap:"break-word" }}>
+                    <div style={{ maxWidth:"72%", background:CT.sbBg, borderRadius:"18px 18px 4px 18px", padding:"12px 18px", color:CT.t1, fontSize:16, lineHeight:1.7, overflowWrap:"break-word" }}>
                       {msg.text}
                       {msg.streaming && msg.text && (
-                        <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:1, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
+                        <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:0, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
                       )}
                     </div>
                   )}
@@ -894,9 +879,9 @@ export default function ChatTab() {
                       style={{ cursor:"zoom-in", borderRadius:R.r3, overflow:"hidden", display:"inline-block", maxWidth:440, width:"100%", boxShadow:"0 4px 24px rgba(0,0,0,0.10)", marginLeft:36 }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={msg.mediaUrl} alt="Generated" style={{ width:"100%", height:"auto", display:"block" }}/>
-                      <div style={{ padding:"7px 12px", background:"rgba(0,0,0,0.03)", fontSize:13, color:CT.t4, display:"flex", gap:10 }}>
+                      <div style={{ padding:"8px 12px", background:"rgba(0,0,0,0.03)", fontSize:13, color:CT.t4, display:"flex", gap:10 }}>
                         <span>🔍 Enlarge</span>
-                        <a href={msg.mediaUrl} download onClick={e=>e.stopPropagation()} style={{ color:CT.send, textDecoration:"none" }}>↓ Download</a>
+                        <a href={msg.mediaUrl} download onClick={(e: React.MouseEvent)=>e.stopPropagation()} style={{ color:CT.send, textDecoration:"none" }}>↓ Download</a>
                       </div>
                     </div>
                   )}
@@ -909,22 +894,22 @@ export default function ChatTab() {
         </div>
 
         {/* ── Input bar ── */}
-        <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:"#fff", flexShrink:0, padding:"14px 20px", paddingBottom:"calc(16px + env(safe-area-inset-bottom))" }}>
+        <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:CT.bg, flexShrink:0, padding:"16px 20px", paddingBottom:"calc(16px + env(safe-area-inset-bottom))" }}>
           <div style={{ maxWidth:760, margin:"0 auto", display:"flex", flexDirection:"column", gap:10 }}>
 
             {/* Mode badges — bright colored, each mode has its own identity */}
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {([
-                { m:"Chat",  color:"#2563eb", bg:"rgba(37,99,235,0.10)",  active:"#2563eb" },
+                { m:"Chat",  color:C.blue, bg:"rgba(37,99,235,0.10)",  active:C.blue },
                 { m:"Image", color:"#7c3aed", bg:"rgba(124,58,237,0.10)", active:"#7c3aed" },
-                { m:"Video", color:"#dc2626", bg:"rgba(220,38,38,0.10)",  active:"#dc2626" },
-                { m:"Build", color:"#059669", bg:"rgba(5,150,105,0.10)",  active:"#059669" },
+                { m:"Video", color:C.red, bg:"rgba(220,38,38,0.10)",  active:C.red },
+                { m:"Build", color:C.green, bg:"rgba(5,150,105,0.10)",  active:C.green },
               ] as Array<{m:Mode;color:string;bg:string;active:string}>).map(({ m, color, bg, active }) => (
                 <button key={m} onClick={() => setMode(m)}
                   aria-label={`Switch to ${m} mode`}
                   aria-pressed={mode === m}
                   style={{
-                    padding: "5px 14px",
+                    padding: "4px 14px",
                     borderRadius: R.pill,
                     border: `1.5px solid ${active}`,
                     background: mode===m ? active : color,
@@ -934,7 +919,7 @@ export default function ChatTab() {
                     cursor: "pointer",
                     flexShrink: 0,
                     minHeight: 30,
-                    letterSpacing: ".01em",
+                    
                     transition: `all ${DUR.fast} ${EASE}`,
                     boxShadow: mode===m ? `0 2px 8px ${active}60` : `0 1px 4px ${active}30`,
                   }}>
@@ -949,13 +934,13 @@ export default function ChatTab() {
                 <input value={attachUrl}
                   onChange={(e:React.ChangeEvent<HTMLInputElement>) => setAttachUrl(e.target.value)}
                   placeholder="Paste image or video URL…"
-                  style={{ flex:1, background:"#f4f4f5", border:"1.5px solid rgba(0,0,0,0.12)", borderRadius:R.r2, padding:"9px 14px", color:CT.t1, fontSize:15, fontFamily:"inherit", outline:"none" }}
+                  style={{ flex:1, background:CT.sbBg, border:"1.5px solid rgba(0,0,0,0.12)", borderRadius:R.r2, padding:"8px 14px", color:CT.t1, fontSize:15, fontFamily:"inherit", outline:"none" }}
                   onKeyDown={(e:React.KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key==="Enter" && attachUrl.trim()) { setInput(p=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }
+                    if (e.key==="Enter" && attachUrl.trim()) { setInput((p: string)=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }
                     if (e.key==="Escape") setAttachMode(false);
                   }}/>
-                <button onClick={() => { setInput(p=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }}
-                  style={{ padding:"9px 18px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>
+                <button onClick={() => { setInput((p: string)=>p+(p?" ":"")+attachUrl.trim()); setAttachUrl(""); setAttachMode(false); }}
+                  style={{ padding:"8px 18px", borderRadius:R.r2, background:CT.send, border:"none", color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>
                   Attach
                 </button>
               </div>
@@ -967,7 +952,7 @@ export default function ChatTab() {
               {/* Plus / upload button */}
               <button
                 aria-label="Attach URL"
-                onClick={() => setAttachMode(v => !v)}
+                onClick={() => setAttachMode((v: boolean) => !v)}
                 style={{
                   width: 42, height: 42, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -988,9 +973,9 @@ export default function ChatTab() {
               <div style={{
                 flex: 1,
                 border: `1.5px solid ${inputFocused ? "#7C3AED" : "rgba(0,0,0,0.16)"}`,
-                borderRadius: 22,
+                borderRadius: 20,
                 padding: "12px 18px",
-                background: inputFocused ? "#fff" : "#f9f9f9",
+                background: inputFocused ? CT.bg : CT.sbBg,
                 transition: `all ${DUR.fast} ${EASE}`,
                 boxShadow: inputFocused ? "0 0 0 3px rgba(124,58,237,0.10)" : "none",
               }}>
@@ -1028,7 +1013,7 @@ export default function ChatTab() {
                   style={{
                     width: 42, height: 42, flexShrink: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "#dc2626",
+                    background: C.red,
                     border: "none",
                     borderRadius: "50%",
                     color: "#fff",
@@ -1079,7 +1064,7 @@ export default function ChatTab() {
         @media (max-width:767px) {
           .streams-chat-mhdr2 { display:flex; }
           .streams-chat-msgs2 { padding:20px 16px 0; }
-          .streams-chat-input2 { padding:10px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+          .streams-chat-input2 { padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
         }
         @media (min-width:768px) {
           .streams-chat-sb2 { position:relative;height:100%;transform:none;transition:none;z-index:auto;flex-shrink:0; }

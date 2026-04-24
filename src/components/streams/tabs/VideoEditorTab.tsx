@@ -156,10 +156,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  }
 
  async function handleApplyMotion(shotId: string) {
- setApplyMotion((p) => ({...p, [shotId]:"running" as const}));
-    if (!genLogId) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+ setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"running" as const}));
+    if (!genLogId) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"idle" as const})); return; }
  const shot = shots.find((s:Shot)=>s.id===shotId);
- if (!shot) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+ if (!shot) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"idle" as const})); return; }
  try {
  const res = await fetch("/api/streams/video/edit-motion", {
  method:"POST", headers:{"Content-Type":"application/json"},
@@ -174,23 +174,23 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  videoUrl: videoUrl ?? "",
  }),
  });
- if (!res.ok) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+ if (!res.ok) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"idle" as const})); return; }
  const { versionId } = await res.json() as { versionId?: string };
- if (!versionId) { setApplyMotion((p) => ({...p, [shotId]:"done" as const})); return; }
+ if (!versionId) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"done" as const})); return; }
  // Poll status until complete (compose pipeline runs server-side)
  let attempts = 0;
  const pollMotion = async (): Promise<void> => {
-   if (attempts++ > 40) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+   if (attempts++ > 40) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"idle" as const})); return; }
    const sr = await fetch("/api/streams/video/edit-motion/status", {
      method:"POST", headers:{"Content-Type":"application/json"},
      body: JSON.stringify({ versionId }),
    });
-   if (sr.ok) { setApplyMotion((p) => ({...p, [shotId]:"done" as const})); return; }
+   if (sr.ok) { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"done" as const})); return; }
    await new Promise(r => setTimeout(r, 3000));
    return pollMotion();
  };
  await pollMotion();
- } catch { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); }
+ } catch { setApplyMotion((p: Record<string,"idle"|"running"|"done">) => ({...p, [shotId]:"idle" as const})); }
  }
 
  async function handleDub() {
@@ -626,7 +626,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
      {(["neutral","happy","sad","angry","surprised","disgusted","fearful"] as const).map(em=>(
        <button key={em} onClick={()=>setEmotion(em)} style={{
-         padding:"6px 12px",borderRadius:R.pill,fontSize:13,fontFamily:"inherit",cursor:"pointer",
+         padding:"8px 12px",borderRadius:R.pill,fontSize:13,fontFamily:"inherit",cursor:"pointer",
          border:`1px solid ${emotion===em?C.acc:C.bdr}`,
          background:emotion===em?C.accDim:"transparent",
          color:emotion===em?C.acc2:C.t3,
@@ -653,11 +653,11 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
    <textarea value={bodyText} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setBodyText(e.target.value)}
      maxLength={2000} rows={3} aria-label="Replacement narration text"
      placeholder="Enter replacement narration text…"
-     style={{background:C.bg3,border:"none",borderRadius:R.r2,padding:"10px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",lineHeight:1.5}}/>
+     style={{background:C.bg3,border:"none",borderRadius:R.r2,padding:"8px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",lineHeight:1.5}}/>
    <button onClick={()=>void handleEditBody()} disabled={bodyState==="running"||!bodyText.trim()||!genLogId} style={{
      padding:"8px 20px",borderRadius:R.r2,border:"none",fontFamily:"inherit",fontSize:14,cursor:"pointer",
      background:bodyState==="done"?C.green:bodyState==="running"?C.bg4:!bodyText.trim()||!genLogId?C.bg4:C.acc,
-     color:bodyState==="running"||!bodyText.trim()||!genLogId?"#aaa":"#fff",
+     color:bodyState==="running"||!bodyText.trim()||!genLogId? C.t4 :"#fff",
      display:"flex",alignItems:"center",gap:8,alignSelf:"flex-start",
    }}>
      {bodyState==="running"&&<span style={{width:12,height:12,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}

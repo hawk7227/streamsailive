@@ -8,6 +8,9 @@ import { createClient }      from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { credentialKeyConfigured } from "@/lib/streams/credentials";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const process: { env: Record<string, string | undefined> };
+
 export const maxDuration = 15;
 
 export async function GET(): Promise<NextResponse> {

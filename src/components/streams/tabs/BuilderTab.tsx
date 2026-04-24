@@ -96,21 +96,21 @@ interface ProjectMemory  { rules: MemoryRule[]; recentDecisions: DecisionEntry[]
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  critical: "#ef4444",
-  high:     "#f97316",
-  medium:   "#f59e0b",
-  low:      "#6b7280",
-  none:     "#374151",
+  critical: C.red,
+  high:     C.orange,
+  medium:   C.amber,
+  low:      C.gray,
+  none:     C.dark,
 };
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
   backlog:     C.t4,
   todo:        C.t3,
-  in_progress: "#60a5fa",
-  blocked:     "#ef4444",
-  in_review:   "#f59e0b",
-  approved:    "#34d399",
-  done:        "#10b981",
+  in_progress: C.sky,
+  blocked:     C.red,
+  in_review:   C.amber,
+  approved:    C.teal,
+  done:        C.green,
   cancelled:   C.t4,
 };
 
@@ -268,7 +268,7 @@ export default function BuilderTab() {
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const json = await res.json() as { data?: TaskRow };
-      if (json.data) setTasks(prev => [json.data!, ...prev]);
+      if (json.data) setTasks((prev: TaskRow[]) => [json.data!, ...prev]);
       setNewTitle("");
       createInputRef.current?.focus();
     } catch (e) {
@@ -289,7 +289,7 @@ export default function BuilderTab() {
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error(`${res.status}`);
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
+      setTasks((prev: TaskRow[]) => prev.map(t => t.id === taskId ? { ...t, status } : t));
       setExpandedTask(null);
     } catch (e) {
       setTasksError(e instanceof Error ? e.message : "Failed to update task");
@@ -311,7 +311,7 @@ export default function BuilderTab() {
       if (!res.ok) throw new Error(`${res.status}`);
       const newApproval: TaskApprovalState = action === "approve" ? "approved" : "rejected";
       const newStatus: TaskStatus = action === "approve" ? "approved" : "backlog";
-      setTasks(prev => prev.map(t =>
+      setTasks((prev: TaskRow[]) => prev.map(t =>
         t.id === taskId ? { ...t, approvalState: newApproval, status: newStatus } : t
       ));
     } catch (e) {
@@ -332,11 +332,11 @@ export default function BuilderTab() {
         body: JSON.stringify({ outcome, resolvedBy: "user" }),
       });
       if (!res.ok) throw new Error(`${res.status}`);
-      setAudit(prev => prev ? {
+      setAudit((prev: AuditSummary | null) => prev ? {
         ...prev,
         approvalGates: {
           ...prev.approvalGates,
-          pending: prev.approvalGates.pending.filter(g => g.id !== gateId),
+          pending: prev.approvalGates.pending.filter((g: { id: string; gate_name: string; action_name: string; workspace_id: string; created_at: string }) => g.id !== gateId),
           pendingCount: prev.approvalGates.pendingCount - 1,
         },
       } : prev);
@@ -384,11 +384,11 @@ export default function BuilderTab() {
   // ── Filtered tasks ───────────────────────────────────────────────────────────
   const filteredTasks = statusFilter === "all"
     ? tasks
-    : tasks.filter(t => t.status === statusFilter);
+    : tasks.filter((t: TaskRow) => t.status === statusFilter);
 
   // ── Sub-nav ──────────────────────────────────────────────────────────────────
   const panels: Array<{ id: BuilderPanel; label: string; badge?: number }> = [
-    { id: "tasks",     label: "Tasks",     badge: tasks.filter(t => t.status === "in_review").length || undefined },
+    { id: "tasks",     label: "Tasks",     badge: tasks.filter((t: TaskRow) => t.status === "in_review").length || undefined },
     { id: "audit",     label: "Audit",     badge: audit?.approvalGates.pendingCount || undefined },
     { id: "artifacts", label: "Artifacts"  },
     { id: "memory",    label: "Memory"     },
@@ -414,7 +414,7 @@ export default function BuilderTab() {
             onClick={() => setPanel(p.id)}
             style={{
               display: "flex", alignItems: "center", gap: S.s2,
-              padding: "6px 14px", borderRadius: R.pill,
+              padding: "8px 14px", borderRadius: R.pill,
               border: `1px solid ${panel === p.id ? C.acc : C.bdr}`,
               background: panel === p.id ? C.accDim : "transparent",
               color: panel === p.id ? C.acc2 : C.t3,
@@ -460,7 +460,7 @@ export default function BuilderTab() {
               <input
                 ref={createInputRef}
                 value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTitle(e.target.value)}
                 placeholder="Task title…"
                 maxLength={200}
                 style={{
@@ -477,7 +477,7 @@ export default function BuilderTab() {
               </div>
               <select
                 value={newPriority}
-                onChange={e => setNewPriority(e.target.value as TaskPriority)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewPriority(e.target.value as TaskPriority)}
                 style={{
                   background: C.bg3, border: "none", borderRadius: R.r2,
                   padding: "8px 10px", color: C.t1, fontSize: 14,
@@ -578,7 +578,7 @@ export default function BuilderTab() {
               </div>
             )}
 
-            {!tasksLoading && filteredTasks.map(task => (
+            {!tasksLoading && filteredTasks.map((task: TaskRow) => (
               <div key={task.id} style={{
                 background: C.bg2, borderRadius: R.r2,
                 border: `1px solid ${expandedTask === task.id ? C.accBr : C.bdr}`,
@@ -589,7 +589,7 @@ export default function BuilderTab() {
                 <div
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setExpandedTask(expandedTask === task.id ? null : task.id); }}
+                  onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") setExpandedTask(expandedTask === task.id ? null : task.id); }}
                   onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                   style={{
                     display: "flex", alignItems: "center", gap: S.s3,
@@ -599,7 +599,7 @@ export default function BuilderTab() {
                   {/* Priority dot */}
                   <span style={{
                     width: 8, height: 8, borderRadius: R.pill, flexShrink: 0,
-                    background: PRIORITY_COLOR[task.priority],
+                    background: PRIORITY_COLOR[task.priority as TaskPriority],
                   }} />
 
                   {/* Title */}
@@ -615,10 +615,10 @@ export default function BuilderTab() {
                   {/* Status badge */}
                   <span style={{
                     fontSize: 12, fontWeight: 500,
-                    color: STATUS_COLOR[task.status],
+                    color: STATUS_COLOR[task.status as TaskStatus],
                     flexShrink: 0,
                   }}>
-                    {STATUS_LABELS[task.status]}
+                    {STATUS_LABELS[task.status as TaskStatus]}
                   </span>
 
                   {/* Approval badge */}
@@ -659,7 +659,7 @@ export default function BuilderTab() {
                         {task.nextStep && (
                           <div style={{
                             fontSize: 12, color: C.acc2,
-                            padding: "6px 10px", borderRadius: R.r1,
+                            padding: "8px 10px", borderRadius: R.r1,
                             background: C.accDim, border: `1px solid ${C.accBr}`,
                           }}>
                             → {task.nextStep}
@@ -691,7 +691,7 @@ export default function BuilderTab() {
                             onClick={() => void handleTaskAction(task.id, "approve")}
                             disabled={updatingTask === task.id}
                             style={{
-                              padding: "6px 14px", borderRadius: R.r1,
+                              padding: "8px 14px", borderRadius: R.r1,
                               background: "rgba(16,185,129,0.15)",
                               border: `1px solid rgba(16,185,129,0.3)`,
                               color: C.green, fontSize: 13,
@@ -706,7 +706,7 @@ export default function BuilderTab() {
                             onClick={() => void handleTaskAction(task.id, "reject")}
                             disabled={updatingTask === task.id}
                             style={{
-                              padding: "6px 14px", borderRadius: R.r1,
+                              padding: "8px 14px", borderRadius: R.r1,
                               background: "rgba(239,68,68,0.10)",
                               border: `1px solid rgba(239,68,68,0.25)`,
                               color: C.red, fontSize: 13,
@@ -772,7 +772,7 @@ export default function BuilderTab() {
 
           {auditError && (
             <div style={{
-              padding: "10px 14px", borderRadius: R.r2,
+              padding: "8px 14px", borderRadius: R.r2,
               background: "rgba(239,68,68,0.08)",
               border: `1px solid rgba(239,68,68,0.2)`,
               color: C.red, fontSize: 13, marginBottom: S.s4,
@@ -836,16 +836,16 @@ export default function BuilderTab() {
                     No open violations ✓
                   </div>
                 ) : (
-                  audit.violations.open.slice(0, 20).map(v => (
+                  audit.violations.open.slice(0, 20).map((v: { id: string; title: string; severity: string; status: string; createdAt: string }) => (
                     <div key={v.id} style={{
                       display: "flex", alignItems: "center", gap: S.s3,
-                      padding: "10px 14px", borderRadius: R.r1,
+                      padding: "8px 14px", borderRadius: R.r1,
                       background: C.bg2, border: `1px solid ${C.bdr}`,
                       marginBottom: S.s1,
                     }}>
                       <span style={{
                         width: 8, height: 8, borderRadius: R.pill, flexShrink: 0,
-                        background: v.severity === "critical" ? C.red : v.severity === "high" ? "#f97316" : C.amber,
+                        background: v.severity === "critical" ? C.red : v.severity === "high" ? C.orange : C.amber,
                       }} />
                       <span style={{ flex: 1, fontSize: 13, color: C.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {v.title}
@@ -868,7 +868,7 @@ export default function BuilderTab() {
                     No pending gates ✓
                   </div>
                 ) : (
-                  audit.approvalGates.pending.map(gate => (
+                  audit.approvalGates.pending.map((gate: { id: string; gate_name: string; action_name: string; workspace_id: string; created_at: string }) => (
                     <div key={gate.id} style={{
                       padding: "12px 14px", borderRadius: R.r2,
                       background: C.bg2, border: `1px solid ${C.accBr}`,
@@ -885,7 +885,7 @@ export default function BuilderTab() {
                           onClick={() => void handleGateResolve(gate.id, "approved")}
                           disabled={resolvingGate === gate.id}
                           style={{
-                            padding: "6px 16px", borderRadius: R.r1,
+                            padding: "8px 16px", borderRadius: R.r1,
                             background: "rgba(16,185,129,0.15)",
                             border: `1px solid rgba(16,185,129,0.3)`,
                             color: C.green, fontSize: 13,
@@ -900,7 +900,7 @@ export default function BuilderTab() {
                           onClick={() => void handleGateResolve(gate.id, "rejected")}
                           disabled={resolvingGate === gate.id}
                           style={{
-                            padding: "6px 16px", borderRadius: R.r1,
+                            padding: "8px 16px", borderRadius: R.r1,
                             background: "rgba(239,68,68,0.10)",
                             border: `1px solid rgba(239,68,68,0.25)`,
                             color: C.red, fontSize: 13,
@@ -925,7 +925,7 @@ export default function BuilderTab() {
                 {audit.audit.recent.length === 0 ? (
                   <div style={{ fontSize: 13, color: C.t4, padding: "12px 0" }}>No recent events</div>
                 ) : (
-                  audit.audit.recent.slice(0, 15).map(ev => (
+                  audit.audit.recent.slice(0, 15).map((ev: { id: string; event_type: string; summary: string; actor: string; occurred_at: string; outcome: string }) => (
                     <div key={ev.id} style={{
                       display: "flex", gap: S.s3, alignItems: "flex-start",
                       padding: "8px 0",
@@ -972,7 +972,7 @@ export default function BuilderTab() {
                     key={a}
                     onClick={() => setActionType(a)}
                     style={{
-                      padding: "5px 12px", borderRadius: R.pill,
+                      padding: "4px 12px", borderRadius: R.pill,
                       border: `1px solid ${actionType === a ? C.acc : C.bdr}`,
                       background: actionType === a ? C.accDim : "transparent",
                       color: actionType === a ? C.acc2 : C.t3,
@@ -993,7 +993,7 @@ export default function BuilderTab() {
               </div>
               <textarea
                 value={actionPayload}
-                onChange={e => {
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                   setActionPayload(e.target.value);
                   setPayloadError(null);
                 }}
@@ -1002,7 +1002,7 @@ export default function BuilderTab() {
                 aria-label="Action payload JSON"
                 style={{
                   width: "100%", background: C.bg3, border: payloadError ? `1px solid ${C.red}` : "none",
-                  borderRadius: R.r2, padding: "10px 12px",
+                  borderRadius: R.r2, padding: "8px 12px",
                   color: C.t1, fontSize: 13, fontFamily: "ui-monospace, monospace",
                   resize: "vertical", outline: "none", lineHeight: 1.6,
                 }}
@@ -1017,7 +1017,7 @@ export default function BuilderTab() {
               onClick={() => void handleRunAction()}
               disabled={actionRunning}
               style={{
-                padding: "10px 24px", borderRadius: R.r2,
+                padding: "8px 24px", borderRadius: R.r2,
                 background: actionRunning ? C.bg4 : C.acc,
                 border: "none",
                 color: actionRunning ? C.t4 : "#fff",
@@ -1042,7 +1042,7 @@ export default function BuilderTab() {
             {/* Error */}
             {actionError && (
               <div style={{
-                marginTop: S.s4, padding: "10px 14px", borderRadius: R.r2,
+                marginTop: S.s4, padding: "8px 14px", borderRadius: R.r2,
                 background: "rgba(239,68,68,0.08)",
                 border: `1px solid rgba(239,68,68,0.2)`,
                 color: C.red, fontSize: 13,
@@ -1129,7 +1129,7 @@ export default function BuilderTab() {
 
             {!artifactsLoading && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: S.s2 }}>
-                {artifacts.map(a => {
+                {artifacts.map((a: ArtifactRow) => {
                   const stateColor: Record<ArtifactState, string> = {
                     draft: C.t4, stable: C.green, deprecated: C.amber, archived: C.t4,
                   };
@@ -1142,7 +1142,7 @@ export default function BuilderTab() {
                       padding: "12px 14px",
                     }}>
                       <div style={{ display:"flex", alignItems:"flex-start", gap:S.s2, marginBottom:S.s2 }}>
-                        <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{typeIcon[a.artifactType]}</span>
+                        <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{typeIcon[a.artifactType as ArtifactType]}</span>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:14, fontWeight:500, color:C.t1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                             {a.name}
@@ -1151,7 +1151,7 @@ export default function BuilderTab() {
                             {a.slug}
                           </div>
                         </div>
-                        <span style={{ fontSize:12, color:stateColor[a.state], flexShrink:0 }}>{a.state}</span>
+                        <span style={{ fontSize:12, color:stateColor[a.state as ArtifactState], flexShrink:0 }}>{a.state}</span>
                       </div>
                       {a.description && (
                         <div style={{ fontSize:12, color:C.t3, lineHeight:1.5, marginBottom:S.s2 }}>{a.description}</div>
@@ -1171,7 +1171,7 @@ export default function BuilderTab() {
                       </div>
                       {a.tags.length > 0 && (
                         <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:S.s2 }}>
-                          {a.tags.slice(0,4).map(tag => (
+                          {a.tags.slice(0,4).map((tag: string) => (
                             <span key={tag} style={{
                               fontSize:12, padding:"2px 6px", borderRadius:R.r1,
                               background:C.surf, border:`1px solid ${C.bdr}`, color:C.t4,
@@ -1218,7 +1218,7 @@ export default function BuilderTab() {
 
             {memoryError && (
               <div style={{
-                padding:"10px 14px", borderRadius:R.r2, marginBottom:S.s4,
+                padding:"8px 14px", borderRadius:R.r2, marginBottom:S.s4,
                 background:"rgba(239,68,68,0.08)", border:`1px solid rgba(239,68,68,0.2)`,
                 color:C.red, fontSize:13, display:"flex", justifyContent:"space-between",
               }}>
@@ -1235,9 +1235,9 @@ export default function BuilderTab() {
                     {memory.pinnedFacts.length === 0 ? (
                       <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No pinned facts — use the Runtime panel to pin facts</div>
                     ) : (
-                      memory.pinnedFacts.map(f => (
+                      memory.pinnedFacts.map((f: PinnedFact) => (
                         <div key={f.factKey} style={{
-                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          padding:"8px 14px", borderRadius:R.r1, marginBottom:S.s1,
                           background:C.bg2, border:`1px solid ${C.bdr}`,
                           display:"flex", alignItems:"flex-start", gap:S.s3,
                         }}>
@@ -1259,9 +1259,9 @@ export default function BuilderTab() {
                     {memory.rules.length === 0 ? (
                       <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No memory rules set</div>
                     ) : (
-                      memory.rules.map((r,i) => (
+                      memory.rules.map((r: MemoryRule, i: number) => (
                         <div key={r.id} style={{
-                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          padding:"8px 14px", borderRadius:R.r1, marginBottom:S.s1,
                           background:C.bg2, border:`1px solid ${C.bdr}`,
                           display:"flex", gap:S.s3, alignItems:"flex-start",
                         }}>
@@ -1282,9 +1282,9 @@ export default function BuilderTab() {
                     {memory.recentDecisions.length === 0 ? (
                       <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No decisions logged yet</div>
                     ) : (
-                      memory.recentDecisions.map(d => (
+                      memory.recentDecisions.map((d: DecisionEntry) => (
                         <div key={d.id} style={{
-                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s2,
+                          padding:"8px 14px", borderRadius:R.r1, marginBottom:S.s2,
                           background:C.bg2, border:`1px solid ${C.bdr}`,
                         }}>
                           <div style={{ fontSize:13, color:C.t1, fontWeight:500, marginBottom:4 }}>{d.decisionSummary}</div>
@@ -1302,9 +1302,9 @@ export default function BuilderTab() {
                     {memory.openIssues.length === 0 ? (
                       <div style={{ color:C.t4, fontSize:13, padding:"12px 0" }}>No open issues ✓</div>
                     ) : (
-                      memory.openIssues.map(issue => (
+                      memory.openIssues.map((issue: IssueEntry) => (
                         <div key={issue.id} style={{
-                          padding:"10px 14px", borderRadius:R.r1, marginBottom:S.s1,
+                          padding:"8px 14px", borderRadius:R.r1, marginBottom:S.s1,
                           background:C.bg2, border:`1px solid ${C.bdr}`,
                           display:"flex", gap:S.s3, alignItems:"flex-start",
                         }}>
@@ -1342,7 +1342,7 @@ export default function BuilderTab() {
                           ].map(row => (
                             <div key={row.label}>
                               <div style={{ fontSize:12, color:C.t4, marginBottom:2 }}>{row.label}</div>
-                              <div style={{ fontSize:13, color:C.t1, fontFamily:"ui-monospace,monospace" }}>{row.value}</div>
+                              <div style={{ fontSize:13, color:C.t1 }}>{row.value}</div>
                             </div>
                           ))}
                         </div>
@@ -1358,7 +1358,7 @@ export default function BuilderTab() {
                         {memory.latestHandoff.pendingItems.length > 0 && (
                           <div style={{ marginTop:S.s4 }}>
                             <div style={{ fontSize:12, color:C.t4, letterSpacing:".06em", textTransform:"uppercase", marginBottom:S.s2 }}>Pending items</div>
-                            {memory.latestHandoff.pendingItems.map((item,i) => (
+                            {memory.latestHandoff.pendingItems.map((item: string, i: number) => (
                               <div key={i} style={{
                                 padding:"8px 12px", borderRadius:R.r1, marginBottom:S.s1,
                                 background:C.bg2, border:`1px solid ${C.bdr}`,
@@ -1395,7 +1395,7 @@ export default function BuilderTab() {
 
 // ── Shared button style helper (avoids repetition in JSX) ────────────────────
 const actionBtn: React.CSSProperties = {
-  padding: "6px 14px", borderRadius: R.r1,
+  padding: "8px 14px", borderRadius: R.r1,
   background: C.surf, border: `1px solid ${C.bdr}`,
   color: C.t2, fontSize: 13,
   fontFamily: "inherit", cursor: "pointer",
