@@ -107,14 +107,12 @@ export async function loadProjectMemory(
   projectId?: string | null,
 ): Promise<ProjectMemory> {
 
-  // Build base filters
-  const wsFilter = (q: ReturnType<SupabaseClient["from"]>) =>
-    q.eq("workspace_id", workspaceId);
-
-  const projFilter = (q: ReturnType<SupabaseClient["from"]>) =>
-    projectId
-      ? q.eq("project_id", projectId)
-      : q.is("project_id", null);
+  // Build base filters — typed as any to avoid Supabase builder generic depth issues
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wsFilter = (q: any) => q.eq("workspace_id", workspaceId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const projFilter = (q: any) =>
+    projectId ? q.eq("project_id", projectId) : q.is("project_id", null);
 
   // 1. Memory rules — top 20 by priority
   const { data: rulesRaw } = await admin

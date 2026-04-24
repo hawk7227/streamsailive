@@ -137,10 +137,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  }
 
  async function handleApplyMotion(shotId: string) {
- setApplyMotion((p:Record<string,string>) => ({...p, [shotId]:"running"}));
- if (!genLogId) { setTimeout(()=>setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"done"})),1800); return; }
+ setApplyMotion((p) => ({...p, [shotId]:"running" as const}));
+ if (!genLogId) { setTimeout(()=>setApplyMotion((p) => ({...p, [shotId]:"done" as const})),1800); return; }
  const shot = shots.find((s:Shot)=>s.id===shotId);
- if (!shot) { setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"idle"})); return; }
+ if (!shot) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
  try {
  const res = await fetch("/api/streams/video/edit-motion", {
  method:"POST", headers:{"Content-Type":"application/json"},
@@ -155,9 +155,9 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  videoUrl: videoUrl ?? "",
  }),
  });
- if (res.ok) setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"done"}));
- else setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"idle"}));
- } catch { setApplyMotion((p:Record<string,string>)=>({...p,[shotId]:"idle"})); }
+ if (res.ok) setApplyMotion((p) => ({...p, [shotId]:"done" as const}));
+ else setApplyMotion((p) => ({...p, [shotId]:"idle" as const}));
+ } catch { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); }
  }
 
  async function handleDub() {

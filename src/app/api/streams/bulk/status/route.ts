@@ -101,8 +101,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Refresh counts
   const { data: refreshed } = await admin.from("bulk_job_items").select("status, output_url").eq("bulk_job_id", body.bulkJobId);
-  const completed = (refreshed ?? []).filter((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.status === "completed").length;
-  const failed    = (refreshed ?? []).filter((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.status === "failed").length;
+  type BulkItem = { status: string; output_url: string | null };
+  const completed = (refreshed ?? []).filter((it: BulkItem) => it.status === "completed").length;
+  const failed    = (refreshed ?? []).filter((it: BulkItem) => it.status === "failed").length;
   const total     = (refreshed ?? []).length;
   const isFinished = completed + failed === total;
 
@@ -111,7 +112,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       status:           failed === total ? "failed" : failed > 0 ? "partial" : "completed",
       completed_count:  completed,
       failed_count:     failed,
-      result_urls:      (refreshed ?? []).filter((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.output_url).map((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.output_url),
+      result_urls:      (refreshed ?? []).filter((it: BulkItem) => it.output_url).map((it: BulkItem) => it.output_url),
     }).eq("id", body.bulkJobId);
   } else {
     await admin.from("bulk_jobs").update({ completed_count: completed, failed_count: failed }).eq("id", body.bulkJobId);
@@ -124,6 +125,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     completed,
     failed,
     pending:     total - completed - failed,
-    outputUrls:  (refreshed ?? []).filter((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.output_url).map((it:{ id:string; status:string; fal_request_id:string|null; output_url?:string }) => it.output_url),
+    outputUrls:  (refreshed ?? []).filter((it: BulkItem) => it.output_url).map((it: BulkItem) => it.output_url),
   });
 }

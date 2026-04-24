@@ -340,7 +340,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  }
 
  generationRef.current = { generationId: data.generationId, responseUrl: data.responseUrl! };
- setGrid((prev: GridItem[]) => prev.map((g: GridItem) => g.id === tempId ? {id: data.generationId, status:"running", generationId: data.generationId} : g));
+ setGrid((prev: GridItem[]) => prev.map((g: GridItem) => g.id === tempId ? {id: data.generationId, status:"running", generationId: data.generationId} as GridItem : g));
  setGenState("queued");
 
  // Poll every 6 seconds
@@ -817,7 +817,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  ))}
  </div>
  </div>
- {musicSub!=="auto-lyrics"&&musicSub!=="instrumental"&&(
+ {musicSub!=="auto-lyrics"&&(
  <div>
  <div style={{fontSize: 12,color:C.t4,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>
  Lyrics <span style={{color:C.amber,textTransform:"none",letterSpacing:0}}>— WORDS + structure tags only</span>

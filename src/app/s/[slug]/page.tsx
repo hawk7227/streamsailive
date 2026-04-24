@@ -31,8 +31,7 @@ export default async function SharePage({ params }: Props) {
     .from("share_links")
     .update({ view_count: (link.view_count ?? 0) + 1 })
     .eq("id", link.id)
-    .then(() => {})
-    .catch(() => {});
+    .then(() => {}, () => {});
 
   // Check expiry
   if (link.expires_at && new Date(link.expires_at) < new Date()) {
