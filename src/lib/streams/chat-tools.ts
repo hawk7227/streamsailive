@@ -35,7 +35,31 @@ function supabaseCreds(): { projectRef: string; serviceRoleKey: string } | null 
   try {
     const raw = getToken("streams:supabase_creds");
     if (!raw) return null;
-    return JSON.parse(raw) as { projectRef: string; serviceRoleKey: string };
+
+    // Format 1: JSON object {"projectRef":"...","serviceRoleKey":"..."}
+    if (raw.trim().startsWith("{")) {
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      const projectRef    = parsed.projectRef    ?? parsed.project_ref   ?? parsed.ref     ?? "";
+      const serviceRoleKey = parsed.serviceRoleKey ?? parsed.service_role_key ?? parsed.key ?? "";
+      if (projectRef && serviceRoleKey) return { projectRef, serviceRoleKey };
+    }
+
+    // Format 2: "projectRef|serviceRoleKey" pipe-separated
+    if (raw.includes("|")) {
+      const [ref, key] = raw.split("|");
+      if (ref?.trim() && key?.trim()) return { projectRef: ref.trim(), serviceRoleKey: key.trim() };
+    }
+
+    // Format 3: URL format "https://xxx.supabase.co" — extract ref
+    if (raw.includes("supabase.co")) {
+      const match = raw.match(/https?:\/\/([^.]+)\.supabase\.co/);
+      if (match?.[1]) {
+        // URL only — no service role key
+        return null;
+      }
+    }
+
+    return null;
   } catch { return null; }
 }
 

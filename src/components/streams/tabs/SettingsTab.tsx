@@ -439,13 +439,12 @@ export default function SettingsTab() {
         {/* Connectors */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
           <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
-            <div style={{ fontSize: 15, fontWeight: 500, color: C.t1 }}>Connections</div>
+            <div style={{ fontSize: 15, color: C.t1 }}>Connections</div>
             <div style={{ fontSize: 13, color: C.t4, marginTop: 2 }}>GitHub, Vercel, and Supabase for the Builder workspace.</div>
           </div>
           {([
             { provider: "github",   label: "GitHub",   hint: "Personal access token or fine-grained token. Enables repo read/write.", placeholder: "ghp_……" },
             { provider: "vercel",   label: "Vercel",   hint: "Vercel API token. Enables deployment status and project linking.",        placeholder: "Bearer ……" },
-            { provider: "supabase", label: "Supabase", hint: "JSON: { \"projectRef\": \"…\", \"serviceRoleKey\": \"…\" }",             placeholder: "{\"projectRef\":\"…\",\"serviceRoleKey\":\"…\"}" },
           ]).map(({ provider, label, hint, placeholder }) => {
             const account = connectors.find(c => c.provider === provider);
             const isConnected = account?.status === "connected";
@@ -453,18 +452,10 @@ export default function SettingsTab() {
               <div key={provider} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <div>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: C.t1 }}>{label}</span>
-                    {isConnected && account.providerAccountId && (
-                      <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>
-                        ✓ {account.providerAccountId}
-                      </span>
-                    )}
-                    {isConnected && !account.providerAccountId && (
-                      <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>✓ Connected</span>
-                    )}
-                    {!isConnected && connectorsLoaded && (
-                      <span style={{ marginLeft: 8, fontSize: 12, color: C.t4 }}>Not connected</span>
-                    )}
+                    <span style={{ fontSize: 14, color: C.t1 }}>{label}</span>
+                    {isConnected
+                      ? <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>✓ Connected</span>
+                      : connectorsLoaded && <span style={{ marginLeft: 8, fontSize: 12, color: C.t4 }}>Not connected</span>}
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: C.t4, marginBottom: 8 }}>{hint}</div>
@@ -475,63 +466,89 @@ export default function SettingsTab() {
                     onChange={e => setConnectToken(prev => ({ ...prev, [provider]: e.target.value }))}
                     placeholder={isConnected ? "Enter new token to update" : placeholder}
                     maxLength={2000}
-                    style={{
-                      flex: 1, background: C.bg3, border: "none", borderRadius: R.r1,
-                      padding: "7px 10px", color: C.t1, fontSize: 13,
-                      fontFamily: "inherit", outline: "none",
-                    }}
+                    style={{ flex: 1, background: C.bg3, border: "none", borderRadius: R.r1, padding: "7px 10px", color: C.t1, fontSize: 13, fontFamily: "inherit", outline: "none" }}
                   />
                   <button
                     onClick={() => void handleConnect(provider)}
                     disabled={!connectToken[provider]?.trim() || connecting === provider}
-                    style={{
-                      padding: "7px 14px", borderRadius: R.r1,
-                      background: connectToken[provider]?.trim() && connecting !== provider ? C.acc : C.bg4,
-                      border: "none",
-                      color: connectToken[provider]?.trim() && connecting !== provider ? "#fff" : C.t4,
-                      fontSize: 13, fontFamily: "inherit", cursor: "pointer",
-                      transition: `background ${DUR.fast} ${EASE}`,
-                      minHeight: 34, flexShrink: 0,
-                    }}
+                    style={{ padding: "7px 14px", borderRadius: R.r1, background: connectToken[provider]?.trim() && connecting !== provider ? C.acc : C.bg4, border: "none", color: connectToken[provider]?.trim() && connecting !== provider ? "#fff" : C.t4, fontSize: 13, fontFamily: "inherit", cursor: "pointer", transition: `background ${DUR.fast} ${EASE}`, minHeight: 34, flexShrink: 0 }}
                   >
                     {connecting === provider ? "Connecting…" : isConnected ? "Update" : "Connect"}
                   </button>
                 </div>
+                {isConnected && (() => {
+                  const account2 = connectors.find(c => c.provider === provider);
+                  return account2 && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button onClick={() => void handleValidate(account2.id, provider)} style={{ fontSize: 12, padding: "4px 10px", borderRadius: R.r1, border: `1px solid ${C.bdr}`, background: C.bg3, color: C.t2, cursor: "pointer", fontFamily: "inherit" }}>↺ Validate</button>
+                      <button onClick={() => void handleDisconnect(account2.id, provider)} style={{ fontSize: 12, padding: "4px 10px", borderRadius: R.r1, border: `1px solid rgba(200,50,50,0.3)`, background: "transparent", color: "rgba(220,80,80,0.9)", cursor: "pointer", fontFamily: "inherit" }}>Disconnect</button>
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          })}
+
+          {/* Supabase — two separate fields instead of raw JSON */}
+          {(() => {
+            const account = connectors.find(c => c.provider === "supabase");
+            const isConnected = account?.status === "connected";
+            return (
+              <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, color: C.t1 }}>Supabase</span>
+                  {isConnected
+                    ? <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>✓ Connected</span>
+                    : connectorsLoaded && <span style={{ marginLeft: 8, fontSize: 12, color: C.t4 }}>Not connected</span>}
+                </div>
+                <div style={{ fontSize: 12, color: C.t4, marginBottom: 8 }}>
+                  Project reference (e.g. <code style={{ fontFamily: "monospace", background: "rgba(255,255,255,0.06)", padding: "1px 4px", borderRadius: 3 }}>abcdefghijklm</code>) + service role key.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <input
+                    type="text"
+                    value={connectToken["supabase_ref"] ?? ""}
+                    onChange={e => setConnectToken(prev => ({ ...prev, supabase_ref: e.target.value }))}
+                    placeholder="Project ref  (from Supabase → Settings → General)"
+                    maxLength={200}
+                    style={{ background: C.bg3, border: "none", borderRadius: R.r1, padding: "7px 10px", color: C.t1, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="password"
+                      value={connectToken["supabase_key"] ?? ""}
+                      onChange={e => setConnectToken(prev => ({ ...prev, supabase_key: e.target.value }))}
+                      placeholder="Service role key  (from Supabase → Settings → API)"
+                      maxLength={500}
+                      style={{ flex: 1, background: C.bg3, border: "none", borderRadius: R.r1, padding: "7px 10px", color: C.t1, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                    />
+                    <button
+                      onClick={() => {
+                        const ref = connectToken["supabase_ref"]?.trim();
+                        const key = connectToken["supabase_key"]?.trim();
+                        if (!ref || !key) return;
+                        // Build JSON and connect via standard handleConnect
+                        const json = JSON.stringify({ projectRef: ref, serviceRoleKey: key });
+                        setConnectToken(prev => ({ ...prev, supabase: json }));
+                        void handleConnect("supabase");
+                      }}
+                      disabled={!connectToken["supabase_ref"]?.trim() || !connectToken["supabase_key"]?.trim() || connecting === "supabase"}
+                      style={{ padding: "7px 14px", borderRadius: R.r1, background: connectToken["supabase_ref"]?.trim() && connectToken["supabase_key"]?.trim() ? C.acc : C.bg4, border: "none", color: connectToken["supabase_ref"]?.trim() && connectToken["supabase_key"]?.trim() ? "#fff" : C.t4, fontSize: 13, fontFamily: "inherit", cursor: "pointer", minHeight: 34, flexShrink: 0 }}
+                    >
+                      {connecting === "supabase" ? "Connecting…" : isConnected ? "Update" : "Connect"}
+                    </button>
+                  </div>
+                </div>
                 {isConnected && account && (
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button
-                      onClick={() => void handleValidate(account.id, provider)}
-                      disabled={validating === provider}
-                      style={{
-                        padding: "5px 12px", borderRadius: R.r1, fontSize: 12,
-                        background: "transparent",
-                        border: `1px solid ${C.bdr}`,
-                        color: C.t3, fontFamily: "inherit", cursor: "pointer",
-                        minHeight: 30,
-                        opacity: validating === provider ? 0.5 : 1,
-                      }}
-                    >
-                      {validating === provider ? "Validating…" : "↻ Validate"}
-                    </button>
-                    <button
-                      onClick={() => void handleDisconnect(account.id, provider)}
-                      disabled={disconnecting === provider}
-                      style={{
-                        padding: "5px 12px", borderRadius: R.r1, fontSize: 12,
-                        background: "transparent",
-                        border: `1px solid rgba(239,68,68,0.25)`,
-                        color: C.red, fontFamily: "inherit", cursor: "pointer",
-                        minHeight: 30,
-                        opacity: disconnecting === provider ? 0.5 : 1,
-                      }}
-                    >
-                      {disconnecting === provider ? "Disconnecting…" : "Disconnect"}
-                    </button>
+                    <button onClick={() => void handleValidate(account.id, "supabase")} style={{ fontSize: 12, padding: "4px 10px", borderRadius: R.r1, border: `1px solid ${C.bdr}`, background: C.bg3, color: C.t2, cursor: "pointer", fontFamily: "inherit" }}>↺ Validate</button>
+                    <button onClick={() => void handleDisconnect(account.id, "supabase")} style={{ fontSize: 12, padding: "4px 10px", borderRadius: R.r1, border: `1px solid rgba(200,50,50,0.3)`, background: "transparent", color: "rgba(220,80,80,0.9)", cursor: "pointer", fontFamily: "inherit" }}>Disconnect</button>
                   </div>
                 )}
               </div>
             );
-          })}
+          })()}
+
           {connectError && (
             <div style={{ padding: "8px 18px", fontSize: 12, color: C.red, borderTop: `1px solid ${C.bdr}` }}>
               {connectError}
