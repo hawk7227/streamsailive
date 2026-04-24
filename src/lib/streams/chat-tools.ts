@@ -264,10 +264,270 @@ const supabaseTools: Record<string, ToolExecutor> = {
 
 // ── All tool executors merged ─────────────────────────────────────────────
 
+// Extended GitHub tools
+const githubExtendedTools: Record<string, ToolExecutor> = {
+
+  github_get_repo_info: async ({ owner, repo }) => {
+    try {
+      const res = await githubRequest(`/repos/${owner}/${repo}`) as {
+        name: string; full_name: string; description: string | null;
+        default_branch: string; private: boolean; language: string | null;
+        stargazers_count: number; forks_count: number; open_issues_count: number;
+        topics: string[]; clone_url: string; updated_at: string;
+      };
+      return { success: true, data: {
+        name: res.full_name, description: res.description,
+        defaultBranch: res.default_branch, private: res.private,
+        language: res.language, stars: res.stargazers_count,
+        forks: res.forks_count, openIssues: res.open_issues_count,
+        topics: res.topics, cloneUrl: res.clone_url, updated: res.updated_at,
+      }};
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_create_branch: async ({ owner, repo, branch, from_branch = "main" }) => {
+    try {
+      // Get SHA of source branch
+      const ref = await githubRequest(`/repos/${owner}/${repo}/git/refs/heads/${from_branch}`) as { object: { sha: string } };
+      const sha = ref.object.sha;
+      // Create new branch
+      await githubRequest(`/repos/${owner}/${repo}/git/refs`, {
+        method: "POST",
+        body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+      });
+      return { success: true, data: { branch, from: from_branch, sha: sha.slice(0,7) } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_delete_file: async ({ owner, repo, path, message, branch = "main" }) => {
+    try {
+      // Get current SHA
+      const current = await githubRequest(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`) as { sha: string };
+      await githubRequest(`/repos/${owner}/${repo}/contents/${path}`, {
+        method: "DELETE",
+        body: JSON.stringify({ message, sha: current.sha, branch }),
+      });
+      return { success: true, data: { deleted: path, branch } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_create_pr: async ({ owner, repo, title, body, head, base = "main", draft = false }) => {
+    try {
+      const res = await githubRequest(`/repos/${owner}/${repo}/pulls`, {
+        method: "POST",
+        body: JSON.stringify({ title, body, head, base, draft }),
+      }) as { number: number; html_url: string; state: string; mergeable: boolean | null };
+      return { success: true, data: { number: res.number, url: res.html_url, state: res.state } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_list_prs: async ({ owner, repo, state = "open", per_page = 10 }) => {
+    try {
+      const res = await githubRequest(`/repos/${owner}/${repo}/pulls?state=${state}&per_page=${per_page}`) as Array<{
+        number: number; title: string; state: string; draft: boolean;
+        html_url: string; head: { ref: string }; base: { ref: string };
+        created_at: string; mergeable_state: string | null;
+      }>;
+      return { success: true, data: res.map(p => ({
+        number: p.number, title: p.title, state: p.state, draft: p.draft,
+        url: p.html_url, from: p.head.ref, into: p.base.ref, created: p.created_at,
+      }))};
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_merge_pr: async ({ owner, repo, pull_number, merge_method = "squash", commit_title }) => {
+    try {
+      const body: Record<string, unknown> = { merge_method };
+      if (commit_title) body.commit_title = commit_title;
+      const res = await githubRequest(`/repos/${owner}/${repo}/pulls/${pull_number}/merge`, {
+        method: "PUT", body: JSON.stringify(body),
+      }) as { sha: string; merged: boolean; message: string };
+      return { success: true, data: { merged: res.merged, sha: res.sha?.slice(0,7), message: res.message } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  github_trigger_workflow: async ({ owner, repo, workflow_id, ref = "main", inputs }) => {
+    try {
+      await githubRequest(`/repos/${owner}/${repo}/actions/workflows/${workflow_id}/dispatches`, {
+        method: "POST",
+        body: JSON.stringify({ ref, inputs: inputs ?? {} }),
+      });
+      return { success: true, data: { triggered: workflow_id, ref } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  diff_files: async ({ owner, repo, base, head, path }) => {
+    try {
+      const params = new URLSearchParams({ base: String(base), head: String(head) });
+      const res = await githubRequest(`/repos/${owner}/${repo}/compare/${base}...${head}`) as {
+        ahead_by: number; behind_by: number; status: string;
+        files: Array<{ filename: string; status: string; additions: number; deletions: number; patch?: string }>;
+      };
+      const files = path ? res.files.filter(f => f.filename.includes(String(path))) : res.files;
+      return { success: true, data: {
+        status: res.status, ahead: res.ahead_by, behind: res.behind_by,
+        files: files.map(f => ({ file: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch?.slice(0, 2000) })),
+      }};
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+};
+
+// Extended Vercel tools
+const vercelExtendedTools: Record<string, ToolExecutor> = {
+
+  vercel_get_env_vars: async ({ projectId, projectName }) => {
+    try {
+      // Lookup by name if no ID
+      if (!projectId && projectName) {
+        const projects = await vercelRequest(`/v9/projects?limit=100`) as { projects: Array<{ id: string; name: string }> };
+        const match = projects.projects.find(p => p.name === String(projectName));
+        if (!match) return { success: false, error: `Project '${projectName}' not found` };
+        projectId = match.id;
+      }
+      const res = await vercelRequest(`/v9/projects/${projectId}/env`) as {
+        envs: Array<{ id: string; key: string; value?: string; type: string; target: string[] }>;
+      };
+      // Mask values for security — show key names only
+      return { success: true, data: res.envs.map(e => ({
+        key: e.key, type: e.type, target: e.target,
+        value: e.type === "encrypted" ? "***encrypted***" : e.value?.slice(0, 20) + "...",
+      }))};
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  vercel_add_env_var: async ({ projectId, key, value, target = ["production", "preview"] }) => {
+    try {
+      await vercelRequest(`/v10/projects/${projectId}/env`, {
+        method: "POST",
+        body: JSON.stringify({ key, value, type: "encrypted", target }),
+      });
+      return { success: true, data: { added: key, target } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  vercel_trigger_deploy: async ({ deployHookUrl }) => {
+    try {
+      if (!String(deployHookUrl).startsWith("https://api.vercel.com/v1/integrations/deploy/")) {
+        return { success: false, error: "Invalid deploy hook URL. Get it from Vercel project → Settings → Git → Deploy Hooks." };
+      }
+      const res = await fetch(String(deployHookUrl), { method: "POST", signal: AbortSignal.timeout(10_000) });
+      const data = await res.json() as { job?: { id: string; state: string } };
+      return { success: true, data: { triggered: true, jobId: data.job?.id, state: data.job?.state } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  vercel_cancel_deploy: async ({ deploymentId }) => {
+    try {
+      const res = await vercelRequest(`/v12/deployments/${deploymentId}/cancel`, { method: "PATCH" }) as { state: string };
+      return { success: true, data: { state: res.state } };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  vercel_get_failed_checks: async ({ deploymentId }) => {
+    try {
+      const res = await vercelRequest(`/v1/deployments/${deploymentId}/checks`) as {
+        checks: Array<{ name: string; status: string; conclusion: string | null; output?: { summary?: string } }>;
+      };
+      const failed = res.checks.filter(c => c.conclusion === "failed" || c.status === "failed");
+      return { success: true, data: {
+        total: res.checks.length,
+        failed: failed.map(c => ({ name: c.name, status: c.status, summary: c.output?.summary })),
+      }};
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+};
+
+// Extended Supabase tools
+const supabaseExtendedTools: Record<string, ToolExecutor> = {
+
+  supabase_insert: async ({ table, data }) => {
+    try {
+      const creds = supabaseCreds();
+      if (!creds) throw new Error("Supabase credentials not set.");
+      const res = await fetch(`https://${creds.projectRef}.supabase.co/rest/v1/${table}`, {
+        method: "POST",
+        headers: {
+          "apikey": creds.serviceRoleKey, "Authorization": `Bearer ${creds.serviceRoleKey}`,
+          "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        body: JSON.stringify(data),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const result = await res.json();
+      if (!res.ok) return { success: false, error: JSON.stringify(result).slice(0, 200) };
+      return { success: true, data: result };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  supabase_update: async ({ table, match, data }) => {
+    try {
+      const creds = supabaseCreds();
+      if (!creds) throw new Error("Supabase credentials not set.");
+      const matchParams = Object.entries(match as Record<string,unknown>).map(([k,v]) => `${k}=eq.${v}`).join("&");
+      const res = await fetch(`https://${creds.projectRef}.supabase.co/rest/v1/${table}?${matchParams}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": creds.serviceRoleKey, "Authorization": `Bearer ${creds.serviceRoleKey}`,
+          "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        body: JSON.stringify(data),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const result = await res.json();
+      if (!res.ok) return { success: false, error: JSON.stringify(result).slice(0, 200) };
+      return { success: true, data: result };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+};
+
+// General utilities
+const utilityTools: Record<string, ToolExecutor> = {
+
+  fetch_url: async ({ url, method = "GET", headers, body }) => {
+    try {
+      const opts: RequestInit = {
+        method: String(method),
+        headers: { "User-Agent": "StreamsAI/1.0", ...(headers as Record<string,string> ?? {}) },
+        signal: AbortSignal.timeout(15_000),
+      };
+      if (body) opts.body = typeof body === "string" ? body : JSON.stringify(body);
+      const res = await fetch(String(url), opts);
+      const text = await res.text();
+      // Try to parse JSON, fall back to text
+      let data: unknown = text.slice(0, 20000);
+      try { data = JSON.parse(text); } catch { /* keep as text */ }
+      return { success: res.ok, data, status: res.status };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
+  run_analysis: async ({ owner, repo, paths, branch = "main" }) => {
+    // Read multiple files in parallel and return combined analysis
+    try {
+      const filePaths = Array.isArray(paths) ? paths as string[] : [String(paths)];
+      const results = await Promise.all(filePaths.map(async (path) => {
+        try {
+          const res = await githubRequest(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`) as { content?: string; encoding?: string; size?: number };
+          if (res.encoding === "base64" && res.content) {
+            const content = atob(res.content.replace(/\n/g, ""));
+            return { path, content: content.slice(0, 15000), size: res.size };
+          }
+          return { path, error: "Could not decode" };
+        } catch (e) { return { path, error: (e as Error).message }; }
+      }));
+      return { success: true, data: results };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+};
+
+
 export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
   ...githubTools,
+  ...githubExtendedTools,
   ...vercelTools,
+  ...vercelExtendedTools,
   ...supabaseTools,
+  ...supabaseExtendedTools,
+  ...utilityTools,
 
   // Check what connections are available
   check_connections: async () => {
@@ -513,6 +773,27 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+  // ── Extended GitHub ───────────────────────────────────────────────────────
+  { type: "function" as const, function: { name: "github_get_repo_info", description: "Get repository metadata: default branch, language, stars, topics, visibility.", parameters: { type: "object", required: ["owner","repo"], properties: { owner: {type:"string"}, repo: {type:"string"} } } } },
+  { type: "function" as const, function: { name: "github_create_branch", description: "Create a new git branch from an existing branch. Do this BEFORE writing files for a PR workflow.", parameters: { type: "object", required: ["owner","repo","branch"], properties: { owner:{type:"string"}, repo:{type:"string"}, branch:{type:"string",description:"New branch name"}, from_branch:{type:"string",description:"Source branch (default: main)"} } } } },
+  { type: "function" as const, function: { name: "github_delete_file", description: "Delete a file from a GitHub repository.", parameters: { type: "object", required: ["owner","repo","path","message"], properties: { owner:{type:"string"}, repo:{type:"string"}, path:{type:"string"}, message:{type:"string",description:"Commit message"}, branch:{type:"string"} } } } },
+  { type: "function" as const, function: { name: "github_create_pr", description: "Create a pull request. Use after writing changes on a branch to propose merging into main.", parameters: { type: "object", required: ["owner","repo","title","head"], properties: { owner:{type:"string"}, repo:{type:"string"}, title:{type:"string"}, body:{type:"string",description:"PR description"}, head:{type:"string",description:"Branch with changes"}, base:{type:"string",description:"Target branch (default: main)"}, draft:{type:"boolean"} } } } },
+  { type: "function" as const, function: { name: "github_list_prs", description: "List pull requests in a repository with their state and branches.", parameters: { type: "object", required: ["owner","repo"], properties: { owner:{type:"string"}, repo:{type:"string"}, state:{type:"string",enum:["open","closed","all"]}, per_page:{type:"number"} } } } },
+  { type: "function" as const, function: { name: "github_merge_pr", description: "Merge a pull request into its base branch.", parameters: { type: "object", required: ["owner","repo","pull_number"], properties: { owner:{type:"string"}, repo:{type:"string"}, pull_number:{type:"number"}, merge_method:{type:"string",enum:["merge","squash","rebase"]}, commit_title:{type:"string"} } } } },
+  { type: "function" as const, function: { name: "github_trigger_workflow", description: "Trigger a GitHub Actions workflow (CI/CD pipeline).", parameters: { type: "object", required: ["owner","repo","workflow_id"], properties: { owner:{type:"string"}, repo:{type:"string"}, workflow_id:{type:"string",description:"Workflow filename e.g. ci.yml or workflow ID"}, ref:{type:"string"}, inputs:{type:"object"} } } } },
+  { type: "function" as const, function: { name: "diff_files", description: "Compare two branches/commits to see what changed. Shows file diffs and patch content.", parameters: { type: "object", required: ["owner","repo","base","head"], properties: { owner:{type:"string"}, repo:{type:"string"}, base:{type:"string",description:"Base branch/commit"}, head:{type:"string",description:"Comparison branch/commit"}, path:{type:"string",description:"Filter to specific file path"} } } } },
+  // ── Extended Vercel ───────────────────────────────────────────────────────
+  { type: "function" as const, function: { name: "vercel_get_env_vars", description: "List environment variables for a Vercel project. Values are masked for security.", parameters: { type: "object", properties: { projectId:{type:"string"}, projectName:{type:"string",description:"Project name if no ID"} } } } },
+  { type: "function" as const, function: { name: "vercel_add_env_var", description: "Add or update an environment variable on a Vercel project.", parameters: { type: "object", required: ["projectId","key","value"], properties: { projectId:{type:"string"}, key:{type:"string"}, value:{type:"string"}, target:{type:"array",items:{type:"string"},description:"Environments: production, preview, development"} } } } },
+  { type: "function" as const, function: { name: "vercel_trigger_deploy", description: "Trigger a Vercel deployment via a deploy hook URL. Get the hook from Vercel project Settings → Git → Deploy Hooks.", parameters: { type: "object", required: ["deployHookUrl"], properties: { deployHookUrl:{type:"string",description:"Full Vercel deploy hook URL"} } } } },
+  { type: "function" as const, function: { name: "vercel_cancel_deploy", description: "Cancel a currently running Vercel deployment.", parameters: { type: "object", required: ["deploymentId"], properties: { deploymentId:{type:"string"} } } } },
+  { type: "function" as const, function: { name: "vercel_get_failed_checks", description: "Get failed build checks for a Vercel deployment — shows what caused it to fail.", parameters: { type: "object", required: ["deploymentId"], properties: { deploymentId:{type:"string"} } } } },
+  // ── Extended Supabase ─────────────────────────────────────────────────────
+  { type: "function" as const, function: { name: "supabase_insert", description: "Insert one or more rows into a Supabase table.", parameters: { type: "object", required: ["table","data"], properties: { table:{type:"string"}, data:{type:"object",description:"Row data as object or array of objects"} } } } },
+  { type: "function" as const, function: { name: "supabase_update", description: "Update rows in a Supabase table matching specific conditions.", parameters: { type: "object", required: ["table","match","data"], properties: { table:{type:"string"}, match:{type:"object",description:"Column=value conditions to match rows"}, data:{type:"object",description:"Updated values"} } } } },
+  // ── Utilities ─────────────────────────────────────────────────────────────
+  { type: "function" as const, function: { name: "fetch_url", description: "Fetch any URL — API endpoints, documentation pages, webhooks, external data sources. Returns response body.", parameters: { type: "object", required: ["url"], properties: { url:{type:"string"}, method:{type:"string",enum:["GET","POST","PUT","PATCH","DELETE"]}, headers:{type:"object"}, body:{description:"Request body"} } } } },
+  { type: "function" as const, function: { name: "run_analysis", description: "Read multiple files in parallel from a GitHub repo for comprehensive codebase analysis. Use when analyzing how multiple files interact.", parameters: { type: "object", required: ["owner","repo","paths"], properties: { owner:{type:"string"}, repo:{type:"string"}, paths:{type:"array",items:{type:"string"},description:"Array of file paths to read simultaneously"}, branch:{type:"string"} } } } },
 ];
 
 // ── Tool call executor — runs a single tool and returns result ─────────────

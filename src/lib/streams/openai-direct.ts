@@ -58,19 +58,67 @@ After reading a file and suggesting a fix → offer to github_write_file the fix
 - Deployed: coral-app-rpgt7.ondigitalocean.app (DigitalOcean) + streamsailive.vercel.app
 - Direct provider calls: browser → fal.ai/OpenAI/ElevenLabs/Runway via localStorage keys
 
-## TOOL REFERENCE
-- github_list_repos      → list ALL repos the token has access to
-- github_list_files      → list files in a directory (owner, repo, path)
-- github_read_file       → read full file content (owner, repo, path, branch)
-- github_write_file      → commit a file change (owner, repo, path, content, message)
-- github_search_code     → search code across repos
-- github_list_issues     → list issues/PRs
-- github_get_commits     → recent commit history
-- vercel_list_projects   → all Vercel projects
-- vercel_list_deployments → recent deployments with status
-- supabase_list_tables   → all database tables
-- supabase_query         → run SQL
-- create_file            → create a downloadable file for the user`;
+## TOOL REFERENCE — 32 TOOLS AVAILABLE
+
+**GitHub (14 tools):**
+- github_list_repos        → all repos with language/stars
+- github_get_repo_info     → default branch, topics, visibility
+- github_list_files        → directory listing
+- github_read_file         → full file content (up to 50KB)
+- github_write_file        → commit a file (create or update)
+- github_delete_file       → remove a file from repo
+- github_create_branch     → new branch from existing (do this BEFORE write for PR workflow)
+- github_create_pr         → open pull request (head → base)
+- github_list_prs          → list open/closed PRs
+- github_merge_pr          → merge a PR (squash/merge/rebase)
+- github_search_code       → search across repos by query/language
+- github_list_issues       → list issues with labels
+- github_get_commits       → recent commit history
+- github_trigger_workflow  → trigger GitHub Actions CI/CD
+- diff_files               → compare branches/commits (shows patch)
+
+**Vercel (7 tools):**
+- vercel_list_projects      → all projects with framework
+- vercel_list_deployments   → recent deployments with state/url/commit
+- vercel_get_deployment_logs → build logs (find errors)
+- vercel_get_failed_checks  → what checks failed and why
+- vercel_get_env_vars       → list env vars (values masked)
+- vercel_add_env_var        → add/update an env var
+- vercel_trigger_deploy     → redeploy via hook URL
+- vercel_cancel_deploy      → cancel stuck deployment
+
+**Supabase (5 tools):**
+- supabase_list_tables → all public tables
+- supabase_get_schema  → columns/types for a table
+- supabase_query       → run SQL (SELECT/INSERT/UPDATE)
+- supabase_insert      → insert rows via REST API
+- supabase_update      → update rows matching conditions
+
+**Utilities (4 tools):**
+- check_connections → verify GitHub/Vercel/Supabase token status
+- fetch_url        → GET/POST any URL (APIs, docs, webhooks)
+- run_analysis     → read multiple files in parallel
+- create_file      → generate a downloadable file
+
+## DEVELOPER WORKFLOWS
+
+**Full PR workflow:**
+1. github_create_branch (new-fix-branch from main)
+2. github_write_file (make the change)
+3. github_create_pr (open PR from branch → main)
+4. github_merge_pr (after review)
+
+**Debug failed Vercel build:**
+1. vercel_list_deployments (find the failed one)
+2. vercel_get_deployment_logs (read build output)
+3. vercel_get_failed_checks (specific checks that failed)
+4. github_read_file (find the breaking code)
+5. github_write_file (fix it)
+
+**Database operations:**
+- SELECT: supabase_query with SQL
+- INSERT: supabase_insert with table + data object
+- UPDATE: supabase_update with match conditions + new data`;
 
 // ── Detect if query needs tools (forces tool call instead of relying on model) ──
 function requiresTools(message: string): boolean {
