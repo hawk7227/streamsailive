@@ -18,7 +18,9 @@ if (missing.length > 0) {
 
 const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: true },
-  eslint:      { ignoreDuringBuilds: true },
 };
+
+// eslint config is valid at runtime — cast to avoid type version mismatch
+(nextConfig as Record<string, unknown>).eslint = { ignoreDuringBuilds: true };
 
 export default nextConfig;

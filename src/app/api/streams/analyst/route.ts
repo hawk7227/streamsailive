@@ -148,7 +148,8 @@ Prompt: ${body.prompt.trim()}`;
     model_recommendation: recommendedModel,
     cost_before_usd: costBefore,
     cost_after_usd:  costAfter,
-  }).catch(() => {/* non-fatal if analyst_sessions table not yet created */});
+  // non-fatal fire-and-forget
+  }).then(() => {}, () => {});
 
   return NextResponse.json({
     sessionId,
