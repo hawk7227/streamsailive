@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from "react";
 import { C, R, DUR, EASE } from "../tokens";
+import { setProviderKey } from "@/lib/streams/provider-keys";
 
 type KeyStatus = "untested" | "testing" | "valid" | "invalid";
 
@@ -243,6 +244,13 @@ export default function SettingsTab() {
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+
+      // Persist full keys to sessionStorage for direct provider calls
+      // Keys are never sent to Vercel/server — only hints (last 4 chars) are stored in DB
+      const providerMap = ["fal", "elevenlabs", "openai"] as const;
+      keyVals.forEach((val: string, i: number) => {
+        if (val.trim()) setProviderKey(providerMap[i], val.trim());
+      });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
     }

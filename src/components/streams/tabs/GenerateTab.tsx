@@ -20,6 +20,7 @@ import FileUpload from "../FileUpload";
 import BottomSheet from "../BottomSheet";
 import { useToast } from "../Toast";
 import { C, R, DUR, EASE } from "../tokens";
+import { submitDirectToFal, extractVideoUrl, extractImageUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-direct";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
 type Duration = "3" | "4" | "5" | "8" | "10" | "15";
@@ -32,6 +33,33 @@ const VIDEO_MODELS = ["Standard","Pro","Precision","Cinema","Native Audio"];
 const IMAGE_MODELS = ["Kontext","Kontext Max","FLUX Pro","Design","Nano"];
 const VOICE_MODELS = ["Voice v3","Turbo","Multilingual"];
 const MUSIC_MODELS = ["Music","Music Draft","Music Ref","Commercial"];
+
+// Direct fal endpoint map — model name → fal endpoint string
+const FAL_VIDEO_ENDPOINTS: Record<string, string> = {
+  "Standard":     "fal-ai/kling-video/v3/standard/text-to-video",
+  "Pro":          "fal-ai/kling-video/v3/pro/text-to-video",
+  "Precision":    "fal-ai/kling-video/v3/standard/text-to-video",
+  "Cinema":       "fal-ai/veo3.1",
+  "Native Audio": "fal-ai/veo3.1",
+};
+const FAL_IMAGE_ENDPOINTS: Record<string, string> = {
+  "Kontext":     "fal-ai/flux-pro/kontext/text-to-image",
+  "Kontext Max": "fal-ai/flux-pro/kontext-max/text-to-image",
+  "FLUX Pro":    "fal-ai/flux-pro",
+  "Design":      "fal-ai/recraft-v3",
+  "Nano":        "fal-ai/flux/dev",
+};
+const FAL_VOICE_ENDPOINTS: Record<string, string> = {
+  "Voice v3":    "fal-ai/elevenlabs/tts/eleven-v3",
+  "Turbo":       "fal-ai/elevenlabs/tts/turbo-v2.5",
+  "Multilingual":"fal-ai/elevenlabs/tts/eleven-v3",
+};
+const FAL_MUSIC_ENDPOINTS: Record<string, string> = {
+  "Music":       "fal-ai/minimax-music/v2.6",
+  "Music Draft": "fal-ai/minimax-music/v2",
+  "Music Ref":   "fal-ai/minimax-music",
+  "Commercial":  "fal-ai/elevenlabs/music",
+};
 
 const STRUCT_TAGS = ["[Intro]","[Verse]","[Pre Chorus]","[Chorus]","[Post Chorus]","[Bridge]","[Hook]","[Outro]","[Inst]","[Solo]"];
 const STYLE_TPLS = [
@@ -283,100 +311,65 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  setGrid((prev: GridItem[]) => [...prev, {id: tempId, status:"waiting"}]);
 
  try {
- // Select correct route and body based on mode
- type RouteBody = Record<string, unknown>;
- let route: string;
- let body: RouteBody;
+ // Build fal endpoint + input directly — no Vercel hop
+ type FalInput = Record<string, unknown>;
+ let falEndpoint: string;
+ let falInput: FalInput;
 
  if (mode === "Music") {
- route = "/api/streams/music/generate";
- body = {
- provider: currentModel.toLowerCase().replace(/\s+/g, "-"),
- prompt: styleInput || prompt,
- lyrics: lyricsInput || undefined,
- topic: topic || undefined,
- };
+   falEndpoint = FAL_MUSIC_ENDPOINTS[currentModel] ?? "fal-ai/minimax-music/v2.6";
+   falInput = {
+     prompt: styleInput || prompt,
+     ...(lyricsInput ? { lyrics: lyricsInput } : {}),
+   };
  } else if (mode === "Image") {
- route = "/api/streams/image/generate";
- body = {
- model: currentModel.toLowerCase().replace(/\s+/g, "-"),
- prompt,
- ...(useCustom && canCustomSize
- ? { width: roundedW, height: roundedH }
- : { aspectRatio: styleAr }),
- };
+   falEndpoint = FAL_IMAGE_ENDPOINTS[currentModel] ?? "fal-ai/flux-pro/kontext/text-to-image";
+   falInput = {
+     prompt,
+     ...(useCustom && canCustomSize
+       ? { image_size: { width: roundedW, height: roundedH } }
+       : { aspect_ratio: styleAr }),
+   };
  } else if (mode === "Voice") {
- route = "/api/streams/voice/generate";
- body = { text: prompt, model: currentModel.toLowerCase().replace(/\s+/g, "-") };
+   falEndpoint = FAL_VOICE_ENDPOINTS[currentModel] ?? "fal-ai/elevenlabs/tts/eleven-v3";
+   falInput = { text: prompt };
  } else {
- // T2V | I2V | Motion — all go to video/generate
- route = "/api/streams/video/generate";
- body = { prompt, duration, aspectRatio: ar };
+   // T2V | I2V | Motion
+   falEndpoint = FAL_VIDEO_ENDPOINTS[currentModel] ?? "fal-ai/kling-video/v3/standard/text-to-video";
+   falInput = { prompt, duration: String(duration), aspect_ratio: ar };
  }
 
- const res = await fetch(route, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
- const data = await res.json() as { generationId?: string; responseUrl?: string; outputUrl?: string; error?: string };
-
- if (!res.ok) {
- setGenState("failed");
- toast.error(data.error ?? "Generation failed");
- setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
- return;
- }
-
- // Sync modes (Image/Voice/Music) return outputUrl directly — no polling needed
- if (data.outputUrl && !data.generationId) {
- setGenState("done");
- setGrid((prev:GridItem[]) => prev.map((g:GridItem) =>
-  g.id===tempId ? {...g,status:"done",outputUrl:data.outputUrl} : g
- ));
- if (window.innerWidth < 768) setResultsOpen(true);
- onGenerationComplete?.(data.outputUrl!, tempId);
- return;
- }
-
- if (!data.generationId) {
- setGenState("failed");
- toast.error("No generation ID returned");
- setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
- return;
- }
-
- generationRef.current = { generationId: data.generationId, responseUrl: data.responseUrl! };
- setGrid((prev: GridItem[]) => prev.map((g: GridItem) => g.id === tempId ? {id: data.generationId, status:"running", generationId: data.generationId} as GridItem : g));
- setGenState("queued");
-
- // Poll every 6 seconds
- pollRef.current = setInterval(async () => {
- const ref = generationRef.current;
- if (!ref) return stopPolling();
-
- const statusRes = await fetch("/api/streams/video/status", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ generationId: ref.generationId, responseUrl: ref.responseUrl }) });
- const statusData = await statusRes.json() as { status?: string; artifactUrl?: string };
-
- if (statusData.status === "processing") { setGenState("polling"); return; }
- if (statusData.status === "completed") {
- stopPolling();
- setGenState("done");
- if (window.innerWidth < 768) setResultsOpen(true);
- const artUrl = (statusData as Record<string,unknown>).artifactUrl as string | undefined;
- if (artUrl) onGenerationComplete?.(artUrl);
- setGrid((prev: GridItem[]) => prev.map((g: GridItem) =>
- g.generationId === ref.generationId || g.id === ref.generationId
- ? { ...g, id: ref.generationId, status: "done", outputUrl: (statusData as Record<string,unknown>).artifactUrl as string | undefined, generationId: ref.generationId }
- : g
- ));
- }
- if (statusData.status === "failed") {
- stopPolling();
- setGenState("failed");
- toast.error("Generation failed — check fal API key in Settings");
- setGrid((prev: GridItem[]) => prev.map((g: GridItem) =>
- g.generationId === ref.generationId ? { ...g, status: "done" } : g
- ));
- }
- }, 6000);
-
+ await submitDirectToFal({
+   endpoint: falEndpoint,
+   input:    falInput,
+   onProgress: (status) => {
+     setGenState(status.includes("Queue") ? "queued" : "polling");
+   },
+   onDone: (raw) => {
+     const outputUrl =
+       mode === "Image"  ? extractImageUrl(raw) :
+       mode === "Music"  ? extractMusicUrl(raw) :
+       mode === "Voice"  ? extractAudioUrl(raw) :
+                           extractVideoUrl(raw);
+     if (!outputUrl) {
+       setGenState("failed");
+       toast.error("Generation completed but no output URL returned");
+       setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
+       return;
+     }
+     setGenState("done");
+     setGrid((prev:GridItem[]) => prev.map((g:GridItem) =>
+       g.id===tempId ? { ...g, id: tempId, status:"done", outputUrl } : g
+     ));
+     if (window.innerWidth < 768) setResultsOpen(true);
+     onGenerationComplete?.(outputUrl, tempId);
+   },
+   onError: (err) => {
+     setGenState("failed");
+     toast.error(err);
+     setGrid((prev:GridItem[]) => prev.map((g:GridItem) => g.id===tempId ? {...g,status:"done"} : g));
+   },
+ });
  } catch (err) {
  console.error("Generate error:", err);
  setGenState("failed");

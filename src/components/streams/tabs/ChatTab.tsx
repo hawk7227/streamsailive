@@ -16,6 +16,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import MediaPlayer from "../VideoPlayer";
 import { R, S, DUR, EASE } from "../tokens";
+import { streamDirectFromOpenAI } from "@/lib/streams/openai-direct";
 
 // ── Claude-style light theme tokens ─────────────────────────────────────────
 const CT = {
@@ -98,8 +99,11 @@ export default function ChatTab() {
     } catch { /* empty state */ } finally { setLibLoad(false); }
   }, [libraryLoading]);
 
+  // ── Send message ─────────────────────────────────────────────────────────
   async function handleSend() {
-    const text = input.trim(); if (!text || streaming) return;
+    const text = input.trim();
+    if (!text || streaming) return;
+
     const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
     setMsgs(p => [...p, userMsg]);
     setSessions(prev => prev.map(s =>
@@ -107,52 +111,122 @@ export default function ChatTab() {
         ? { ...s, title: text.slice(0, 36) + (text.length > 36 ? "…" : "") } : s));
     setInput(""); setStreaming(true);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+
     const aiId = (Date.now() + 1).toString();
-    setMsgs(p => [...p, { id: aiId, role: "assistant", text: "", streaming: true }]);
-    try {
-      const res = await fetch("/api/ai-assistant", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, mode: mode.toLowerCase(), conversationId: convId }),
-      });
-      if (!res.ok || !res.body) {
-        setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: "Error connecting to assistant.", streaming: false } : m));
-        setStreaming(false); return;
-      }
-      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
-      const readTimeout = () => Promise.race([
-        reader.read(),
-        new Promise<{done:true;value:undefined}>((_, rej) => setTimeout(() => rej(new Error("SSE timeout")), 90_000)),
-      ]) as Promise<{done:boolean;value?:Uint8Array}>;
-      while (true) {
-        const { done, value } = await readTimeout(); if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n"); buffer = chunks.pop() ?? "";
-        for (const chunk of chunks) {
-          const lines    = chunk.split("\n");
-          const evtLine  = lines.find(l => l.startsWith("event:"));
-          const dataLine = lines.find(l => l.startsWith("data:"));
-          if (!dataLine) continue;
-          const eventName = evtLine?.replace("event:", "").trim() ?? "message";
-          let payload: Record<string, unknown> = {};
-          try { payload = JSON.parse(dataLine.replace("data:", "").trim()); } catch { continue; }
-          if (eventName === "text_delta") {
-            const delta = String(payload.delta ?? "");
-            setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: m.text + delta } : m));
-          } else if (eventName === "media") {
-            const mediaUrl  = String(payload.url  ?? "");
-            const mediaType = String(payload.kind ?? "image") as "image"|"video";
-            setMsgs(p => p.map(m => m.id === aiId ? { ...m, mediaUrl, mediaType } : m));
-          } else if (eventName === "done") {
-            setMsgs(p => p.map(m => m.id === aiId ? { ...m, streaming: false } : m));
+
+    // ── Image mode — generate image directly, show inline ──────────────────
+    if (mode === "Image") {
+      setMsgs(p => [...p, { id: aiId, role: "assistant", text: "Generating image…", streaming: true }]);
+
+      const { getProviderKey } = await import("@/lib/streams/provider-keys");
+      const { submitDirectToFal, extractImageUrl } = await import("@/lib/streams/fal-direct");
+      const falKey = getProviderKey("fal");
+      const openaiKey = getProviderKey("openai");
+
+      if (falKey) {
+        // fal FLUX — fastest, best quality
+        await submitDirectToFal({
+          endpoint: "fal-ai/flux-pro/kontext/text-to-image",
+          input:    { prompt: text, aspect_ratio: "1:1" },
+          onProgress: (status) => {
+            setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: status } : m));
+          },
+          onDone: (raw) => {
+            const url = extractImageUrl(raw);
+            if (url) {
+              setMsgs(p => p.map(m => m.id === aiId
+                ? { ...m, text: "", mediaUrl: url, mediaType: "image" as const, streaming: false }
+                : m));
+            } else {
+              setMsgs(p => p.map(m => m.id === aiId
+                ? { ...m, text: "Image generated but URL could not be read.", streaming: false }
+                : m));
+            }
             setStreaming(false);
-          }
-        }
+          },
+          onError: (err) => {
+            setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: err, streaming: false } : m));
+            setStreaming(false);
+          },
+        });
+        return;
       }
-      setMsgs(p => p.map(m => m.id === aiId ? { ...m, streaming: false } : m));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection error";
-      setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: msg, streaming: false } : m));
-    } finally { setStreaming(false); }
+
+      if (openaiKey) {
+        // OpenAI gpt-image-1 — direct from browser
+        try {
+          const res = await fetch("https://api.openai.com/v1/images/generations", {
+            method: "POST",
+            headers: {
+              "Content-Type":  "application/json",
+              "Authorization": `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+              model:   "gpt-image-1",
+              prompt:  text,
+              n:       1,
+              size:    "1024x1024",
+              quality: "standard",
+            }),
+          });
+          const data = await res.json() as {
+            data?: Array<{ url?: string; b64_json?: string }>;
+            error?: { message: string };
+          };
+          if (!res.ok || data.error) {
+            throw new Error(data.error?.message ?? `HTTP ${res.status}`);
+          }
+          const item = data.data?.[0];
+          const url  = item?.url ?? (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
+          if (url) {
+            setMsgs(p => p.map(m => m.id === aiId
+              ? { ...m, text: "", mediaUrl: url, mediaType: "image" as const, streaming: false }
+              : m));
+          } else {
+            setMsgs(p => p.map(m => m.id === aiId
+              ? { ...m, text: "Image generated but no URL returned.", streaming: false }
+              : m));
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Image generation failed";
+          setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: msg, streaming: false } : m));
+        } finally {
+          setStreaming(false);
+        }
+        return;
+      }
+
+      // No key set
+      setMsgs(p => p.map(m => m.id === aiId
+        ? { ...m, text: "No image key set — go to Settings → API Keys and add a fal or OpenAI key.", streaming: false }
+        : m));
+      setStreaming(false);
+      return;
+    }
+
+    // ── Chat / Build mode — stream text from OpenAI directly ───────────────
+    setMsgs(p => [...p, { id: aiId, role: "assistant", text: "", streaming: true }]);
+
+    const history = msgs.slice(-12).map(m => ({
+      role:    m.role as "user" | "assistant",
+      content: m.text,
+    }));
+
+    await streamDirectFromOpenAI({
+      message: text,
+      history,
+      onDelta: (delta) => {
+        setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: m.text + delta } : m));
+      },
+      onDone: () => {
+        setMsgs(p => p.map(m => m.id === aiId ? { ...m, streaming: false } : m));
+        setStreaming(false);
+      },
+      onError: (err) => {
+        setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: err, streaming: false } : m));
+        setStreaming(false);
+      },
+    });
   }
 
   function handleNewChat() {
