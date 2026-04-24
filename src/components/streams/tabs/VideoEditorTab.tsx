@@ -132,7 +132,22 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  body: JSON.stringify({ generationLogId:genLogId, analysisId, originalText:selectedWord??"",
  newText:editText, startMs, endMs, videoUrl:videoUrl??"" }),
  });
- if (res.ok) setRevoiceState("done"); else setRevoiceState("idle");
+ if (!res.ok) { setRevoiceState("idle"); return; }
+ const { versionId } = await res.json() as { versionId?: string };
+ if (!versionId) { setRevoiceState("done"); return; }
+ // Poll status until complete
+ let attempts = 0;
+ const poll = async (): Promise<void> => {
+   if (attempts++ > 40) { setRevoiceState("idle"); return; }
+   const sr = await fetch("/api/streams/video/edit-voice/status", {
+     method:"POST", headers:{"Content-Type":"application/json"},
+     body: JSON.stringify({ versionId }),
+   });
+   if (sr.ok) { setRevoiceState("done"); return; }
+   await new Promise(r => setTimeout(r, 3000));
+   return poll();
+ };
+ await poll();
  } catch { setRevoiceState("idle"); }
  }
 
@@ -155,8 +170,22 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  videoUrl: videoUrl ?? "",
  }),
  });
- if (res.ok) setApplyMotion((p) => ({...p, [shotId]:"done" as const}));
- else setApplyMotion((p) => ({...p, [shotId]:"idle" as const}));
+ if (!res.ok) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+ const { versionId } = await res.json() as { versionId?: string };
+ if (!versionId) { setApplyMotion((p) => ({...p, [shotId]:"done" as const})); return; }
+ // Poll status until complete (compose pipeline runs server-side)
+ let attempts = 0;
+ const pollMotion = async (): Promise<void> => {
+   if (attempts++ > 40) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
+   const sr = await fetch("/api/streams/video/edit-motion/status", {
+     method:"POST", headers:{"Content-Type":"application/json"},
+     body: JSON.stringify({ versionId }),
+   });
+   if (sr.ok) { setApplyMotion((p) => ({...p, [shotId]:"done" as const})); return; }
+   await new Promise(r => setTimeout(r, 3000));
+   return pollMotion();
+ };
+ await pollMotion();
  } catch { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); }
  }
 
