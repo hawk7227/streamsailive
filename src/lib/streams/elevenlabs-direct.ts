@@ -35,7 +35,7 @@ export async function speakDirectFromElevenLabs(opts: ElevenLabsTTSOptions): Pro
   }
 
   const voiceId = opts.voiceId ?? DEFAULT_VOICE_ID;
-  const modelId = opts.modelId ?? "eleven_turbo_v2_5"; // fastest model
+  const modelId = opts.modelId ?? "eleven_multilingual_v2"; // highest quality model
 
   try {
     const res = await fetch(
@@ -50,9 +50,13 @@ export async function speakDirectFromElevenLabs(opts: ElevenLabsTTSOptions): Pro
         body: JSON.stringify({
           text:             opts.text,
           model_id:         modelId,
+          // Studio-quality output: 192kbps MP3, 44.1kHz — highest ElevenLabs tier
+          output_format:    "mp3_44100_192",
           voice_settings: {
-            stability:        opts.stability        ?? 0.5,
-            similarity_boost: opts.similarityBoost  ?? 0.75,
+            stability:        opts.stability        ?? 0.42,  // slightly lower = more expressive
+            similarity_boost: opts.similarityBoost  ?? 0.82,  // higher = more accurate to voice
+            style:            0.35,                           // adds style variation
+            use_speaker_boost: true,                          // enhances clarity
           },
         }),
       }

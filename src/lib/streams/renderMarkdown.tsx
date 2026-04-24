@@ -9,7 +9,118 @@
 import React from "react";
 
 // ── Languages that get a live preview tab ────────────────────────────────
-const PREVIEWABLE = new Set(["html", "jsx", "tsx", "svg", "css"]);
+
+const PREVIEWABLE = new Set(["html","jsx","tsx","svg","css","mermaid","latex","math","csv","tsv","json","markdown","md"]);
+const AUDIO_LANGS = new Set(["audio","mp3","wav","ogg","m4a"]);
+const FILE_LANGS  = new Set(["pdf","docx","doc","xlsx","txt"]);
+
+
+
+// ── Mermaid diagram srcdoc ────────────────────────────────────────────────
+function buildMermaidSrcdoc(code: string): string {
+  const escaped = code.replace(/</g,"&lt;");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></` + `script>
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;padding:20px}.mermaid{max-width:100%}svg{max-width:100%;height:auto}</style></head><body>
+<div class="mermaid">${escaped}</div>
+<script>mermaid.initialize({startOnLoad:true,theme:'default',securityLevel:'loose'});</` + `script></body></html>`;
+}
+
+// ── KaTeX math srcdoc ─────────────────────────────────────────────────────
+function buildLatexSrcdoc(code: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></` + `script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></` + `script>
+<style>body{margin:32px;font-family:system-ui,sans-serif;font-size:16px;line-height:1.7;background:#fff}</style></head><body>
+<div id="math">$$` + `${code}$$</div>
+<script>renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});</` + `script></body></html>`;
+}
+
+// ── Markdown doc srcdoc ───────────────────────────────────────────────────
+function buildMarkdownSrcdoc(code: string): string {
+  const safe = JSON.stringify(code);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></` + `script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown.min.css">
+<style>body{margin:32px;background:#fff}.markdown-body{max-width:800px;margin:0 auto}</style></head><body>
+<div class="markdown-body" id="out"></div>
+<script>document.getElementById('out').innerHTML=marked.parse(` + `${safe});</` + `script></body></html>`;
+}
+
+// ── CSV sortable table ────────────────────────────────────────────────────
+function CSVPreview({ code, sep = "," }: { code: string; sep?: string }) {
+  const [sortCol, setSortCol] = React.useState<number|null>(null);
+  const [sortAsc, setSortAsc] = React.useState(true);
+  const rows = React.useMemo(()=>code.trim().split("\n").map(l=>l.split(sep).map(c=>c.trim().replace(/^["']|["']$/g,""))), [code,sep]);
+  const header = rows[0]??[];
+  const data = React.useMemo(()=>{
+    const body=rows.slice(1);
+    if(sortCol===null)return body;
+    return [...body].sort((a,b)=>{const av=a[sortCol]??"",bv=b[sortCol]??"";const n=Number(av)-Number(bv);const cmp=isNaN(n)?av.localeCompare(bv):n;return sortAsc?cmp:-cmp;});
+  },[rows,sortCol,sortAsc]);
+  const sort=(col:number)=>{if(sortCol===col)setSortAsc(v=>!v);else{setSortCol(col);setSortAsc(true);}};
+  return <div style={{overflowX:"auto",maxHeight:400,overflowY:"auto"}}>
+    <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+      <thead style={{position:"sticky",top:0,background:"#f6f8fa",zIndex:1}}>
+        <tr>{header.map((h,i)=><th key={i} onClick={()=>sort(i)} style={{padding:"8px 12px",border:"1px solid rgba(0,0,0,0.10)",textAlign:"left",cursor:"pointer",userSelect:"none",fontWeight:500,whiteSpace:"nowrap"}}>{h}{sortCol===i?(sortAsc?" ↑":" ↓"):""}</th>)}</tr>
+      </thead>
+      <tbody>{data.map((row,ri)=><tr key={ri} style={{background:ri%2?"rgba(0,0,0,0.015)":"#fff"}}>{row.map((cell,ci)=><td key={ci} style={{padding:"6px 12px",border:"1px solid rgba(0,0,0,0.07)",fontSize:13}}>{cell}</td>)}</tr>)}</tbody>
+    </table>
+    <div style={{padding:"5px 12px",fontSize:12,color:"rgba(0,0,0,0.38)"}}>{data.length} rows · {header.length} cols · click header to sort</div>
+  </div>;
+}
+
+// ── JSON collapsible tree ─────────────────────────────────────────────────
+function JSONNode({ data, depth=0, k }: { data: unknown; depth?: number; k?: string }) {
+  const [open,setOpen]=React.useState(depth<2);
+  const isObj=data!==null&&typeof data==="object"&&!Array.isArray(data);
+  const isArr=Array.isArray(data);
+  const entries=isObj?Object.entries(data as Record<string,unknown>):isArr?(data as unknown[]).map((v,i)=>[String(i),v] as [string,unknown]):[];
+  const br=isArr?["[","]"]:["{","}"];
+  const vc=(v:unknown)=>typeof v==="string"?"#22863a":typeof v==="number"?"#005cc5":typeof v==="boolean"?"#d73a49":"rgba(0,0,0,0.45)";
+  if(!isObj&&!isArr)return<span style={{color:vc(data),fontFamily:"monospace",fontSize:13}}>{JSON.stringify(data)}</span>;
+  return<span>
+    {k!==undefined&&<span style={{color:"#6f42c1",fontFamily:"monospace",fontSize:13}}>"{k}": </span>}
+    <button onClick={()=>setOpen(v=>!v)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"monospace",fontSize:13,padding:0,color:"rgba(0,0,0,0.55)"}}>
+      {open?"▾":"▸"} {br[0]}{!open&&<span style={{color:"rgba(0,0,0,0.38)"}}>{entries.length} {isArr?"items":"keys"}{br[1]}</span>}
+    </button>
+    {open&&<div style={{paddingLeft:18,borderLeft:"1px solid rgba(0,0,0,0.08)",marginLeft:4}}>
+      {entries.map(([ek,ev])=><div key={ek} style={{lineHeight:1.8}}>
+        {typeof ev==="object"&&ev!==null?<JSONNode data={ev} depth={depth+1} k={ek}/>:<><span style={{color:"#6f42c1",fontFamily:"monospace",fontSize:13}}>"{ek}": </span><JSONNode data={ev} depth={depth+1}/></>}
+      </div>)}
+    </div>}
+    {open&&<span style={{fontFamily:"monospace",fontSize:13}}>{br[1]}</span>}
+  </span>;
+}
+function JSONPreview({ code }: { code: string }) {
+  const p=React.useMemo(()=>{try{return{ok:true,data:JSON.parse(code)};}catch(e){return{ok:false,error:(e as Error).message};}}, [code]);
+  if(!p.ok)return<div style={{padding:14,color:"#dc2626",fontFamily:"monospace",fontSize:13}}>JSON error: {p.error}</div>;
+  return<div style={{padding:"12px 16px",overflowX:"auto",maxHeight:420,overflowY:"auto"}}><JSONNode data={p.data}/></div>;
+}
+
+// ── Audio inline player ───────────────────────────────────────────────────
+function AudioPlayer({ src }: { src: string }) {
+  return<div style={{padding:"16px 20px",background:"#f6f8fa"}}>
+    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+    <audio controls style={{width:"100%",minHeight:40}} src={src}/>
+  </div>;
+}
+
+// ── File download artifact ────────────────────────────────────────────────
+function FileArtifact({ filename, code, lang }: { filename: string; code: string; lang: string }) {
+  const download=()=>{const blob=new Blob([code],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
+  const icons: Record<string,string>={pdf:"📄",doc:"📝",docx:"📝",txt:"📄",json:"📋",csv:"📊",xlsx:"📊",md:"📝"};
+  return<div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px",border:"1px solid rgba(0,0,0,0.10)",borderRadius:10,background:"#fafafa",margin:"10px 0"}}>
+    <span style={{fontSize:28}}>{icons[lang]??"📁"}</span>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:14,color:"rgba(0,0,0,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{filename}</div>
+      <div style={{fontSize:12,color:"rgba(0,0,0,0.42)",marginTop:2}}>{lang.toUpperCase()} · {(new TextEncoder().encode(code).length/1024).toFixed(1)} KB</div>
+    </div>
+    <button onClick={download} style={{padding:"7px 16px",fontSize:13,fontFamily:"inherit",background:"rgba(0,0,0,0.07)",border:"1px solid rgba(0,0,0,0.12)",borderRadius:8,cursor:"pointer",color:"rgba(0,0,0,0.7)",flexShrink:0}}>↓ Download</button>
+  </div>;
+}
+
 
 // ── Copy button ───────────────────────────────────────────────────────────
 function CopyButton({ code, small }: { code: string; small?: boolean }) {
@@ -120,16 +231,28 @@ function ArtifactBlock({ lang, code, idx }: { lang: string; code: string; idx: n
   const [tab,      setTab]      = React.useState<"preview" | "code">("preview");
   const [expanded, setExpanded] = React.useState(false);
 
-  // Build srcdoc once per code change
-  const srcdoc = React.useMemo(() => {
-    if (lang === "html") return code;
-    if (lang === "svg")  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;background:#fff}</style></head><body>${code}</body></html>`;
-    if (lang === "css")  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:16px;font-family:system-ui,sans-serif}${code}</style></head><body><h1 class="heading">Heading</h1><p class="text">Paragraph text sample</p><button class="button">Button</button><div class="card" style="margin-top:16px;padding:16px">Card</div></body></html>`;
-    if (lang === "jsx" || lang === "tsx") return buildJSXSrcdoc(code);
-    return `<!DOCTYPE html><html><body style="margin:16px;font-family:monospace;font-size:13px"><pre>${code.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></body></html>`;
-  }, [lang, code]);
+  // 4K quality: every srcdoc sets viewport to 3840px (4K width), scaled down to fit.
+  // Regardless of monitor, the content renders at 4K resolution then CSS-scales to container.
+  const K4_META = `<meta name="viewport" content="width=3840, initial-scale=1">
+<style>html{image-rendering:high-quality;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}</style>`;
 
-  const previewH = expanded ? 700 : 420;
+  const srcdoc = React.useMemo(() => {
+    if (lang === "html") {
+      // Inject 4K meta into existing HTML
+      return code.includes("<head>")
+        ? code.replace("<head>", `<head>${K4_META}`)
+        : `<!DOCTYPE html><html><head>${K4_META}</head><body>${code}</body></html>`;
+    }
+    if (lang === "svg")  return `<!DOCTYPE html><html><head><meta charset="utf-8">${K4_META}<style>html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;background:#fff}</style></head><body>${code}</body></html>`;
+    if (lang === "css")  return `<!DOCTYPE html><html><head><meta charset="utf-8">${K4_META}<style>*{box-sizing:border-box}body{margin:32px;font-family:system-ui,sans-serif}${code}</style></head><body><h1 class="heading">Heading Sample</h1><p class="text">Body text sample paragraph.</p><button class="button">Button</button><div class="card" style="margin-top:24px;padding:20px">Card element</div></body></html>`;
+    if (lang === "jsx" || lang === "tsx") return buildJSXSrcdoc(code);
+    if (lang === "mermaid") return buildMermaidSrcdoc(code);
+    if (lang === "latex" || lang === "math") return buildLatexSrcdoc(code);
+    if (lang === "markdown" || lang === "md") return buildMarkdownSrcdoc(code);
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${K4_META}</head><body style="margin:16px;font-family:monospace;font-size:13px"><pre>${code.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></body></html>`;
+  }, [lang, code, K4_META]);
+
+  const previewH = expanded ? 720 : 440;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "6px 16px",
@@ -474,9 +597,35 @@ function renderBlock(block: Block, idx: number): React.ReactNode {
 
     case "code": {
       const code = block.lines.join("\n");
-      if (PREVIEWABLE.has(block.lang)) {
-        return <ArtifactBlock key={idx} lang={block.lang} code={code} idx={idx} />;
-      }
+      const lang  = block.lang.toLowerCase();
+
+      if (AUDIO_LANGS.has(lang))
+        return <div key={idx} style={{margin:"10px 0"}}><AudioPlayer src={code} /></div>;
+
+      if (FILE_LANGS.has(lang))
+        return <FileArtifact key={idx} filename={`document.${lang}`} code={code} lang={lang} />;
+
+      if (lang === "csv" || lang === "tsv")
+        return <div key={idx} style={{border:"1px solid rgba(0,0,0,0.10)",borderRadius:8,overflow:"hidden",margin:"10px 0"}}>
+          <div style={{padding:"7px 14px",background:"#fafafa",borderBottom:"1px solid rgba(0,0,0,0.08)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,color:"rgba(0,0,0,0.42)",fontFamily:"monospace"}}>{lang}</span>
+            <CopyButton code={code} small/>
+          </div>
+          <CSVPreview code={code} sep={lang==="tsv"?"\t":","} />
+        </div>;
+
+      if (lang === "json")
+        return <div key={idx} style={{border:"1px solid rgba(0,0,0,0.10)",borderRadius:8,overflow:"hidden",margin:"10px 0"}}>
+          <div style={{padding:"7px 14px",background:"#fafafa",borderBottom:"1px solid rgba(0,0,0,0.08)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,color:"rgba(0,0,0,0.42)",fontFamily:"monospace"}}>json</span>
+            <CopyButton code={code} small/>
+          </div>
+          <JSONPreview code={code}/>
+        </div>;
+
+      if (PREVIEWABLE.has(lang))
+        return <ArtifactBlock key={idx} lang={lang} code={code} idx={idx} />;
+
       return <PlainCodeBlock key={idx} lang={block.lang} code={code} />;
     }
 

@@ -545,6 +545,54 @@ export default function SettingsTab() {
             {saveError}
           </div>
         )}
+
+        {/* SMS Notifications */}
+        <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
+          <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
+            <div style={{ fontSize: 15, color: C.t1 }}>SMS Notifications</div>
+            <div style={{ fontSize: 13, color: C.t4, marginTop: 2 }}>Get notified when generations complete, fail, or need review.</div>
+          </div>
+          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 13, color: C.t3, lineHeight: 1.5 }}>
+              Add these to your DigitalOcean environment variables:
+            </div>
+            {[
+              { key: "TWILIO_ACCOUNT_SID",  label: "Twilio Account SID",  hint: "From twilio.com/console" },
+              { key: "TWILIO_AUTH_TOKEN",   label: "Twilio Auth Token",   hint: "From twilio.com/console" },
+              { key: "TWILIO_FROM_NUMBER",  label: "Twilio From Number",  hint: "+15551234567 (your Twilio number)" },
+              { key: "ADMIN_PHONE_NUMBER",  label: "Your Phone Number",   hint: "+15559876543 (receives alerts)" },
+            ].map(({ key, label, hint }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: C.bg3, borderRadius: R.r1, border: `1px solid ${C.bdr}` }}>
+                <div>
+                  <div style={{ fontSize: 13, color: C.t1, fontFamily: "monospace" }}>{key}</div>
+                  <div style={{ fontSize: 12, color: C.t4, marginTop: 1 }}>{label} — {hint}</div>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/admin/notify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ event: "user_action_needed", message: "Test SMS from Streams AI", detail: "SMS notifications are working correctly." }),
+                  });
+                  const d = await res.json() as { sent?: boolean; error?: string };
+                  if (d.sent) setSaveError(null);
+                  else setSaveError(d.error ?? "SMS test failed — check env vars");
+                } catch { setSaveError("SMS test failed — check network"); }
+              }}
+              style={{ padding: "8px 16px", borderRadius: R.r1, border: `1px solid ${C.bdr}`, background: C.surf, color: C.t2, fontSize: 13, fontFamily: "inherit", cursor: "pointer", alignSelf: "flex-start" }}
+            >
+              🔔 Send test SMS
+            </button>
+            <div style={{ fontSize: 12, color: C.t4, lineHeight: 1.5 }}>
+              Events that trigger SMS: generation complete/failed, connector connected/failed,
+              rate limits, cost alerts, build complete/failed, manual review needed.
+            </div>
+          </div>
+        </div>
+
         {/* Save */}
         <button onClick={handleSave} style={{
           width: "100%", padding: "12px 0", borderRadius: R.r2, border: "none",
