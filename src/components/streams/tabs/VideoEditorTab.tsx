@@ -81,6 +81,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const [timelineZoom,   setTimelineZoom]   = useState(1);
  const [timelineOffset, setTimelineOffset] = useState(0);
  const [loadError, setLoadError] = useState<string|null>(null);
+ const [drawerOpen, setDrawerOpen] = useState(false);
  const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
  // Sync prop changes (when PersonTab ingest completes after mount)
@@ -221,7 +222,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <div style={{
  width:220, flexShrink:0, borderRight:`1px solid ${C.bdr}`,
  background:C.bg2, display:"flex", flexDirection:"column", overflow:"hidden",
- }} className="streams-editor-left">
+ }} className={`streams-editor-left${drawerOpen ? " open" : ""}`}>
  <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.bdr}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <span style={{fontSize:12,color:C.t4,letterSpacing:".1em",textTransform:"uppercase",fontWeight:500}}>Editable Layers</span>
  <span style={{fontSize:12,padding:"1px 8px",borderRadius:R.pill,background:C.accDim,border:`1px solid ${C.accBr}`,color:C.acc2}}>{shots.length} shots</span>
@@ -590,7 +591,30 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
 
  return (
  <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+
+ {/* Mobile drawer overlay */}
+ <div
+   aria-hidden="true"
+   onClick={() => setDrawerOpen(false)}
+   style={{
+     position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+     zIndex:299, opacity:drawerOpen?1:0,
+     pointerEvents:drawerOpen?"auto":"none",
+     transition:`opacity 200ms ease`,
+   }}
+   className="streams-editor-overlay"
+ />
+
  <div style={{display:"flex",height:46,flexShrink:0,borderBottom:`1px solid ${C.bdr}`,background:C.bg2,padding:"0 16px",gap:0,overflowX:"auto"}}>
+ {/* Mobile hamburger — opens left panel drawer */}
+ <button
+   aria-label="Open layers panel"
+   onClick={() => setDrawerOpen((prev: boolean) => !prev)}
+   className="streams-editor-hamburger"
+   style={{background:"transparent",border:"none",
+     color:C.t3,fontSize:18,cursor:"pointer",padding:"0 8px",flexShrink:0}}>
+   ☰
+ </button>
  {(["Motion","Transcript","Audio","Export"] as SubTab[]).map(t=>(
  <button key={t} onClick={()=>setSubTab(t)} style={{height:46,padding:"0 18px",border:"none",borderBottom:subTab===t?`2px solid ${C.acc}`:"2px solid transparent",background:subTab===t?"rgba(124,58,237,0.06)":"transparent",color:subTab===t?C.t1:C.t3,fontSize:14,fontFamily:"inherit",cursor:"pointer",flexShrink:0,transition:`all ${DUR.fast} ${EASE}`}}>{t}</button>
  ))}
@@ -618,16 +642,48 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  {subTab==="Export" && ExportView}
  <style>{`
  @keyframes streams-editor-spin { to{transform:rotate(360deg)} }
+
  .streams-editor-audio-bar {
    scrollbar-width: none;
    -ms-overflow-style: none;
  }
  .streams-editor-audio-bar::-webkit-scrollbar { display: none; }
- @media(max-width:767px){
-   .streams-root .streams-editor-left { display: none; }
+
+ /* Left panel: drawer on mobile, inline on desktop */
+ .streams-editor-left {
+   position: fixed;
+   top: 0; left: 0;
+   height: 100dvh;
+   width: 260px;
+   z-index: 300;
+   transform: translateX(-100%);
+   transition: transform 200ms cubic-bezier(.4,0,.2,1);
  }
- @media(min-width:768px){
-   .streams-root .streams-editor-left { display: flex; }
+ .streams-editor-left.open {
+   transform: translateX(0);
+ }
+ .streams-editor-overlay {
+   display: block;
+ }
+ /* Hamburger: hidden by default, shown on mobile */
+ .streams-editor-hamburger {
+   display: none;
+   align-items: center;
+ }
+ @media (max-width: 767px) {
+   .streams-editor-hamburger { display: flex; }
+ }
+ @media (min-width: 768px) {
+   .streams-editor-left {
+     position: relative;
+     height: 100%;
+     width: 220px;
+     transform: none;
+     transition: none;
+     z-index: auto;
+     flex-shrink: 0;
+   }
+   .streams-editor-overlay { display: none; }
  }
  `}</style>
  </div>

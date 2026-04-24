@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { checkRateLimit } from "@/lib/streams/rate-limiter";
 import { falSubmit, FAL_ENDPOINTS } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
@@ -98,6 +99,29 @@ export async function POST(request: Request): Promise<NextResponse> {
     input_params:    { text: body.text, voice_id: body.voiceId, singing: body.singing },
     fal_status:      "pending",
   });
+
+  // ── Rate limit ────────────────────────────────────────────────────────────
+  const rateResult = checkRateLimit(workspaceId);
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again shortly." },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
+
+  // ── Cost enforcement ──────────────────────────────────────────────────────
+  const { data: wSettings } = await admin
+    .from("workspace_settings").select("cost_limit_daily_usd").eq("workspace_id", workspaceId).maybeSingle();
+  const limitUsd = wSettings?.cost_limit_daily_usd ?? null;
+  if (limitUsd != null && limitUsd > 0) {
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const { data: rows } = await admin.from("generation_log").select("cost_usd")
+      .eq("workspace_id", workspaceId).gte("created_at", todayStart.toISOString());
+    const spent = (rows ?? []).reduce((s: number, r: {cost_usd: number|null}) => s + (r.cost_usd ?? 0), 0);
+    if (spent >= limitUsd) {
+      return NextResponse.json({ error: `Daily cost limit $${limitUsd.toFixed(2)} reached. Spent: $${spent.toFixed(2)}` }, { status: 402 });
+    }
+  }
 
   const submitResult = await falSubmit(endpoint, falInput);
 
