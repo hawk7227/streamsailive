@@ -70,6 +70,10 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  const [applyMotion, setApplyMotion] = useState<Record<string,"idle"|"running"|"done">>({});
  const [dubLang, setDubLang] = useState("Spanish");
  const [dubState, setDubState] = useState<"idle"|"running"|"done">("idle");
+ const [emotion, setEmotion] = useState<"neutral"|"happy"|"sad"|"angry"|"surprised"|"disgusted"|"fearful">("neutral");
+ const [emotionState, setEmotionState] = useState<"idle"|"running"|"done">("idle");
+ const [bodyText, setBodyText] = useState("");
+ const [bodyState, setBodyState] = useState<"idle"|"running"|"done">("idle");
  const [downloading, setDownloading] = useState<string|null>(null);
  const [analysisId, setAnalysisId] = useState<string|null>(propAnalysisId ?? null);
  const [genLogId, setGenLogId] = useState<string|null>(propGenLogId ?? null);
@@ -208,6 +212,31 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  });
  if (res.ok) setDubState("done"); else setDubState("idle");
  } catch { setDubState("idle"); }
+ }
+
+ async function handleEditEmotion() {
+   if (emotionState==="running"||!genLogId||!videoUrl) return;
+   setEmotionState("running");
+   try {
+     const res = await fetch("/api/streams/video/edit-emotion", {
+       method:"POST", headers:{"Content-Type":"application/json"},
+       body: JSON.stringify({ generationLogId:genLogId, videoUrl, emotion, temperature:0.5, headMode:1 }),
+     });
+     if (res.ok) setEmotionState("done"); else setEmotionState("idle");
+   } catch { setEmotionState("idle"); }
+ }
+
+ async function handleEditBody() {
+   const text = bodyText.trim();
+   if (bodyState==="running"||!text||!genLogId||!analysisId) return;
+   setBodyState("running");
+   try {
+     const res = await fetch("/api/streams/video/edit-body", {
+       method:"POST", headers:{"Content-Type":"application/json"},
+       body: JSON.stringify({ generationLogId:genLogId, analysisId, newText:text }),
+     });
+     if (res.ok) { setBodyState("done"); setBodyText(""); } else setBodyState("idle");
+   } catch { setBodyState("idle"); }
  }
 
   function handleDownload(label: string) {
@@ -587,12 +616,59 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  </button>
  </div>
  </div>
+ {/* Emotion edit */}
+ <div style={{background:C.bg2,border:`1px solid ${C.bdr}`,borderRadius:R.r3,overflow:"hidden"}}>
+ <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.bdr}`}}>
+   <div style={{fontSize:15,fontWeight:500,color:C.t1}}>Emotion</div>
+   <div style={{fontSize:13,color:C.t4,marginTop:3}}>Change emotional delivery — Sync React-1. No regeneration.</div>
+ </div>
+ <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+   <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+     {(["neutral","happy","sad","angry","surprised","disgusted","fearful"] as const).map(em=>(
+       <button key={em} onClick={()=>setEmotion(em)} style={{
+         padding:"6px 12px",borderRadius:R.pill,fontSize:13,fontFamily:"inherit",cursor:"pointer",
+         border:`1px solid ${emotion===em?C.acc:C.bdr}`,
+         background:emotion===em?C.accDim:"transparent",
+         color:emotion===em?C.acc2:C.t3,
+       }}>{em}</button>
+     ))}
+   </div>
+   <button onClick={()=>void handleEditEmotion()} disabled={emotionState==="running"||!genLogId} style={{
+     padding:"8px 20px",borderRadius:R.r2,border:"none",fontFamily:"inherit",fontSize:14,cursor:"pointer",
+     background:emotionState==="done"?C.green:emotionState==="running"?C.bg4:C.acc,color:"#fff",
+     display:"flex",alignItems:"center",gap:8,alignSelf:"flex-start",
+   }}>
+     {emotionState==="running"&&<span style={{width:12,height:12,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
+     {emotionState==="done"?"✓ Applied":emotionState==="running"?"Applying…":`Apply ${emotion}`}
+   </button>
+ </div>
+ </div>
+ {/* Body edit — audio swap */}
+ <div style={{background:C.bg2,border:`1px solid ${C.bdr}`,borderRadius:R.r3,overflow:"hidden"}}>
+ <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.bdr}`}}>
+   <div style={{fontSize:15,fontWeight:500,color:C.t1}}>Body edit</div>
+   <div style={{fontSize:13,color:C.t4,marginTop:3}}>Replace narration audio — uses stored voice_id for TTS.</div>
+ </div>
+ <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
+   <textarea value={bodyText} onChange={(e:React.ChangeEvent<HTMLTextAreaElement>)=>setBodyText(e.target.value)}
+     maxLength={2000} rows={3} aria-label="Replacement narration text"
+     placeholder="Enter replacement narration text…"
+     style={{background:C.bg3,border:"none",borderRadius:R.r2,padding:"10px 12px",color:C.t1,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",lineHeight:1.5}}/>
+   <button onClick={()=>void handleEditBody()} disabled={bodyState==="running"||!bodyText.trim()||!genLogId} style={{
+     padding:"8px 20px",borderRadius:R.r2,border:"none",fontFamily:"inherit",fontSize:14,cursor:"pointer",
+     background:bodyState==="done"?C.green:bodyState==="running"?C.bg4:!bodyText.trim()||!genLogId?C.bg4:C.acc,
+     color:bodyState==="running"||!bodyText.trim()||!genLogId?"#aaa":"#fff",
+     display:"flex",alignItems:"center",gap:8,alignSelf:"flex-start",
+   }}>
+     {bodyState==="running"&&<span style={{width:12,height:12,borderRadius:R.pill,border:"1.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",display:"block",animation:"streams-editor-spin 600ms linear infinite"}}/>}
+     {bodyState==="done"?"✓ Applied":bodyState==="running"?"Applying…":"Apply body edit"}
+   </button>
+ </div>
+ </div>
  </div>
  </div>
  </div>
  );
-
- /* ── Export view ───────────────────────────────────────────────────── */
  const ExportView = (
  <div style={{flex:1,overflowY:"auto",padding:"24px 32px"}}>
  <div style={{maxWidth:680,margin:"0 auto"}}>
