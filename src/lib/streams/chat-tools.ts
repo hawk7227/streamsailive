@@ -269,6 +269,23 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
   ...vercelTools,
   ...supabaseTools,
 
+  // Check what connections are available
+  check_connections: async () => {
+    try {
+      const gh  = getToken("streams:github_token");
+      const vc  = getToken("streams:vercel_token");
+      const sb  = getToken("streams:supabase_creds");
+      return {
+        success: true,
+        data: {
+          github:   gh  ? `✅ Connected (token: ${gh.slice(0,8)}...)` : "❌ Not connected — go to Settings → Connections",
+          vercel:   vc  ? `✅ Connected (token: ${vc.slice(0,8)}...)` : "❌ Not connected — go to Settings → Connections",
+          supabase: sb  ? `✅ Connected` : "❌ Not connected — go to Settings → Connections",
+        }
+      };
+    } catch (e) { return { success: false, error: (e as Error).message }; }
+  },
+
   // Create a downloadable file
   create_file: async ({ filename, content, type = "text/plain" }) => {
     try {
@@ -285,6 +302,14 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
 // ── OpenAI tool definitions (schema passed to the API) ────────────────────
 
 export const TOOL_DEFINITIONS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "check_connections",
+      description: "Check which integrations (GitHub, Vercel, Supabase) are currently connected and have valid tokens. Call this first if unsure whether a connection is available.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
   {
     type: "function" as const,
     function: {

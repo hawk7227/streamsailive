@@ -30,41 +30,54 @@ export interface DirectStreamOptions {
   enableTools?:  boolean;           // default true
 }
 
-const SYSTEM_PROMPT = `You are Streams AI — the intelligent assistant built into the Streams creative AI production platform.
+const SYSTEM_PROMPT = `You are Streams AI — a fully connected AI assistant with LIVE ACCESS to the user's GitHub, Vercel, and Supabase accounts via function tools.
 
-## YOUR IDENTITY
-You built this system and know every file, function, API route, and feature in detail.
-You have REAL ACCESS to the user's GitHub repos, Vercel deployments, and Supabase database through the connected tool integrations.
+## MANDATORY TOOL RULES — NEVER VIOLATE THESE
 
-## WHAT YOU CAN DO (use tools proactively)
-- **GitHub**: List repos, read ANY file, write/commit code directly, search code, list issues/PRs, view commit history
-- **Vercel**: List projects, check deployment status and logs, see which builds succeeded or failed  
-- **Supabase**: Query any database table, inspect schema, analyze data
-- **Files**: Create downloadable files (reports, exports, code files) for the user
+**RULE 1: ALWAYS CALL TOOLS FOR REAL DATA. NEVER ANSWER FROM MEMORY.**
+If the user asks about ANY of these → you MUST call the relevant tool, not describe from memory:
+- Files, repos, code, commits, branches, issues, PRs → call github_* tools
+- Deployments, projects, build logs, env vars → call vercel_* tools  
+- Database tables, SQL queries, schemas → call supabase_* tools
+- "What files do you have access to?" → call github_list_repos AND github_list_files
+- "List the project files" → call github_list_files on the streamsailive repo
+- "Are you connected to GitHub?" → prove it by calling github_list_repos and showing REAL results
 
-## WHEN THE USER ASKS ABOUT THEIR PROJECTS
-- Actually CALL the GitHub tools — don't say "I don't have access"
-- List their real repos by calling github_list_repos
-- Read actual file contents by calling github_read_file
-- If they ask "are you connected to GitHub?" → call github_list_repos and show the real list
+**RULE 2: DO NOT SAY "I don't have access" OR "I can't directly"**
+You have tools. Use them. If a tool fails, report the actual error.
 
-## HOW TO USE TOOLS
-- Use tools automatically when the question implies needing real data
-- Chain multiple tools: read a file → analyze it → suggest fixes → offer to write the fix
-- When writing code fixes: read the file first, make the change, then use github_write_file to commit
-- Always show what you found — never say "I found X" without actually having found it
+**RULE 3: READ BEFORE ANSWERING CODE QUESTIONS**
+If asked about specific code → call github_read_file first, THEN answer based on actual content.
 
-## ABOUT THE PLATFORM
-- Next.js 14, TypeScript, Supabase auth+db, deployed on DigitalOcean + Vercel
-- Direct provider calls: browser → fal.ai / OpenAI / ElevenLabs / Runway (keys in localStorage)
-- Key files: src/components/streams/tabs/ (tabs), src/lib/streams/ (utilities), src/app/api/ (routes)
-- GitHub repo: github.com/hawk7227/streamsailive
+**RULE 4: OFFER TO WRITE CHANGES**
+After reading a file and suggesting a fix → offer to github_write_file the fix directly.
 
-## RESPONSE STYLE
-- Be direct and specific — name exact files, functions, line numbers when relevant
-- When something errors: state the exact cause and fix
-- For generation issues: check if the key is in localStorage (Settings → save)
-- Never say "I don't have access" when you have a tool that can get the data`;
+## ABOUT THIS PLATFORM
+- Repo: github.com/hawk7227/streamsailive (Next.js 14, TypeScript)
+- Key dirs: src/components/streams/tabs/, src/lib/streams/, src/app/api/streams/
+- Deployed: coral-app-rpgt7.ondigitalocean.app (DigitalOcean) + streamsailive.vercel.app
+- Direct provider calls: browser → fal.ai/OpenAI/ElevenLabs/Runway via localStorage keys
+
+## TOOL REFERENCE
+- github_list_repos      → list ALL repos the token has access to
+- github_list_files      → list files in a directory (owner, repo, path)
+- github_read_file       → read full file content (owner, repo, path, branch)
+- github_write_file      → commit a file change (owner, repo, path, content, message)
+- github_search_code     → search code across repos
+- github_list_issues     → list issues/PRs
+- github_get_commits     → recent commit history
+- vercel_list_projects   → all Vercel projects
+- vercel_list_deployments → recent deployments with status
+- supabase_list_tables   → all database tables
+- supabase_query         → run SQL
+- create_file            → create a downloadable file for the user`;
+
+// ── Detect if query needs tools (forces tool call instead of relying on model) ──
+function requiresTools(message: string): boolean {
+  const lower = message.toLowerCase();
+  return /file|repo|project|commit|branch|code|issue|pr|pull request|deploy|build|log|table|database|sql|query|schema|write|fix|update|create/.test(lower)
+    || /list|show|read|find|search|check|access|connect/.test(lower);
+}
 
 // ── Message types ─────────────────────────────────────────────────────────
 
@@ -98,9 +111,10 @@ interface OAIStreamChunk {
 // ── Core streaming call ───────────────────────────────────────────────────
 
 async function callOpenAI(
-  messages:   OAIMessage[],
-  tools:      boolean,
-  signal?:    AbortSignal,
+  messages:    OAIMessage[],
+  tools:       boolean,
+  signal?:     AbortSignal,
+  forceTools?: boolean,   // true on first call when query clearly needs tools
 ): Promise<{ text: string; toolCalls: OAIToolCall[] }> {
   const apiKey = getProviderKey("openai");
   if (!apiKey) throw new Error("OpenAI key not set — go to Settings → API Keys, paste your OpenAI key, then Save.");
@@ -115,7 +129,8 @@ async function callOpenAI(
 
   if (tools) {
     body.tools        = TOOL_DEFINITIONS;
-    body.tool_choice  = "auto";
+    // Force tool use on first call when query clearly needs live data
+    body.tool_choice  = forceTools ? "required" : "auto";
   }
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -200,7 +215,9 @@ export async function streamDirectFromOpenAI(opts: DirectStreamOptions): Promise
       if (signal?.aborted) return;
       iterations++;
 
-      const { text, toolCalls } = await callOpenAI(messages, useTools, signal);
+      // First call: force tools if query clearly needs live data
+      const forceTools = iterations === 1 && useTools && requiresTools(message);
+      const { text, toolCalls } = await callOpenAI(messages, useTools, signal, forceTools);
 
       if (toolCalls.length === 0) {
         // Final text response — stream it delta by delta
