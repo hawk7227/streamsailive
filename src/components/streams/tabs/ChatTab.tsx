@@ -44,8 +44,22 @@ interface Msg {
 type Session     = { id: string; title: string; time: string };
 type LibraryItem = { id: string; generation_type: string; output_url: string; created_at: string; cost_usd?: number | null };
 
+// ── Auto-save direct generations to library ───────────────────────────────────
+async function saveGenerationToLibrary(opts: {
+  type: "image" | "video" | "voice" | "music";
+  outputUrl: string; prompt: string; model?: string; provider?: string;
+}) {
+  try {
+    await fetch("/api/streams/save-generation", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify(opts),
+    });
+  } catch { /* non-fatal — library save failure doesn't block the user */ }
+}
+
 export default function ChatTab() {
   const [msgs,          setMsgs]         = useState<Msg[]>([]);
+  const [lightboxUrl,   setLightboxUrl]  = useState<string | null>(null);
   const [input,         setInput]        = useState("");
   const [mode,          setMode]         = useState<Mode>("Chat");
   const [streaming,     setStreaming]    = useState(false);
@@ -137,15 +151,22 @@ export default function ChatTab() {
               setMsgs(p => p.map(m => m.id === aiId
                 ? { ...m, text: "", mediaUrl: url, mediaType: "image" as const, streaming: false }
                 : m));
+              // Auto-save to library
+              void saveGenerationToLibrary({ type: "image", outputUrl: url, prompt: text, provider: "fal", model: "flux-pro/kontext" });
             } else {
               setMsgs(p => p.map(m => m.id === aiId
-                ? { ...m, text: "Image generated but URL could not be read.", streaming: false }
+                ? { ...m, text: "Image completed but no URL was returned from fal — try again.", streaming: false }
                 : m));
             }
             setStreaming(false);
           },
           onError: (err) => {
-            setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: err, streaming: false } : m));
+            const plain = err.includes("fal key not set")
+              ? "fal key not set — go to Settings → API Keys, paste your fal key, click Test, then Save settings."
+              : err.includes("401") ? "fal key is invalid — go to Settings → API Keys and re-enter your fal key."
+              : err.includes("429") ? "fal rate limit — wait 30 seconds and try again."
+              : err;
+            setMsgs(p => p.map(m => m.id === aiId ? { ...m, text: plain, streaming: false } : m));
             setStreaming(false);
           },
         });
@@ -182,9 +203,13 @@ export default function ChatTab() {
             setMsgs(p => p.map(m => m.id === aiId
               ? { ...m, text: "", mediaUrl: url, mediaType: "image" as const, streaming: false }
               : m));
+            // Auto-save to library (skip data: URIs — too large for DB)
+            if (!url.startsWith("data:")) {
+              void saveGenerationToLibrary({ type: "image", outputUrl: url, prompt: text, provider: "openai", model: "gpt-image-1" });
+            }
           } else {
             setMsgs(p => p.map(m => m.id === aiId
-              ? { ...m, text: "Image generated but no URL returned.", streaming: false }
+              ? { ...m, text: "OpenAI image completed but no URL was returned — try again.", streaming: false }
               : m));
           }
         } catch (err) {
@@ -405,11 +430,43 @@ export default function ChatTab() {
                   </div>
 
                   {msg.role==="assistant" && msg.mediaUrl && (
-                    <div style={{ width:"100%", maxWidth:360, marginTop:S.s2 }}>
-                      <MediaPlayer src={msg.mediaUrl}
-                        kind={msg.mediaType==="video"?"video":"image"}
-                        aspectRatio={msg.mediaType==="video"?"16/9":"1/1"}
-                        showDownload label="Generated"/>
+                    <div style={{ marginTop:S.s2 }}>
+                      {msg.mediaType === "video" ? (
+                        <div style={{ width:"100%", maxWidth:400 }}>
+                          <MediaPlayer src={msg.mediaUrl} kind="video"
+                            aspectRatio="16/9" showDownload label="Generated"/>
+                        </div>
+                      ) : (
+                        /* Clickable image — opens lightbox */
+                        <div
+                          role="button"
+                          aria-label="View full size image"
+                          tabIndex={0}
+                          onClick={() => setLightboxUrl(msg.mediaUrl!)}
+                          onKeyDown={(e:React.KeyboardEvent) => { if (e.key==="Enter"||e.key===" ") setLightboxUrl(msg.mediaUrl!); }}
+                          style={{
+                            cursor:"zoom-in", borderRadius:R.r2,
+                            overflow:"hidden", display:"inline-block",
+                            maxWidth:360, width:"100%",
+                            boxShadow:"0 4px 20px rgba(0,0,0,0.12)",
+                            transition:`transform ${DUR.fast} ${EASE}`,
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={msg.mediaUrl}
+                            alt="Generated image"
+                            style={{ width:"100%", height:"auto", display:"block" }}
+                          />
+                          <div style={{
+                            padding:"6px 10px", background:"rgba(0,0,0,0.04)",
+                            fontSize:12, color:CT.t4,
+                            display:"flex", alignItems:"center", gap:4,
+                          }}>
+                            <span>🔍</span> Click to enlarge
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
