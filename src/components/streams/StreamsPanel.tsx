@@ -20,8 +20,9 @@ import GenerateTab   from "./tabs/GenerateTab";
 import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
 import SettingsTab   from "./tabs/SettingsTab";
+import BuilderTab    from "./tabs/BuilderTab";
 
-type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings";
+type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder";
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "chat",      icon: "💬", label: "Chat"      },
@@ -29,6 +30,7 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "generate",  icon: "✦",  label: "Generate"  },
   { id: "reference", icon: "⬡",  label: "Reference" },
   { id: "person",    icon: "◈",  label: "Person"    },
+  { id: "builder",   icon: "⬡",  label: "Build"     },
   { id: "settings",  icon: "⚙",  label: "Settings"  },
 ];
 
@@ -188,6 +190,7 @@ export default function StreamsPanel() {
             />
           )}
           {active === "settings"  && <SettingsTab />}
+          {active === "builder"   && <BuilderTab />}
         </main>
 
         {/* ── Mobile bottom nav ───────────────────────────────── */}
