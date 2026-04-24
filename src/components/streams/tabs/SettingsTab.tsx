@@ -74,8 +74,21 @@ export default function SettingsTab() {
 
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Connectors state ─────────────────────────────────────────────────────
+  type ConnectorStatus = "connected" | "disconnected" | "error";
+  interface ConnectorAccount {
+    id: string; provider: string; providerAccountId: string | null;
+    status: ConnectorStatus; lastValidatedAt: string | null;
+  }
+  const [connectors,      setConnectors]      = useState<ConnectorAccount[]>([]);
+  const [connectorsLoaded, setConnectorsLoaded] = useState(false);
+  const [connecting,      setConnecting]      = useState<string | null>(null);
+  const [connectToken,    setConnectToken]    = useState<Record<string, string>>({});
+  const [connectError,    setConnectError]    = useState<string | null>(null);
+
   // Load settings on mount
   useEffect(() => {
+    // Load settings
     fetch("/api/streams/settings")
       .then(r => r.json())
       .then((d: { settings?: { default_video_model?: string; default_image_model?: string; default_voice_model?: string; default_music_model?: string; cost_limit_daily_usd?: number; cost_limit_monthly_usd?: number; quality_preset?: "fast"|"standard"|"pro"; watermark_enabled?: boolean } | null }) => {
@@ -113,7 +126,47 @@ export default function SettingsTab() {
         }
       })
       .catch(() => {/* settings load failed — use defaults */});
+
+    // Load connectors
+    fetch("/api/streams/connectors", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { data?: ConnectorAccount[] } | null) => {
+        if (d?.data) setConnectors(d.data);
+        setConnectorsLoaded(true);
+      })
+      .catch(() => setConnectorsLoaded(true));
   }, []);
+
+  async function handleConnect(provider: string) {
+    const token = connectToken[provider]?.trim();
+    if (!token) return;
+    setConnecting(provider);
+    setConnectError(null);
+    try {
+      const res = await fetch("/api/streams/connectors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ provider, credential: token }),
+      });
+      const d = await res.json() as { data?: ConnectorAccount; error?: string };
+      if (!res.ok || d.error) {
+        setConnectError(d.error ?? "Connection failed");
+      } else if (d.data) {
+        setConnectors(prev => {
+          const exists = prev.find(c => c.provider === provider);
+          return exists
+            ? prev.map(c => c.provider === provider ? d.data! : c)
+            : [...prev, d.data!];
+        });
+        setConnectToken(prev => ({ ...prev, [provider]: "" }));
+      }
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : "Connection failed");
+    } finally {
+      setConnecting(null);
+    }
+  }
 
   async function handleSave() {
     setSaveError(null);
@@ -297,6 +350,77 @@ export default function SettingsTab() {
               {watermark ? "On" : "Off"}
             </button>
           </div>
+        </div>
+
+        {/* Connectors */}
+        <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, overflow: "hidden" }}>
+          <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: C.t1 }}>Connections</div>
+            <div style={{ fontSize: 13, color: C.t4, marginTop: 2 }}>GitHub, Vercel, and Supabase for the Builder workspace.</div>
+          </div>
+          {([
+            { provider: "github",   label: "GitHub",   hint: "Personal access token or fine-grained token. Enables repo read/write.", placeholder: "ghp_……" },
+            { provider: "vercel",   label: "Vercel",   hint: "Vercel API token. Enables deployment status and project linking.",        placeholder: "Bearer ……" },
+            { provider: "supabase", label: "Supabase", hint: "JSON: { \"projectRef\": \"…\", \"serviceRoleKey\": \"…\" }",             placeholder: "{\"projectRef\":\"…\",\"serviceRoleKey\":\"…\"}" },
+          ]).map(({ provider, label, hint, placeholder }) => {
+            const account = connectors.find(c => c.provider === provider);
+            const isConnected = account?.status === "connected";
+            return (
+              <div key={provider} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.bdr}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: C.t1 }}>{label}</span>
+                    {isConnected && account.providerAccountId && (
+                      <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>
+                        ✓ {account.providerAccountId}
+                      </span>
+                    )}
+                    {isConnected && !account.providerAccountId && (
+                      <span style={{ marginLeft: 8, fontSize: 12, color: C.green }}>✓ Connected</span>
+                    )}
+                    {!isConnected && connectorsLoaded && (
+                      <span style={{ marginLeft: 8, fontSize: 12, color: C.t4 }}>Not connected</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: C.t4, marginBottom: 8 }}>{hint}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="password"
+                    value={connectToken[provider] ?? ""}
+                    onChange={e => setConnectToken(prev => ({ ...prev, [provider]: e.target.value }))}
+                    placeholder={isConnected ? "Enter new token to update" : placeholder}
+                    maxLength={2000}
+                    style={{
+                      flex: 1, background: C.bg3, border: "none", borderRadius: R.r1,
+                      padding: "7px 10px", color: C.t1, fontSize: 13,
+                      fontFamily: "inherit", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => void handleConnect(provider)}
+                    disabled={!connectToken[provider]?.trim() || connecting === provider}
+                    style={{
+                      padding: "7px 14px", borderRadius: R.r1,
+                      background: connectToken[provider]?.trim() && connecting !== provider ? C.acc : C.bg4,
+                      border: "none",
+                      color: connectToken[provider]?.trim() && connecting !== provider ? "#fff" : C.t4,
+                      fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+                      transition: `background ${DUR.fast} ${EASE}`,
+                      minHeight: 34, flexShrink: 0,
+                    }}
+                  >
+                    {connecting === provider ? "Connecting…" : isConnected ? "Update" : "Connect"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {connectError && (
+            <div style={{ padding: "8px 18px", fontSize: 12, color: C.red, borderTop: `1px solid ${C.bdr}` }}>
+              {connectError}
+            </div>
+          )}
         </div>
 
         {/* Save error */}

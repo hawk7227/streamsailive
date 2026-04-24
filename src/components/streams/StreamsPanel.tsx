@@ -30,7 +30,7 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "generate",  icon: "✦",  label: "Generate"  },
   { id: "reference", icon: "⬡",  label: "Reference" },
   { id: "person",    icon: "◈",  label: "Person"    },
-  { id: "builder",   icon: "⬡",  label: "Build"     },
+  { id: "builder",   icon: "⬢",  label: "Build"     },
   { id: "settings",  icon: "⚙",  label: "Settings"  },
 ];
 
