@@ -138,7 +138,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
 
  async function handleApplyMotion(shotId: string) {
  setApplyMotion((p) => ({...p, [shotId]:"running" as const}));
- if (!genLogId) { setTimeout(()=>setApplyMotion((p) => ({...p, [shotId]:"done" as const})),1800); return; }
+    if (!genLogId) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
  const shot = shots.find((s:Shot)=>s.id===shotId);
  if (!shot) { setApplyMotion((p) => ({...p, [shotId]:"idle" as const})); return; }
  try {
