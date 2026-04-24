@@ -37,6 +37,7 @@ const CT = {
   send:        "#d95b2a",
   inputBorder: "#d4d4d8",
   inputFocus:  "#a1a1aa",
+  statusBg:    "rgba(0,0,0,0.04)",
 } as const;
 
 type Mode    = "Chat" | "Image" | "Video" | "Build";
@@ -48,6 +49,8 @@ interface Msg {
   text:           string;
   // Phase drives ActivityConversation — real system state only
   phase?:         ActivityPhase;
+  // Tool calls shown live as they execute
+  toolCalls?:     Array<{ name: string; status: "running"|"done"|"error"; label: string }>;
   // Media generation
   mediaStage?:    MediaGenerationState;
   mediaKind?:     "image" | "video";
@@ -359,40 +362,68 @@ export default function ChatTab() {
     const history = msgs.slice(-12).map(m => ({ role: m.role as "user"|"assistant", content: m.text }));
     let firstDelta = true;
 
+    // Tool label map — human-readable names for each tool
+    const TOOL_LABELS: Record<string, string> = {
+      github_list_repos:        "Reading GitHub repos",
+      github_read_file:         "Reading file",
+      github_list_files:        "Listing files",
+      github_write_file:        "Writing file to GitHub",
+      github_search_code:       "Searching code",
+      github_list_issues:       "Reading issues",
+      github_get_commits:       "Reading commit history",
+      vercel_list_projects:     "Reading Vercel projects",
+      vercel_list_deployments:  "Checking deployments",
+      vercel_get_deployment_logs: "Reading deployment logs",
+      supabase_list_tables:     "Reading database tables",
+      supabase_query:           "Running SQL query",
+      supabase_get_schema:      "Reading table schema",
+      create_file:              "Creating file",
+    };
+
+    function handleToolCall(name: string, status: "running"|"done"|"error") {
+      const label = TOOL_LABELS[name] ?? name.replace(/_/g, " ");
+      // Advance to tool_running phase so ActivityConversation shows correct messages
+      if (status === "running") advancePhase(aiId, "tool_running");
+      setMsgs(p => p.map(m => {
+        if (m.id !== aiId) return m;
+        const existing = m.toolCalls ?? [];
+        const idx = existing.findIndex(t => t.name === name && t.status === "running");
+        if (status === "running") {
+          return { ...m, toolCalls: [...existing, { name, status, label }] };
+        }
+        if (idx >= 0) {
+          const updated = [...existing];
+          updated[idx] = { name, status, label };
+          return { ...m, toolCalls: updated };
+        }
+        return m;
+      }));
+    }
+
+    const streamOpts = {
+      history,
+      signal: ctrl.signal,
+      onToolCall: handleToolCall,
+      onDelta: (delta: string) => {
+        if (firstDelta) { firstDelta = false; clearTimers(); startTokenFlush(aiId); }
+        tokenBufRef.current += delta;
+      },
+      onDone: () => { clearTimers(); finishMsg(aiId); },
+      onError: (err: string) => { clearTimers(); if (err.includes("aborted")) { finishMsg(aiId); return; } errorMsg(aiId, err); },
+    };
+
+    let clearTimers: () => void;
+
     if (isBuild) {
-      // Advance build phases on timers while waiting for first token
       const t1 = setTimeout(() => advancePhase(aiId, "build_planning"), 700);
       const t2 = setTimeout(() => advancePhase(aiId, "build_writing"), 1600);
-      const cleanTimers = () => { clearTimeout(t1); clearTimeout(t2); };
-
-      await streamDirectFromOpenAI({
-        message: `[Build mode] ${text}`,
-        history,
-        signal: ctrl.signal,
-        onDelta: (delta) => {
-          if (firstDelta) { firstDelta = false; cleanTimers(); startTokenFlush(aiId); }
-          tokenBufRef.current += delta;
-        },
-        onDone: () => { cleanTimers(); finishMsg(aiId); },
-        onError: (err) => { cleanTimers(); if (err.includes("aborted")) { finishMsg(aiId); return; } errorMsg(aiId, err); },
-      });
+      clearTimers = () => { clearTimeout(t1); clearTimeout(t2); };
+      await streamDirectFromOpenAI({ message: `[Build mode] ${text}`, ...streamOpts });
     } else {
-      // Chat: advance phase on timers while waiting
       const t1 = setTimeout(() => advancePhase(aiId, "chat_thinking"), 1400);
       const t2 = setTimeout(() => advancePhase(aiId, "chat_thinking"), 3000);
-      const cleanTimers = () => { clearTimeout(t1); clearTimeout(t2); };
-
-      await streamDirectFromOpenAI({
-        message: text,
-        history,
-        signal: ctrl.signal,
-        onDelta: (delta) => {
-          if (firstDelta) { firstDelta = false; cleanTimers(); startTokenFlush(aiId); }
-          tokenBufRef.current += delta;
-        },
-        onDone: () => { cleanTimers(); finishMsg(aiId); },
-        onError: (err) => { cleanTimers(); if (err.includes("aborted")) { finishMsg(aiId); return; } errorMsg(aiId, err); },
-      });
+      clearTimers = () => { clearTimeout(t1); clearTimeout(t2); };
+      await streamDirectFromOpenAI({ message: text, ...streamOpts });
     }
   }
 
@@ -511,6 +542,30 @@ export default function ChatTab() {
                       active={msg.streaming}
                       firstOutputVisible={msg.firstOutput}
                     />
+                  )}
+
+                  {/* ── Tool call status pills — show as tools execute ── */}
+                  {msg.role==="assistant" && msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:msg.text ? S.s3 : 0 }}>
+                      {msg.toolCalls.map((tc, ti) => (
+                        <div key={`${tc.name}-${ti}`} style={{
+                          display:"inline-flex", alignItems:"center", gap:6,
+                          padding:"4px 10px", borderRadius:R.pill,
+                          background: tc.status==="done" ? "rgba(0,120,0,0.06)" : tc.status==="error" ? "rgba(200,0,0,0.06)" : CT.statusBg,
+                          border:`1px solid ${tc.status==="done"?"rgba(0,120,0,0.15)":tc.status==="error"?"rgba(200,0,0,0.15)":"rgba(0,0,0,0.08)"}`,
+                          alignSelf:"flex-start", fontSize:12,
+                          color: tc.status==="done"?"rgba(0,100,0,0.8)":tc.status==="error"?"rgba(160,0,0,0.8)":CT.t3,
+                          maxWidth:"100%",
+                        }}>
+                          {tc.status==="running" && (
+                            <span style={{ width:6, height:6, borderRadius:"50%", background:CT.send, flexShrink:0, animation:"streams-pulse2 1.2s ease infinite" }}/>
+                          )}
+                          {tc.status==="done"   && <span style={{ fontSize:12 }}>✓</span>}
+                          {tc.status==="error"  && <span style={{ fontSize:12 }}>✗</span>}
+                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tc.label}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
 
                   {/* ── MediaGenerationStage — renders IN the message, exact spot where output appears ── */}
