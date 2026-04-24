@@ -42,34 +42,103 @@ function CopyButton({ code, small }: { code: string; small?: boolean }) {
   );
 }
 
-// ── Artifact block — Preview + Code tabs (matches claude.ai) ─────────────
+// ── Open in browser — creates a blob URL and opens at full resolution ────
+function openInBrowser(srcdoc: string) {
+  const blob = new Blob([srcdoc], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
+  // Open at 4K resolution — user's monitor determines actual render quality
+  window.open(url, "_blank", "width=1920,height=1080,noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// ── Build JSX/TSX srcdoc with Babel + React + Tailwind from CDN ──────────
+function buildJSXSrcdoc(code: string): string {
+  // Strip ESM exports so Babel UMD mode works
+  const sanitized = code
+    .replace(/export\s+default\s+function\s+(\w+)/g, "function $1")
+    .replace(/export\s+default\s+class\s+(\w+)/g, "class $1")
+    .replace(/export\s+default\s+(\w+)/g, "window.__StreamsApp__=$1;")
+    .replace(/export\s+\{[^}]*\}/g, "")
+    .replace(/^import\s+.*$/gm, "// import stripped");
+
+  // Detect component name — last function/class def, or default marker
+  const nameMatch = sanitized.match(/(?:function|class)\s+([A-Z]\w*)/g);
+  const lastName  = nameMatch?.[nameMatch.length - 1]?.split(/\s+/)[1] ?? null;
+  const renderLine = lastName
+    ? `window.__StreamsApp__ = window.__StreamsApp__ || ${lastName};`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+    #root{min-height:100vh}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="error" style="display:none;padding:20px;color:#dc2626;font-family:monospace;font-size:13px;white-space:pre-wrap"></div>
+  <script type="text/babel" data-presets="react,typescript">
+    const {
+      useState, useEffect, useRef, useCallback, useMemo,
+      useContext, createContext, useReducer, useId,
+      forwardRef, memo, Fragment
+    } = React;
+
+    try {
+      ${sanitized}
+      ${renderLine}
+
+      const App = window.__StreamsApp__;
+      if (App) {
+        ReactDOM.createRoot(document.getElementById('root')).render(
+          React.createElement(React.StrictMode, null, React.createElement(App))
+        );
+      } else {
+        document.getElementById('root').innerHTML =
+          '<div style="padding:20px;color:#52525b;font-size:14px">No default export found — name your component and add: export default ComponentName</div>';
+      }
+    } catch(e) {
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'Render error: ' + e.message;
+    }
+  <\/script>
+</body>
+</html>`;
+}
+
 function ArtifactBlock({ lang, code, idx }: { lang: string; code: string; idx: number }) {
-  const [tab, setTab] = React.useState<"preview" | "code">("preview");
+  const [tab,      setTab]      = React.useState<"preview" | "code">("preview");
   const [expanded, setExpanded] = React.useState(false);
 
-  // Build srcdoc for the iframe preview
+  // Build srcdoc once per code change
   const srcdoc = React.useMemo(() => {
     if (lang === "html") return code;
-    if (lang === "svg") return `<!DOCTYPE html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff">${code}</body></html>`;
-    if (lang === "css") return `<!DOCTYPE html><html><head><style>${code}</style></head><body><div class="preview">CSS Preview</div></body></html>`;
-    // jsx/tsx — basic wrapper (no bundler, just shows the raw code nicely)
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>body{margin:0;font-family:system-ui,sans-serif;padding:16px;background:#fff;color:#18181b}
-pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow:auto;font-size:13px;line-height:1.6}</style>
-</head><body>
-<div style="color:#52525b;font-size:13px;margin-bottom:10px">Component preview requires a runtime. Here's the source:</div>
-<pre><code>${code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
-</body></html>`;
+    if (lang === "svg")  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;background:#fff}</style></head><body>${code}</body></html>`;
+    if (lang === "css")  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:16px;font-family:system-ui,sans-serif}${code}</style></head><body><h1 class="heading">Heading</h1><p class="text">Paragraph text sample</p><button class="button">Button</button><div class="card" style="margin-top:16px;padding:16px">Card</div></body></html>`;
+    if (lang === "jsx" || lang === "tsx") return buildJSXSrcdoc(code);
+    return `<!DOCTYPE html><html><body style="margin:16px;font-family:monospace;font-size:13px"><pre>${code.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></body></html>`;
   }, [lang, code]);
 
+  const previewH = expanded ? 700 : 420;
+
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    padding: "5px 14px",
+    padding: "6px 16px",
     fontSize: 13,
     fontFamily: "inherit",
     background: "transparent",
     border: "none",
-    borderBottom: active ? "2px solid rgba(0,0,0,0.75)" : "2px solid transparent",
-    color: active ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0.45)",
+    borderBottom: active ? "2px solid rgba(0,0,0,0.8)" : "2px solid transparent",
+    color: active ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0.42)",
     cursor: "pointer",
     marginBottom: -1,
     lineHeight: 1.4,
@@ -81,39 +150,58 @@ pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow:auto;font-size:13
       border: "1px solid rgba(0,0,0,0.10)",
       borderRadius: 10,
       overflow: "hidden",
-      margin: "12px 0",
+      margin: "14px 0",
       background: "#fff",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
     }}>
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{
-        display: "flex",
-        alignItems: "center",
+        display: "flex", alignItems: "center",
         justifyContent: "space-between",
         padding: "0 14px",
         borderBottom: "1px solid rgba(0,0,0,0.08)",
         background: "#fafafa",
+        minHeight: 40,
         gap: 8,
       }}>
         {/* Tabs */}
         <div style={{ display: "flex", gap: 2 }}>
           <button style={tabStyle(tab === "preview")} onClick={() => setTab("preview")}>Preview</button>
-          <button style={tabStyle(tab === "code")} onClick={() => setTab("code")}>Code</button>
+          <button style={tabStyle(tab === "code")}    onClick={() => setTab("code")}>Code</button>
         </div>
 
         {/* Right controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "rgba(0,0,0,0.35)", fontFamily: "monospace" }}>{lang}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "rgba(0,0,0,0.32)", fontFamily: "monospace" }}>{lang}</span>
           <CopyButton code={code} small />
+
+          {/* Open in browser — full 4K resolution */}
           <button
-            aria-label={expanded ? "Collapse" : "Expand"}
-            onClick={() => setExpanded(v => !v)}
+            aria-label="Open in browser at full resolution"
+            onClick={() => openInBrowser(srcdoc)}
+            title="Open in browser (full resolution)"
             style={{
-              width: 24, height: 24,
+              padding: "2px 10px", fontSize: 12, fontFamily: "inherit",
+              background: "rgba(0,0,0,0.06)",
+              border: "1px solid rgba(0,0,0,0.10)",
+              borderRadius: 6, color: "rgba(0,0,0,0.55)",
+              cursor: "pointer", lineHeight: 1.4,
+            }}
+          >
+            ↗ Open
+          </button>
+
+          {/* Expand / collapse */}
+          <button
+            aria-label={expanded ? "Collapse preview" : "Expand preview"}
+            onClick={() => setExpanded(v => !v)}
+            title={expanded ? "Collapse" : "Expand"}
+            style={{
+              width: 26, height: 26,
               display: "flex", alignItems: "center", justifyContent: "center",
               background: "transparent", border: "none",
-              color: "rgba(0,0,0,0.4)", cursor: "pointer", fontSize: 14,
-              borderRadius: 4,
+              color: "rgba(0,0,0,0.4)", cursor: "pointer", fontSize: 16,
+              borderRadius: 4, lineHeight: 1,
             }}
           >
             {expanded ? "⊟" : "⊞"}
@@ -121,37 +209,51 @@ pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow:auto;font-size:13
         </div>
       </div>
 
-      {/* Preview tab */}
+      {/* ── Preview tab ── */}
       {tab === "preview" && (
-        <iframe
-          key={`preview-${idx}-${code.length}`}
-          srcDoc={srcdoc}
-          sandbox="allow-scripts allow-same-origin"
-          style={{
-            width: "100%",
-            height: expanded ? 520 : 320,
-            border: "none",
-            display: "block",
-            background: "#fff",
-            transition: "height 0.2s ease",
-          }}
-          title={`Preview ${lang}`}
-        />
+        <div style={{ position: "relative" }}>
+          <iframe
+            key={`preview-${idx}-${code.length}`}
+            srcDoc={srcdoc}
+            sandbox="allow-scripts allow-same-origin"
+            style={{
+              width: "100%",
+              height: previewH,
+              border: "none",
+              display: "block",
+              background: "#fff",
+              transition: "height 0.2s ease",
+            }}
+            title={`${lang} preview`}
+          />
+          {/* Bottom hint — open in browser for full view */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            padding: "6px 12px",
+            background: "linear-gradient(transparent, rgba(255,255,255,0.95))",
+            display: "flex", justifyContent: "flex-end",
+            pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 12, color: "rgba(0,0,0,0.35)", pointerEvents: "none" }}>
+              ↗ Open for full 4K view
+            </span>
+          </div>
+        </div>
       )}
 
-      {/* Code tab */}
+      {/* ── Code tab ── */}
       {tab === "code" && (
         <pre style={{
           margin: 0,
           padding: "14px 16px",
           overflowX: "auto",
+          overflowY: "auto",
           fontSize: 13,
           fontFamily: "monospace",
           lineHeight: 1.6,
           color: "rgba(0,0,0,0.87)",
           background: "#f6f8fa",
-          maxHeight: expanded ? 600 : 400,
-          overflowY: "auto",
+          maxHeight: previewH,
         }}>
           <code>{code}</code>
         </pre>
