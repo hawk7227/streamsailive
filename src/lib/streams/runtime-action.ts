@@ -212,7 +212,21 @@ const EXECUTORS: Record<string, Executor> = {
     return { success: true, outputText: "Handoff written." };
   },
 
-  // ── register_artifact ──────────────────────────────────────────────────────
+  // ── pre_push ───────────────────────────────────────────────────────────────
+  // Records a pre-push audit request and returns instructions.
+  // Actual checks run via scripts/pre-push.mjs on the local machine.
+  pre_push: async (_payload, ctx, _admin) => {
+    return {
+      success:    true,
+      outputText: [
+        "Pre-push workflow registered.",
+        `Run locally: node scripts/pre-push.mjs --message "your commit message"`,
+        `API endpoint: POST /api/streams/pre-push`,
+        `Project: ${ctx.projectId ?? "workspace-level"}`,
+        `Session: ${ctx.sessionId}`,
+      ].join("\n"),
+    };
+  },
   // Registers an output as an artifact in the registry.
   register_artifact: async (payload, ctx, admin) => {
     const name         = payload.name as string;

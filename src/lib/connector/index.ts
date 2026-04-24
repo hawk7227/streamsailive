@@ -30,6 +30,7 @@ export {
   grantProjectAccess,
   getProjectGrant,
   getRecentConnectorLogs,
+  logConnectorAction,
 } from "./repository";
 
 // Adapters — for direct provider operations (server-only)
