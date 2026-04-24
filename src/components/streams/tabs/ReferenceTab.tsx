@@ -175,6 +175,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
                 />
                 <button onClick={source === "YouTube" ? undefined : runAnalysis}
                   disabled={source === "YouTube" || !urlInput.trim()}
+                  aria-label="Analyze URL"
                   style={{
                   padding: "8px 12px", borderRadius: R.r1,
                   background: (source === "YouTube" || !urlInput.trim()) ? C.bg4 : C.acc,

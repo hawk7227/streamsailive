@@ -1184,6 +1184,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  @media(max-width:767px){
    .streams-gen-left { flex: 0 0 100%; border-right: none; }
    .streams-gen-right { display: none; }
+   .streams-gen-scroll { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
  }
  @media(min-width:768px){
    .streams-gen-right { display: flex; }
