@@ -170,6 +170,9 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  const [bulkCount, setBulkCount] = useState(1);
  const [bulkMode, setBulkMode] = useState<"single"|"parallel">("single");
  const [stitchUrl, setStitchUrl] = useState<string | null>(null);
+ const [stitchError, setStitchError] = useState<string | null>(null);
+ const [sharingId, setSharingId] = useState<string | null>(null);
+ const [copiedId, setCopiedId] = useState<string | null>(null);
  const [micState, setMicState] = useState<"idle"|"recording"|"done">("idle");
  const [camState, setCamState] = useState<"idle"|"done">("idle");
  const [revoiceState,setRevoiceState]= useState<"idle"|"running"|"done">("idle");
@@ -408,6 +411,31 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
 
  function addToStitch(id: string) {
  setStitch((s:string[]) => s.includes(id) ? s.filter((x:string)=>x!==id) : [...s,id]);
+ }
+
+ async function handleShare(outputUrl: string, itemId: string) {
+   if (sharingId === itemId) return;
+   setSharingId(itemId);
+   try {
+     const res = await fetch("/api/streams/share", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       credentials: "include",
+       body: JSON.stringify({ generationLogId: itemId, isPublic: true }),
+     });
+     const data = await res.json() as { slug?: string; url?: string; error?: string };
+     const shareUrl = data.url ?? (data.slug ? `${window.location.origin}/s/${data.slug}` : outputUrl);
+     await navigator.clipboard.writeText(shareUrl);
+     setCopiedId(itemId);
+     setTimeout(() => setCopiedId(null), 2000);
+   } catch {
+     // Fallback: copy the direct output URL
+     try { await navigator.clipboard.writeText(outputUrl); } catch { /* ignore */ }
+     setCopiedId(itemId);
+     setTimeout(() => setCopiedId(null), 2000);
+   } finally {
+     setSharingId(null);
+   }
  }
 
  const btnLabel = isActive
@@ -979,7 +1007,19 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  
  {item.status==="done"&&<>
  <div style={{fontSize: 28,color:C.t4,opacity:.2}}>▶</div>
- <div style={{position:"absolute",bottom:8,right:8}}>
+ <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:4}}>
+ <button
+   aria-label="Share item"
+   onClick={(e:React.MouseEvent)=>{e.stopPropagation();if(item.outputUrl) void handleShare(item.outputUrl,item.id);}}
+   style={{
+     padding:"4px 8px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
+     background:copiedId===item.id?C.green:C.bg4,
+     border:`1px solid ${copiedId===item.id?C.green:C.bdr}`,
+     color:copiedId===item.id?"#fff":C.t3,
+     transition:`background 150ms ease`,
+   }}>
+   {sharingId===item.id?"…":copiedId===item.id?"✓ Copied":"↗ Share"}
+ </button>
  <button onClick={()=>addToStitch(item.id)} style={{
  padding:"4px 8px",borderRadius:R.r1,fontSize: 12,cursor:"pointer",fontFamily:"inherit",
  background:stitch.includes(item.id)?C.acc:C.bg4,
@@ -1075,7 +1115,7 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  .filter((url: string | undefined): url is string => typeof url === "string" && url.startsWith("http"));
 
  if (clipUrls.length < 2) {
- alert("Stitch requires at least 2 completed clips with output URLs. Generate clips first.");
+ setStitchError("Add at least 2 completed clips to the stitch queue before merging.");
  setStitchState("idle");
  return;
  }
@@ -1121,13 +1161,35 @@ export default function GenerateTab({ voiceId: propVoiceId, initialPrompt, onGen
  {stitchState === "done" ? "✓ Stitched" : stitchState === "running" ? "Stitching…" : "Stitch → fal"}
 </button>
  </div>}
+ {stitchError && (
+   <div style={{margin:"4px 16px 0",fontSize:13,color:C.red,padding:"6px 10px",
+     borderRadius:R.r1,background:"rgba(239,68,68,0.08)",border:`1px solid rgba(239,68,68,0.2)`}}>
+     {stitchError}
+     <button onClick={()=>setStitchError(null)}
+       aria-label="Dismiss"
+       style={{marginLeft:8,background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:14}}>×</button>
+   </div>
+ )}
  {stitchUrl && (
   <div style={{margin:"8px 0",borderRadius:R.r2,overflow:"hidden",
     border:`1px solid rgba(16,185,129,0.3)`}}>
    <MediaPlayer src={stitchUrl} kind="video" aspectRatio="16/9" showDownload label="Stitched"/>
    <div style={{padding:"8px 12px",background:"rgba(16,185,129,0.08)",
-     fontSize:13,color:C.green,fontWeight:500}}>
-    ✓ {grid.filter((g:GridItem)=>g.outputUrl).length} clips merged
+     display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <span style={{fontSize:13,color:C.green,fontWeight:500}}>
+     ✓ {grid.filter((g:GridItem)=>g.outputUrl).length} clips merged
+    </span>
+    <button
+      aria-label="Share stitched video"
+      onClick={()=>void handleShare(stitchUrl,"stitch")}
+      style={{padding:"4px 12px",borderRadius:R.r1,fontSize:12,cursor:"pointer",fontFamily:"inherit",
+        background:copiedId==="stitch"?C.green:C.bg4,
+        border:`1px solid ${copiedId==="stitch"?C.green:C.bdr}`,
+        color:copiedId==="stitch"?"#fff":C.t3,
+        transition:`background 150ms ease`,
+      }}>
+      {sharingId==="stitch"?"…":copiedId==="stitch"?"✓ Copied":"↗ Share"}
+    </button>
    </div>
   </div>
  )}
