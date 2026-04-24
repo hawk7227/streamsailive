@@ -126,40 +126,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // Validate immediately — if invalid, mark as such
-  try {
-    const { valid, result } = await validateAndRefreshAccount(
-      admin,
-      workspaceId,
-      provider as Provider,
-    );
-
-    if (!valid) {
-      return NextResponse.json(
-        {
-          error:    `${provider} credentials are invalid: ${result.error ?? "Validation failed"}`,
-          accountId: inserted.id,
-          status:   "invalid",
-        },
-        { status: 422 }
-      );
-    }
-
-    // Update provider_account_id from validation if not provided
-    if (!providerAccountId) {
-      const username = (result as unknown as Record<string, unknown>).username as string | null;
-      if (username) {
-        await admin
-          .from("connected_accounts")
-          .update({ provider_account_id: username })
-          .eq("id", inserted.id as string);
-      }
-    }
-  } catch {
-    // Validation threw — credentials stored but not validated
-    // Don't fail the connection — let user retry validation
-  }
-
   return NextResponse.json(
     {
       data: {
