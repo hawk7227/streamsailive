@@ -310,23 +310,50 @@ COMMENT ON TABLE connector_approval_queue IS
 -- The columns were added in Phase 2 as UUID (no FK). Now add the constraints.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-DO $$ BEGIN
-  ALTER TABLE project_bindings
-    ADD CONSTRAINT fk_pb_github_account
-    FOREIGN KEY (github_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- FK constraints into project_bindings are applied only if that table exists.
+-- If Phase 2 migration has not been run yet, these are skipped safely.
+-- Re-run this block after applying Phase 2 to wire the constraints.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'project_bindings'
+  ) THEN
+    -- github_account_id FK
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_pb_github_account'
+    ) THEN
+      ALTER TABLE project_bindings
+        ADD CONSTRAINT fk_pb_github_account
+        FOREIGN KEY (github_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
+    END IF;
 
-DO $$ BEGIN
-  ALTER TABLE project_bindings
-    ADD CONSTRAINT fk_pb_vercel_account
-    FOREIGN KEY (vercel_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    -- vercel_account_id FK
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_pb_vercel_account'
+    ) THEN
+      ALTER TABLE project_bindings
+        ADD CONSTRAINT fk_pb_vercel_account
+        FOREIGN KEY (vercel_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
+    END IF;
 
-DO $$ BEGIN
-  ALTER TABLE project_bindings
-    ADD CONSTRAINT fk_pb_supabase_account
-    FOREIGN KEY (supabase_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    -- supabase_account_id FK
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_pb_supabase_account'
+    ) THEN
+      ALTER TABLE project_bindings
+        ADD CONSTRAINT fk_pb_supabase_account
+        FOREIGN KEY (supabase_account_id) REFERENCES connected_accounts(id) ON DELETE SET NULL;
+    END IF;
+
+    RAISE NOTICE 'project_bindings FK constraints applied.';
+  ELSE
+    RAISE NOTICE 'project_bindings does not exist yet — run Phase 2 migration first, then re-apply these constraints.';
+  END IF;
+END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Helper functions
