@@ -221,43 +221,35 @@ export default function ChatTab() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  // ── iOS keyboard: resize the fixed column to visualViewport height ──
+  // ── iOS keyboard: translate ONLY the input bar up by keyboard height ──
+  // Body background is #fff so the gap below is invisible (keyboard covers it)
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile) return; // desktop: normal flex layout, no intervention
-
-    const col = inputContainerRef.current;
-    if (!col) return;
-
-    // Lock the column to viewport using position:fixed
-    const applyFixed = () => {
-      col.style.position = "fixed";
-      col.style.top = "0";
-      col.style.left = "0";
-      col.style.right = "0";
-      col.style.bottom = "0";
-      col.style.zIndex = "1";
-      col.style.height = `${window.visualViewport?.height ?? window.innerHeight}px`;
-    };
+    if (!isMobile) return;
 
     const adjust = () => {
       const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      if (col) col.style.height = `${h}px`;
-      // Keep messages scrolled to bottom when keyboard opens
-      const scrollEl = col.querySelector(".streams-chat-scroll") as HTMLElement | null;
-      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      if (!vv) return;
+      // kbH = how many px the keyboard is taking from the bottom
+      const kbH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      const inputEl  = inputAreaRef.current;
+      const scrollEl = inputContainerRef.current?.querySelector(".streams-chat-scroll") as HTMLElement | null;
+
+      if (inputEl) {
+        inputEl.style.transform  = kbH > 0 ? `translateY(-${kbH}px)` : "";
+        // Collapse the phantom space so messages don't push down into keyboard
+        inputEl.style.marginBottom = kbH > 0 ? `-${kbH}px` : "";
+      }
+      if (scrollEl && kbH > 0) {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
     };
 
-    applyFixed();
-    window.visualViewport?.addEventListener("resize", adjust);
-    window.visualViewport?.addEventListener("scroll", adjust);
-    window.addEventListener("resize", adjust);
-
+    window.visualViewport?.addEventListener("resize",  adjust);
+    window.visualViewport?.addEventListener("scroll",  adjust);
     return () => {
-      window.visualViewport?.removeEventListener("resize", adjust);
-      window.visualViewport?.removeEventListener("scroll", adjust);
-      window.removeEventListener("resize", adjust);
+      window.visualViewport?.removeEventListener("resize",  adjust);
+      window.visualViewport?.removeEventListener("scroll",  adjust);
     };
   }, []);
 
