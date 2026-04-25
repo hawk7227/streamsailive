@@ -224,12 +224,19 @@ export default function ChatTab() {
   useEffect(() => {
     const vv = window.visualViewport; if (!vv) return;
     const handler = () => {
-      const offset = window.innerHeight - vv.height;
-      if (inputContainerRef.current)
-        inputContainerRef.current.style.transform = `translateY(-${offset}px)`;
+      // Only translate the input bar — NOT the messages area
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      if (inputAreaRef.current) {
+        inputAreaRef.current.style.transform = offset > 0 ? `translateY(-${offset}px)` : "";
+        inputAreaRef.current.style.marginBottom = offset > 0 ? `-${offset}px` : "";
+      }
     };
     vv.addEventListener("resize", handler);
-    return () => vv.removeEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    return () => {
+      vv.removeEventListener("resize", handler);
+      vv.removeEventListener("scroll", handler);
+    };
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
