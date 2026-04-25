@@ -221,23 +221,7 @@ export default function ChatTab() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const vv = window.visualViewport; if (!vv) return;
-    const handler = () => {
-      // Only translate the input bar — NOT the messages area
-      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      if (inputAreaRef.current) {
-        inputAreaRef.current.style.transform = offset > 0 ? `translateY(-${offset}px)` : "";
-        inputAreaRef.current.style.marginBottom = offset > 0 ? `-${offset}px` : "";
-      }
-    };
-    vv.addEventListener("resize", handler);
-    vv.addEventListener("scroll", handler);
-    return () => {
-      vv.removeEventListener("resize", handler);
-      vv.removeEventListener("scroll", handler);
-    };
-  }, []);
+  // iOS keyboard handled natively via position:fixed on .streams-chat-input2
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -1014,7 +998,7 @@ export default function ChatTab() {
                   rows={1}
                   style={{
                     width: "100%", background: "transparent", border: "none",
-                    outline: "none", fontFamily: "inherit", fontSize: 16,
+                    outline: "none", fontFamily: "inherit", fontSize: 18,
                     color: CT.t1, resize: "none", lineHeight: 1.6, minHeight: 26,
                   }}/>
               </div>
@@ -1077,15 +1061,37 @@ export default function ChatTab() {
         .streams-chat-sb2.open { transform:translateX(0); }
         .streams-chat-mhdr2 { display:none; }
         @media (max-width:767px) {
+          /* Show mobile header */
           .streams-chat-mhdr2 { display:flex; }
-          .streams-chat-msgs2 { padding:20px 16px 0;font-size:18px;line-height:1.85; }
-          .streams-chat-msgs2 p { font-size:18px; }
-          .streams-chat-msgs2 li { font-size:18px; }
-          .streams-chat-input2 { padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+
+          /* Messages: larger text, bottom padding = input bar height so last msg is never hidden */
+          .streams-chat-msgs2 {
+            padding: 20px 16px 140px;
+            font-size: 18px;
+            line-height: 1.85;
+          }
+          .streams-chat-msgs2 p  { font-size: 18px; line-height: 1.85; }
+          .streams-chat-msgs2 li { font-size: 18px; line-height: 1.85; }
+
+          /* Input bar: fixed to bottom — iOS Safari lifts it above keyboard natively */
+          .streams-chat-input2 {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 12px 16px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            border-top: 1px solid rgba(0,0,0,0.09);
+            background: #ffffff;
+          }
         }
+
         @media (min-width:768px) {
           .streams-chat-sb2 { position:relative;height:100%;transform:none;transition:none;z-index:auto;flex-shrink:0; }
           .streams-chat-sb2.open { transform:none; }
+          /* Desktop: input stays in normal flex flow */
+          .streams-chat-input2 { position:static; }
         }
       `}</style>
     </div>
