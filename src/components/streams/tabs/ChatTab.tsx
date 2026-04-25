@@ -836,7 +836,7 @@ export default function ChatTab() {
                   {msg.role==="assistant" && (
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
                       <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#d95b2a)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                        <span style={{ fontSize:13, color:"#fff", lineHeight:1 }}>S</span>
+                        <span style={{ fontSize:12, color:"#fff", lineHeight:1 }}>✦</span>
                       </div>
                       <span style={{ fontSize:14, color:CT.t2 }}>Streams</span>
                     </div>
@@ -885,17 +885,25 @@ export default function ChatTab() {
 
                   {/* User bubble */}
                   {msg.text && msg.role==="user" && (
-                    <div style={{ maxWidth:"72%", background:CT.sbBg, borderRadius:"18px 18px 4px 18px", padding:"12px 18px", color:CT.t1, fontSize:16, lineHeight:1.7, overflowWrap:"break-word" }}>
-                      {msg.text}
-                      {msg.streaming && msg.text && (
-                        <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:0, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
-                      )}
+                    <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6, maxWidth:"78%" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                        <span style={{ fontSize:12, color:CT.t4, letterSpacing:".04em" }}>You</span>
+                        <div style={{ width:22, height:22, borderRadius:"50%", background:"linear-gradient(135deg,#e0e7ff,#c7d2fe)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <span style={{ fontSize:11, color:"#4338ca" }}>👤</span>
+                        </div>
+                      </div>
+                      <div style={{ background:CT.sbBg, borderRadius:"18px 18px 4px 18px", padding:"12px 18px", color:CT.t1, fontSize:17, lineHeight:1.75, overflowWrap:"break-word", borderLeft:"3px solid #c7d2fe" }}>
+                        {renderMarkdown(msg.text, false)}
+                        {msg.streaming && msg.text && (
+                          <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:0, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
+                        )}
+                      </div>
                     </div>
                   )}
 
                   {/* AI response */}
                   {msg.text && msg.role==="assistant" && (
-                    <div style={{ width:"100%", paddingLeft:36, color:CT.t1, fontSize:16, lineHeight:1.8, overflowWrap:"break-word" }}>
+                    <div style={{ width:"100%", paddingLeft:36, color:CT.t1, fontSize:17, lineHeight:1.85, overflowWrap:"break-word" }}>
                       {renderMarkdown(msg.text, !!(msg.streaming && msg.text))}
                     </div>
                   )}
@@ -1092,7 +1100,9 @@ export default function ChatTab() {
         .streams-chat-mhdr2 { display:none; }
         @media (max-width:767px) {
           .streams-chat-mhdr2 { display:flex; }
-          .streams-chat-msgs2 { padding:20px 16px 0; }
+          .streams-chat-msgs2 { padding:20px 16px 0;font-size:18px;line-height:1.85; }
+          .streams-chat-msgs2 p { font-size:18px; }
+          .streams-chat-msgs2 li { font-size:18px; }
           .streams-chat-input2 { padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
         }
         @media (min-width:768px) {
