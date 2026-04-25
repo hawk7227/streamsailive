@@ -221,43 +221,35 @@ export default function ChatTab() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  // ── iOS keyboard: resize the fixed column to visualViewport height ──
+  // ── iOS keyboard: shift ONLY the input bar up, leave messages in place ──
   useEffect(() => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile) return; // desktop: normal flex layout, no intervention
-
-    const col = inputContainerRef.current;
-    if (!col) return;
-
-    // Lock the column to viewport using position:fixed
-    const applyFixed = () => {
-      col.style.position = "fixed";
-      col.style.top = "0";
-      col.style.left = "0";
-      col.style.right = "0";
-      col.style.bottom = "0";
-      col.style.zIndex = "1";
-      col.style.height = `${window.visualViewport?.height ?? window.innerHeight}px`;
-    };
+    const vv = window.visualViewport;
+    if (!vv) return;
 
     const adjust = () => {
-      const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      if (col) col.style.height = `${h}px`;
-      // Keep messages scrolled to bottom when keyboard opens
-      const scrollEl = col.querySelector(".streams-chat-scroll") as HTMLElement | null;
-      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      // kbH = pixels the keyboard is covering from the bottom
+      const kbH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      const inputEl  = inputAreaRef.current;
+      const scrollEl = inputContainerRef.current?.querySelector(".streams-chat-scroll") as HTMLElement | null;
+
+      if (inputEl) {
+        // Lift input bar above keyboard
+        inputEl.style.transform = kbH > 0 ? `translateY(-${kbH}px)` : "";
+        // Shrink its visual margin so content below doesn't show black
+        inputEl.style.marginBottom = kbH > 0 ? `-${kbH}px` : "";
+      }
+
+      // Scroll messages to bottom so last message stays visible
+      if (scrollEl && kbH > 0) {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
     };
 
-    applyFixed();
-    window.visualViewport?.addEventListener("resize", adjust);
-    window.visualViewport?.addEventListener("scroll", adjust);
-    window.addEventListener("resize", adjust);
-
+    vv.addEventListener("resize", adjust);
+    vv.addEventListener("scroll", adjust);
     return () => {
-      window.visualViewport?.removeEventListener("resize", adjust);
-      window.visualViewport?.removeEventListener("scroll", adjust);
-      window.removeEventListener("resize", adjust);
+      vv.removeEventListener("resize", adjust);
+      vv.removeEventListener("scroll", adjust);
     };
   }, []);
 
@@ -808,7 +800,7 @@ export default function ChatTab() {
         </div>
       )}
 
-      <div ref={inputContainerRef} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:CT.bg, minHeight:0 }}>
+      <div ref={inputContainerRef} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:CT.bg }}>
 
         <div className="streams-chat-mhdr2" style={{ padding:"12px 16px", borderBottom:`1px solid ${CT.border}`, alignItems:"center", gap:S.s3 }}>
           <button aria-label="Open sidebar" onClick={() => setSidebarOpen((v: boolean)=>!v)} style={{ background:"transparent", border:`1px solid ${CT.border}`, borderRadius:R.r1, color:CT.t2, cursor:"pointer", fontFamily:"inherit", minWidth:44, minHeight:44, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>☰</button>
