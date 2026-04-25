@@ -790,7 +790,7 @@ export default function ChatTab() {
           )}
 
           {msgs.length>0 && (
-            <div className="streams-chat-msgs2" style={{ maxWidth:760, margin:"0 auto", padding:"40px 28px 0", display:"flex", flexDirection:"column", gap:28 }}>
+            <div className="streams-chat-msgs2" style={{ maxWidth:760, margin:"0 auto", display:"flex", flexDirection:"column", gap:28 }}>
               {msgs.map((msg:Msg) => (
                 <div key={msg.id} id={`msg-${msg.id}`} style={{ display:"flex", flexDirection:"column", alignItems:msg.role==="user"?"flex-end":"flex-start" }}>
 
@@ -893,7 +893,7 @@ export default function ChatTab() {
         </div>
 
         {/* ── Input bar ── */}
-        <div ref={inputAreaRef} className="streams-chat-input2" style={{ borderTop:`1px solid ${CT.border}`, background:CT.bg, flexShrink:0, padding:"16px 20px", paddingBottom:"calc(16px + env(safe-area-inset-bottom))" }}>
+        <div ref={inputAreaRef} className="streams-chat-input2" style={{ flexShrink:0 }}>
           <div style={{ maxWidth:760, margin:"0 auto", display:"flex", flexDirection:"column", gap:10 }}>
 
             {/* Mode badges — bright colored, each mode has its own identity */}
@@ -1057,14 +1057,28 @@ export default function ChatTab() {
         @keyframes streams-stop-pulse  { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.5)} 50%{box-shadow:0 0 0 7px rgba(220,38,38,0)} }
         @keyframes streams-send-breathe{ 0%,100%{opacity:0.55;transform:scale(1)} 50%{opacity:0.80;transform:scale(1.04)} }
         .streams-chat-chips2::-webkit-scrollbar { display:none; }
-        .streams-chat-sb2 { position:fixed;top:0;left:0;height:100dvh;width:260px;z-index:300;transform:translateX(-100%);transition:transform ${DUR.base} ${EASE};border-right:1px solid rgba(0,0,0,0.08); }
-        .streams-chat-sb2.open { transform:translateX(0); }
-        .streams-chat-mhdr2 { display:none; }
-        @media (max-width:767px) {
-          /* Show mobile header */
-          .streams-chat-mhdr2 { display:flex; }
 
-          /* Messages: larger text, bottom padding = input bar height so last msg is never hidden */
+        /* ── Sidebar: mobile default = hidden off-left ── */
+        .streams-chat-sb2 {
+          position: fixed;
+          top: 0; left: 0;
+          height: 100dvh;
+          width: 260px;
+          z-index: 300;
+          transform: translateX(-100%);
+          transition: transform ${DUR.base} ${EASE};
+          border-right: 1px solid rgba(0,0,0,0.08);
+        }
+        .streams-chat-sb2.open { transform: translateX(0); }
+
+        /* ── Mobile header: hidden on desktop ── */
+        .streams-chat-mhdr2 { display: none; }
+
+        /* ── Mobile-only rules ── */
+        @media (max-width:767px) {
+          .streams-chat-mhdr2 {
+            display: flex;
+          }
           .streams-chat-msgs2 {
             padding: 20px 16px 140px;
             font-size: 18px;
@@ -1072,26 +1086,40 @@ export default function ChatTab() {
           }
           .streams-chat-msgs2 p  { font-size: 18px; line-height: 1.85; }
           .streams-chat-msgs2 li { font-size: 18px; line-height: 1.85; }
-
-          /* Input bar: fixed to bottom — iOS Safari lifts it above keyboard natively */
           .streams-chat-input2 {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
             z-index: 100;
-            padding: 12px 16px;
-            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
             border-top: 1px solid rgba(0,0,0,0.09);
             background: #ffffff;
           }
         }
 
+        /* ── Desktop-only rules ── */
         @media (min-width:768px) {
-          .streams-chat-sb2 { position:relative;height:100%;transform:none;transition:none;z-index:auto;flex-shrink:0; }
-          .streams-chat-sb2.open { transform:none; }
-          /* Desktop: input stays in normal flex flow */
-          .streams-chat-input2 { position:static; }
+          .streams-chat-sb2 {
+            position: relative;
+            height: 100%;
+            width: 260px;
+            transform: none;
+            transition: none;
+            z-index: auto;
+            flex-shrink: 0;
+          }
+          .streams-chat-sb2.open { transform: none; }
+          .streams-chat-msgs2 {
+            padding: 40px 28px 0;
+            font-size: 17px;
+            line-height: 1.8;
+          }
+          .streams-chat-input2 {
+            padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+            border-top: 1px solid rgba(0,0,0,0.09);
+            background: #ffffff;
+          }
         }
       `}</style>
     </div>
