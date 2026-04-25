@@ -101,18 +101,19 @@
   --gradient-hero: linear-gradient(180deg, rgba(99, 102, 241, 0.15) 0%, transparent 50%);
 }
 
-body {
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-family: var(--font-inter);
-  /* iOS: prevent rubber-band scroll showing dark body behind panels */
+html, body {
+  /* iOS: white background everywhere — no black gaps ever */
+  background: #ffffff;
   overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
+  height: 100%;
+  /* Dynamic viewport for iOS keyboard */
+  height: -webkit-fill-available;
 }
 
-/* iOS keyboard: use dynamic viewport height so panels resize with keyboard */
-html {
-  height: -webkit-fill-available;
+body {
+  color: var(--color-text-primary);
+  font-family: var(--font-inter);
 }
 
 @keyframes growUp {
