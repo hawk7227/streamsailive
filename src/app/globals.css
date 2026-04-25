@@ -105,6 +105,14 @@ body {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-inter);
+  /* iOS: prevent rubber-band scroll showing dark body behind panels */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* iOS keyboard: use dynamic viewport height so panels resize with keyboard */
+html {
+  height: -webkit-fill-available;
 }
 
 @keyframes growUp {
