@@ -221,36 +221,15 @@ export default function ChatTab() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  // ── iOS keyboard: shift ONLY the input bar up, leave messages in place ──
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const adjust = () => {
-      // kbH = pixels the keyboard is covering from the bottom
-      const kbH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      const inputEl  = inputAreaRef.current;
-      const scrollEl = inputContainerRef.current?.querySelector(".streams-chat-scroll") as HTMLElement | null;
-
-      if (inputEl) {
-        // Lift input bar above keyboard
-        inputEl.style.transform = kbH > 0 ? `translateY(-${kbH}px)` : "";
-        // Shrink its visual margin so content below doesn't show black
-        inputEl.style.marginBottom = kbH > 0 ? `-${kbH}px` : "";
-      }
-
-      // Scroll messages to bottom so last message stays visible
-      if (scrollEl && kbH > 0) {
-        scrollEl.scrollTop = scrollEl.scrollHeight;
-      }
+    const vv = window.visualViewport; if (!vv) return;
+    const handler = () => {
+      const offset = window.innerHeight - vv.height;
+      if (inputContainerRef.current)
+        inputContainerRef.current.style.transform = `translateY(-${offset}px)`;
     };
-
-    vv.addEventListener("resize", adjust);
-    vv.addEventListener("scroll", adjust);
-    return () => {
-      vv.removeEventListener("resize", adjust);
-      vv.removeEventListener("scroll", adjust);
-    };
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
@@ -667,7 +646,7 @@ export default function ChatTab() {
   }
 
   const Sidebar = (
-    <div style={{ height:"100%", display:"flex", flexDirection:"column", background:CT.sbBg, overflow:"hidden", WebkitTextSizeAdjust:"100%" }}>
+    <div style={{ height:"100%", display:"flex", flexDirection:"column", background:CT.sbBg, overflow:"hidden" }}>
       <div style={{ padding:"16px 16px 12px", borderBottom:`1px solid ${CT.border}`, flexShrink:0 }}>
         <div style={{ fontSize:12, color:CT.t4, letterSpacing:".18em", textTransform:"uppercase", marginBottom:S.s3 }}>Streams</div>
         <button onClick={handleNewChat} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", padding:"8px 0", background:CT.send, border:"none", borderRadius:R.r2, color:"#fff", fontSize:14, fontFamily:"inherit", cursor:"pointer", minHeight:44 }}>+ New chat</button>
@@ -810,7 +789,7 @@ export default function ChatTab() {
         {/* Messages */}
         <div role="log" aria-live="polite" aria-atomic="false" aria-label="Conversation messages"
           className="streams-chat-scroll"
-          style={{ flex:1, overflowY:"auto", overscrollBehavior:"contain", paddingBottom:inputBarH+S.s4, WebkitOverflowScrolling:"touch" }}>
+          style={{ flex:1, overflowY:"auto", overscrollBehavior:"contain", paddingBottom:inputBarH+S.s4 }}>
 
           {msgs.length===0 && (
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60%", padding:"40px 32px", textAlign:"center" }}>
