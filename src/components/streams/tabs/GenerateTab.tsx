@@ -1,3 +1,4 @@
+import { PROVIDER_ENDPOINTS } from "@/lib/streams/provider-endpoints";
 "use client";
 
 /**
@@ -102,10 +103,10 @@ export default function GenerateTab() {
       setGrid([{ id: tempId, status: "waiting" }]);
       
       const endpoint = mode === "Image"
-        ? "fal-ai/flux-pro/kontext"
+        ? PROVIDER_ENDPOINTS.IMAGE
         : mode === "T2V"
-        ? "fal-ai/kling-video/v3"
-        : "fal-ai/veo3.1";
+        ? PROVIDER_ENDPOINTS.VIDEO
+        : PROVIDER_ENDPOINTS.VOICE;
       
       const input: Record<string,any> = {
         prompt: promptText,
@@ -190,9 +191,9 @@ export default function GenerateTab() {
 
       {/* TOPBAR */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, flexShrink: 0, borderBottom: `1px solid ${C.bdr}`, padding: "0 20px" }}>
-        <button aria-label="Back to Dashboard" style={{ padding: "7px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>← Dashboard</button>
+        <button aria-label="Back to Dashboard" style={{ padding: "8px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>← Dashboard</button>
         <span style={{ fontSize: 15, fontWeight: 500, color: C.t1 }}>Generate</span>
-        <button aria-label="Open History" style={{ padding: "7px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>⊞ History</button>
+        <button aria-label="Open History" style={{ padding: "8px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>⊞ History</button>
       </div>
 
       {/* MODE IMAGE STRIP — 110px */}
@@ -203,12 +204,12 @@ export default function GenerateTab() {
             borderBottom: mode === m ? `3px solid ${C.acc}` : "none",
           }}>
             <img src={`/images/mode-${m.toLowerCase()}.png`} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-            <div style={{ position: "absolute", inset: 0, background: mode === m ? "linear-gradient(to bottom, rgba(124,58,237,0.1) 0%, rgba(0,0,0,0.5) 100%)" : "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)", zIndex: 1 }} />
-            <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: "#fff", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>
+            <div style={{ position: "absolute", inset: 0, background: mode === m ? "linear-gradient(to bottom, rgba(124,58,237,0.1) 0%, rgba(0,0,0,0.5) 100%)" : "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)", zIndex: 10 }} />
+            <div style={{ position: "relative", zIndex: 100, display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#fff", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>
                 {m === "Image" ? "IMAGE" : m === "I2V" ? "I2V" : m === "T2V" ? "T2V" : m === "Motion" ? "MOTION" : m === "Voice" ? "VOICE" : "MUSIC"}
               </div>
-              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.65)", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>
                 {m === "Image" ? "SINGLE / BULK" : m === "I2V" ? "STILL TO MOTION" : m === "T2V" ? "IDEA TO SCREEN" : m === "Motion" ? "COPY MOVEMENT" : m === "Voice" ? "SPEAK · CLONE" : "CREATE · MIX"}
               </div>
             </div>
@@ -232,7 +233,7 @@ export default function GenerateTab() {
 
         {/* PROMPT CARD — 240px fixed */}
         <div style={{ flexShrink: 0, height: 240, padding: 20, borderBottom: `1px solid ${C.bdr}`, display: "flex", flexDirection: "column", gap: 12, background: C.bg }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.t4, fontWeight: 500 }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: C.t4, fontWeight: 500 }}>
             {mode === "Image" ? "Describe your image" : mode === "T2V" ? "Describe the video" : mode === "I2V" ? "Motion prompt" : mode === "Motion" ? "Character appearance" : mode === "Voice" ? "Message to speak" : "Song style & lyrics"}
           </div>
 
@@ -240,7 +241,7 @@ export default function GenerateTab() {
 
           {/* CONTROLS ROW */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <select value={currentModel} onChange={(e) => { const idx = models.indexOf(e.target.value); setModel(Math.max(0, idx)); }} style={{ height: 32, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238891B8' d='M1 1l5 5 5-5'/%3e%3c/svg%3e\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px", paddingRight: 28, flexShrink: 0 }}>
+            <select value={currentModel} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { const idx = models.indexOf(e.target.value); setModel(Math.max(0, idx)); }} style={{ height: 32, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238891B8' d='M1 1l5 5 5-5'/%3e%3c/svg%3e\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px", paddingRight: 28, flexShrink: 0 }}>
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
 
@@ -300,12 +301,12 @@ export default function GenerateTab() {
 
             {/* Action Bar */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: `1px solid ${C.bdr}`, background: C.bg2, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: C.t4, fontFamily: "var(--mono)" }}>{grid.length} results</span>
+              <span style={{ fontSize: 12, color: C.t4, fontFamily: "var(--mono)" }}>{grid.length} results</span>
               <div style={{ display: "flex", gap: 6 }}>
                 {grid.length > 0 && (
                   <>
-                    <button onClick={() => { grid.forEach(g => g.outputUrl && navigator.clipboard.writeText(g.outputUrl)); }} aria-label="Share" style={{ height: 28, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r1, color: C.t2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🔗</button>
-                    <button onClick={() => setGrid([])} aria-label="Clear" style={{ height: 28, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r1, color: C.t2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                    <button onClick={() => { grid.forEach((g: GridItem) => g.outputUrl && navigator.clipboard.writeText(g.outputUrl)); }} aria-label="Share" style={{ height: 28, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r1, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🔗</button>
+                    <button onClick={() => setGrid([])} aria-label="Clear" style={{ height: 28, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r1, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
                   </>
                 )}
               </div>
@@ -320,7 +321,7 @@ export default function GenerateTab() {
                   {item.outputUrl && (
                     <>
                       <img src={item.outputUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0 }} onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")} onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}>
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0 }} onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.opacity = "1")} onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.opacity = "0")}>
                         <span style={{ fontSize: 24, color: C.green }}>✓</span>
                       </div>
                     </>

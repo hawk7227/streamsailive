@@ -1,104 +1,24 @@
-STREAMS AUDIT — 42 VIOLATIONS
+STREAMS AUDIT — 8 VIOLATIONS
 
-[10.1] 3 violation(s)
-  src/components/streams/tabs/GenerateTab.tsx:105
-  → Provider name 'fal-ai/' outside SettingsTab: ? "fal-ai/flux-pro/kontext"
-  src/components/streams/tabs/GenerateTab.tsx:107
-  → Provider name 'fal-ai/' outside SettingsTab: ? "fal-ai/kling-video/v3"
-  src/components/streams/tabs/GenerateTab.tsx:108
-  → Provider name 'fal-ai/' outside SettingsTab: : "fal-ai/veo3.1";
-
-[12.1] 22 violation(s)
-  src/app/api/streams/bulk-job/[id]/cancel-all/route.ts
-  → src/app/api/streams/bulk-job/[id]/cancel-all/route.ts(14,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/bulk-job/[id]/cancel-all/route.ts
-  → src/app/api/streams/bulk-job/[id]/cancel-all/route.ts(15,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/bulk-job/[id]/route.ts
-  → src/app/api/streams/bulk-job/[id]/route.ts(14,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/bulk-job/[id]/route.ts
-  → src/app/api/streams/bulk-job/[id]/route.ts(15,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/bulk-job/route.ts
-  → src/app/api/streams/bulk-job/route.ts(17,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/bulk-job/route.ts
-  → src/app/api/streams/bulk-job/route.ts(18,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generate-job/route.ts
-  → src/app/api/streams/generate-job/route.ts(17,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generate-job/route.ts
-  → src/app/api/streams/generate-job/route.ts(18,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generation-job/[id]/cancel/route.ts
-  → src/app/api/streams/generation-job/[id]/cancel/route.ts(13,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generation-job/[id]/cancel/route.ts
-  → src/app/api/streams/generation-job/[id]/cancel/route.ts(14,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generation-job/[id]/route.ts
-  → src/app/api/streams/generation-job/[id]/route.ts(15,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/generation-job/[id]/route.ts
-  → src/app/api/streams/generation-job/[id]/route.ts(16,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/my-generations/route.ts
-  → src/app/api/streams/my-generations/route.ts(16,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
-  src/app/api/streams/my-generations/route.ts
-  → src/app/api/streams/my-generations/route.ts(17,3): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+[12.1] 6 violation(s)
+  src/components/streams/StreamsPanel.tsx
+  → src/components/streams/StreamsPanel.tsx(194,15): error TS2322: Type '{ voiceId: string | null; initialPrompt: string | null; onGenerationComplete: (url: string, generationId?: string | undefined) => void; onPromptConsumed: () => void; }' is not assignable to type 'IntrinsicAttributes'.
+  src/components/streams/artifacts/Phase9ChatControlPlane.tsx
+  → src/components/streams/artifacts/Phase9ChatControlPlane.tsx(58,62): error TS2322: Type '"active"' is not assignable to type '"error" | "pending" | "complete" | "in-progress"'.
+  src/components/streams/artifacts/Phase9ChatControlPlane.tsx
+  → src/components/streams/artifacts/Phase9ChatControlPlane.tsx(162,29): error TS2345: Argument of type '(prev: ChatMessage[]) => (ChatMessage | { artifacts: ({ id: string; code: string; type: "react" | "html" | "svg"; asyncContent?: { type: "image" | "video" | "none"; url?: string; progress?: number; status: "idle" | "loading" | "complete" | "error"; }; } | Artifact)[]; id: string; role: "user" | "assistant"; content:...' is not assignable to parameter of type 'SetStateAction<ChatMessage[]>'.
   src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(116,59): error TS2554: Expected 1 arguments, but got 2.
+  → src/components/streams/tabs/GenerateTab.tsx(117,59): error TS2554: Expected 1 arguments, but got 2.
   src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(239,79): error TS7006: Parameter 'e' implicitly has an 'any' type.
+  → src/components/streams/tabs/GenerateTab.tsx(120,15): error TS2339: Property 'error' does not exist on type 'ToastCtx'.
   src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(243,53): error TS7006: Parameter 'e' implicitly has an 'any' type.
-  src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(248,45): error TS7006: Parameter 'e' implicitly has an 'any' type.
-  src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(256,51): error TS7006: Parameter 'e' implicitly has an 'any' type.
-  src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(307,59): error TS7006: Parameter 'g' implicitly has an 'any' type.
-  src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(323,194): error TS7006: Parameter 'e' implicitly has an 'any' type.
-  src/components/streams/tabs/GenerateTab.tsx
-  → src/components/streams/tabs/GenerateTab.tsx(323,254): error TS7006: Parameter 'e' implicitly has an 'any' type.
-
-[3.1] 1 violation(s)
-  src/components/streams/tabs/ChatTab.tsx
-  → ChatTab bottom input missing window.visualViewport listener — keyboard hides input on iOS
+  → src/components/streams/tabs/GenerateTab.tsx(159,13): error TS2339: Property 'error' does not exist on type 'ToastCtx'.
 
 [ACC.4] 1 violation(s)
   src/components/streams/tabs/GenerateTab.tsx
   → GenerateTab generation status has no aria-live / role=status
 
-[CSS.2] 2 violation(s)
-  src/components/streams/tabs/ChatTab.tsx:854
-  → Hardcoded colour "#4338ca" — use token: <span style={{ fontSize:11, color:"#4338ca" }}>👤</span>
-  src/app/api/streams/chat/route.ts:223
-  → Hardcoded colour '#4F46E5' — use token: backgroundColor: '#4F46E5',
-
-[S.1/9.2] 3 violation(s)
-  src/components/streams/tabs/GenerateTab.tsx:193
-  → Off-scale spacing 7px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): <button aria-label="Back to Dashboard" style={{ padding: "7px 12px", background: "transparent", bord
-  src/components/streams/tabs/GenerateTab.tsx:195
-  → Off-scale spacing 7px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): <button aria-label="Open History" style={{ padding: "7px 12px", background: "transparent", border: `
-  src/components/streams/tabs/GenerateTab.tsx:223
+[S.1/9.2] 1 violation(s)
+  src/components/streams/tabs/GenerateTab.tsx:224
   → Off-scale spacing 5px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): <button key={sub} onClick={() => setMusicSub(sub)} aria-label={`Music mode: ${sub}`} style={{ paddin
-
-[S.8] 2 violation(s)
-  src/components/streams/tabs/GenerateTab.tsx:206
-  → z-index 1 not in scale {10,100,200,299,300,400}: <div style={{ position: "absolute", inset: 0, background: mode === m ? "linear-gradient(to bottom, r
-  src/components/streams/tabs/GenerateTab.tsx:207
-  → z-index 2 not in scale {10,100,200,299,300,400}: <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-
-[T.4] 1 violation(s)
-  src/components/streams/tabs/ChatTab.tsx:852
-  → letterSpacing on non-uppercase text: <span style={{ fontSize:12, color:CT.t4, letterSpacing:".04em" }}>You</span>
-
-[T.8] 7 violation(s)
-  src/components/streams/tabs/GenerateTab.tsx:208
-  → fontSize 11.0 below minimum 12: <div style={{ fontSize: 11, fontWeight: 500, color: "#fff", lineHeight: 1.2, textShadow: "0 1px 3px 
-  src/components/streams/tabs/GenerateTab.tsx:211
-  → fontSize 8.0 below minimum 12: <div style={{ fontSize: 8, color: "rgba(255,255,255,0.65)", lineHeight: 1.2, textShadow: "0 1px 3px 
-  src/components/streams/tabs/GenerateTab.tsx:235
-  → fontSize 11.0 below minimum 12: <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.t4, fontWe
-  src/components/streams/tabs/GenerateTab.tsx:303
-  → fontSize 11.0 below minimum 12: <span style={{ fontSize: 11, color: C.t4, fontFamily: "var(--mono)" }}>{grid.length} results</span>
-  src/components/streams/tabs/GenerateTab.tsx:307
-  → fontSize 11.0 below minimum 12: <button onClick={() => { grid.forEach(g => g.outputUrl && navigator.clipboard.writeText(g.outputUrl)
-  src/components/streams/tabs/GenerateTab.tsx:308
-  → fontSize 11.0 below minimum 12: <button onClick={() => setGrid([])} aria-label="Clear" style={{ height: 28, padding: "0 12px", backg
-  src/components/streams/tabs/ChatTab.tsx:854
-  → fontSize 11.0 below minimum 12: <span style={{ fontSize:11, color:"#4338ca" }}>👤</span>
 

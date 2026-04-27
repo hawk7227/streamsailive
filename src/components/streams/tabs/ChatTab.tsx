@@ -92,9 +92,31 @@ export default function ChatTab() {
   const abortRef = useRef<AbortController | null>(null);
 
   // RAF streaming buffer — prevents React 18 batch-dump
-  const tokenBufRef    = useRef<string>("");
+
+const tokenBufRef    = useRef<string>("");
   const rafRef         = useRef<number | null>(null);
   const streamingIdRef = useRef<string | null>(null);
+
+  // iOS keyboard handling — keep input above soft keyboard
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleViewportChange = () => {
+      const inputContainer = document.getElementById('chat-input-container');
+      if (!inputContainer) return;
+      
+      const offset = window.innerHeight - (window.visualViewport?.height ?? window.innerHeight);
+      inputContainer.style.transform = `translateY(-${offset}px)`;
+    };
+    
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleViewportChange);
+    
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
 
   const endRef            = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
@@ -849,9 +871,9 @@ export default function ChatTab() {
                   {msg.text && msg.role==="user" && (
                     <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6, maxWidth:"78%" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-                        <span style={{ fontSize:12, color:CT.t4, letterSpacing:".04em" }}>You</span>
+                        <span style={{ fontSize:12, color:CT.t4,  }}>You</span>
                         <div style={{ width:22, height:22, borderRadius:"50%", background:"linear-gradient(135deg,#e0e7ff,#c7d2fe)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                          <span style={{ fontSize:11, color:"#4338ca" }}>👤</span>
+                          <span style={{ fontSize:12, color:C.t4 }}>👤</span>
                         </div>
                       </div>
                       <div style={{ background:CT.sbBg, borderRadius:"18px 18px 4px 18px", padding:"12px 18px", color:CT.t1, fontSize:17, lineHeight:1.75, overflowWrap:"break-word", borderLeft:"3px solid #c7d2fe" }}>
