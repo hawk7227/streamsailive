@@ -8,9 +8,13 @@ import { C } from '../tokens';
 interface Artifact {
   id: string;
   code: string;
-  language: string;
-  type: 'react' | 'code' | 'html';
-  title?: string;
+  type: 'react' | 'html' | 'svg';
+  asyncContent?: {
+    type: 'image' | 'video' | 'none';
+    url?: string;
+    progress?: number;
+    status: 'idle' | 'loading' | 'complete' | 'error';
+  };
 }
 export interface Phase9ChatControlPlaneProps {
   projectId?: string;
@@ -55,7 +59,7 @@ export function Phase9ChatControlPlane({
       setIsLoading(true);
       setIsActivityPhase(true);
       setActivitySteps([
-        { id: 'load-context', label: 'Load project context', status: 'active' },
+        { id: 'load-context', label: 'Load project context', status: 'in-progress' },
         { id: 'analyze', label: 'Analyze message', status: 'pending' },
         { id: 'generate', label: 'Generate response', status: 'pending' },
         { id: 'artifacts', label: 'Prepare artifacts', status: 'pending' },
@@ -150,27 +154,23 @@ export function Phase9ChatControlPlane({
 
               // Handle artifacts (code ready immediately)
               else if (eventType === 'artifact' && typeof data === 'object' && data !== null && 'code' in data) {
-                const artData = data as { id: string; code: string; language: string; type: string; title: string };
+                const artData = data as { id: string; code: string; type: string };
                 currentArtifact = {
                   id: artData.id,
                   code: artData.code,
-                  language: artData.language || 'typescript',
-                  type: (artData.type || 'code') as 'react' | 'code' | 'html',
-                  title: artData.title,
+                  type: (artData.type || 'react') as 'react' | 'html' | 'svg',
                 };
                 // Inject artifact into last message
-                setMessages((prev: ChatMessage[]) => {
-                  const lastMsg = prev[prev.length - 1];
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
                   if (lastMsg?.role === 'assistant') {
-                    return [
-                      ...prev.slice(0, -1),
-                      {
-                        ...lastMsg,
-                        artifacts: [...(lastMsg.artifacts || []), currentArtifact!],
-                      },
-                    ];
+                    updated[updated.length - 1] = {
+                      ...lastMsg,
+                      artifacts: [...(lastMsg.artifacts || []), currentArtifact!],
+                    };
                   }
-                  return prev;
+                  return updated;
                 });
                 if (onArtifactGenerated) {
                   onArtifactGenerated(artData.id);
