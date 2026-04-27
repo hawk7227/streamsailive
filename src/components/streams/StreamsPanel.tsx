@@ -12,6 +12,7 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { ToastProvider } from "./Toast";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
@@ -36,6 +37,28 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
 
 export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
+  const [userId, setUserId] = useState<string>("");
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+
+  // Get current user from auth
+  useEffect(() => {
+    async function loadAuth() {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+      );
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        // TODO: Get workspace from query params or user metadata
+        // For now, use user ID as workspace (temporary)
+        setWorkspaceId(user.id);
+      }
+    }
+    
+    loadAuth();
+  }, []);
 
   // V.3 — read ?tab= on mount so deep links and hard-reload restore tab
   useEffect(() => {
@@ -191,6 +214,8 @@ export default function StreamsPanel() {
           )}
           {active === "generate"  && (
             <GenerateTab
+              userId={userId}
+              workspaceId={workspaceId}
               voiceId={sharedVoiceId}
               initialPrompt={sharedPrompt}
               onGenerationComplete={onGenerationComplete}

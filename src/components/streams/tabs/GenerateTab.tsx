@@ -51,16 +51,29 @@ interface GridItem {
 }
 
 // All state from original — UNCHANGED
-export default function GenerateTab() {
+export default function GenerateTab({
+  userId,
+  workspaceId,
+  voiceId,
+  initialPrompt,
+  onGenerationComplete,
+  onPromptConsumed,
+}: {
+  userId: string;
+  workspaceId: string;
+  voiceId?: string | null;
+  initialPrompt?: string | null;
+  onGenerationComplete?: (url: string, generationId?: string) => void;
+  onPromptConsumed?: () => void;
+}) {
   const toast = useToast();
   
   // ── PHASE 0: Persistence (NEW) ───────────────────────────────────────────
   // Resume active jobs from database on mount
-  // For now using placeholder user/workspace; TODO: wire from auth
-  const placeholderId = "placeholder";
-  const { activeJobs, pollJobStatus, isInitialized } = useGenerationPersistence(
-    placeholderId, // userId (TODO: get from auth)
-    placeholderId  // workspaceId (TODO: get from auth)
+  // NOW using actual user/workspace IDs from auth
+  const { activeJobs, pollJobStatus, isInitialized, cancelJob } = useGenerationPersistence(
+    userId,
+    workspaceId
   );
   const [persistentJobsOpen, setPersistentJobsOpen] = useState(false);
   
@@ -133,8 +146,8 @@ export default function GenerateTab() {
           aspectRatio: mode !== "Image" ? ar : undefined,
           customWidth: useCustom ? parseInt(customW) : undefined,
           customHeight: useCustom ? parseInt(customH) : undefined,
-          userId: placeholderId, // TODO: wire from auth
-          workspaceId: placeholderId, // TODO: wire from auth
+          userId, // Now using actual auth user ID
+          workspaceId, // Now using actual workspace ID
         }),
       });
 
@@ -288,12 +301,8 @@ export default function GenerateTab() {
               </div>
               {job.status === "queued" || job.status === "processing" ? (
                 <button 
-                  onClick={() => {
-                    // TODO: Implement cancel via API when hook supports it
-                    setPersistentJobsOpen(false);
-                  }}
+                  onClick={() => cancelJob(job.id)}
                   style={{ padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 11, cursor: "pointer" }}
-                  disabled
                 >
                   Cancel
                 </button>
@@ -413,11 +422,7 @@ export default function GenerateTab() {
                           Est. {Math.ceil((genState === "polling" ? 30 : 15) / 2)}s
                         </div>
                         <button
-                          onClick={() => {
-                            // TODO: Call cancelJob(item.id) from hook
-                            setGrid([]);
-                            setGenState("idle");
-                          }}
+                          onClick={() => cancelJob(item.id)}
                           style={{ marginTop: 8, padding: "6px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
                         >
                           Cancel

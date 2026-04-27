@@ -222,6 +222,27 @@ export function useGenerationPersistence(userId: string, workspaceId: string) {
   }, [resumeOnMount]);
 
   // Rule 11.1: All return values consumed in components
+  const cancelJob = useCallback(async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/streams/generation-job/${jobId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        // Stop polling this job
+        const interval = pollingRef.current.get(jobId);
+        if (interval) clearInterval(interval as any);
+        pollingRef.current.delete(jobId);
+        
+        // Remove from active jobs
+        setActiveJobs((prev) => prev.filter((j) => j.id !== jobId));
+      }
+    } catch (error) {
+      console.error("Error cancelling job:", error);
+    }
+  }, []);
+
   return {
     activeJobs,
     completedJobs,
@@ -232,5 +253,6 @@ export function useGenerationPersistence(userId: string, workspaceId: string) {
     startBulkPolling,
     pollJobStatus,
     pollBulkStatus,
+    cancelJob, // NEW: allow cancellation
   };
 }
