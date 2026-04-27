@@ -18,6 +18,8 @@ import BottomSheet from "../BottomSheet";
 import { useToast } from "../Toast";
 import { C, R, DUR, EASE } from "../tokens";
 import { submitDirectToFal, extractVideoUrl, extractImageUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-direct";
+import { useGenerationPersistence } from "@/hooks/useGenerationPersistence";
+import type { GenerationJob } from "@/lib/persistence/GenerationManager";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
 type Duration = "3" | "4" | "5" | "8" | "10" | "15";
@@ -51,6 +53,18 @@ interface GridItem {
 // All state from original — UNCHANGED
 export default function GenerateTab() {
   const toast = useToast();
+  
+  // ── PHASE 0: Persistence (NEW) ───────────────────────────────────────────
+  // Resume active jobs from database on mount
+  // For now using placeholder user/workspace; TODO: wire from auth
+  const placeholderId = "placeholder";
+  const { activeJobs, startJob, pollStatus, cancelJob, isInitialized } = useGenerationPersistence(
+    placeholderId, // userId (TODO: get from auth)
+    placeholderId  // workspaceId (TODO: get from auth)
+  );
+  const [persistentJobsOpen, setPersistentJobsOpen] = useState(false);
+  
+  // ── Original state (UNCHANGED) ────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>("Image");
   const [model, setModel] = useState(0);
   const [prompt, setPrompt] = useState("");
@@ -194,8 +208,48 @@ export default function GenerateTab() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, flexShrink: 0, borderBottom: `1px solid ${C.bdr}`, padding: "0 20px" }}>
         <button aria-label="Back to Dashboard" style={{ padding: "8px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>← Dashboard</button>
         <span style={{ fontSize: 15, fontWeight: 500, color: C.t1 }}>Generate</span>
-        <button aria-label="Open History" style={{ padding: "8px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>⊞ History</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* PHASE 0: Show persistent jobs indicator */}
+          {isInitialized && activeJobs.length > 0 && (
+            <button 
+              onClick={() => setPersistentJobsOpen(!persistentJobsOpen)}
+              title={`${activeJobs.length} job(s) running in background`}
+              style={{ padding: "8px 12px", background: C.acc, border: "none", borderRadius: R.r2, color: "#fff", fontSize: 12, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}
+            >
+              ⟳ {activeJobs.length}
+            </button>
+          )}
+          <button aria-label="Open History" style={{ padding: "8px 12px", background: "transparent", border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t3, fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>⊞ History</button>
+        </div>
       </div>
+
+      {/* PHASE 0: Persistent jobs panel (if open) */}
+      {persistentJobsOpen && activeJobs.length > 0 && (
+        <div style={{ background: C.bg2, borderBottom: `1px solid ${C.bdr}`, maxHeight: 200, overflowY: "auto", padding: "12px 16px", flexShrink: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginBottom: 8 }}>Background Jobs</div>
+          {activeJobs.map((job: GenerationJob) => (
+            <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px", background: C.bg1, border: `1px solid ${C.bdr}`, borderRadius: R.r1, marginBottom: 6, fontSize: 11 }}>
+              <div style={{ fontSize: 16 }}>⟳</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, color: C.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {job.mode} - {job.status}
+                </div>
+                <div style={{ color: C.t3, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {job.prompt.substring(0, 40)}...
+                </div>
+              </div>
+              {job.status === "queued" || job.status === "processing" && (
+                <button 
+                  onClick={() => cancelJob(job.id)}
+                  style={{ padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 11, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* MODE IMAGE STRIP — 110px */}
       <div style={{ display: "flex", height: 110, flexShrink: 0, gap: 0, borderBottom: `1px solid ${C.bdr}`, overflow: "hidden" }}>
