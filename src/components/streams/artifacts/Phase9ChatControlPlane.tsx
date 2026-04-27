@@ -5,6 +5,13 @@ import { ActivityTimeline, ActivityStep } from './ActivityTimeline';
 import { SplitPanelChat, ChatMessage } from './SplitPanelChat';
 import { C } from '../tokens';
 
+interface Artifact {
+  id: string;
+  code: string;
+  language: string;
+  type: 'react' | 'code' | 'html';
+  title?: string;
+}
 export interface Phase9ChatControlPlaneProps {
   projectId?: string;
   userId?: string;
@@ -21,8 +28,9 @@ export function Phase9ChatControlPlane({
   const [isActivityPhase, setIsActivityPhase] = useState(false);
   const [activitySteps, setActivitySteps] = useState<ActivityStep[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Detect mobile
+  // Detect mobile (no layout shift at 768px)
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -32,48 +40,10 @@ export function Phase9ChatControlPlane({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Simulate activity steps
-  const simulateActivityPhase = useCallback(() => {
-    setIsActivityPhase(true);
-    setIsLoading(true);
-
-    const steps: ActivityStep[] = [
-      { id: 'load-context', label: 'Load project context', status: 'pending' },
-      { id: 'resolve-keys', label: 'Resolve API keys', status: 'pending' },
-      { id: 'generate-code', label: 'Generate component code', status: 'pending' },
-      { id: 'register-artifact', label: 'Register artifact', status: 'pending' },
-    ];
-
-    setActivitySteps(steps);
-
-    let stepIndex = 0;
-    const interval = setInterval(() => {
-      setActivitySteps((prev: ActivityStep[]) => {
-        const updated = [...prev];
-        if (stepIndex > 0) {
-          updated[stepIndex - 1].status = 'complete';
-        }
-        if (stepIndex < updated.length) {
-          updated[stepIndex].status = 'in-progress';
-        }
-        return updated;
-      });
-
-      stepIndex += 1;
-      if (stepIndex > steps.length) {
-        clearInterval(interval);
-        setIsActivityPhase(false);
-        setIsLoading(false);
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Handle sending message
+  // Real API call with SSE streaming
   const handleSendMessage = useCallback(
     async (message: string) => {
-      if (!message.trim()) return;
+      if (!message.trim() || !userId) return;
 
       const userMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -82,86 +52,176 @@ export function Phase9ChatControlPlane({
       };
       setMessages((prev: ChatMessage[]) => [...prev, userMsg]);
 
-      simulateActivityPhase();
+      setIsLoading(true);
+      setIsActivityPhase(true);
+      setActivitySteps([
+        { id: 'load-context', label: 'Load project context', status: 'active' },
+        { id: 'analyze', label: 'Analyze message', status: 'pending' },
+        { id: 'generate', label: 'Generate response', status: 'pending' },
+        { id: 'artifacts', label: 'Prepare artifacts', status: 'pending' },
+      ]);
 
-      setTimeout(() => {
-        const assistantMsg: ChatMessage = {
-          id: `msg-${Date.now() + 1}`,
-          role: 'assistant',
-          content:
-            'I\'ve created a React component with the following features:\n- Interactive preview\n- Real-time updates\n- Responsive design\n- Fully customizable',
-          artifacts: [
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      try {
+        // Call /api/streams/chat with SSE
+        const response = await fetch('/api/streams/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            projectId: projectId || null,
+            userId,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Chat API error: ${response.statusText}`);
+        }
+
+        if (!response.body) {
+          throw new Error('No response body');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let responseBuffer = '';
+        let currentArtifact: Artifact | null = null;
+        let assistantContent = '';
+
+        // Read SSE stream
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          responseBuffer += decoder.decode(value, { stream: true });
+          const lines = responseBuffer.split('\n');
+          responseBuffer = lines[lines.length - 1];
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            if (line.startsWith('event:')) {
+              const eventType = line.replace('event:', '').trim();
+              const dataLine = lines[++i]?.trim();
+              if (!dataLine || !dataLine.startsWith('data:')) continue;
+
+              const jsonStr = dataLine.replace('data:', '').trim();
+              let data: unknown;
+              try {
+                data = JSON.parse(jsonStr);
+              } catch {
+                continue;
+              }
+
+              // Handle activity updates
+              if (eventType === 'activity' && typeof data === 'object' && data !== null && 'steps' in data) {
+                const actData = data as { steps?: ActivityStep[] };
+                setActivitySteps(actData.steps || []);
+              }
+
+              // Handle response text streaming
+              else if (eventType === 'response' && typeof data === 'object' && data !== null && 'partial' in data) {
+                const respData = data as { partial: string };
+                assistantContent = respData.partial;
+                // Update or create assistant message with streamed text
+                setMessages((prev: ChatMessage[]) => {
+                  const lastMsg = prev[prev.length - 1];
+                  if (lastMsg?.role === 'assistant') {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...lastMsg, content: assistantContent },
+                    ];
+                  } else {
+                    return [
+                      ...prev,
+                      {
+                        id: `msg-${Date.now()}`,
+                        role: 'assistant',
+                        content: assistantContent,
+                      },
+                    ];
+                  }
+                });
+              }
+
+              // Handle artifacts (code ready immediately)
+              else if (eventType === 'artifact' && typeof data === 'object' && data !== null && 'code' in data) {
+                const artData = data as { id: string; code: string; language: string; type: string; title: string };
+                currentArtifact = {
+                  id: artData.id,
+                  code: artData.code,
+                  language: artData.language || 'typescript',
+                  type: (artData.type || 'code') as 'react' | 'code' | 'html',
+                  title: artData.title,
+                };
+                // Inject artifact into last message
+                setMessages((prev: ChatMessage[]) => {
+                  const lastMsg = prev[prev.length - 1];
+                  if (lastMsg?.role === 'assistant') {
+                    return [
+                      ...prev.slice(0, -1),
+                      {
+                        ...lastMsg,
+                        artifacts: [...(lastMsg.artifacts || []), currentArtifact!],
+                      },
+                    ];
+                  }
+                  return prev;
+                });
+                if (onArtifactGenerated) {
+                  onArtifactGenerated(artData.id);
+                }
+              }
+
+              // Handle completion
+              else if (eventType === 'complete') {
+                setIsActivityPhase(false);
+                setIsLoading(false);
+              }
+
+              // Handle errors
+              else if (eventType === 'error' && typeof data === 'object' && data !== null && 'message' in data) {
+                const errData = data as { message: string };
+                console.error('Chat API error:', errData);
+                setIsActivityPhase(false);
+                setIsLoading(false);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Chat error:', error);
+          setMessages((prev: ChatMessage[]) => [
+            ...prev,
             {
-              id: `artifact-${Date.now()}`,
-              code: `
-export function Counter() {
-  const [count, setCount] = React.useState(0);
-  
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '16px',
-      padding: '24px',
-      fontFamily: 'system-ui'
-    }}>
-      <h1 style={{ margin: 0, fontSize: '24px' }}>Count: {count}</h1>
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <button
-          onClick={() => setCount(c => c + 1)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: C.green,
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
-        >
-          +
-        </button>
-        <button
-          onClick={() => setCount(c => c - 1)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: C.red,
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
-        >
-          −
-        </button>
-      </div>
-      <p style={{ fontSize: '12px', color: C.t4 }}>
-        Click the buttons to change the count
-      </p>
-    </div>
-  );
-}
-            `.trim(),
-              type: 'react' as const,
-              asyncContent: {
-                type: 'image' as const,
-                url: 'https://images.unsplash.com/photo-1633356122544-f134324ef6db?w=400&h=300',
-                status: 'loading' as const,
-                progress: 0,
-              },
+              id: `msg-${Date.now()}`,
+              role: 'assistant',
+              content: `Error: ${error.message}`,
             },
-          ],
-          isStreaming: false,
-        };
-
-        setMessages((prev: ChatMessage[]) => [...prev, assistantMsg]);
-        onArtifactGenerated?.(assistantMsg.artifacts?.[0].id || '');
-      }, 2000);
+          ]);
+        }
+        setIsActivityPhase(false);
+        setIsLoading(false);
+      } finally {
+        abortControllerRef.current = null;
+      }
     },
-    [simulateActivityPhase, onArtifactGenerated]
+    [userId, projectId, onArtifactGenerated]
   );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <div
