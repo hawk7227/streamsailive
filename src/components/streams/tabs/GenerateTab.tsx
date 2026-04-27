@@ -115,60 +115,108 @@ export default function GenerateTab() {
     
     try {
       const tempId = Date.now().toString();
-      setGrid([{ id: tempId, status: "waiting" }]);
       
-      const endpoint = mode === "Image"
-        ? PROVIDER_ENDPOINTS.IMAGE
-        : mode === "T2V"
-        ? PROVIDER_ENDPOINTS.VIDEO
-        : PROVIDER_ENDPOINTS.VOICE;
-      
-      const input: Record<string,any> = {
-        prompt: promptText,
-        ...(mode !== "Image" && { duration: parseInt(duration) }),
-        ...(mode !== "Image" && { aspect_ratio: ar }),
-      };
-      
-      const submitRes = await submitDirectToFal(endpoint, input) as any;
-      if (!submitRes || submitRes.error) {
+      // ── PHASE 0: Submit to new job-based system ──────────────────────────
+      // Non-blocking: submit job and return immediately
+      // New API: /api/streams/generate-job
+      const jobRes = await fetch("/api/streams/generate-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          prompt: promptText,
+          model: mode === "Image" ? IMAGE_MODELS[model] : 
+                 mode === "Voice" ? VOICE_MODELS[model] :
+                 mode === "Music" ? MUSIC_MODELS[model] :
+                 VIDEO_MODELS[model],
+          duration: mode !== "Image" ? parseInt(duration) : undefined,
+          aspectRatio: mode !== "Image" ? ar : undefined,
+          customWidth: useCustom ? parseInt(customW) : undefined,
+          customHeight: useCustom ? parseInt(customH) : undefined,
+          userId: placeholderId, // TODO: wire from auth
+          workspaceId: placeholderId, // TODO: wire from auth
+        }),
+      });
+
+      if (!jobRes.ok) {
         setGenState("failed");
-        toast.error(`Generation failed`);
+        toast.error("Failed to submit generation");
         return;
       }
-      
+
+      const jobData = await jobRes.json();
+      const jobId = jobData.jobId;
+      const estimatedDuration = jobData.estimatedDuration || 30;
+
+      // Show placeholder while job runs in background
+      setGrid([{ 
+        id: jobId, 
+        status: "waiting", 
+        generationId: jobId 
+      }]);
       setGenState("polling");
-      const responseUrl = submitRes.requestId || submitRes;
+
+      // ── PHASE 0: Poll job status (non-blocking) ──────────────────────────
+      // Poll the persistent job system instead of FAL directly
+      let pollCount = 0;
+      const maxPolls = (estimatedDuration * 1000 / 2000) + 10; // +10 buffer polls
       
-      // Poll for completion
       const pollInterval = setInterval(async () => {
+        pollCount++;
         try {
-          const checkRes = await fetch("/api/streams/video/status", {
-            method: "POST",
+          // New API: /api/streams/generation-job/:id
+          const checkRes = await fetch(`/api/streams/generation-job/${jobId}`, {
+            method: "GET",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fal_request_id: responseUrl }),
           });
-          
+
           if (!checkRes.ok) return;
-          const data = await checkRes.json() as { status?: string; output?: any };
-          
-          if (data.status === "completed" && data.output) {
-            const outputUrl = mode === "Image"
-              ? extractImageUrl(data.output)
-              : mode === "Voice" || mode === "Music"
-              ? extractAudioUrl(data.output)
-              : extractVideoUrl(data.output);
-            
-            if (outputUrl) {
-              setGrid([{ id: tempId, status: "done", outputUrl, generationId: tempId }]);
-              setGenState("done");
-              clearInterval(pollInterval);
-            }
+          const jobStatus = await checkRes.json();
+
+          // Update grid with current status
+          if (jobStatus.status === "completed" && jobStatus.result_url) {
+            setGrid([{ 
+              id: jobId, 
+              status: "done", 
+              outputUrl: jobStatus.result_url, 
+              generationId: jobId 
+            }]);
+            setGenState("done");
+            clearInterval(pollInterval);
+            toast.success("Generation complete!");
+          } else if (jobStatus.status === "failed") {
+            setGrid([{ 
+              id: jobId, 
+              status: "failed", 
+              generationId: jobId 
+            }]);
+            setGenState("failed");
+            clearInterval(pollInterval);
+            toast.error(`Generation failed: ${jobStatus.error_message || "Unknown error"}`);
+          } else if (jobStatus.status === "cancelled") {
+            setGrid([{ 
+              id: jobId, 
+              status: "failed", 
+              generationId: jobId 
+            }]);
+            setGenState("failed");
+            clearInterval(pollInterval);
+            toast.info("Generation cancelled");
           }
-        } catch {}
+          // Still processing: keep polling
+        } catch (err) {
+          console.warn("Poll error:", err);
+        }
+
+        // Stop after max polls (timeout safety)
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval);
+        }
       }, 2000);
+
+      // Fallback: auto-clear after 10 min (safety)
+      setTimeout(() => clearInterval(pollInterval), 600000);
       
-      // Auto-clear after 5 min
-      setTimeout(() => clearInterval(pollInterval), 300000);
     } catch (err) {
       setGenState("failed");
       toast.error(String(err));
