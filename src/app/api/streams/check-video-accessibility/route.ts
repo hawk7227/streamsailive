@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         response = {
           uploadedUrl: input,
           detectedPlatform: platform,
-          canEmbed: isVideo && isAccessible,
+          canEmbed: !!(isVideo && isAccessible),
           isAccessible,
           duplicationScore: isAccessible ? 0.05 : 0.5, // Lower for accessible videos
           suggestedPrompt: `Create a video based on the style from: ${platform}`,

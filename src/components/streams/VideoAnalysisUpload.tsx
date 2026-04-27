@@ -10,7 +10,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { C, R } from "../tokens";
+import { C, R } from "./tokens";
 
 interface VideoAnalysisUploadProps {
   onAnalysisComplete?: (analysis: VideoAnalysis) => void;
@@ -79,9 +79,9 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: "always" },
+        video: true,
         audio: false,
-      });
+      } as DisplayMediaStreamOptions);
 
       const recorder = new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
