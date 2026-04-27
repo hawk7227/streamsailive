@@ -24,7 +24,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceSelection } from "@/lib/team-server";
 import { loadProjectMemory, formatMemoryForContext } from "@/lib/streams/memory";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -143,8 +143,10 @@ export async function POST(request: Request): Promise<Response> {
           // Wait before starting response stream
           await new Promise((r) => setTimeout(r, 200));
 
-          // Initialize Claude client
-          const client = new Anthropic();
+          // Initialize OpenAI client
+          const client = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+          });
 
           // Build system prompt with project context
           const systemPrompt = `You are Streams, an AI project analysis and generation assistant.
@@ -157,26 +159,27 @@ Respond to the user's message directly. Be helpful, specific, and build on prior
 
 Format your response as clear prose. Do not include code blocks or artifacts in your text response.`;
 
-          // Stream Claude response
+          // Stream OpenAI response
           let responseText = "";
-          const stream = await client.messages.stream({
-            model: "claude-opus-4-20250805",
+          const stream = await client.chat.completions.create({
+            model: "gpt-4o",
             max_tokens: 1024,
-            system: systemPrompt,
             messages: [
+              {
+                role: "system",
+                content: systemPrompt,
+              },
               {
                 role: "user",
                 content: message,
               },
             ],
+            stream: true,
           });
 
           for await (const chunk of stream) {
-            if (
-              chunk.type === "content_block_delta" &&
-              chunk.delta.type === "text_delta"
-            ) {
-              const token = chunk.delta.text;
+            if (chunk.choices[0]?.delta?.content) {
+              const token = chunk.choices[0].delta.content;
               responseText += token;
 
               // Stream text token
