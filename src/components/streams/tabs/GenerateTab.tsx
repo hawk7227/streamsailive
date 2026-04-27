@@ -415,12 +415,25 @@ export default function GenerateTab({
                     {(item.status === "waiting" || item.status === "running") && (
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}>
                         <div style={{ fontSize: 32, animation: "streams-spin 2s linear infinite" }}>⟳</div>
+                        
+                        {/* PHASE 1: Mode-specific status messages */}
                         <div style={{ fontSize: 13, color: "#fff", fontWeight: 500, textAlign: "center" }}>
-                          Generating {mode}...
+                          {mode === "Image" && "Generating image..."}
+                          {mode === "T2V" && "Generating video..."}
+                          {mode === "I2V" && "Processing image to video..."}
+                          {mode === "Motion" && "Transferring motion..."}
+                          {mode === "Voice" && "Synthesizing voice..."}
+                          {mode === "Music" && "Creating music..."}
                         </div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-                          Est. {Math.ceil((genState === "polling" ? 30 : 15) / 2)}s
+                        
+                        {/* PHASE 1: Estimated time + cost */}
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>
+                          <div>Est. {mode === "Image" ? "8s" : mode === "Voice" ? "10s" : mode === "Music" ? "20s" : "45s"}</div>
+                          <div style={{ marginTop: 4, fontSize: 11 }}>
+                            Cost: ${cost}
+                          </div>
                         </div>
+                        
                         <button
                           onClick={() => cancelJob(item.id)}
                           style={{ marginTop: 8, padding: "6px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
