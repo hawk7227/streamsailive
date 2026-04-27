@@ -1,4 +1,4 @@
-STREAMS AUDIT — 8 VIOLATIONS
+STREAMS AUDIT — 17 VIOLATIONS
 
 [12.1] 6 violation(s)
   src/components/streams/StreamsPanel.tsx
@@ -18,7 +18,29 @@ STREAMS AUDIT — 8 VIOLATIONS
   src/components/streams/tabs/GenerateTab.tsx
   → GenerateTab generation status has no aria-live / role=status
 
-[S.1/9.2] 1 violation(s)
+[CSS.2] 1 violation(s)
+  src/components/streams/ChatMessageActions.tsx:134
+  → Hardcoded colour '#fee2e2' — use token: background: hasThumbsDown ? '#fee2e2' : 'transparent',
+
+[M.3] 6 violation(s)
+  src/components/streams/ChatMessageActions.tsx:118
+  → transition: all found: transition: 'all 150ms ease',
+  src/components/streams/ChatMessageActions.tsx:144
+  → transition: all found: transition: 'all 150ms ease',
+  src/components/streams/ChatMessageActions.tsx:173
+  → transition: all found: transition: 'all 150ms ease',
+  src/components/streams/ChatMessageActions.tsx:201
+  → transition: all found: transition: 'all 150ms ease',
+  src/components/streams/ChatMessageActions.tsx:227
+  → transition: all found: transition: 'all 150ms ease',
+  src/components/streams/ChatMessageActions.tsx:259
+  → transition: all found: transition: 'all 150ms ease',
+
+[S.1/9.2] 3 violation(s)
+  src/components/streams/ChatMessageActions.tsx:298
+  → Off-scale spacing 6px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): padding: '6px 12px',
+  src/components/streams/ChatMessageActions.tsx:318
+  → Off-scale spacing 6px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): padding: '6px 12px',
   src/components/streams/tabs/GenerateTab.tsx:224
   → Off-scale spacing 5px (scale: 4,8,12,16,20,24,32,40,48,64,80,96): <button key={sub} onClick={() => setMusicSub(sub)} aria-label={`Music mode: ${sub}`} style={{ paddin
 

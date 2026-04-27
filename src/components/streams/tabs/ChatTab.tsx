@@ -981,7 +981,7 @@ const tokenBufRef    = useRef<string>("");
                           }
                         }}
                         isLoading={streaming}
-                        currentUserId={userId}
+                        currentUserId={userId ?? undefined}
                       />
                     </div>
                   )}
@@ -1017,7 +1017,7 @@ const tokenBufRef    = useRef<string>("");
                           }
                         }}
                         isLoading={streaming}
-                        currentUserId={userId}
+                        currentUserId={userId ?? undefined}
                       />
                     </div>
                   )}

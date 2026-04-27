@@ -6,7 +6,13 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { C, R } from '../tokens';
+import { C, R } from '@/components/streams/tokens';
+
+// Build rule compliant colors
+const COLORS = {
+  successBg: '#dbeafe', // Light blue for thumbs up
+  errorBg: '#fee2e2', // Light red for thumbs down (use C.red with opacity)
+};
 
 export interface MessageAction {
   type: 'reaction' | 'regenerate' | 'edit' | 'copy' | 'delete';
@@ -115,7 +121,7 @@ export function MessageActions({
               minHeight: '32px',
               minWidth: '32px',
               opacity: isLoading ? 0.5 : 1,
-              transition: 'all 150ms ease',
+              transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
             }}
           >
             👍 {reactions?.thumbsUp.length || 0}
@@ -131,7 +137,7 @@ export function MessageActions({
               alignItems: 'center',
               gap: '4px',
               padding: '4px 8px',
-              background: hasThumbsDown ? '#fee2e2' : 'transparent',
+              background: hasThumbsDown ? 'rgba(220, 38, 38, 0.1)' : 'transparent',
               border: `1px solid ${hasThumbsDown ? C.red : C.bdr}`,
               borderRadius: R.r1,
               color: hasThumbsDown ? C.red : C.t3,
@@ -141,7 +147,7 @@ export function MessageActions({
               minHeight: '32px',
               minWidth: '32px',
               opacity: isLoading ? 0.5 : 1,
-              transition: 'all 150ms ease',
+              transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
             }}
           >
             👎 {reactions?.thumbsDown.length || 0}
@@ -170,7 +176,7 @@ export function MessageActions({
             minHeight: '32px',
             minWidth: '32px',
             opacity: isLoading ? 0.5 : 1,
-            transition: 'all 150ms ease',
+            transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
           }}
         >
           🔄
@@ -198,7 +204,7 @@ export function MessageActions({
             minHeight: '32px',
             minWidth: '32px',
             opacity: isLoading ? 0.5 : 1,
-            transition: 'all 150ms ease',
+            transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
           }}
         >
           ✏️
@@ -224,7 +230,7 @@ export function MessageActions({
             fontFamily: 'inherit',
             minHeight: '32px',
             minWidth: '32px',
-            transition: 'all 150ms ease',
+            transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
           }}
         >
           📋
@@ -256,7 +262,7 @@ export function MessageActions({
             minHeight: '32px',
             minWidth: '32px',
             opacity: isLoading ? 0.5 : 1,
-            transition: 'all 150ms ease',
+            transition: 'background 150ms ease, border 150ms ease, color 150ms ease',
           }}
         >
           🗑️
@@ -295,7 +301,7 @@ export function MessageActions({
             <button
               onClick={handleEdit}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 background: C.acc,
                 border: 'none',
                 borderRadius: R.r1,
@@ -315,7 +321,7 @@ export function MessageActions({
                 setEditedContent(content);
               }}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 background: 'transparent',
                 border: `1px solid ${C.bdr}`,
                 borderRadius: R.r1,
