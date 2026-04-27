@@ -58,7 +58,7 @@ export default function GenerateTab() {
   // Resume active jobs from database on mount
   // For now using placeholder user/workspace; TODO: wire from auth
   const placeholderId = "placeholder";
-  const { activeJobs, startJob, pollStatus, cancelJob, isInitialized } = useGenerationPersistence(
+  const { activeJobs, pollJobStatus, isInitialized } = useGenerationPersistence(
     placeholderId, // userId (TODO: get from auth)
     placeholderId  // workspaceId (TODO: get from auth)
   );
@@ -140,7 +140,7 @@ export default function GenerateTab() {
 
       if (!jobRes.ok) {
         setGenState("failed");
-        toast.error("Failed to submit generation");
+        toast.toast.error("Failed to submit generation");
         return;
       }
 
@@ -183,7 +183,7 @@ export default function GenerateTab() {
             }]);
             setGenState("done");
             clearInterval(pollInterval);
-            toast.success("Generation complete!");
+            toast.toast.success("Generation complete!");
           } else if (jobStatus.status === "failed") {
             setGrid([{ 
               id: jobId, 
@@ -192,7 +192,7 @@ export default function GenerateTab() {
             }]);
             setGenState("failed");
             clearInterval(pollInterval);
-            toast.error(`Generation failed: ${jobStatus.error_message || "Unknown error"}`);
+            toast.toast.error(`Generation failed: ${jobStatus.error_message || "Unknown error"}`);
           } else if (jobStatus.status === "cancelled") {
             setGrid([{ 
               id: jobId, 
@@ -201,7 +201,7 @@ export default function GenerateTab() {
             }]);
             setGenState("failed");
             clearInterval(pollInterval);
-            toast.info("Generation cancelled");
+            toast.toast.info("Generation cancelled");
           }
           // Still processing: keep polling
         } catch (err) {
@@ -219,7 +219,7 @@ export default function GenerateTab() {
       
     } catch (err) {
       setGenState("failed");
-      toast.error(String(err));
+      toast.toast.error(String(err));
     }
   }
 
@@ -276,7 +276,7 @@ export default function GenerateTab() {
         <div style={{ background: C.bg2, borderBottom: `1px solid ${C.bdr}`, maxHeight: 200, overflowY: "auto", padding: "12px 16px", flexShrink: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginBottom: 8 }}>Background Jobs</div>
           {activeJobs.map((job: GenerationJob) => (
-            <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px", background: C.bg1, border: `1px solid ${C.bdr}`, borderRadius: R.r1, marginBottom: 6, fontSize: 11 }}>
+            <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, marginBottom: 6, fontSize: 11 }}>
               <div style={{ fontSize: 16 }}>⟳</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, color: C.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -286,14 +286,18 @@ export default function GenerateTab() {
                   {job.prompt.substring(0, 40)}...
                 </div>
               </div>
-              {job.status === "queued" || job.status === "processing" && (
+              {job.status === "queued" || job.status === "processing" ? (
                 <button 
-                  onClick={() => cancelJob(job.id)}
+                  onClick={() => {
+                    // TODO: Implement cancel via API when hook supports it
+                    setPersistentJobsOpen(false);
+                  }}
                   style={{ padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 11, cursor: "pointer" }}
+                  disabled
                 >
                   Cancel
                 </button>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
@@ -393,9 +397,41 @@ export default function GenerateTab() {
             ) : (
               <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
                 {grid.map((item: GridItem) => (
-                  <div key={item.id} style={{ background: C.bg3, borderRadius: R.r2, border: `1px solid ${item.status === "done" ? C.accBr : C.bdr}`, overflow: "hidden" }}>
+                  <div key={item.id} style={{ background: C.bg3, borderRadius: R.r2, border: `1px solid ${item.status === "done" ? C.accBr : C.bdr}`, overflow: "hidden", position: "relative" }}>
                     {item.outputUrl && (
                       <MediaPlayer src={item.outputUrl} kind={mode === "Voice" || mode === "Music" ? "audio" : "video"} aspectRatio={ar} showDownload={false} label="Result" />
+                    )}
+                    
+                    {/* PHASE 0: Status indicator while polling */}
+                    {(item.status === "waiting" || item.status === "running") && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}>
+                        <div style={{ fontSize: 32, animation: "streams-spin 2s linear infinite" }}>⟳</div>
+                        <div style={{ fontSize: 13, color: "#fff", fontWeight: 500, textAlign: "center" }}>
+                          Generating {mode}...
+                        </div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                          Est. {Math.ceil((genState === "polling" ? 30 : 15) / 2)}s
+                        </div>
+                        <button
+                          onClick={() => {
+                            // TODO: Call cancelJob(item.id) from hook
+                            setGrid([]);
+                            setGenState("idle");
+                          }}
+                          style={{ marginTop: 8, padding: "6px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {item.status === "failed" && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(239,68,68,0.15)" }}>
+                        <div style={{ textAlign: "center", color: C.red }}>
+                          <div style={{ fontSize: 24, marginBottom: 8 }}>✕</div>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>Generation Failed</div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
