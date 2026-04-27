@@ -32,6 +32,19 @@ import { getProviderKey } from "@/lib/streams/provider-keys";
 import type { ActivityPhase } from "@/lib/assistant-ui/activityConversations";
 import type { MediaGenerationState } from "@/components/assistant/MediaGenerationStage";
 import { C, CT } from "../tokens";
+// Phase 10: Persistence + Features
+import {
+  createChatSession,
+  loadSessionMessages,
+  saveMessage,
+  editMessage,
+  deleteMessage,
+  loadChatSessions,
+  subscribeToSessionMessages,
+} from "@/lib/streams/chat-persistence-v2";
+import { MessageActions } from "../ChatMessageActions";
+import { useMessage } from "@/hooks/useMessage";
+import { createClient } from "@supabase/supabase-js";
 
 type Mode    = "Chat" | "Image" | "Video" | "Build";
 type MsgRole = "user" | "assistant";
@@ -66,6 +79,35 @@ async function saveToLibrary(opts: { type: "image"|"video"|"voice"|"music"; outp
 }
 
 export default function ChatTab() {
+  // Phase 10: Initialize Supabase
+  const supabase = useRef(
+    typeof window !== 'undefined'
+      ? createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+      : null
+  );
+
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get current user from Supabase auth
+  useEffect(() => {
+    if (!supabase.current) return;
+    
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.current!.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+
+    getUser();
+  }, []);
+
+  // Original state
   const [msgs,          setMsgs]         = useState<Msg[]>([]);
   const [lightboxUrl,   setLightboxUrl]  = useState<string | null>(null);
   const [input,         setInput]        = useState("");
@@ -389,6 +431,22 @@ const tokenBufRef    = useRef<string>("");
     setInput(""); setStreaming(true);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
+    // Phase 10: Save user message to Supabase
+    if (supabase.current && userId) {
+      const { data: savedMsg, error: saveError } = await saveMessage(
+        supabase.current,
+        {
+          sessionId: activeSession,
+          role: "user",
+          content: text,
+        }
+      );
+      if (saveError) {
+        console.error("Failed to save user message:", saveError);
+        // Continue anyway - message is in local state
+      }
+    }
+
     const aiId = (Date.now() + 1).toString();
     const ctrl  = new AbortController();
     abortRef.current = ctrl;
@@ -615,6 +673,24 @@ const tokenBufRef    = useRef<string>("");
     setSidebarOpen(false);
     setSearchQuery("");
     setSearchResults([]);
+
+    // Phase 10: Load messages from Supabase
+    if (supabase.current && userId) {
+      const loadMessages = async () => {
+        const { data, error } = await loadSessionMessages(supabase.current!, id);
+        if (!error && data) {
+          const convertedMsgs = data.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            text: msg.content,
+            edited: msg.edited,
+            // ... map other fields as needed
+          }));
+          setMsgs(convertedMsgs);
+        }
+      };
+      loadMessages();
+    }
   }
 
   function handleDeleteSession(e: React.MouseEvent, id: string) {
@@ -882,6 +958,31 @@ const tokenBufRef    = useRef<string>("");
                           <span style={{ display:"inline-block", width:2, height:16, background:CT.t1, borderRadius:0, marginLeft:2, verticalAlign:"text-bottom", animation:"streams-blink2 0.8s ease infinite" }}/>
                         )}
                       </div>
+
+                      {/* Phase 10: Message Actions (edit, copy, delete) */}
+                      <MessageActions
+                        messageId={msg.id}
+                        role="user"
+                        content={msg.text}
+                        onEdit={async (newContent) => {
+                          if (!supabase.current) return;
+                          const { error } = await editMessage(supabase.current, msg.id, newContent);
+                          if (!error) {
+                            setMsgs(prev => 
+                              prev.map(m => m.id === msg.id ? { ...m, text: newContent, edited: true } : m)
+                            );
+                          }
+                        }}
+                        onDelete={async () => {
+                          if (!supabase.current) return;
+                          const { error } = await deleteMessage(supabase.current, msg.id);
+                          if (!error) {
+                            setMsgs(prev => prev.filter(m => m.id !== msg.id));
+                          }
+                        }}
+                        isLoading={streaming}
+                        currentUserId={userId}
+                      />
                     </div>
                   )}
 
@@ -889,6 +990,35 @@ const tokenBufRef    = useRef<string>("");
                   {msg.text && msg.role==="assistant" && (
                     <div style={{ width:"100%", paddingLeft:36, color:CT.t1, fontSize:17, lineHeight:1.85, overflowWrap:"break-word" }}>
                       {renderMarkdown(msg.text, !!(msg.streaming && msg.text))}
+
+                      {/* Phase 10: Message Actions (reactions, regenerate, copy) */}
+                      <MessageActions
+                        messageId={msg.id}
+                        role="assistant"
+                        content={msg.text}
+                        onReact={async (reaction) => {
+                          if (!supabase.current || !userId) return;
+                          const { addReaction } = await import('@/lib/streams/chat-persistence-v2');
+                          await addReaction(supabase.current, msg.id, userId, reaction);
+                        }}
+                        onRegenerate={async () => {
+                          // Find the previous user message and re-send it
+                          const prevUserMsg = msgs.slice().reverse().find(m => m.role === "user");
+                          if (prevUserMsg) {
+                            // Remove this assistant response
+                            setMsgs(prev => prev.filter(m => m.id !== msg.id));
+                            // Re-send the user message (it will create a new response)
+                            setInput(prevUserMsg.text);
+                            // Trigger send on next render
+                            setTimeout(() => {
+                              const sendBtn = document.querySelector('[aria-label="Send message"]') as HTMLButtonElement;
+                              if (sendBtn) sendBtn.click();
+                            }, 100);
+                          }
+                        }}
+                        isLoading={streaming}
+                        currentUserId={userId}
+                      />
                     </div>
                   )}
 
