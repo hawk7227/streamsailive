@@ -41,3 +41,6 @@ next-env.d.ts
 .env.local
 site-config.json
 public/build-report.json
+# Backups and locks
+*.backup
+package-lock.json
