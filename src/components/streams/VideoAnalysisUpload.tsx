@@ -32,6 +32,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
   const [input, setInput] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -41,6 +42,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
     if (!input.trim()) return;
     
     setIsAnalyzing(true);
+    setError(null);
     try {
       const res = await fetch("/api/streams/check-video-accessibility", {
         method: "POST",
@@ -51,12 +53,19 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
         }),
       });
 
-      if (!res.ok) throw new Error("Analysis failed");
-
       const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Analysis failed. Please try again.");
+        return;
+      }
+
       setAnalysis(data);
+      setError(null);
       onAnalysisComplete?.(data);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Network error. Check your connection.";
+      setError(errorMsg);
       console.error("Video analysis error:", error);
     } finally {
       setIsAnalyzing(false);
@@ -263,7 +272,24 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
       </button>
 
       {/* Results */}
-      {analysis && (
+      {error && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "12px",
+            background: "rgba(239, 68, 68, 0.1)",
+            border: `1px solid ${C.red}`,
+            borderRadius: R.r1,
+            fontSize: 12,
+            color: C.red,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>⚠ Error</div>
+          <div>{error}</div>
+        </div>
+      )}
+
+      {analysis && !error && (
         <div
           style={{
             marginTop: "12px",
@@ -274,7 +300,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             color: C.t2,
           }}
         >
-          <div style={{ fontWeight: 600, color: C.t1, marginBottom: 8 }}>Analysis Results</div>
+          <div style={{ fontWeight: 600, color: C.t1, marginBottom: 8 }}>✓ Analysis Results</div>
           <div style={{ marginBottom: 4 }}>
             <strong>Platform:</strong> {analysis.detectedPlatform}
           </div>

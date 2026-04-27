@@ -13,6 +13,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { getOrCreateUserWorkspace } from "@/lib/streams/getOrCreateUserWorkspace";
 import { ToastProvider } from "./Toast";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
@@ -49,10 +50,12 @@ export default function StreamsPanel() {
     
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (session?.user) {
           setUserId(session.user.id);
-          setWorkspaceId(session.user.id); // TODO: Get workspace from metadata
+          // Get or create workspace for this user
+          const workspaceId = await getOrCreateUserWorkspace(session.user.id);
+          setWorkspaceId(workspaceId);
         }
       }
     );
