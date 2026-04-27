@@ -1,5 +1,6 @@
-import { PROVIDER_ENDPOINTS } from "@/lib/streams/provider-endpoints";
 "use client";
+
+import { PROVIDER_ENDPOINTS } from "@/lib/streams/provider-endpoints";
 
 /**
  * GenerateTab — 6 modes. Viewport-fit layout (100% zoom, no scroll).
