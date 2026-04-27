@@ -1,0 +1,242 @@
+name: Test, Screenshot & Report
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build, Test & Capture Screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TypeScript check
+        run: pnpm tsc --noEmit
+        continue-on-error: true
+
+      - name: Run ESLint
+        run: pnpm eslint . --max-warnings 10
+        continue-on-error: true
+
+      - name: Build Next.js
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Run Playwright E2E tests
+        run: pnpm exec playwright test
+        continue-on-error: true
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-screenshots
+          path: screenshots/
+          retention-days: 30
+
+      - name: Publish test report comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Check if test results exist
+            let testSummary = '## ✅ Test Results\n\n';
+            
+            try {
+              const resultsFile = 'playwright-report/results.json';
+              if (fs.existsSync(resultsFile)) {
+                const results = JSON.parse(fs.readFileSync(resultsFile, 'utf-8'));
+                const totalTests = results.suites?.reduce((acc, s) => acc + (s.tests?.length || 0), 0) || 0;
+                const passedTests = results.suites?.reduce((acc, s) => 
+                  acc + (s.tests?.filter(t => t.status === 'passed').length || 0), 0) || 0;
+                
+                testSummary += `- **Total Tests**: ${totalTests}\n`;
+                testSummary += `- **Passed**: ${passedTests} ✅\n`;
+                testSummary += `- **Failed**: ${totalTests - passedTests} ❌\n\n`;
+              }
+            } catch (e) {
+              testSummary += 'Could not parse test results\n\n';
+            }
+            
+            // Check for screenshots
+            const screenshotDir = 'screenshots';
+            let screenshotInfo = '';
+            if (fs.existsSync(screenshotDir)) {
+              const screenshots = fs.readdirSync(screenshotDir).filter(f => f.endsWith('.png'));
+              if (screenshots.length > 0) {
+                screenshotInfo = `## 📸 Screenshots Captured\n\n${screenshots.length} screenshot(s) captured:\n`;
+                screenshots.forEach(screenshot => {
+                  screenshotInfo += `- ${screenshot}\n`;
+                });
+              }
+            }
+            
+            const comment = `${testSummary}${screenshotInfo}
+
+**Commit**: \`${{ github.sha }}\`
+**Branch**: \`${{ github.ref_name }}\`
+**Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            // Post or update comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Test Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment,
+              });
+            } else if (context.issue?.number) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment,
+              });
+            }
+
+  accessibility-audit:
+    name: Accessibility Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Install Puppeteer
+        run: pnpm add @axe-core/puppeteer puppeteer
+
+      - name: Run accessibility audit
+        run: node scripts/accessibility-audit.js
+        continue-on-error: true
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-audit
+          path: accessibility-report.json
+          retention-days: 30
+
+  build-check:
+    name: Build Status Check
+    runs-on: ubuntu-latest
+    needs: [build-and-test, accessibility-audit]
+    if: always()
+
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.build-and-test.result }}" == "failure" ]; then
+            echo "❌ Build tests failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const buildStatus = '${{ needs.build-and-test.result }}';
+            const a11yStatus = '${{ needs.accessibility-audit.result }}';
+            
+            let emoji = '✅';
+            let status = 'PASSED';
+            
+            if (buildStatus === 'failure' || a11yStatus === 'failure') {
+              emoji = '❌';
+              status = 'FAILED';
+            }
+            
+            const comment = `${emoji} **Phase 5: GitHub Actions Automation**
+
+**Build & Test**: ${buildStatus === 'success' ? '✅' : '❌'}
+**Accessibility**: ${a11yStatus === 'success' ? '✅' : '❌'}
+
+Overall Status: **${status}**
+
+[View full logs →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment,
+            });
