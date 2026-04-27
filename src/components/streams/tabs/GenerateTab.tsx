@@ -19,6 +19,7 @@ import { useToast } from "../Toast";
 import { C, R, DUR, EASE } from "../tokens";
 import { submitDirectToFal, extractVideoUrl, extractImageUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-direct";
 import { useGenerationPersistence } from "@/hooks/useGenerationPersistence";
+import VideoAnalysisUpload from "../VideoAnalysisUpload";
 import type { GenerationJob } from "@/lib/persistence/GenerationManager";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
@@ -76,6 +77,10 @@ export default function GenerateTab({
     workspaceId
   );
   const [persistentJobsOpen, setPersistentJobsOpen] = useState(false);
+  
+  // ── PHASE 2: Video Analysis (NEW) ──────────────────────────────────────────
+  const [showVideoAnalysis, setShowVideoAnalysis] = useState(false);
+  const [videoAnalysis, setVideoAnalysis] = useState<any>(null);
   
   // ── Original state (UNCHANGED) ────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>("Image");
@@ -394,6 +399,31 @@ export default function GenerateTab({
 
         {/* OUTPUT + BULK — ONLY scrollable section */}
         <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: 16, display: "flex", flexDirection: "column", gap: 12, minHeight: 0, scrollbarWidth: "thin" }}>
+
+          {/* PHASE 2: Video Analysis */}
+          <button
+            onClick={() => setShowVideoAnalysis(!showVideoAnalysis)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: R.r1,
+              border: `1px solid ${C.bdr}`,
+              background: C.bg2,
+              color: C.t2,
+              fontSize: 12,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {showVideoAnalysis ? "▼ Hide video analysis" : "▶ Show video analysis (Phase 2)"}
+          </button>
+
+          {showVideoAnalysis && (
+            <VideoAnalysisUpload
+              onAnalysisComplete={(analysis) => {
+                setVideoAnalysis(analysis);
+              }}
+            />
+          )}
 
           {/* OUTPUT CARD */}
           <div style={{ flexShrink: 0, maxHeight: 380, background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r2, overflow: "hidden", display: "flex", flexDirection: "column" }}>
