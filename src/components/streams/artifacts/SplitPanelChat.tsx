@@ -23,7 +23,7 @@ export interface ChatMessage {
 
 export interface SplitPanelChatProps {
   messages: ChatMessage[];
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: (message: string, fileData?: { name: string; type: string; content: string }) => void;
   isLoading?: boolean;
 }
 
@@ -349,8 +349,26 @@ export function SplitPanelChat({
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  onSendMessage?.(inputValue);
-                  setInputValue('');
+                  // Handle file reading asynchronously
+                  (async () => {
+                    let fileData: { name: string; type: string; content: string } | undefined;
+                    if (uploadedFile && fileInputRef.current?.files?.[0]) {
+                      const file = fileInputRef.current.files[0];
+                      try {
+                        const content = await file.text();
+                        fileData = {
+                          name: file.name,
+                          type: file.type,
+                          content,
+                        };
+                      } catch (err) {
+                        console.error('Failed to read file:', err);
+                      }
+                    }
+                    onSendMessage?.(inputValue, fileData);
+                    setInputValue('');
+                    setUploadedFile(null);
+                  })();
                 }
               }}
               placeholder="Ask Claude to build something..."
@@ -372,9 +390,29 @@ export function SplitPanelChat({
 
             {/* Send button */}
             <button
-              onClick={() => {
-                onSendMessage?.(inputValue);
+              onClick={async () => {
+                if (!inputValue.trim()) return;
+                
+                // If file is uploaded, read its content
+                let fileData: { name: string; type: string; content: string } | undefined;
+                if (uploadedFile && fileInputRef.current?.files?.[0]) {
+                  const file = fileInputRef.current.files[0];
+                  try {
+                    const content = await file.text();
+                    fileData = {
+                      name: file.name,
+                      type: file.type,
+                      content,
+                    };
+                  } catch (err) {
+                    console.error('Failed to read file:', err);
+                    // Continue anyway, just without file
+                  }
+                }
+                
+                onSendMessage?.(inputValue, fileData);
                 setInputValue('');
+                setUploadedFile(null);
               }}
               disabled={isLoading || !inputValue.trim()}
               style={{

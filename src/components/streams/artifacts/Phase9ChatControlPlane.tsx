@@ -46,7 +46,7 @@ export function Phase9ChatControlPlane({
 
   // Real API call with SSE streaming
   const handleSendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, fileData?: { name: string; type: string; content: string }) => {
       if (!message.trim() || !userId) return;
 
       const userMsg: ChatMessage = {
@@ -77,6 +77,11 @@ export function Phase9ChatControlPlane({
             message,
             projectId: projectId || null,
             userId,
+            file: fileData ? {
+              name: fileData.name,
+              type: fileData.type,
+              content: fileData.content,
+            } : null,
           }),
           signal: abortController.signal,
         });

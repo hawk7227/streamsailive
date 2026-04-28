@@ -29,6 +29,11 @@ interface ChatRequest {
   message: string;
   projectId?: string;
   userId: string;
+  file?: {
+    name: string;
+    type: string;
+    content: string;
+  };
 }
 
 interface ActivityStep {
@@ -52,10 +57,16 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const body = (await request.json()) as ChatRequest;
-    const { message, userId } = body;
+    const { message, userId, file } = body;
 
     if (!message || !userId) {
       return NextResponse.json({ error: 'message and userId required' }, { status: 400 });
+    }
+
+    // Build context with file if provided
+    let context = '';
+    if (file) {
+      context = `User uploaded file: ${file.name} (${file.type})\n\nFile content:\n${file.content}\n\n`;
     }
 
     // Route model based on user intent
@@ -103,7 +114,10 @@ export async function POST(request: Request): Promise<Response> {
             model: route.model,
             max_tokens: 1024,
             temperature: 0.4,
-            messages: [{ role: 'user', content: message }],
+            messages: [{ 
+              role: 'user', 
+              content: context ? `${context}\nUser request: ${message}` : message 
+            }],
             stream: true,
           });
 
@@ -126,7 +140,10 @@ export async function POST(request: Request): Promise<Response> {
               model: 'gpt-5.3',
               max_tokens: 1024,
               temperature: 0.35,
-              messages: [{ role: 'user', content: message }],
+              messages: [{ 
+                role: 'user', 
+                content: context ? `${context}\nUser request: ${message}` : message 
+              }],
               stream: true,
             });
 
