@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityPhase,
-  pickConversationActivity,
-  pickActivityLines,
-  type ActivityContext,
-  type ConversationActivity,
-} from "@/lib/assistant-ui/activityConversations";
+"use client";
+
+import React from "react";
+import ActivityGenerationCard, { type ActivityMode } from "@/components/streams/ActivityGenerationCard";
+import type { ActivityPhase } from "@/lib/assistant-ui/activityConversations";
 import "./ActivityConversation.css";
 
 export type ActivityConversationProps = {
@@ -17,11 +14,8 @@ export type ActivityConversationProps = {
   className?: string;
 };
 
-const ROTATE_MS = 1050;
-const LONG_WAIT_MS = 2200;
-const MAX_RECENT_LINES = 12;
-
-function layoutFromPhase(phase: ActivityPhase): ActivityContext["mode"] {
+function modeFromPhase(phase: ActivityPhase, explicitMode?: ActivityConversationProps["mode"]): ActivityConversationProps["mode"] {
+  if (explicitMode) return explicitMode;
   if (phase.startsWith("image_")) return "image";
   if (phase.startsWith("video_")) return "video";
   if (phase.startsWith("build_")) return "build";
@@ -29,119 +23,124 @@ function layoutFromPhase(phase: ActivityPhase): ActivityContext["mode"] {
   return "chat";
 }
 
+function cardMode(mode: ActivityConversationProps["mode"]): ActivityMode {
+  if (mode === "image") return "image";
+  if (mode === "build") return "build";
+  if (mode === "tool" || mode === "video") return "tool";
+  return "conversation";
+}
+
+function cardCopy(phase: ActivityPhase, mode: ActivityConversationProps["mode"]): { label: string; title: string; subtitle: string } {
+  if (mode === "image") {
+    if (phase === "image_finalizing") {
+      return {
+        label: "IMAGE GENERATION",
+        title: "Finalizing your image",
+        subtitle: "Preparing the finished result for the chat.",
+      };
+    }
+    return {
+      label: "IMAGE GENERATION",
+      title: "Generating your image",
+      subtitle: "No dead screen — your image is being created.",
+    };
+  }
+
+  if (mode === "video") {
+    return {
+      label: "VIDEO GENERATION",
+      title: phase === "video_finalizing" ? "Finalizing your video" : "Generating your video",
+      subtitle: "Keeping the session active while the output is prepared.",
+    };
+  }
+
+  if (mode === "build") {
+    const title =
+      phase === "build_reviewing"
+        ? "Reviewing your code"
+        : phase === "build_writing"
+          ? "Building your code"
+          : "Preparing the build";
+    return {
+      label: "BUILDING",
+      title,
+      subtitle: "Preparing the implementation and output.",
+    };
+  }
+
+  if (phase === "file_reading") {
+    return {
+      label: "FILE",
+      title: "Reading your file",
+      subtitle: "Extracting and analyzing the uploaded content.",
+    };
+  }
+
+  return {
+    label: "WORKING",
+    title: "Running the requested action",
+    subtitle: "Keeping the session active while the result is prepared.",
+  };
+}
+
+function statusText(phase: ActivityPhase): string {
+  switch (phase) {
+    case "chat_streaming":
+      return "Responding…";
+    case "retrying":
+      return "Retrying…";
+    case "recovering":
+      return "Recovering…";
+    case "error":
+      return "Something went wrong.";
+    default:
+      return "Thinking…";
+  }
+}
+
 export function ActivityConversation({
   phase,
-  userText,
   mode,
   active = true,
   firstOutputVisible = false,
   className = "",
 }: ActivityConversationProps) {
-  const startedAtRef = useRef<number>(Date.now());
-  const recentLinesRef = useRef<string[]>([]);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [activity, setActivity] = useState<ConversationActivity | null>(null);
-  const [lines, setLines] = useState<string[]>([]);
-
-  const resolvedMode = mode ?? layoutFromPhase(phase);
-
-  const context = useMemo<ActivityContext>(
-    () => ({
-      userText,
-      mode: resolvedMode,
-      phase,
-      elapsedMs,
-      recentLineIds: recentLinesRef.current,
-    }),
-    [userText, resolvedMode, phase, elapsedMs]
-  );
-
-  useEffect(() => {
-    startedAtRef.current = Date.now();
-    recentLinesRef.current = [];
-
-    const nextActivity = pickConversationActivity({
-      userText,
-      mode: resolvedMode,
-      phase,
-      elapsedMs: 0,
-      recentLineIds: [],
-    });
-
-    setActivity(nextActivity);
-    setElapsedMs(0);
-
-    if (nextActivity) {
-      const nextLines = pickActivityLines(nextActivity, {
-        userText,
-        mode: resolvedMode,
-        phase,
-        elapsedMs: 0,
-        recentLineIds: [],
-      });
-      recentLinesRef.current = nextLines;
-      setLines(nextLines);
-    } else {
-      setLines([]);
-    }
-  }, [phase, userText, resolvedMode]);
-
-  useEffect(() => {
-    if (!active || firstOutputVisible || !activity) return;
-
-    const tick = window.setInterval(() => {
-      const nextElapsed = Date.now() - startedAtRef.current;
-      setElapsedMs(nextElapsed);
-
-      const nextLines = pickActivityLines(activity, {
-        ...context,
-        elapsedMs: nextElapsed,
-        recentLineIds: recentLinesRef.current,
-      });
-
-      recentLinesRef.current = [...recentLinesRef.current, ...nextLines].slice(-MAX_RECENT_LINES);
-      setLines(nextLines);
-    }, ROTATE_MS);
-
-    return () => window.clearInterval(tick);
-  }, [active, firstOutputVisible, activity, context]);
-
-  if (!active || firstOutputVisible || !activity || !lines.length || phase === "idle") {
+  if (!active || firstOutputVisible || phase === "idle" || phase === "done") {
     return null;
   }
 
-  return (
-    <section
-      className={[
-        "activity-conversation",
-        `activity-conversation--${activity.layout}`,
-        `activity-conversation--${activity.tone}`,
-        `activity-conversation--intensity-${activity.intensity}`,
-        className,
-      ].join(" ")}
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <div className="activity-conversation__visual" aria-hidden="true">
-        <div className="activity-conversation__orb" />
-        <div className="activity-conversation__skeleton">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
+  const resolvedMode = modeFromPhase(phase, mode);
 
-      <div className="activity-conversation__copy">
-        {lines.map((line, index) => (
-          <p
-            key={`${line}-${index}-${elapsedMs}`}
-            className={`activity-conversation__line activity-conversation__line--${index + 1}`}
-          >
-            {line}
-          </p>
-        ))}
+  // Conversation waits must use the small ChatGPT-style status row, not the old card.
+  if (resolvedMode === "chat" || phase === "chat_thinking" || phase === "chat_streaming") {
+    return (
+      <div
+        className={["activity-conversation-status", className].filter(Boolean).join(" ")}
+        role="status"
+        aria-live="polite"
+        aria-busy={phase !== "error"}
+      >
+        {statusText(phase)}
       </div>
-    </section>
+    );
+  }
+
+  const copy = cardCopy(phase, resolvedMode);
+
+  return (
+    <div
+      className={["activity-conversation-replacement", className].filter(Boolean).join(" ")}
+      aria-live="polite"
+      aria-busy={phase !== "error"}
+    >
+      <ActivityGenerationCard
+        mode={cardMode(resolvedMode)}
+        label={copy.label}
+        title={copy.title}
+        subtitle={copy.subtitle}
+        compact
+      />
+    </div>
   );
 }
 

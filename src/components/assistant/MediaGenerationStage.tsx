@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import ActivityGenerationCard from "@/components/streams/ActivityGenerationCard";
 import "./MediaGenerationStage.css";
 
 export type MediaGenerationKind = "image" | "video";
@@ -20,60 +23,21 @@ export type MediaGenerationStageProps = {
   className?: string;
 };
 
-const defaultCopy: Record<MediaGenerationKind, Record<MediaGenerationState, { message: string; detail: string }>> = {
-  image: {
-    starting: {
-      message: "I’m starting your image now",
-      detail: "I’ll keep the preview space alive while it takes shape.",
-    },
-    queued: {
-      message: "Your image is lined up",
-      detail: "It’s waiting to begin, and I’ll keep watching it.",
-    },
-    generating: {
-      message: "Your image is taking shape",
-      detail: "I’m keeping the look close to what you asked for.",
-    },
-    finalizing: {
-      message: "Almost ready",
-      detail: "I’m getting the image ready to show here.",
-    },
-    complete: {
-      message: "Image ready",
-      detail: "Take a look.",
-    },
-    error: {
-      message: "The image didn’t finish",
-      detail: "I’ll show the issue clearly instead of pretending it worked.",
-    },
-  },
-  video: {
-    starting: {
-      message: "I’m starting your video now",
-      detail: "This preview space will stay active while it gets moving.",
-    },
-    queued: {
-      message: "Your video is lined up",
-      detail: "It’s waiting to begin, and I’ll keep you posted.",
-    },
-    generating: {
-      message: "Your video is coming together",
-      detail: "I’m watching for the moment it’s ready to preview.",
-    },
-    finalizing: {
-      message: "Almost ready",
-      detail: "I’m preparing the player here.",
-    },
-    complete: {
-      message: "Video ready",
-      detail: "Press play when you’re ready.",
-    },
-    error: {
-      message: "The video didn’t finish",
-      detail: "I’ll show the issue clearly instead of going silent.",
-    },
-  },
-};
+function defaultCopy(kind: MediaGenerationKind, state: MediaGenerationState): { label: string; title: string; subtitle: string } {
+  if (kind === "image") {
+    return {
+      label: state === "error" ? "IMAGE ERROR" : "IMAGE GENERATION",
+      title: state === "finalizing" ? "Finalizing your image" : state === "error" ? "The image did not finish" : "Generating your image",
+      subtitle: state === "error" ? "The issue will be shown clearly instead of pretending it worked." : "No dead screen — your image is being created.",
+    };
+  }
+
+  return {
+    label: state === "error" ? "VIDEO ERROR" : "VIDEO GENERATION",
+    title: state === "finalizing" ? "Finalizing your video" : state === "error" ? "The video did not finish" : "Generating your video",
+    subtitle: state === "error" ? "The issue will be shown clearly instead of pretending it worked." : "Keeping the session active while the output is prepared.",
+  };
+}
 
 export function MediaGenerationStage({
   kind,
@@ -84,20 +48,16 @@ export function MediaGenerationStage({
   outputUrl,
   className = "",
 }: MediaGenerationStageProps) {
-  const copy = defaultCopy[kind][state];
-
   if (!active && !outputUrl) return null;
 
   const showOutput = Boolean(outputUrl && state === "complete");
+  const copy = defaultCopy(kind, state);
 
   return (
     <section
-      className={[
-        "media-generation-stage",
-        `media-generation-stage--${kind}`,
-        `media-generation-stage--${state}`,
-        className,
-      ].join(" ")}
+      className={["media-generation-stage", `media-generation-stage--${kind}`, `media-generation-stage--${state}`, className]
+        .filter(Boolean)
+        .join(" ")}
       aria-live="polite"
       aria-busy={!showOutput && state !== "error"}
     >
@@ -108,27 +68,12 @@ export function MediaGenerationStage({
           <video className="media-generation-stage__output" src={outputUrl ?? ""} controls playsInline />
         )
       ) : (
-        <div className="media-generation-stage__animation" aria-hidden="true">
-          <div className="media-generation-stage__burst" />
-          <div className="media-generation-stage__rings" />
-          <div className="media-generation-stage__mesh" />
-          {kind === "video" && (
-            <div className="media-generation-stage__timeline">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-          )}
-        </div>
-      )}
-
-      {!showOutput && (
-        <div className="media-generation-stage__copy">
-          <p className="media-generation-stage__message">{message ?? copy.message}</p>
-          <p className="media-generation-stage__detail">{detail ?? copy.detail}</p>
-        </div>
+        <ActivityGenerationCard
+          mode={kind === "image" ? "image" : "tool"}
+          label={copy.label}
+          title={message ?? copy.title}
+          subtitle={detail ?? copy.subtitle}
+        />
       )}
     </section>
   );

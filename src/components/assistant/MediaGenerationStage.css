@@ -1,200 +1,26 @@
 .media-generation-stage {
-  position: relative;
   width: 100%;
-  min-height: 320px;
-  border-radius: 22px;
-  overflow: hidden;
-  background: #090912;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
-  isolation: isolate;
-}
-
-.media-generation-stage__animation {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.22), transparent 7%),
-    conic-gradient(
-      from 0deg at 50% 50%,
-      #ff005d,
-      #ff7a00,
-      #fff200,
-      #00d084,
-      #00c8ff,
-      #3157ff,
-      #a000ff,
-      #ff00d4,
-      #ff005d
-    );
-}
-
-.media-generation-stage--image .media-generation-stage__animation {
-  animation: mediaSpectrumSpin 5.5s linear infinite;
-}
-
-.media-generation-stage--video .media-generation-stage__animation {
-  background:
-    linear-gradient(120deg, rgba(255, 0, 93, 0.95), rgba(255, 122, 0, 0.9), rgba(255, 242, 0, 0.92), rgba(0, 208, 132, 0.9), rgba(0, 200, 255, 0.9), rgba(160, 0, 255, 0.9)),
-    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.28), transparent 18%);
-  background-size: 260% 260%;
-  animation: mediaFlow 3.2s ease-in-out infinite;
-}
-
-.media-generation-stage__burst {
-  position: absolute;
-  inset: -30%;
-  background:
-    repeating-conic-gradient(
-      from 0deg,
-      rgba(255,255,255,0.48) 0deg 2deg,
-      rgba(255,255,255,0.02) 2deg 12deg
-    );
-  mix-blend-mode: overlay;
-  animation: mediaBurst 2.8s linear infinite;
-}
-
-.media-generation-stage__rings {
-  position: absolute;
-  inset: 12%;
-  border-radius: 999px;
-  border: 2px solid rgba(255,255,255,0.28);
-  box-shadow:
-    0 0 0 18px rgba(255,255,255,0.05),
-    0 0 0 42px rgba(255,255,255,0.04),
-    0 0 0 78px rgba(255,255,255,0.03),
-    0 0 70px rgba(255,255,255,0.45);
-  animation: mediaRings 1.8s ease-in-out infinite;
-}
-
-.media-generation-stage__mesh {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,0.16) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255,255,255,0.10) 1px, transparent 1px);
-  background-size: 26px 26px;
-  mask-image: radial-gradient(circle at center, black 0%, transparent 72%);
-  animation: mediaMesh 1.4s linear infinite;
-}
-
-.media-generation-stage__timeline {
-  position: absolute;
-  left: 22px;
-  right: 22px;
-  bottom: 24px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  z-index: 3;
-}
-
-.media-generation-stage__timeline span {
-  height: 42px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.24);
-  border: 1px solid rgba(255,255,255,0.28);
-  backdrop-filter: blur(10px);
-  animation: mediaTimeline 1.1s ease-in-out infinite;
-}
-
-.media-generation-stage__timeline span:nth-child(2) { animation-delay: 120ms; }
-.media-generation-stage__timeline span:nth-child(3) { animation-delay: 240ms; }
-.media-generation-stage__timeline span:nth-child(4) { animation-delay: 360ms; }
-.media-generation-stage__timeline span:nth-child(5) { animation-delay: 480ms; }
-
-.media-generation-stage__copy {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
-  z-index: 5;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(9, 9, 18, 0.55);
-  border: 1px solid rgba(255,255,255,0.2);
-  color: white;
-  backdrop-filter: blur(18px);
-}
-
-.media-generation-stage__message {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.25;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.media-generation-stage__detail {
-  margin: 5px 0 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: rgba(255,255,255,0.78);
+  max-width: 760px;
+  margin: 8px 0 12px;
 }
 
 .media-generation-stage__output {
   display: block;
   width: 100%;
-  height: 100%;
   min-height: 320px;
+  border-radius: 22px;
   object-fit: cover;
   background: #090912;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
 }
 
-.media-generation-stage--queued .media-generation-stage__animation {
-  filter: saturate(0.8) brightness(0.82);
-  animation-duration: 8s;
-}
+@media (max-width: 768px) {
+  .media-generation-stage {
+    max-width: 100%;
+  }
 
-.media-generation-stage--finalizing .media-generation-stage__animation {
-  filter: saturate(1.2) brightness(1.05);
-}
-
-.media-generation-stage--error {
-  background: #171012;
-}
-
-.media-generation-stage--error .media-generation-stage__animation {
-  background: linear-gradient(135deg, #2a1218, #5c1f2a);
-  animation: none;
-}
-
-@keyframes mediaSpectrumSpin {
-  from { transform: scale(1.22) rotate(0deg); }
-  to { transform: scale(1.22) rotate(360deg); }
-}
-
-@keyframes mediaFlow {
-  0%, 100% { background-position: 0% 50%; transform: scale(1.04); }
-  50% { background-position: 100% 50%; transform: scale(1.1); }
-}
-
-@keyframes mediaBurst {
-  from { transform: rotate(0deg) scale(1); }
-  to { transform: rotate(-360deg) scale(1.04); }
-}
-
-@keyframes mediaRings {
-  0%, 100% { transform: scale(0.92); opacity: 0.45; }
-  50% { transform: scale(1.08); opacity: 0.9; }
-}
-
-@keyframes mediaMesh {
-  from { background-position: 0 0; }
-  to { background-position: 26px 26px; }
-}
-
-@keyframes mediaTimeline {
-  0%, 100% { transform: scaleY(0.72); opacity: 0.55; }
-  50% { transform: scaleY(1); opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .media-generation-stage *,
-  .media-generation-stage *::before,
-  .media-generation-stage *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
+  .media-generation-stage__output {
+    min-height: 220px;
+    border-radius: 18px;
   }
 }

@@ -1,153 +1,29 @@
-.activity-conversation {
-  position: relative;
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  gap: 14px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid rgba(20, 20, 24, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 12px 40px rgba(20, 20, 24, 0.07);
-  overflow: hidden;
-}
-
-.activity-conversation__visual {
-  position: relative;
-  min-height: 52px;
-}
-
-.activity-conversation__orb {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95), transparent 35%),
-    linear-gradient(135deg, rgba(32, 98, 255, 0.85), rgba(155, 80, 255, 0.72));
-  animation: activityFloat 1.8s ease-in-out infinite;
-}
-
-.activity-conversation__skeleton {
-  position: absolute;
-  left: 4px;
-  right: 0;
-  bottom: -2px;
-  display: grid;
-  gap: 4px;
-}
-
-.activity-conversation__skeleton span {
-  display: block;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(0,0,0,0.08), rgba(0,0,0,0.18), rgba(0,0,0,0.08));
-  background-size: 220% 100%;
-  animation: activityShimmer 1.2s linear infinite;
-}
-
-.activity-conversation__skeleton span:nth-child(1) { width: 34px; }
-.activity-conversation__skeleton span:nth-child(2) { width: 44px; }
-.activity-conversation__skeleton span:nth-child(3) { width: 26px; }
-
-.activity-conversation__copy {
-  display: grid;
-  gap: 5px;
-  align-content: center;
-}
-
-.activity-conversation__line {
-  margin: 0;
-  color: rgba(20, 20, 24, 0.92);
+.activity-conversation-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  margin: 2px 0 8px;
+  color: rgba(80, 80, 88, 0.82);
   font-size: 14px;
-  line-height: 1.35;
+  font-weight: 400;
+  line-height: 1.4;
   letter-spacing: -0.01em;
-  animation: activityLineIn 240ms ease both;
+  animation: activityStatusIn 180ms ease both;
 }
 
-.activity-conversation__line--1 {
-  font-weight: 750;
+.activity-conversation-replacement {
+  width: 100%;
+  max-width: 760px;
+  margin: 8px 0 12px;
+  animation: activityStatusIn 180ms ease both;
 }
 
-.activity-conversation__line--2,
-.activity-conversation__line--3 {
-  color: rgba(20, 20, 24, 0.68);
-}
-
-.activity-conversation--image,
-.activity-conversation--video {
-  background:
-    radial-gradient(circle at 10% 10%, rgba(255, 232, 62, 0.28), transparent 24%),
-    radial-gradient(circle at 90% 20%, rgba(0, 220, 255, 0.25), transparent 28%),
-    radial-gradient(circle at 55% 100%, rgba(255, 0, 160, 0.20), transparent 30%),
-    rgba(255,255,255,0.86);
-}
-
-.activity-conversation--image .activity-conversation__orb,
-.activity-conversation--video .activity-conversation__orb {
-  background:
-    conic-gradient(
-      from 0deg,
-      #ff005d,
-      #ffb000,
-      #fff200,
-      #00d084,
-      #00c8ff,
-      #6a5cff,
-      #ff00e5,
-      #ff005d
-    );
-  filter: saturate(1.15);
-  animation: activitySpin 2.4s linear infinite, activityPulse 1.2s ease-in-out infinite;
-}
-
-.activity-conversation--build .activity-conversation__orb {
-  border-radius: 14px;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,0.65) 2px, transparent 2px),
-    linear-gradient(180deg, rgba(255,255,255,0.45) 2px, transparent 2px),
-    linear-gradient(135deg, rgba(30, 30, 34, 0.9), rgba(100, 100, 110, 0.78));
-  background-size: 10px 10px, 10px 10px, 100% 100%;
-}
-
-.activity-conversation--tool .activity-conversation__orb {
-  background: linear-gradient(135deg, rgba(35, 35, 42, 0.82), rgba(85, 85, 96, 0.72));
-}
-
-.activity-conversation--excited .activity-conversation__line--1 {
-  color: rgba(18, 38, 95, 0.95);
-}
-
-.activity-conversation--reassuring .activity-conversation__line--1 {
-  color: rgba(60, 55, 40, 0.95);
-}
-
-.activity-conversation--intensity-3 {
-  box-shadow: 0 16px 50px rgba(20, 20, 24, 0.10);
-}
-
-@keyframes activityShimmer {
-  from { background-position: 220% 0; }
-  to { background-position: -220% 0; }
-}
-
-@keyframes activityFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-
-@keyframes activitySpin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes activityPulse {
-  0%, 100% { scale: 1; }
-  50% { scale: 1.045; }
-}
-
-@keyframes activityLineIn {
+@keyframes activityStatusIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(3px);
   }
   to {
     opacity: 1;
@@ -155,12 +31,22 @@
   }
 }
 
+@media (max-width: 768px) {
+  .activity-conversation-status {
+    font-size: 13px;
+    margin: 2px 0 6px;
+  }
+
+  .activity-conversation-replacement {
+    max-width: 100%;
+    margin: 8px 0 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .activity-conversation *,
-  .activity-conversation *::before,
-  .activity-conversation *::after {
+  .activity-conversation-status,
+  .activity-conversation-replacement {
     animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
 }
