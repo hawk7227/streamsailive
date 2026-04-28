@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * ChatTab.tsx — Phase 9 Implementation (Refactored)
- * 
- * ARCHITECTURE COLLAPSE:
- * OLD: ChatTab → Phase9ChatControlPlane → SplitPanelChat → Artifact (5 layers)
- * NEW: ChatTab → UnifiedChatPanel (1 efficient layer)
- * 
- * Result: -300ms latency, simpler code, easier to maintain
- */
-
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { UnifiedChatPanel } from "../UnifiedChatPanel";
@@ -21,7 +11,6 @@ export default function ChatTab() {
   const [loading, setLoading] = useState(true);
   const supabaseRef = useRef<any>(null);
 
-  // Initialize auth on mount
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -31,7 +20,6 @@ export default function ChatTab() {
         );
         supabaseRef.current = supabase;
 
-        // Listen for auth changes
         const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
           (event: any, session: any) => {
             if (session?.user) {
@@ -55,59 +43,25 @@ export default function ChatTab() {
     };
   }, []);
 
-  // Loading state
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: C.t3,
-          fontSize: 13,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: C.t3, fontSize: 13 }}>
         Initializing chat...
       </div>
     );
   }
 
-  // No user
   if (!userId) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: C.t4,
-          fontSize: 13,
-          flexDirection: "column",
-          gap: 8,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: C.t4, fontSize: 13, flexDirection: "column", gap: 8 }}>
         <div>Please log in to use Chat</div>
-        <button
-          onClick={() => window.location.href = "/login"}
-          style={{
-            padding: "8px 16px",
-            borderRadius: R.r1,
-            border: "none",
-            background: C.acc,
-            color: "#fff",
-            cursor: "pointer",
-            fontSize: 13,
-          }}
-        >
+        <button onClick={() => window.location.href = "/login"} style={{ padding: "8px 16px", borderRadius: R.r1, border: "none", background: C.acc, color: "#fff", cursor: "pointer", fontSize: 13 }}>
           Go to Login
         </button>
       </div>
     );
   }
 
-  // Render Unified Chat Panel
   return (
     <UnifiedChatPanel
       projectId={projectId || "default-project"}
