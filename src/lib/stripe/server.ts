@@ -1,17 +1,3 @@
-/**
- * src/lib/stripe/server.ts
- *
- * Stripe is temporarily disabled.
- *
- * Purpose:
- * - Removes active Stripe client construction from the production build.
- * - Keeps stable exports so existing imports do not break immediately.
- * - Prevents Stripe apiVersion TypeScript failures while billing is offline.
- *
- * Re-enable later by restoring the Stripe client with the Stripe package's
- * currently supported apiVersion.
- */
-
 export function isStripeEnabled(): false {
   return false;
 }
@@ -26,5 +12,4 @@ export function requireStripe(): never {
   throw new Error(
     "Stripe is temporarily disabled. Billing routes should return a disabled response."
   );
-}
 }
