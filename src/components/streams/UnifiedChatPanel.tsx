@@ -80,6 +80,25 @@ export function UnifiedChatPanel({
     }
   }, [messages]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+Shift+K to focus input (future: integrate with search)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'k') {
+        e.preventDefault();
+        document.querySelector('textarea')?.focus();
+      }
+      
+      // Escape to blur
+      if (e.key === 'Escape') {
+        document.activeElement instanceof HTMLElement && document.activeElement.blur();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeydown);
+    return () => window.removeEventListener('keydown', handleGlobalKeydown);
+  }, []);
+
   // Pre-create iframe for artifact rendering (optimization)
   useEffect(() => {
     if (!iframeRef.current) return;
@@ -448,7 +467,13 @@ export function UnifiedChatPanel({
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
+                    // Enter to send (Shift+Enter for newline)
                     if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                    // Cmd/Ctrl+Enter also sends
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
                       handleSend();
                     }
@@ -925,7 +950,13 @@ export function UnifiedChatPanel({
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {
+                  // Enter to send (Shift+Enter for newline)
                   if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                  // Cmd/Ctrl+Enter also sends
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
                     handleSend();
                   }
