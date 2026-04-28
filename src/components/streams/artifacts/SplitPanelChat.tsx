@@ -37,6 +37,8 @@ export function SplitPanelChat({
   const [showJumpButton, setShowJumpButton] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{name: string, type: string} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detect if we're on mobile
   useEffect(() => {
@@ -265,55 +267,129 @@ export function SplitPanelChat({
             backgroundColor: C.bg2,
             borderRadius: '8px',
             borderTop: `1px solid ${C.t4}`,
+            flexDirection: 'column',
           }}
         >
-          <textarea
-            value={inputValue}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
+          {/* File upload indicator */}
+          {uploadedFile && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px',
+                backgroundColor: C.bg3,
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: C.t2,
+              }}
+            >
+              <span>📎</span>
+              <span>{uploadedFile.name}</span>
+              <button
+                onClick={() => setUploadedFile(null)}
+                style={{
+                  marginLeft: 'auto',
+                  background: 'none',
+                  border: 'none',
+                  color: C.t3,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Input row */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            {/* File upload button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: C.bg3,
+                border: `1px solid ${C.t4}`,
+                borderRadius: '6px',
+                color: C.t2,
+                cursor: 'pointer',
+                fontSize: '12px',
+                lineHeight: 1.4,
+              }}
+              title="Upload document (PDF, CSV, XLSX, DOCX, TXT)"
+            >
+              📁
+            </button>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.csv,.xlsx,.docx,.txt,.doc"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setUploadedFile({
+                    name: file.name,
+                    type: file.type,
+                  });
+                }
+              }}
+              style={{ display: 'none' }}
+            />
+
+            {/* Textarea */}
+            <textarea
+              value={inputValue}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  onSendMessage?.(inputValue);
+                  setInputValue('');
+                }
+              }}
+              placeholder="Ask Claude to build something..."
+              style={{
+                flex: 1,
+                padding: '8px',
+                backgroundColor: C.bg3,
+                border: `1px solid ${C.t4}`,
+                borderRadius: '6px',
+                color: C.t1,
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                resize: 'none',
+                minHeight: '40px',
+                maxHeight: '100px',
+                lineHeight: 1.4,
+              }}
+            />
+
+            {/* Send button */}
+            <button
+              onClick={() => {
                 onSendMessage?.(inputValue);
                 setInputValue('');
-              }
-            }}
-            placeholder="Ask Claude to build something..."
-            style={{
-              flex: 1,
-              padding: '8px',
-              backgroundColor: C.bg3,
-              border: `1px solid ${C.t4}`,
-              borderRadius: '6px',
-              color: C.t1,
-              fontSize: '13px',
-              fontFamily: 'inherit',
-              resize: 'none',
-              minHeight: '40px',
-              maxHeight: '100px',
-              lineHeight: 1.4,
-            }}
-          />
-          <button
-            onClick={() => {
-              onSendMessage?.(inputValue);
-              setInputValue('');
-            }}
-            disabled={isLoading || !inputValue.trim()}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: isLoading || !inputValue.trim() ? C.t4 : C.acc,
-              color: C.bg,
-              border: 'none',
-              borderRadius: '6px',
-              cursor: isLoading || !inputValue.trim() ? 'not-allowed' : 'pointer',
-              fontSize: '12px',
-              fontWeight: 500,
-              lineHeight: 1.4,
-              opacity: isLoading || !inputValue.trim() ? 0.5 : 1,
-            }}
-          >
-            Send
-          </button>
+              }}
+              disabled={isLoading || !inputValue.trim()}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: isLoading || !inputValue.trim() ? C.t4 : C.acc,
+                color: C.bg,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isLoading || !inputValue.trim() ? 'not-allowed' : 'pointer',
+                fontSize: '12px',
+                fontWeight: 500,
+                lineHeight: 1.4,
+                opacity: isLoading || !inputValue.trim() ? 0.5 : 1,
+              }}
+            >
+              Send
+            </button>
+          </div>
         </div>
       </div>
 

@@ -525,29 +525,91 @@ export async function executeAssistantTool(
       handlers?.onProgress?.(`searching web for: ${query}`);
 
       try {
-        // Use a web search API endpoint (could be SerpAPI, Google Custom Search, etc.)
-        // For now, returning a formatted response that the AI can use
+        // Try using DuckDuckGo API (free, no key required)
+        const searchUrl = new URL('https://api.search.brave.com/res/v1/web/search');
+        searchUrl.searchParams.set('q', query);
+        searchUrl.searchParams.set('count', String(numResults));
+        
+        const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+        
+        if (!apiKey) {
+          // Fallback: Use DuckDuckGo instant answer API (free, basic)
+          const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`;
+          const ddgResponse = await fetch(ddgUrl);
+          if (!ddgResponse.ok) throw new Error('DuckDuckGo search failed');
+          
+          const ddgData = await ddgResponse.json() as any;
+          const results = (ddgData.Results || []).slice(0, numResults).map((result: any) => ({
+            title: result.Text || '',
+            url: result.FirstURL || '',
+            snippet: result.Result || '',
+            source: new URL(result.FirstURL || 'https://example.com').hostname || 'duckduckgo.com',
+          }));
+          
+          return {
+            ok: true,
+            query,
+            results: results.length > 0 ? results : [
+              {
+                title: "Search via DuckDuckGo",
+                url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+                snippet: `Search results for "${query}" on DuckDuckGo`,
+                source: "duckduckgo.com",
+              }
+            ],
+            searchEngine: "DuckDuckGo (Free API)",
+          };
+        }
+        
+        // Use Brave Search API (if key provided)
+        const response = await fetch(searchUrl.toString(), {
+          headers: {
+            'Accept': 'application/json',
+            'X-Subscription-Token': apiKey,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Brave Search API error: ${response.statusText}`);
+        }
+        
+        const data = await response.json() as any;
+        const results = (data.web || []).map((result: any) => ({
+          title: result.title || '',
+          url: result.url || '',
+          snippet: result.description || '',
+          source: new URL(result.url || 'https://example.com').hostname || 'brave.com',
+        }));
+        
+        return {
+          ok: true,
+          query,
+          results: results.length > 0 ? results : [
+            {
+              title: "Search Results",
+              url: `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
+              snippet: `Search results for "${query}"`,
+              source: "brave.com",
+            }
+          ],
+          searchEngine: "Brave Search API",
+        };
+      } catch (err) {
+        // Final fallback to DuckDuckGo website search
         return {
           ok: true,
           query,
           results: [
             {
-              title: "Search Result 1",
-              url: "https://example.com/1",
-              snippet: "Search results would appear here with actual web search integration",
-              source: "example.com",
-            },
-            {
-              title: "Search Result 2",
-              url: "https://example.com/2",
-              snippet: "Multiple results would be returned based on the query",
-              source: "example.com",
-            },
+              title: "Search on DuckDuckGo",
+              url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+              snippet: `Visit DuckDuckGo to search for "${query}"`,
+              source: "duckduckgo.com",
+            }
           ],
-          note: "Web search tool is available. Integrate with SerpAPI or similar service for live results.",
+          searchEngine: "DuckDuckGo (Fallback)",
+          note: `To enable API search, set BRAVE_SEARCH_API_KEY environment variable. Error: ${String(err)}`,
         };
-      } catch (err) {
-        return { ok: false, error: `Web search failed: ${String(err)}` };
       }
     }
 
