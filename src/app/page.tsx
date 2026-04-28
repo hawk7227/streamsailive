@@ -1,4 +1,5 @@
 "use client";
+// Cache bust: 2026-04-28T23:33:00Z - Force full rebuild
 
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
