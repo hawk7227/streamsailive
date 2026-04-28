@@ -296,6 +296,16 @@ export function UnifiedChatPanel({
         overflow: 'hidden',
       }}
     >
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
       {/* DESKTOP: Side-by-side layout (65% chat, 35% artifact) */}
       {!isMobile && (
         <div
@@ -535,11 +545,36 @@ export function UnifiedChatPanel({
                           borderLeft: `2px solid ${C.acc}`,
                         }}
                       >
-                        <div style={{ margin: '4px 0' }}>◌ Analyzing message...</div>
-                        <div style={{ margin: '4px 0' }}>◌ Generating response...</div>
-                        <div style={{ margin: '4px 0', opacity: 0.5 }}>◌ Preparing artifacts...</div>
+                        <div style={{ margin: '4px 0' }}>⏳ Analyzing message...</div>
+                        <div style={{ margin: '4px 0' }}>⏳ Generating response...</div>
+                        <div style={{ margin: '4px 0', opacity: 0.5 }}>⏳ Preparing artifacts...</div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Loading indicator */}
+                {isLoading && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: C.bg3,
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      color: C.t3,
+                      textAlign: 'center',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    >
+                      ⟳
+                    </span>{' '}
+                    Generating...
                   </div>
                 )}
 
