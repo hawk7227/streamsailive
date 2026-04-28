@@ -1069,7 +1069,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: '54px 32px 34px',
+                padding: '54px clamp(48px, 8vw, 160px) 34px',
               }}
             >
               <div style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
