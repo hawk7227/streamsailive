@@ -48,6 +48,7 @@ export function UnifiedChatPanel({
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
   const [showActivityTimeline, setShowActivityTimeline] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Refs
   const chatPanelRef = useRef<HTMLDivElement>(null);
@@ -325,18 +326,114 @@ export function UnifiedChatPanel({
           to { opacity: 1; }
         }
       `}</style>
-      {/* DESKTOP: Side-by-side layout (65% chat, 35% artifact) */}
+      {/* DESKTOP: 3-column layout (sidebar, chat, artifacts) */}
       {!isMobile && (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '65% 35%',
-            gap: '20px',
+            gridTemplateColumns: sidebarOpen ? '180px 1fr 35%' : '50px 1fr 35%',
+            gap: '12px',
             height: '100%',
             padding: '12px',
             overflow: 'hidden',
+            transition: 'grid-template-columns 150ms ease',
           }}
         >
+          {/* Artifact sidebar */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              backgroundColor: C.bg2,
+              borderRadius: '8px',
+              padding: sidebarOpen ? '12px' : '8px',
+              overflow: 'hidden',
+              borderRight: `1px solid ${C.bdr}`,
+            }}
+          >
+            {/* Toggle button */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: 'transparent',
+                color: C.t2,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                lineHeight: 1.4,
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+              title={sidebarOpen ? 'Collapse' : 'Expand'}
+            >
+              {sidebarOpen ? '◀' : '▶'}
+            </button>
+
+            {/* Recent artifacts list */}
+            {sidebarOpen && (
+              <>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: C.t3,
+                    padding: '0 4px',
+                    marginTop: '8px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Recent
+                </div>
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                  }}
+                >
+                  {messages
+                    .filter((m) => m.artifacts && m.artifacts.length > 0)
+                    .reverse()
+                    .slice(0, 10)
+                    .map((msg, idx) => (
+                      <button
+                        key={msg.id}
+                        onClick={() => {
+                          // Jump to this artifact
+                          const el = document.getElementById(`msg-${msg.id}`);
+                          if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                          }
+                        }}
+                        style={{
+                          padding: '6px 8px',
+                          backgroundColor:
+                            latestArtifact && msg.id === latestArtifact.id ? C.acc : C.bg3,
+                          color: latestArtifact && msg.id === latestArtifact.id ? C.bg : C.t1,
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          lineHeight: 1.4,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        #{idx + 1}
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Chat panel */}
           <div
             style={{
@@ -361,6 +458,7 @@ export function UnifiedChatPanel({
             >
               {messages.map((msg) => (
                 <div
+                  id={`msg-${msg.id}`}
                   key={msg.id}
                   style={{
                     display: 'flex',
@@ -806,6 +904,7 @@ export function UnifiedChatPanel({
           >
             {messages.map((msg) => (
               <div
+                id={`msg-${msg.id}`}
                 key={msg.id}
                 style={{
                   display: 'flex',
