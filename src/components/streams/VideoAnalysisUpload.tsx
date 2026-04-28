@@ -11,6 +11,7 @@
 
 import { useState, useRef } from "react";
 import { C, R } from "./tokens";
+import { VideoThumbnailSelector, SelectedThumbnail } from "./VideoThumbnailSelector";
 
 interface VideoAnalysisUploadProps {
   onAnalysisComplete?: (analysis: VideoAnalysis) => void;
@@ -33,6 +34,8 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedThumbnail, setSelectedThumbnail] = useState<SelectedThumbnail | null>(null);
+  const [showThumbnailSelector, setShowThumbnailSelector] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -314,6 +317,103 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             <strong>Suggested prompt:</strong>
             <div style={{ marginTop: 4, fontStyle: "italic" }}>{analysis.suggestedPrompt}</div>
           </div>
+
+          {/* Phase 3: Thumbnail Selector Button */}
+          {analysis.uploadedUrl && !showThumbnailSelector && !selectedThumbnail && (
+            <button
+              onClick={() => setShowThumbnailSelector(true)}
+              style={{
+                marginTop: 12,
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: R.r1,
+                border: `1px solid ${C.acc}`,
+                background: "transparent",
+                color: C.acc,
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 150ms ease",
+                fontFamily: "inherit",
+              }}
+              onMouseOver={(e) => {
+                (e.target as HTMLButtonElement).style.background = C.acc;
+                (e.target as HTMLButtonElement).style.color = "#fff";
+              }}
+              onMouseOut={(e) => {
+                (e.target as HTMLButtonElement).style.background = "transparent";
+                (e.target as HTMLButtonElement).style.color = C.acc;
+              }}
+            >
+              ▶ Next: Select Thumbnail
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Phase 3: Thumbnail Selector */}
+      {showThumbnailSelector && analysis && (
+        <div style={{ marginTop: "12px" }}>
+          <VideoThumbnailSelector
+            videoUrl={analysis.uploadedUrl}
+            duration={30} // TODO: Get from video metadata
+            fps={24} // TODO: Get from video metadata
+            onThumbnailSelected={(thumbnail) => {
+              setSelectedThumbnail(thumbnail);
+              setShowThumbnailSelector(false);
+              console.log("Thumbnail selected:", thumbnail);
+            }}
+            onCancel={() => setShowThumbnailSelector(false)}
+          />
+        </div>
+      )}
+
+      {/* Phase 3: Selected Thumbnail Preview */}
+      {selectedThumbnail && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "12px",
+            background: C.bg3,
+            borderRadius: R.r1,
+          }}
+        >
+          <div style={{ fontWeight: 600, color: C.t1, marginBottom: 8, fontSize: 12 }}>
+            ✓ Thumbnail Selected
+          </div>
+          <img
+            src={selectedThumbnail.frameDataUrl}
+            alt="Selected thumbnail"
+            style={{
+              width: "100%",
+              maxHeight: 200,
+              borderRadius: R.r1,
+              marginBottom: 8,
+              objectFit: "cover",
+            }}
+          />
+          <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>
+            Frame @ {selectedThumbnail.timestamp.toFixed(2)}s
+            <br />
+            Grid size: {selectedThumbnail.gridSize} frames
+          </div>
+          <button
+            onClick={() => setSelectedThumbnail(null)}
+            style={{
+              width: "100%",
+              padding: "6px 12px",
+              borderRadius: R.r1,
+              border: `1px solid ${C.bdr}`,
+              background: "transparent",
+              color: C.t2,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Change Thumbnail
+          </button>
         </div>
       )}
     </div>
