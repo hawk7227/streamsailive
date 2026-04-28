@@ -82,8 +82,13 @@ export function UnifiedChatPanel({
   // Pre-create iframe for artifact rendering (optimization)
   useEffect(() => {
     if (!iframeRef.current) return;
-    // Initialize iframe once
-    iframeRef.current.srcdoc = '<html><body style="margin:0;padding:8px;font-family:system-ui;"></body></html>';
+    
+    // Initialize iframe once with blank HTML
+    try {
+      iframeRef.current.srcdoc = '<html><body style="margin:0;padding:8px;font-family:system-ui;background:#f9fafb;"></body></html>';
+    } catch (err) {
+      console.error('Failed to initialize iframe:', err);
+    }
   }, []);
 
   // ============================================
@@ -174,12 +179,24 @@ export function UnifiedChatPanel({
                 }
 
                 if (data.type === 'artifact' && data.code) {
-                  // Artifact generated
+                  // Artifact generated - write directly to iframe without state change
                   currentArtifact = {
                     id: `artifact-${Date.now()}`,
                     code: data.code,
                     type: data.type || 'react',
                   };
+                  
+                  // OPTIMIZATION: Direct iframe write (no re-render needed)
+                  if (iframeRef.current && iframeRef.current.contentDocument) {
+                    try {
+                      const doc = iframeRef.current.contentDocument;
+                      doc.body.innerHTML = `<pre style="margin:0;padding:8px;font-family:monospace;font-size:12px;color:#333;overflow:auto;"><code>${currentArtifact.code.substring(0, 500)}</code></pre>`;
+                    } catch (err) {
+                      console.error('Failed to write to iframe:', err);
+                    }
+                  }
+                  
+                  // Also update state for UI consistency
                   onArtifactGenerated?.(currentArtifact.id);
                   setMessages((prev) => {
                     const updated = [...prev];
