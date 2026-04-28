@@ -66,8 +66,12 @@ type StreamPayload = {
   language?: string;
 };
 
-const CHAT_MAX_WIDTH = 720;
-const USER_BUBBLE_MAX_WIDTH = 520;
+const CHAT_MAX_WIDTH = 'min(1120px, calc(100vw - 320px))';
+const USER_BUBBLE_MAX_WIDTH = 'min(620px, 72%)';
+const CHAT_TEXT_FONT_SIZE = 16;
+const CHAT_TEXT_LINE_HEIGHT = 1.65;
+const CHAT_META_FONT_SIZE = 13;
+const COMPOSER_FONT_SIZE = 16;
 const MOBILE_BREAKPOINT = 768;
 
 function formatElapsedStatus(elapsedMs?: number): string {
@@ -194,8 +198,8 @@ function MarkdownMessage({ content }: { content: string }) {
     <div
       style={{
         color: CT.t1,
-        fontSize: 15,
-        lineHeight: 1.62,
+        fontSize: CHAT_TEXT_FONT_SIZE,
+        lineHeight: CHAT_TEXT_LINE_HEIGHT,
         letterSpacing: '-0.003em',
       }}
     >
@@ -211,8 +215,8 @@ function MarkdownMessage({ content }: { content: string }) {
                 borderRadius: 10,
                 background: '#0d1228',
                 color: '#f0f2ff',
-                fontSize: 13,
-                lineHeight: 1.55,
+                fontSize: 14,
+                lineHeight: 1.6,
                 fontFamily: 'IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
               }}
             >
@@ -672,12 +676,14 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     await handleSendMessage(outgoing, fileData);
   }, [handleSendMessage, inputValue, isLoading, uploadedFile]);
 
+  const activeChatMaxWidth = isMobile ? '100%' : CHAT_MAX_WIDTH;
+
   const renderMessage = (msg: ChatMessage) => {
     if (msg.role === 'user') {
       return (
         <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', margin: '0 0 28px' }}>
           <div style={{ maxWidth: USER_BUBBLE_MAX_WIDTH, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: CT.t3, fontSize: 12, lineHeight: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: CT.t3, fontSize: CHAT_META_FONT_SIZE, lineHeight: '18px' }}>
               <span>You</span>
               <UserAvatar />
             </div>
@@ -688,8 +694,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 borderRadius: '18px 18px 4px 18px',
                 padding: '13px 16px',
                 color: CT.t1,
-                fontSize: 15,
-                lineHeight: 1.5,
+                fontSize: CHAT_TEXT_FONT_SIZE,
+                lineHeight: CHAT_TEXT_LINE_HEIGHT,
                 boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
@@ -704,10 +710,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
     return (
       <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', margin: '0 0 30px' }}>
-        <div style={{ maxWidth: CHAT_MAX_WIDTH, width: '100%' }}>
+        <div style={{ maxWidth: activeChatMaxWidth, width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <StreamsAvatar />
-            <span style={{ color: CT.t2, fontSize: 13, lineHeight: '18px', fontWeight: 500 }}>Streams</span>
+            <span style={{ color: CT.t2, fontSize: CHAT_META_FONT_SIZE, lineHeight: '18px', fontWeight: 500 }}>Streams</span>
           </div>
           <div style={{ paddingLeft: 30 }}>
             <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
@@ -869,8 +875,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     <div
       style={{
         width: '100%',
-        maxWidth: CHAT_MAX_WIDTH,
-        margin: '0 auto',
+        maxWidth: activeChatMaxWidth,
+        margin: isMobile ? 0 : '0 auto',
         padding: isMobile ? '8px 12px calc(12px + env(safe-area-inset-bottom))' : '10px 0 14px',
       }}
     >
@@ -994,9 +1000,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             resize: 'none',
             background: 'transparent',
             color: CT.t1,
-            fontSize: 15,
+            fontSize: COMPOSER_FONT_SIZE,
             fontFamily: 'inherit',
-            lineHeight: 1.45,
+            lineHeight: 1.5,
           }}
         />
         <button
@@ -1066,7 +1072,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 padding: '54px 32px 34px',
               }}
             >
-              <div style={{ maxWidth: CHAT_MAX_WIDTH, margin: '0 auto' }}>{messages.map(renderMessage)}</div>
+              <div style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
               <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
             </div>
             <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>
@@ -1085,7 +1091,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               padding: '24px 16px 24px',
             }}
           >
-            <div style={{ maxWidth: CHAT_MAX_WIDTH, margin: '0 auto' }}>{messages.map(renderMessage)}</div>
+            <div style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
             {latestArtifact && <div style={{ margin: '14px 0' }}>{artifactPanel}</div>}
             <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
           </div>
@@ -1097,3 +1103,4 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 }
 
 export default UnifiedChatPanel;
+
