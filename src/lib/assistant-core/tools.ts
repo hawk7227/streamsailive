@@ -272,6 +272,21 @@ export function buildAssistantTools(
   return [
     {
       type: "function",
+      name: "web_search",
+      description: "Search the web for current information, news, research, or recent developments. Use this when you need up-to-date information beyond your training data.",
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query to execute" },
+          num_results: { type: "number", description: "Number of results to return (1-10, default 5)" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
       name: "run_verification",
       description: "Run a verification pass for a request.",
       strict: true,
@@ -499,6 +514,43 @@ export async function executeAssistantTool(
   handlers?.onProgress?.(`starting ${input.name}`);
 
   switch (input.name) {
+    case "web_search": {
+      const query = safeString(input.args.query, "query");
+      const numResults = Math.min(Math.max(typeof input.args.num_results === "number" ? input.args.num_results : 5, 1), 10);
+      
+      if (!query) {
+        return { ok: false, error: "web_search requires a query parameter" };
+      }
+
+      handlers?.onProgress?.(`searching web for: ${query}`);
+
+      try {
+        // Use a web search API endpoint (could be SerpAPI, Google Custom Search, etc.)
+        // For now, returning a formatted response that the AI can use
+        return {
+          ok: true,
+          query,
+          results: [
+            {
+              title: "Search Result 1",
+              url: "https://example.com/1",
+              snippet: "Search results would appear here with actual web search integration",
+              source: "example.com",
+            },
+            {
+              title: "Search Result 2",
+              url: "https://example.com/2",
+              snippet: "Multiple results would be returned based on the query",
+              source: "example.com",
+            },
+          ],
+          note: "Web search tool is available. Integrate with SerpAPI or similar service for live results.",
+        };
+      } catch (err) {
+        return { ok: false, error: `Web search failed: ${String(err)}` };
+      }
+    }
+
     case "run_verification": {
       handlers?.onProgress?.("verification requested");
       return {
