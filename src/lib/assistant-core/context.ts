@@ -89,8 +89,10 @@ function buildSystemPromptBase(route: BuildContextInput["route"], userText = "")
       return `You are STREAMS. Handle build, code, and repair requests precisely. Use tools when needed. Never pretend filesystem or command execution happened if it did not run.${vhint}`;
     case "file":
       return `You are STREAMS. Handle workspace and file requests precisely. Use tools when needed. Never pretend file operations happened if they did not run.${vhint}`;
+    case "chat":
+      return `You are STREAMS. A general-purpose AI assistant with capabilities for writing, analysis, and discussion. You can answer questions, write content, analyze documents, brainstorm ideas, and help with research. You also execute code and build features. Be helpful, thorough, and clear in your responses.${vhint}`;
     default:
-      return `You are STREAMS. Respond like a strong, reliable assistant. Use tools only when needed. Never pretend a tool ran if it did not run.${vhint}`;
+      return `You are STREAMS. Respond like a strong, reliable assistant. You can write articles, analyze documents, answer questions, and build code features. Use tools when needed. Never pretend a tool ran if it did not run.${vhint}`;
   }
 }
 

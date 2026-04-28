@@ -37,9 +37,14 @@ const MODELS = {
 // Rule-based keywords for intent detection
 const INTENT_PATTERNS = {
   build: /build|code|create\s+(?:a\s+)?(?:button|component|feature|function|page|view|screen|endpoint|api|endpoint|form|ui|interface)|implement|write\s+(?:a\s+)?(?:code|function|script)|full\s+file|repo|system|integration|implement|scaffold/gi,
-  question: /explain|what\s+is|how\s+do|how\s+does|compare|difference|why|help\s+me\s+understand|tell\s+me|describe|what\s+are|when\s+should|best\s+practice/gi,
   debug: /error|bug|broken|not\s+working|fix|debug|test|verify|failing|crash|exception|stack\s+trace|issue|problem\s+with/gi,
-  media: /image|video|photo|picture|visual|screenshot|diagram|chart|graph/gi,
+  general_knowledge: /what\s+is|how\s+does|explain|describe|tell\s+me\s+about|define|meaning\s+of/gi,
+  content_writing: /write\s+(?:an?|me)\s+(?:article|email|story|essay|post|letter|blog|content)|draft\s+(?:an?|me)|compose|create\s+(?:an?\s+)?(?:article|post|content)/gi,
+  document_analysis: /analyze|summarize|review|examine|extract|read\s+(?:this|the)|what\s+(?:does|is)\s+(?:in|on|this)/gi,
+  brainstorm: /brainstorm|ideas|suggestions|options|alternatives|think\s+of|come\s+up\s+with/gi,
+  research: /research|find\s+information|search|lookup|recent\s+developments|what\s+are\s+(?:the\s+)?(?:latest|new)/gi,
+  question: /compare|difference|why|help\s+me\s+understand|when\s+should|best\s+practice|how\s+to/gi,
+  media: /image|video|photo|picture|visual|screenshot|diagram|chart|graph|generate\s+(?:an?\s+)?(?:image|photo)|draw|create\s+(?:an?\s+)?(?:image|visual)/gi,
 };
 
 /**
@@ -64,7 +69,7 @@ export function ruleBasedRouter(userInput: string): RoutingDecision | null {
     return {
       primaryModel: MODELS.BUILDING,
       fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
-      timeout: 30000, // 30 seconds for builds
+      timeout: 30000,
       intent: 'build',
       confidence: 0.95,
       reason: 'Build/code request detected from keywords',
@@ -76,26 +81,86 @@ export function ruleBasedRouter(userInput: string): RoutingDecision | null {
     return {
       primaryModel: MODELS.BUILDING,
       fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
-      timeout: 25000, // 25 seconds for debugging
+      timeout: 25000,
       intent: 'debug',
       confidence: 0.92,
       reason: 'Debug/error request detected from keywords',
     };
   }
 
-  // Check for question/discussion intent
-  if (INTENT_PATTERNS.question.test(userInput)) {
+  // Check for general knowledge intent (new)
+  if (INTENT_PATTERNS.general_knowledge.test(userInput)) {
     return {
-      primaryModel: MODELS.DISCUSSION,
-      fallbacks: [MODELS.DISCUSSION_FALLBACK_1, MODELS.DISCUSSION_FALLBACK_2],
-      timeout: 10000, // 10 seconds for questions
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 15000,
       intent: 'question',
-      confidence: 0.88,
-      reason: 'Question/discussion request detected from keywords',
+      confidence: 0.90,
+      reason: 'General knowledge request detected',
     };
   }
 
-  // No strong pattern matched
+  // Check for content writing intent (new)
+  if (INTENT_PATTERNS.content_writing.test(userInput)) {
+    return {
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 20000,
+      intent: 'analyze',
+      confidence: 0.93,
+      reason: 'Content writing request detected',
+    };
+  }
+
+  // Check for document analysis intent (new)
+  if (INTENT_PATTERNS.document_analysis.test(userInput)) {
+    return {
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 20000,
+      intent: 'analyze',
+      confidence: 0.88,
+      reason: 'Document analysis request detected',
+    };
+  }
+
+  // Check for brainstorm intent (new)
+  if (INTENT_PATTERNS.brainstorm.test(userInput)) {
+    return {
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 18000,
+      intent: 'analyze',
+      confidence: 0.85,
+      reason: 'Brainstorming request detected',
+    };
+  }
+
+  // Check for research intent (new)
+  if (INTENT_PATTERNS.research.test(userInput)) {
+    return {
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 20000,
+      intent: 'analyze',
+      confidence: 0.87,
+      reason: 'Research request detected - web search available',
+    };
+  }
+
+  // Check for question/discussion intent
+  if (INTENT_PATTERNS.question.test(userInput)) {
+    return {
+      primaryModel: MODELS.BUILDING,
+      fallbacks: [MODELS.BUILDING_FALLBACK_1, MODELS.BUILDING_FALLBACK_2, MODELS.BUILDING_FALLBACK_3],
+      timeout: 12000,
+      intent: 'question',
+      confidence: 0.88,
+      reason: 'Question/discussion request detected',
+    };
+  }
+
+  // No strong pattern matched - return null to trigger classifier
   return null;
 }
 

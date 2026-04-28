@@ -23,6 +23,7 @@ export interface ConcurrentArtifactRendererProps {
   isStreaming?: boolean;
   onAsyncContentReady?: (content: AsyncContent) => void;
   onError?: (error: string) => void;
+  onRegenerate?: () => void;
 }
 
 export function ConcurrentArtifactRenderer({
@@ -30,6 +31,7 @@ export function ConcurrentArtifactRenderer({
   isStreaming = false,
   onAsyncContentReady,
   onError,
+  onRegenerate,
 }: ConcurrentArtifactRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [codeReady, setCodeReady] = useState(false);
@@ -284,6 +286,24 @@ export function ConcurrentArtifactRenderer({
           flexWrap: 'wrap',
         }}
       >
+        {onRegenerate && (
+          <button
+            onClick={onRegenerate}
+            style={{
+              padding: '8px 12px',
+              fontSize: '12px',
+              backgroundColor: C.acc,
+              color: C.bg,
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              lineHeight: 1.4,
+              fontWeight: 500,
+            }}
+          >
+            Regenerate
+          </button>
+        )}
         <button
           onClick={() => window.print?.()}
           style={{
