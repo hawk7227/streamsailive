@@ -19,6 +19,7 @@ if (missing.length > 0) {
 const nextConfig: NextConfig = {
   // TypeScript errors are fixed, not ignored
   // ESLint config removed - Next.js 16 no longer supports it
+  // Cache bust timestamp: 2026-04-28T23:30:00Z
 };
 
 export default nextConfig;
