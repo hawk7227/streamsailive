@@ -217,15 +217,19 @@ export function UnifiedChatPanel({
                   }
                   
                   // Also update state for UI consistency
-                  onArtifactGenerated?.(currentArtifact.id);
-                  setMessages((prev) => {
-                    const updated = [...prev];
-                    const lastMsg = updated[updated.length - 1];
-                    if (lastMsg?.role === 'assistant') {
-                      lastMsg.artifacts = [currentArtifact];
-                    }
-                    return updated;
-                  });
+                  if (currentArtifact) {
+                    const artifact = currentArtifact; // Type narrowing capture
+                    onArtifactGenerated?.(artifact.id);
+                    setMessages((prev) => {
+                      const updated = [...prev];
+                      const lastMsg = updated[updated.length - 1];
+                      if (lastMsg?.role === 'assistant') {
+                        lastMsg.artifacts = lastMsg.artifacts || [];
+                        lastMsg.artifacts[0] = artifact;
+                      }
+                      return updated;
+                    });
+                  }
                 }
               } catch (e) {
                 // Not JSON, skip

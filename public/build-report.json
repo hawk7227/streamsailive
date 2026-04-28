@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-04-28T02:03:09.336Z",
-  "commit": "931e10ae65dca4e16a02db9c50066a661a5859cc",
+  "generatedAt": "2026-04-28T08:30:14.310Z",
+  "commit": "642f5237e2ad0d542b97d7a70019a38581b08971",
   "branch": "main",
   "environment": "unknown",
   "env": {
     "required": [
       {
         "key": "OPENAI_API_KEY",
-        "present": false
+        "present": true
       },
       {
         "key": "NEXT_PUBLIC_SUPABASE_URL",
-        "present": false
+        "present": true
       }
     ],
     "optional": [
@@ -45,9 +45,6 @@
       }
     ]
   },
-  "ok": false,
-  "issues": [
-    "Missing required env var: OPENAI_API_KEY",
-    "Missing required env var: NEXT_PUBLIC_SUPABASE_URL"
-  ]
+  "ok": true,
+  "issues": []
 }

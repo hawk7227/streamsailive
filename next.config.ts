@@ -17,10 +17,8 @@ if (missing.length > 0) {
 }
 
 const nextConfig: NextConfig = {
-  typescript: { ignoreBuildErrors: true },
+  // TypeScript errors are fixed, not ignored
+  // ESLint config removed - Next.js 16 no longer supports it
 };
-
-// eslint config is valid at runtime — cast to avoid type version mismatch
-(nextConfig as Record<string, unknown>).eslint = { ignoreDuringBuilds: true };
 
 export default nextConfig;

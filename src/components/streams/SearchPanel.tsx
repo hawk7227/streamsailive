@@ -162,7 +162,7 @@ export function SearchPanel({ onSelectResult, onClose }: SearchPanelProps) {
               transition: 'background-color 150ms ease',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLDivElement).style.backgroundColor = C.bg1;
+              (e.currentTarget as HTMLDivElement).style.backgroundColor = C.bg2;
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLDivElement).style.backgroundColor = C.bg3;

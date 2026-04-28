@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { C } from '../tokens';
+import { C } from './tokens';
 
 interface ResponsiveTabsProps {
   isMobile: boolean;

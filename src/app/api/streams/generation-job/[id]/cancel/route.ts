@@ -16,10 +16,10 @@ const supabase = createClient(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const jobId = params.id;
+    const { id: jobId } = await params;
 
     if (!jobId) {
       return new Response(

@@ -468,16 +468,6 @@ function AsyncContentLoader({
           to { transform: rotate(360deg); }
         }
       `}</style>
-
-      {/* Share Modal */}
-      {showShare && itemId && (
-        <SharePanel
-          itemId={itemId}
-          itemType="artifact"
-          itemTitle={itemTitle}
-          onClose={() => setShowShare(false)}
-        />
-      )}
     </div>
   );
 }

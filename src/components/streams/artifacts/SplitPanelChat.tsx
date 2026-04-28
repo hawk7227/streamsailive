@@ -473,8 +473,8 @@ export function SplitPanelChat({
             </p>
           </div>
         )}
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Mobile artifact view: show below chat when artifact exists */}
       {isMobile && latestArtifact && (

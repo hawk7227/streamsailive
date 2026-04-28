@@ -19,7 +19,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { routeModel, shouldEscalateResponseQuality } from '@/lib/streams/model-routing-openai';
+import { routeModel } from '@/lib/streams/model-routing-openai';
 import OpenAI from 'openai';
 
 export const maxDuration = 60;
@@ -129,35 +129,8 @@ export async function POST(request: Request): Promise<Response> {
             }
           }
 
-          // Check quality and escalate if needed
-          const quality = shouldEscalateResponseQuality({ text: responseText, expectedText: true });
-
-          if (quality.escalate && route.tier === 'mini') {
-            controller.enqueue(encoder.encode(encodeEvent({ type: 'activity', data: { escalating: true, newModel: 'gpt-5.3' } })));
-
-            responseText = '';
-            const escalated = await openai.chat.completions.create({
-              model: 'gpt-5.3',
-              max_tokens: 1024,
-              temperature: 0.35,
-              messages: [{ 
-                role: 'user', 
-                content: context ? `${context}\nUser request: ${message}` : message 
-              }],
-              stream: true,
-            });
-
-            for await (const chunk of escalated) {
-              const delta = chunk.choices[0]?.delta?.content;
-              if (delta) {
-                responseText += delta;
-                controller.enqueue(encoder.encode(encodeEvent({ type: 'response', data: { token: delta, partial: responseText } })));
-              }
-            }
-          }
-
           // Artifact (if code mentioned)
-          if (responseText.toLowerCase().includes('code') || responseText.toLowerCase().includes('component') || route.tier === 'full') {
+          if (responseText.toLowerCase().includes('code') || responseText.toLowerCase().includes('component') || route.tier === 'primary') {
             controller.enqueue(
               encoder.encode(
                 encodeEvent({

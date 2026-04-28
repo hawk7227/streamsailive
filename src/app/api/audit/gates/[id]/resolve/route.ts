@@ -14,9 +14,9 @@ import { resolveApprovalGate, createAuditRecord } from "@/lib/audit";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const gateId = params.id;
+  const { id: gateId } = await params;
   if (!gateId) {
     return NextResponse.json({ error: "Gate ID is required" }, { status: 400 });
   }
