@@ -96,9 +96,12 @@ export function SplitPanelChat({
     .filter((m: ChatMessage) => m.artifacts && m.artifacts.length > 0)
     .reverse()[0]?.artifacts?.[0];
 
-  const chatWidth = isMobile ? '60%' : '65%';
-  const previewWidth = isMobile ? '40%' : '35%';
-  const gap = isMobile ? '12px' : '20px';
+  // FIXED: Mobile is now 100% full-width (not broken 60/40)
+  // Desktop remains 65/35 split
+  const chatWidth = isMobile ? '100%' : '65%';
+  const previewWidth = isMobile ? '100%' : '35%';
+  const gap = isMobile ? '0px' : '20px';
+  const isShowingMobileArtifact = isMobile && latestArtifact;
 
   return (
     <div
@@ -393,21 +396,22 @@ export function SplitPanelChat({
         </div>
       </div>
 
-      {/* RIGHT PANEL: Artifact Preview (35% desktop, 40% mobile) */}
-      <div
-        style={{
-          flex: `0 0 ${previewWidth}`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          backgroundColor: C.bg2,
-          borderRadius: '8px',
-          padding: '12px',
-          borderLeft: `1px solid ${C.t4}`,
-          minWidth: 0,
-          overflowY: 'auto',
-        }}
-      >
+      {/* RIGHT PANEL: Artifact Preview (hidden on mobile, 35% desktop) */}
+      {!isMobile && (
+        <div
+          style={{
+            flex: `0 0 ${previewWidth}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            backgroundColor: C.bg2,
+            borderRadius: '8px',
+            padding: '12px',
+            borderLeft: `1px solid ${C.t4}`,
+            minWidth: 0,
+            overflowY: 'auto',
+          }}
+        >
         {latestArtifact ? (
           <ArtifactPreviewPanel
             artifact={latestArtifact}
@@ -431,7 +435,28 @@ export function SplitPanelChat({
             </p>
           </div>
         )}
+        )}
       </div>
+
+      {/* Mobile artifact view: show below chat when artifact exists */}
+      {isMobile && latestArtifact && (
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px',
+            backgroundColor: C.bg2,
+            borderRadius: '8px',
+            border: `1px solid ${C.t4}`,
+            maxHeight: '300px',
+            overflowY: 'auto',
+          }}
+        >
+          <ArtifactPreviewPanel
+            artifact={latestArtifact}
+            isMobile={true}
+          />
+        </div>
+      )}
 
       <style>{`
         @keyframes spin {
