@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { C } from '../tokens';
+import { SharePanel } from '../SharePanel';
 
 export interface AsyncContent {
   type: 'image' | 'video' | 'none';
@@ -24,6 +25,8 @@ export interface ConcurrentArtifactRendererProps {
   onAsyncContentReady?: (content: AsyncContent) => void;
   onError?: (error: string) => void;
   onRegenerate?: () => void;
+  itemId?: string;
+  itemTitle?: string;
 }
 
 export function ConcurrentArtifactRenderer({
@@ -32,9 +35,12 @@ export function ConcurrentArtifactRenderer({
   onAsyncContentReady,
   onError,
   onRegenerate,
+  itemId,
+  itemTitle,
 }: ConcurrentArtifactRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [codeReady, setCodeReady] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [asyncContent, setAsyncContent] = useState<AsyncContent>(
     artifact.asyncContent || { type: 'none', status: 'idle' }
   );
@@ -304,6 +310,23 @@ export function ConcurrentArtifactRenderer({
             Regenerate
           </button>
         )}
+        {itemId && (
+          <button
+            onClick={() => setShowShare(true)}
+            style={{
+              padding: '8px 12px',
+              fontSize: '12px',
+              backgroundColor: C.acc2,
+              color: C.bg,
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              lineHeight: 1.4,
+            }}
+          >
+            Share
+          </button>
+        )}
         <button
           onClick={() => window.print?.()}
           style={{
@@ -445,6 +468,16 @@ function AsyncContentLoader({
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Share Modal */}
+      {showShare && itemId && (
+        <SharePanel
+          itemId={itemId}
+          itemType="artifact"
+          itemTitle={itemTitle}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 }

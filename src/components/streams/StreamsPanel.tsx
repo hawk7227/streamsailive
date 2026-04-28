@@ -15,6 +15,7 @@ import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { getOrCreateUserWorkspace } from "@/lib/streams/getOrCreateUserWorkspace";
 import { ToastProvider } from "./Toast";
+import { SearchPanel } from "./SearchPanel";
 import { C, R, DUR, EASE } from "./tokens";
 import ChatTab       from "./tabs/ChatTab";
 import VideoEditorTab from "./tabs/VideoEditorTab";
@@ -40,6 +41,7 @@ export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
   const [userId, setUserId] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [showSearch, setShowSearch] = useState(false);
 
   // Get current user from auth
   useEffect(() => {
@@ -68,6 +70,21 @@ export default function StreamsPanel() {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab") as Tab | null;
     if (t && TABS.some(tab => tab.id === t)) setActive(t);
+  }, []);
+
+  // Cmd+K or Ctrl+K to open search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+      if (e.key === 'Escape') {
+        setShowSearch(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Write ?tab= on every switch — replaceState keeps history clean
@@ -203,6 +220,37 @@ export default function StreamsPanel() {
               </button>
             ))}
           </div>
+
+          {/* Search button - right aligned */}
+          <button
+            onClick={() => setShowSearch(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              marginLeft: 'auto',
+              backgroundColor: C.bg3,
+              border: `1px solid ${C.bdr}`,
+              borderRadius: 8,
+              color: C.t2,
+              fontSize: 12,
+              cursor: 'pointer',
+              transition: `background ${DUR.fast} ${EASE}, color ${DUR.fast} ${EASE}`,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = C.bg2;
+              (e.currentTarget as HTMLButtonElement).style.color = C.t1;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = C.bg3;
+              (e.currentTarget as HTMLButtonElement).style.color = C.t2;
+            }}
+            title="Search conversations (Cmd+K)"
+          >
+            🔍
+            <span style={{ display: 'none' }} className="streams-desktop-nav">Search</span>
+          </button>
         </nav>
 
         {/* ── Content ─────────────────────────────────────────── */}
@@ -295,6 +343,21 @@ export default function StreamsPanel() {
             .streams-root .streams-mobile-nav  { display: flex; }
           }
         `}</style>
+
+        {/* Search Panel Modal */}
+        {showSearch && (
+          <SearchPanel
+            onSelectResult={(result) => {
+              if (result.conversationId) {
+                // In a real app, navigate to that conversation
+                // For now, just close and switch to chat tab
+                setShowSearch(false);
+                switchTab('chat');
+              }
+            }}
+            onClose={() => setShowSearch(false)}
+          />
+        )}
       </div>
     </ToastProvider>
   );
