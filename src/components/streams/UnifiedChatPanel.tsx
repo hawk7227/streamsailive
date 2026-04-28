@@ -498,14 +498,16 @@ export function UnifiedChatPanel({
           >
             {latestArtifact ? (
               <>
-                {/* Artifact controls */}
+                {/* Artifact controls - simplified */}
                 <div
                   style={{
                     display: 'flex',
                     gap: '8px',
                     fontSize: '12px',
+                    alignItems: 'center',
                   }}
                 >
+                  {/* Primary action */}
                   <button
                     onClick={() => {
                       // Regenerate logic
@@ -513,35 +515,109 @@ export function UnifiedChatPanel({
                     }}
                     style={{
                       flex: 1,
-                      padding: '6px 12px',
+                      padding: '8px 12px',
                       backgroundColor: C.acc,
                       color: C.bg,
                       border: 'none',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       fontWeight: 500,
+                      lineHeight: 1.4,
                     }}
                   >
-                    Regenerate
+                    ↻ Regenerate
                   </button>
-                  <button
-                    onClick={() => {
-                      // Copy code
-                      navigator.clipboard.writeText(latestArtifact.code);
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: C.bg3,
-                      color: C.t1,
-                      border: `1px solid ${C.t4}`,
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                    }}
-                  >
-                    Copy
-                  </button>
+
+                  {/* Secondary actions menu */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={(e) => {
+                        const menu = (e.target as HTMLElement).parentElement?.querySelector(
+                          '[data-menu]'
+                        ) as HTMLDivElement;
+                        if (menu) {
+                          menu.style.display =
+                            menu.style.display === 'none' ? 'block' : 'none';
+                        }
+                      }}
+                      style={{
+                        padding: '8px 10px',
+                        backgroundColor: C.bg3,
+                        color: C.t1,
+                        border: `1px solid ${C.t4}`,
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        lineHeight: 1.4,
+                        minWidth: '32px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      ⋯
+                    </button>
+
+                    {/* Dropdown menu */}
+                    <div
+                      data-menu
+                      style={{
+                        display: 'none',
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: '4px',
+                        backgroundColor: C.bg2,
+                        border: `1px solid ${C.t4}`,
+                        borderRadius: '4px',
+                        minWidth: '140px',
+                        zIndex: 100,
+                      }}
+                    >
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(latestArtifact.code);
+                          const menu = (event?.target as HTMLElement).closest('[data-menu]') as HTMLDivElement;
+                          if (menu) menu.style.display = 'none';
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          backgroundColor: 'transparent',
+                          color: C.t1,
+                          border: 'none',
+                          borderRadius: 0,
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          textAlign: 'left',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        📋 Copy Code
+                      </button>
+                      <div style={{ height: '1px', backgroundColor: C.t4, margin: '4px 0' }} />
+                      <button
+                        onClick={() => {
+                          window.open('', '_blank');
+                          const menu = (event?.target as HTMLElement).closest('[data-menu]') as HTMLDivElement;
+                          if (menu) menu.style.display = 'none';
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          backgroundColor: 'transparent',
+                          color: C.t1,
+                          border: 'none',
+                          borderRadius: 0,
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          textAlign: 'left',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        ⛶ Full Screen
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Artifact preview (iframe) */}
