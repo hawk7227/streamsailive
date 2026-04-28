@@ -297,7 +297,7 @@ export function StreamsChatSurface({ projectId, userId, onArtifactGenerated }: S
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeAssistantIdRef = useRef<string | null>(null);
