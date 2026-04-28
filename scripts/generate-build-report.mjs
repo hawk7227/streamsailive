@@ -35,8 +35,10 @@ function gitBranch() {
   }
 }
 
-const REQUIRED_VARS = ["OPENAI_API_KEY", "NEXT_PUBLIC_SUPABASE_URL"];
+const REQUIRED_VARS = []; // No vars required at build time - these are runtime dependencies
 const OPTIONAL_VARS = [
+  "OPENAI_API_KEY",
+  "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUPABASE_SERVICE_ROLE",
   "FAL_API_KEY",
