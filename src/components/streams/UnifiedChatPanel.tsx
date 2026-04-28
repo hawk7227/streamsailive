@@ -47,6 +47,7 @@ export function UnifiedChatPanel({
   const [isMobile, setIsMobile] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
+  const [showActivityTimeline, setShowActivityTimeline] = useState(false);
 
   // Refs
   const chatPanelRef = useRef<HTMLDivElement>(null);
@@ -498,6 +499,50 @@ export function UnifiedChatPanel({
           >
             {latestArtifact ? (
               <>
+                {/* Activity timeline - optional and collapsible */}
+                {isLoading && (
+                  <div
+                    style={{
+                      paddingBottom: '12px',
+                      borderBottom: `1px solid ${C.t4}`,
+                    }}
+                  >
+                    <button
+                      onClick={() => setShowActivityTimeline(!showActivityTimeline)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        backgroundColor: 'transparent',
+                        color: C.t3,
+                        border: 'none',
+                        borderRadius: 0,
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        textAlign: 'left',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {showActivityTimeline ? '▼' : '▶'} Work steps
+                    </button>
+
+                    {showActivityTimeline && (
+                      <div
+                        style={{
+                          marginTop: '8px',
+                          fontSize: '11px',
+                          color: C.t3,
+                          paddingLeft: '8px',
+                          borderLeft: `2px solid ${C.acc}`,
+                        }}
+                      >
+                        <div style={{ margin: '4px 0' }}>◌ Analyzing message...</div>
+                        <div style={{ margin: '4px 0' }}>◌ Generating response...</div>
+                        <div style={{ margin: '4px 0', opacity: 0.5 }}>◌ Preparing artifacts...</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Artifact controls - simplified */}
                 <div
                   style={{
