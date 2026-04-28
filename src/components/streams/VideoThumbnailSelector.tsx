@@ -70,14 +70,24 @@ export function VideoThumbnailSelector({
         // Set video to timestamp
         videoRef.current.currentTime = timestamp;
 
-        // Wait for frame to load
-        await new Promise(resolve => {
-          const handler = () => {
-            videoRef.current?.removeEventListener('seeked', handler);
-            resolve(null);
-          };
-          videoRef.current?.addEventListener('seeked', handler);
-        });
+        // Wait for frame to load with timeout
+        try {
+          await Promise.race([
+            new Promise<void>(resolve => {
+              const handler = () => {
+                videoRef.current?.removeEventListener('seeked', handler);
+                resolve();
+              };
+              videoRef.current?.addEventListener('seeked', handler);
+            }),
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout at ${timestamp}s`)), 5000)
+            )
+          ]);
+        } catch (error) {
+          console.error('Frame extraction error:', error);
+          throw new Error(`Failed to extract frame at ${timestamp}s. CORS issue or corrupted video.`);
+        }
 
         // Draw frame to canvas
         canvas.width = 320;

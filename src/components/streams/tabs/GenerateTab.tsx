@@ -20,6 +20,7 @@ import { C, R, DUR, EASE } from "../tokens";
 import { submitDirectToFal, extractVideoUrl, extractImageUrl, extractAudioUrl, extractMusicUrl } from "@/lib/streams/fal-direct";
 import { useGenerationPersistence } from "@/hooks/useGenerationPersistence";
 import VideoAnalysisUpload from "../VideoAnalysisUpload";
+import { TypeSpecificControls } from "../TypeSpecificControls";
 import type { GenerationJob } from "@/lib/persistence/GenerationManager";
 
 type Mode = "T2V" | "I2V" | "Motion" | "Image" | "Voice" | "Music";
@@ -85,6 +86,7 @@ export default function GenerateTab({
   // ── Original state (UNCHANGED) ────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>("Image");
   const [model, setModel] = useState(0);
+  const [modeConfig, setModeConfig] = useState<any>(null); // Phase 5: Type-specific config
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState<Duration>("5");
   const [ar, setAr] = useState<AR>("16:9");
@@ -365,6 +367,19 @@ export default function GenerateTab({
             <select value={currentModel} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { const idx = models.indexOf(e.target.value); setModel(Math.max(0, idx)); }} style={{ height: 32, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238891B8' d='M1 1l5 5 5-5'/%3e%3c/svg%3e\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px", paddingRight: 28, flexShrink: 0 }}>
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+
+            {/* PHASE 5: Type-Specific Controls */}
+            {(mode === "Image" || mode === "T2V" || mode === "I2V" || mode === "Voice" || mode === "Music") && (
+              <div style={{ flexBasis: "100%", marginLeft: 0 }}>
+                <TypeSpecificControls 
+                  mode={mode as any}
+                  onConfigChange={(config) => {
+                    setModeConfig(config);
+                    console.log('Mode config updated:', mode, config);
+                  }}
+                />
+              </div>
+            )}
 
             {(mode === "T2V" || mode === "I2V" || mode === "Motion") && (
               <select value={ar} onChange={(e) => setAr(e.target.value as AR)} style={{ height: 32, padding: "0 12px", background: C.surf, border: `1px solid ${C.bdr}`, borderRadius: R.r2, color: C.t2, fontSize: 12, cursor: "pointer", fontFamily: "inherit", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238891B8' d='M1 1l5 5 5-5'/%3e%3c/svg%3e\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px", paddingRight: 28, flexShrink: 0 }}>

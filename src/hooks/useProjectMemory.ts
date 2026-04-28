@@ -70,31 +70,38 @@ export function useProjectMemory(
 
     setIsLoading(true);
     setError(null);
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10s timeout
 
     try {
-      // Parallel requests to load all project context
-      const [artifactsRes, tasksRes, memoryRes, historyRes] = await Promise.all([
-        fetch(`/api/streams/artifacts?projectId=${projectId}&limit=10`),
-        fetch(`/api/streams/tasks?projectId=${projectId}&status=active`),
-        fetch(`/api/streams/memory/facts?projectId=${projectId}`),
-        fetch(`/api/streams/generation-history?projectId=${projectId}&limit=20`),
+      // Helper to fetch with timeout and JSON parsing
+      const fetchWithTimeout = async (url: string, field: string) => {
+        try {
+          const res = await fetch(url, { signal: abortController.signal });
+          
+          if (!res.ok) {
+            console.warn(`${field} API returned ${res.status}`);
+            return { [field]: [] };
+          }
+
+          const data = await res.json();
+          return data;
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            throw new Error(`${field} API timeout`);
+          }
+          console.error(`${field} API error:`, err);
+          return { [field]: [] };
+        }
+      };
+
+      // Parallel requests with proper error handling
+      const [artifacts, tasks, memory, history] = await Promise.all([
+        fetchWithTimeout(`/api/streams/artifacts?projectId=${projectId}&limit=10`, 'artifacts'),
+        fetchWithTimeout(`/api/streams/tasks?projectId=${projectId}&status=active`, 'tasks'),
+        fetchWithTimeout(`/api/streams/memory/facts?projectId=${projectId}`, 'memory'),
+        fetchWithTimeout(`/api/streams/generation-history?projectId=${projectId}&limit=20`, 'history'),
       ]);
-
-      const artifacts = artifactsRes.ok
-        ? await artifactsRes.json()
-        : { artifacts: [] };
-
-      const tasks = tasksRes.ok
-        ? await tasksRes.json()
-        : { tasks: [] };
-
-      const memory = memoryRes.ok
-        ? await memoryRes.json()
-        : { facts: [] };
-
-      const history = historyRes.ok
-        ? await historyRes.json()
-        : { generations: [] };
 
       setProjectMemory({
         projectId,
@@ -105,9 +112,10 @@ export function useProjectMemory(
       });
     } catch (err) {
       console.error('Error loading project memory:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load project memory');
+      const errMsg = err instanceof Error ? err.message : 'Failed to load project memory';
+      setError(errMsg);
       
-      // Fallback to empty memory on error
+      // Fallback to empty memory
       setProjectMemory({
         projectId,
         recentArtifacts: [],
@@ -116,6 +124,8 @@ export function useProjectMemory(
         generationHistory: [],
       });
     } finally {
+      clearTimeout(timeoutId);
+      abortController.abort();
       setIsLoading(false);
     }
   }, [projectId, userId]);
