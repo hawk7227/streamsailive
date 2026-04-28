@@ -1,15 +1,21 @@
-export function isStripeEnabled(): false {
-  return false;
-}
-
-export function getStripe(): never {
-  throw new Error(
-    "Stripe is temporarily disabled. Billing routes should return a disabled response."
+export async function POST() {
+  return NextResponse.json(
+    {
+      ok: false,
+      disabled: true,
+      error: "Stripe checkout is temporarily disabled.",
+    },
+    { status: 503 }
   );
 }
 
-export function requireStripe(): never {
-  throw new Error(
-    "Stripe is temporarily disabled. Billing routes should return a disabled response."
+export async function GET() {
+  return NextResponse.json(
+    {
+      ok: false,
+      disabled: true,
+      error: "Stripe checkout is temporarily disabled.",
+    },
+    { status: 503 }
   );
 }
