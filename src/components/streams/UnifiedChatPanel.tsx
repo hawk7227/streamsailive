@@ -14,7 +14,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { C } from '../tokens';
+import { C } from './tokens';
 
 export interface ChatMessage {
   id: string;
@@ -161,7 +161,7 @@ export function UnifiedChatPanel({
         // Create assistant message placeholder
         const assistantMsgId = `msg-${Date.now()}-assistant`;
         let currentAssistantContent = '';
-        let currentArtifact: ChatMessage['artifacts']?.[0] | null = null;
+        let currentArtifact: { id: string; code: string; type: 'react' | 'html' | 'svg' } | null = null;
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
