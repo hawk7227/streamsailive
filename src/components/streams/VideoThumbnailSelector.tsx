@@ -15,6 +15,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { C, R } from './tokens';
+import { AdvancedVideoPlayer } from './AdvancedVideoPlayer';
 
 export interface SelectedThumbnail {
   timestamp: number;
@@ -47,6 +48,7 @@ export function VideoThumbnailSelector({
   const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
   const [isLoadingFrames, setIsLoadingFrames] = useState(false);
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   // Extract frames at specific timestamps
   const extractFrames = async (gridSizeValue: GridSize) => {
@@ -421,6 +423,66 @@ export function VideoThumbnailSelector({
       <div style={{ fontSize: 11, color: C.t4, lineHeight: 1.5 }}>
         Click on a frame to select it as your thumbnail. You can also drag the timeline scrubber to preview any point in the video. Selected frame will be used as the video thumbnail.
       </div>
+
+      {/* Phase 4: Advanced Video Player (Optional) */}
+      {showPlayer && (
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${C.bdr}` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>
+            ▶ Advanced Video Editing
+          </div>
+          <AdvancedVideoPlayer
+            videoUrl={videoUrl}
+            duration={duration}
+            fps={fps}
+            onSegmentCreated={(segment) => {
+              console.log('Segment created:', segment);
+            }}
+            onSegmentDeleted={(segmentId) => {
+              console.log('Segment deleted:', segmentId);
+            }}
+          />
+          <button
+            onClick={() => setShowPlayer(false)}
+            style={{
+              marginTop: 8,
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: R.r1,
+              border: `1px solid ${C.bdr}`,
+              background: 'transparent',
+              color: C.t2,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Close Editor
+          </button>
+        </div>
+      )}
+
+      {/* Toggle advanced editor button */}
+      {!showPlayer && (
+        <button
+          onClick={() => setShowPlayer(true)}
+          style={{
+            marginTop: 8,
+            width: '100%',
+            padding: '8px 12px',
+            borderRadius: R.r1,
+            border: `1px solid ${C.acc}`,
+            background: 'transparent',
+            color: C.acc,
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          ▶ Open Advanced Video Editor
+        </button>
+      )}
     </div>
   );
 }
