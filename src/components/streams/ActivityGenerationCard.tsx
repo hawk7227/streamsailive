@@ -75,7 +75,7 @@ export function ActivityGenerationCard({
       style={{
         position: 'relative',
         width: '100%',
-        maxWidth: compact ? 520 : 760,
+        maxWidth: compact ? 520 : 'min(1180px, calc(100vw - 360px))',
         minHeight: compact ? 132 : 218,
         borderRadius: compact ? 22 : 28,
         overflow: 'hidden',

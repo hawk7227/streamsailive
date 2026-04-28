@@ -50,7 +50,7 @@ export function AssistantMessageList({ messages, streamingText, streamingMode, p
           WebkitOverflowScrolling: "touch" as never,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 'min(1180px, calc(100vw - 360px))', margin: "0 auto" }}>
           {messages.map((message, index) => (
             <AssistantMessage key={`${message.role}-${index}`} message={message} />
           ))}

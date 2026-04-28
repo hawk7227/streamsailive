@@ -15,7 +15,7 @@
 
 .activity-conversation-replacement {
   width: 100%;
-  max-width: 760px;
+  max-width: min(1180px, calc(100vw - 360px));
   margin: 8px 0 12px;
   animation: activityStatusIn 180ms ease both;
 }
