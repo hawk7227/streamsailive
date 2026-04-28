@@ -291,7 +291,7 @@ export default function SettingsTab() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 700, margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ width: "100%", maxWidth: "none", margin: 0, padding: "24px clamp(24px, 5vw, 80px)", display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
 
         {/* Header */}
         <div>

@@ -520,7 +520,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <div style={{flex:1,display:"flex",overflow:"hidden"}}>
  {LeftPanel}
  <div style={{flex:1,overflowY:"auto",padding:"24px 32px"}}>
- <div style={{maxWidth:680,margin:"0 auto"}}>
+ <div style={{width:"100%",maxWidth:"none",margin:0}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
  <div style={{fontFamily:"'DM Serif Display', serif",fontSize:20,color:C.t1}}>Full transcript</div>
  <div style={{display:"flex",gap:8}}>
@@ -565,7 +565,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  <div style={{flex:1,display:"flex",overflow:"hidden"}}>
  {LeftPanel}
  <div style={{flex:1,overflowY:"auto",padding:"24px 32px"}}>
- <div style={{maxWidth:680,margin:"0 auto",display:"flex",flexDirection:"column",gap:16}}>
+ <div style={{width:"100%",maxWidth:"none",margin:0,display:"flex",flexDirection:"column",gap:16}}>
  {[
  {title:"Voice track",color:C.green,badge:"extracted · clean",actions:[
  {label:"Re-voice entire track",fn:handleReVoice,state:revoiceState},
@@ -671,7 +671,7 @@ export default function VideoEditorTab({ analysisId: propAnalysisId, genLogId: p
  );
  const ExportView = (
  <div style={{flex:1,overflowY:"auto",padding:"24px 32px"}}>
- <div style={{maxWidth:680,margin:"0 auto"}}>
+ <div style={{width:"100%",maxWidth:"none",margin:0}}>
  <div style={{fontFamily:"'DM Serif Display', serif",fontSize:20,color:C.t1,marginBottom:6}}>Export</div>
  <div style={{fontSize:13,color:C.t3,marginBottom:24}}>Download any combination of assets from this project.</div>
  <div style={{display:"flex",flexDirection:"column",gap:10}}>

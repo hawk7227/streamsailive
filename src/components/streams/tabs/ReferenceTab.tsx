@@ -308,7 +308,7 @@ export default function ReferenceTab({ onSelectPrompt }: ReferenceTabProps = {})
           {/* Preview area */}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 20 }}>
             {urlInput ? (
-              <div style={{ width: "100%", maxWidth: 520 }}>
+              <div style={{ width: "100%", maxWidth: "min(1180px, 100%)" }}>
                 {urlInput ? (
                   <MediaPlayer
                     src={urlInput}

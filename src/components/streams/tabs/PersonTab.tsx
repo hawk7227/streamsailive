@@ -240,7 +240,7 @@ export default function PersonTab({ onIngestComplete, videoUrl: propVideoUrl }: 
 
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: "20px" }} className="streams-person-scroll">
-      <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ width: "100%", maxWidth: "none", margin: 0, display: "flex", flexDirection: "column", gap: 16 }}>
 
         {/* Video selector */}
         <div style={{ background: C.bg2, border: `1px solid ${C.bdr}`, borderRadius: R.r3, padding: 16 }}>

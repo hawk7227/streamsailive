@@ -270,7 +270,7 @@ export default function GenerateTab({
   const cost = COST[`${mode}-${currentModel}`] ?? "—";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", maxWidth: 780, margin: "0 auto", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", maxWidth: "none", margin: 0, overflow: "hidden", padding: "24px clamp(24px, 5vw, 80px)", boxSizing: "border-box" }}>
 
       {/* TOPBAR */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, flexShrink: 0, borderBottom: `1px solid ${C.bdr}`, padding: "0 20px" }}>
