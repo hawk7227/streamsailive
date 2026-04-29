@@ -31,8 +31,8 @@ function getCopy(mode: ActivityMode): { label: string; title: string; subtitle: 
     case 'code':
       return {
         label: 'BUILDING',
-        title: 'Building your code',
-        subtitle: 'Preparing the implementation and output.',
+        title: 'Working on output',
+        subtitle: 'Preparing the result.',
       };
     case 'file':
       return {
