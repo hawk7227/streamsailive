@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityGenerationCard, ActivityMode } from './ActivityGenerationCard';
+import type { ActivityMode } from './ActivityGenerationCard';
 import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
 import { C, CT } from './tokens';
@@ -88,11 +88,6 @@ function formatCompleteStatus(mode: ActivityMode | undefined, elapsedMs?: number
   if (mode === 'image-edit') return `Edited image in ${seconds} seconds ›`;
   if (mode === 'file') return `Analyzed file in ${seconds} seconds ›`;
   return formatElapsedStatus(elapsedMs);
-}
-
-function shouldShowActivityCard(activity?: ChatActivity | null, isStreaming?: boolean): boolean {
-  if (!activity || !isStreaming) return false;
-  return ['image', 'image-edit', 'build', 'code', 'tool'].includes(activity.mode);
 }
 
 function parseSseChunk(buffer: string): { events: Array<{ event: StreamEventName; data: StreamPayload }>; rest: string } {
@@ -333,58 +328,12 @@ function AssistantStatusRow({ text, active }: { text?: string; active?: boolean 
   );
 }
 
-function StreamsAvatar() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 999,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #7C3AED, #f97316)',
-        color: '#fff',
-        fontSize: 12,
-        boxShadow: '0 6px 18px rgba(124,58,237,0.24)',
-        flexShrink: 0,
-      }}
-    >
-      ✦
-    </div>
-  );
-}
-
-function UserAvatar() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: 18,
-        height: 18,
-        borderRadius: 999,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#e9e7ff',
-        color: '#6d5bd0',
-        fontSize: 11,
-        flexShrink: 0,
-      }}
-    >
-      ♟
-    </div>
-  );
-}
-
 export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: UnifiedChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
-  const [showActivityTimeline, setShowActivityTimeline] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -487,17 +436,27 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       if (event === 'activity') {
         const mode = data.mode ?? activeActivityRef.current?.mode ?? 'conversation';
-        const activity: ChatActivity = {
+        activeActivityRef.current = {
           mode,
           phase: data.phase,
           label: data.label,
           title: data.title,
           subtitle: data.subtitle,
         };
-        activeActivityRef.current = activity;
+
+        const phaseText =
+          data.statusText ??
+          (data.phase === 'responding'
+            ? 'Responding…'
+            : data.phase === 'tool' || data.phase === 'using_tools'
+              ? 'Using tools…'
+              : data.phase === 'generating'
+                ? 'Generating…'
+                : 'Thinking…');
+
         updateAssistantMessage(id, {
-          activity,
-          statusText: data.statusText ?? (data.phase === 'responding' ? 'Responding…' : 'Thinking…'),
+          activity: null,
+          statusText: phaseText,
           isStreaming: true,
         });
         return;
@@ -570,11 +529,11 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         content: '',
         statusText: 'Thinking…',
         isStreaming: true,
-        activity: { mode: fileData ? 'file' : 'conversation', phase: 'thinking' },
+        activity: null,
       };
 
       assistantMsgIdRef.current = assistantMsg.id;
-      activeActivityRef.current = assistantMsg.activity ?? null;
+      activeActivityRef.current = { mode: fileData ? 'file' : 'conversation', phase: 'thinking' };
       activeArtifactRef.current = null;
       calmStream.reset('');
 
@@ -682,27 +641,18 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     if (msg.role === 'user') {
       return (
         <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', margin: '0 0 28px' }}>
-          <div style={{ maxWidth: USER_BUBBLE_MAX_WIDTH, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: CT.t3, fontSize: CHAT_META_FONT_SIZE, lineHeight: '18px' }}>
-              <span>You</span>
-              <UserAvatar />
-            </div>
-            <div
-              style={{
-                background: '#f7f7f8',
-                border: `1px solid ${CT.border}`,
-                borderRadius: '18px 18px 4px 18px',
-                padding: '13px 16px',
-                color: CT.t1,
-                fontSize: CHAT_TEXT_FONT_SIZE,
-                lineHeight: CHAT_TEXT_LINE_HEIGHT,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {msg.content}
-            </div>
+          <div
+            style={{
+              maxWidth: USER_BUBBLE_MAX_WIDTH,
+              color: CT.t1,
+              fontSize: CHAT_TEXT_FONT_SIZE,
+              lineHeight: CHAT_TEXT_LINE_HEIGHT,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              textAlign: 'right',
+            }}
+          >
+            {msg.content}
           </div>
         </div>
       );
@@ -711,25 +661,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     return (
       <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', margin: '0 0 30px' }}>
         <div style={{ maxWidth: activeChatMaxWidth, width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <StreamsAvatar />
-            <span style={{ color: CT.t2, fontSize: CHAT_META_FONT_SIZE, lineHeight: '18px', fontWeight: 500 }}>Streams</span>
-          </div>
-          <div style={{ paddingLeft: 30 }}>
-            <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
-            {shouldShowActivityCard(msg.activity, msg.isStreaming) && (
-              <div style={{ margin: msg.content ? '12px 0 16px' : '4px 0 16px' }}>
-                <ActivityGenerationCard
-                  mode={msg.activity?.mode ?? 'tool'}
-                  label={msg.activity?.label}
-                  title={msg.activity?.title}
-                  subtitle={msg.activity?.subtitle}
-                  compact={isMobile}
-                />
-              </div>
-            )}
-            <MarkdownMessage content={msg.content} />
-          </div>
+          <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
+          <MarkdownMessage content={msg.content} />
         </div>
       </div>
     );
@@ -752,39 +685,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     >
       {latestArtifact ? (
         <>
-          {isLoading && (
-            <div style={{ paddingBottom: 12, borderBottom: `1px solid ${C.bdr}` }}>
-              <button
-                onClick={() => setShowActivityTimeline(!showActivityTimeline)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  backgroundColor: 'transparent',
-                  color: C.t3,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  textAlign: 'left',
-                  lineHeight: 1.4,
-                }}
-              >
-                {showActivityTimeline ? '▼' : '▶'} Work steps
-              </button>
-              {showActivityTimeline && (
-                <div style={{ marginTop: 8, fontSize: 12, color: C.t3, paddingLeft: 8, borderLeft: `2px solid ${C.acc}` }}>
-                  <div style={{ margin: '4px 0' }}>✓ Thinking</div>
-                  <div style={{ margin: '4px 0' }}>✓ Streaming response</div>
-                  <div style={{ margin: '4px 0', opacity: 0.72 }}>⏳ Preparing artifact</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {isLoading && (
-            <ActivityGenerationCard mode="build" compact label="BUILDING" title="Building your code" subtitle="Preparing the implementation and output." />
-          )}
-
-          <div style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center' }}>
+<div style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center' }}>
             <button
               onClick={() => console.log('Regenerate clicked')}
               style={{
@@ -880,34 +781,6 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         padding: isMobile ? '8px 12px calc(12px + env(safe-area-inset-bottom))' : '10px 0 14px',
       }}
     >
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, paddingLeft: isMobile ? 0 : 0 }}>
-        {[
-          ['Chat', '#3b82f6'],
-          ['Image', '#7C3AED'],
-          ['Video', '#ef4444'],
-          ['Build', '#10b981'],
-        ].map(([label, color]) => (
-          <span
-            key={label}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              height: 28,
-              padding: '0 13px',
-              borderRadius: 999,
-              background: color,
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 700,
-              lineHeight: '28px',
-              boxShadow: '0 8px 18px rgba(0,0,0,0.10)',
-            }}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
-
       {uploadedFile && (
         <div
           style={{
