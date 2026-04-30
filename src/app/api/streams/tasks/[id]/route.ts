@@ -15,9 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { resolveStreamsRouteContext } from "@/lib/streams/test-mode-auth";
 import {
   getTask,
   updateTaskStatus,
@@ -35,24 +33,30 @@ import type { TaskStatus, TaskOwnerType } from "@/lib/streams/tasks";
 
 export const maxDuration = 15;
 
-async function resolveUser() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, workspaceId: null, admin: null };
-  const admin = createAdminClient();
-  try {
-    const sel = await getCurrentWorkspaceSelection(admin, user);
-    return { user, workspaceId: sel.current.workspace.id, admin };
-  } catch {
+async function resolveUser(request: Request, body?: Record<string, unknown>) {
+  const ctx = await resolveStreamsRouteContext({
+    request,
+    body: body ?? null,
+    requireWorkspace: false,
+    allowTestMode: true,
+  });
+
+  if (!ctx?.userId || !ctx.admin) {
     return { user: null, workspaceId: null, admin: null };
   }
+
+  return {
+    user: { id: ctx.userId } as { id: string },
+    workspaceId: ctx.workspaceId,
+    admin: ctx.admin,
+  };
 }
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin } = await resolveUser(_request);
   if (!user || !workspaceId || !admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -68,7 +72,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin } = await resolveUser(request);
   if (!user || !workspaceId || !admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -130,7 +134,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin } = await resolveUser(_request);
   if (!user || !workspaceId || !admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -148,7 +152,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
+  const { user, workspaceId, admin } = await resolveUser(request);
   if (!user || !workspaceId || !admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

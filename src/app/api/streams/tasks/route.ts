@@ -2,81 +2,67 @@
  * GET  /api/streams/tasks?projectId=&status=&priority=&ownerType=&limit=
  * POST /api/streams/tasks
  *
- * GET — list tasks for the current workspace, filtered by query params.
- * POST — create a new task. Status starts at 'backlog'.
- *
- * POST body: {
- *   projectId?:      string
- *   title:           string
- *   description?:    string
- *   priority?:       TaskPriority
- *   ownerType?:      'user' | 'ai' | 'system'
- *   ownerUserId?:    string
- *   approvalState?:  TaskApprovalState
- *   dependsOn?:      string[]
- *   dueAt?:          string        — ISO 8601
- *   nextStep?:       string
- *   tags?:           string[]
- *   sessionId?:      string
- *   isRecurring?:    boolean
- *   recurrenceRule?: string        — rrule string
- *   nextDueAt?:      string        — ISO 8601
- * }
+ * Public /streams test mode is allowed only when the request explicitly uses
+ * TEST_USER_ID. When no real workspace is available in test mode, GET returns
+ * an empty collection instead of a 401 so the UI can stay mounted cleanly.
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { resolveStreamsRouteContext, isFallbackTestWorkspace } from "@/lib/streams/test-mode-auth";
 import { createTask, listTasks } from "@/lib/streams/tasks";
 import type { TaskStatus, TaskPriority, TaskOwnerType } from "@/lib/streams/tasks";
 
 export const maxDuration = 30;
 
-async function resolveUser() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, workspaceId: null, admin: null };
-  const admin = createAdminClient();
-  try {
-    const sel = await getCurrentWorkspaceSelection(admin, user);
-    return { user, workspaceId: sel.current.workspace.id, admin };
-  } catch {
-    return { user: null, workspaceId: null, admin: null };
-  }
-}
-
 export async function GET(request: Request): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
-  if (!user || !workspaceId || !admin) {
+  const ctx = await resolveStreamsRouteContext({ request, requireWorkspace: false, allowTestMode: true });
+  if (!ctx?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspaceId = ctx.workspaceId;
+  if (!workspaceId || (ctx.isTestMode && isFallbackTestWorkspace(workspaceId))) {
+    return NextResponse.json({ data: [], testMode: ctx.isTestMode, persisted: false });
   }
 
   const { searchParams } = new URL(request.url);
-
-  const data = await listTasks(admin, workspaceId, {
-    projectId:   searchParams.get("projectId") ?? undefined,
-    status:      searchParams.get("status") as TaskStatus | undefined,
-    priority:    searchParams.get("priority") as TaskPriority | undefined,
-    ownerType:   searchParams.get("ownerType") as TaskOwnerType | undefined,
+  const data = await listTasks(ctx.admin, workspaceId, {
+    projectId: searchParams.get("projectId") ?? undefined,
+    status: searchParams.get("status") as TaskStatus | undefined,
+    priority: searchParams.get("priority") as TaskPriority | undefined,
+    ownerType: searchParams.get("ownerType") as TaskOwnerType | undefined,
     ownerUserId: searchParams.get("ownerUserId") ?? undefined,
-    limit:       searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
+    limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
   });
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data, testMode: ctx.isTestMode, persisted: true });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
-  if (!user || !workspaceId || !admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const ctx = await resolveStreamsRouteContext({
+    request,
+    body,
+    requireWorkspace: false,
+    allowTestMode: true,
+  });
+
+  if (!ctx?.userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspaceId = (typeof body.workspaceId === "string" && body.workspaceId) || ctx.workspaceId;
+  if (!workspaceId || (ctx.isTestMode && isFallbackTestWorkspace(workspaceId))) {
+    return NextResponse.json(
+      { error: "Task writes require a real workspace. Set STREAMS_TEST_WORKSPACE_ID or sign in." },
+      { status: 503 },
+    );
   }
 
   const { title } = body;
@@ -85,30 +71,30 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const task = await createTask(admin, user.id, {
+    const task = await createTask(ctx.admin, ctx.userId, {
       workspaceId,
-      projectId:      body.projectId as string | undefined,
+      projectId: body.projectId as string | undefined,
       title,
-      description:    body.description as string | undefined,
-      priority:       body.priority as TaskPriority | undefined,
-      ownerType:      body.ownerType as TaskOwnerType | undefined,
-      ownerUserId:    body.ownerUserId as string | undefined,
-      approvalState:  body.approvalState as "not_required" | "pending" | undefined,
-      dependsOn:      body.dependsOn as string[] | undefined,
-      dueAt:          body.dueAt as string | undefined,
-      nextStep:       body.nextStep as string | undefined,
-      tags:           body.tags as string[] | undefined,
-      sessionId:      body.sessionId as string | undefined,
-      isRecurring:    body.isRecurring as boolean | undefined,
+      description: body.description as string | undefined,
+      priority: body.priority as TaskPriority | undefined,
+      ownerType: body.ownerType as TaskOwnerType | undefined,
+      ownerUserId: body.ownerUserId as string | undefined,
+      approvalState: body.approvalState as "not_required" | "pending" | undefined,
+      dependsOn: body.dependsOn as string[] | undefined,
+      dueAt: body.dueAt as string | undefined,
+      nextStep: body.nextStep as string | undefined,
+      tags: body.tags as string[] | undefined,
+      sessionId: body.sessionId as string | undefined,
+      isRecurring: body.isRecurring as boolean | undefined,
       recurrenceRule: body.recurrenceRule as string | undefined,
-      nextDueAt:      body.nextDueAt as string | undefined,
+      nextDueAt: body.nextDueAt as string | undefined,
     });
 
-    return NextResponse.json({ data: task }, { status: 201 });
-  } catch (err) {
+    return NextResponse.json({ data: task, testMode: ctx.isTestMode, persisted: true }, { status: 201 });
+  } catch (error) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Task create failed" },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : "Task create failed" },
+      { status: 500 },
     );
   }
 }
