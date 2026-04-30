@@ -13,6 +13,7 @@ import type { ActivityMode } from './ActivityGenerationCard';
 import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
 import { C, CT } from './tokens';
+import { isImageGenerationPrompt } from '@/lib/assistant-ui/imageIntent';
 
 export interface ChatArtifact {
   id: string;
@@ -40,6 +41,8 @@ export interface ChatMessage {
   activity?: ChatActivity | null;
   error?: boolean;
   elapsedMs?: number;
+  generatedImageUrl?: string;
+  generationId?: string;
 }
 
 interface UnifiedChatPanelProps {
@@ -88,6 +91,10 @@ function formatCompleteStatus(mode: ActivityMode | undefined, elapsedMs?: number
   if (mode === 'image-edit') return `Edited image in ${seconds} seconds ›`;
   if (mode === 'file') return `Analyzed file in ${seconds} seconds ›`;
   return formatElapsedStatus(elapsedMs);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseSseChunk(buffer: string): { events: Array<{ event: StreamEventName; data: StreamPayload }>; rest: string } {
@@ -527,27 +534,137 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     [calmStream, onArtifactGenerated, scrollToBottom, updateAssistantMessage, writeArtifactToIframe]
   );
 
+  const handleGenerateImageMessage = useCallback(
+    async (message: string, assistantMessageId: string, abortController: AbortController) => {
+      const startedAt = Date.now();
+
+      updateAssistantMessage(assistantMessageId, {
+        content: '',
+        statusText: 'Submitting image generation…',
+        isStreaming: true,
+        activity: null,
+      });
+
+      const generationRes = await fetch('/api/streams/image/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: message,
+          model: 'kontext',
+          aspectRatio: '1:1',
+          numImages: 1,
+          userId,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!generationRes.ok) {
+        const errorText = await generationRes.text().catch(() => 'Image generation request failed.');
+        throw new Error(errorText || 'Image generation request failed.');
+      }
+
+      const generationData = (await generationRes.json()) as {
+        generationId?: string;
+        responseUrl?: string;
+        error?: string;
+      };
+
+      if (!generationData.generationId || !generationData.responseUrl) {
+        throw new Error(generationData.error || 'Image generation did not return a valid job.');
+      }
+
+      updateAssistantMessage(assistantMessageId, {
+        generationId: generationData.generationId,
+        statusText: 'Generating image…',
+        isStreaming: true,
+      });
+
+      const maxPolls = 90;
+      for (let attempt = 0; attempt < maxPolls; attempt += 1) {
+        if (abortController.signal.aborted) {
+          throw new DOMException('Image generation aborted.', 'AbortError');
+        }
+
+        await sleep(2000);
+
+        const statusRes = await fetch('/api/streams/video/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            generationId: generationData.generationId,
+            responseUrl: generationData.responseUrl,
+            userId,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!statusRes.ok) {
+          const errorText = await statusRes.text().catch(() => 'Image status check failed.');
+          throw new Error(errorText || 'Image status check failed.');
+        }
+
+        const statusData = (await statusRes.json()) as {
+          status?: string;
+          artifactUrl?: string;
+          error?: string;
+        };
+
+        if (statusData.status === 'completed' && statusData.artifactUrl) {
+          const elapsedMs = Date.now() - startedAt;
+          updateAssistantMessage(assistantMessageId, {
+            isStreaming: false,
+            activity: null,
+            elapsedMs,
+            content: '',
+            generatedImageUrl: statusData.artifactUrl,
+            statusText: formatCompleteStatus('image', elapsedMs, false),
+          });
+          setIsLoading(false);
+          setTimeout(() => scrollToBottom({ force: true, behavior: 'smooth' }), 60);
+          return;
+        }
+
+        if (statusData.status === 'failed') {
+          throw new Error(statusData.error || 'Image generation failed.');
+        }
+
+        updateAssistantMessage(assistantMessageId, {
+          statusText: attempt > 0 ? 'Still generating image…' : 'Generating image…',
+          isStreaming: true,
+        });
+      }
+
+      throw new Error('Image generation timed out.');
+    },
+    [scrollToBottom, updateAssistantMessage, userId]
+  );
+
   const handleSendMessage = useCallback(
     async (message: string, fileData?: { name: string; type: string; content: string }) => {
-      if (!message.trim() || !userId || isLoading) return;
+      const normalizedMessage = message.trim();
+      if (!normalizedMessage || !userId || isLoading) return;
 
+      const isDirectImageRequest = !fileData && isImageGenerationPrompt(normalizedMessage);
       const now = Date.now();
       const userMsg: ChatMessage = {
         id: `msg-${now}`,
         role: 'user',
-        content: message.trim(),
+        content: normalizedMessage,
       };
       const assistantMsg: ChatMessage = {
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: 'Thinking…',
+        statusText: isDirectImageRequest ? 'Generating image…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
 
       assistantMsgIdRef.current = assistantMsg.id;
-      activeActivityRef.current = { mode: fileData ? 'file' : 'conversation', phase: 'thinking' };
+      activeActivityRef.current = {
+        mode: isDirectImageRequest ? 'image' : fileData ? 'file' : 'conversation',
+        phase: isDirectImageRequest ? 'generating' : 'thinking',
+      };
       activeArtifactRef.current = null;
       calmStream.reset('');
 
@@ -559,6 +676,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       abortControllerRef.current = abortController;
 
       try {
+        if (isDirectImageRequest) {
+          await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController);
+          return;
+        }
         const response = await fetch('/api/streams/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -676,7 +797,23 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', margin: '0 0 30px' }}>
         <div style={{ maxWidth: activeChatMaxWidth, width: '100%' }}>
           <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
-          <MarkdownMessage content={msg.content} />
+          {msg.content ? <MarkdownMessage content={msg.content} /> : null}
+          {msg.generatedImageUrl ? (
+            <div style={{ marginTop: msg.content ? 12 : 0 }}>
+              <img
+                src={msg.generatedImageUrl}
+                alt="Generated image"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: 'auto',
+                  borderRadius: 18,
+                  border: `1px solid ${CT.border}`,
+                  background: '#ffffff',
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     );

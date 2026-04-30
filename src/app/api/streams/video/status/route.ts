@@ -1,67 +1,35 @@
 /**
  * POST /api/streams/video/status
  *
- * Polls a fal job and, when complete, downloads the video from fal's
- * temporary URL, uploads it to durable Supabase storage, and finalizes
- * the generation_log record.
+ * Polls a fal job and, when complete, downloads the temporary provider
+ * artifact, uploads it to durable Supabase storage, and finalizes the
+ * generation_log record when a persisted record exists.
  *
- * Called by the client on a polling interval after /api/streams/video/generate
- * returns { status: "queued", responseUrl, generationId }.
- *
- * Flow:
- *   1. Parse + validate body
- *   2. Auth — get user
- *   3. Resolve workspace
- *   4. Authorization — verify generation_log row belongs to this workspace
- *   5. falPoll(responseUrl)
- *   6. processing → return { status: "processing" }
- *   7. failed     → mark generation_log failed → return { status: "failed" }
- *   8. completed:
- *        a. extractVideoUrl(raw) — if null, mark failed
- *        b. Download from fal temporary URL (60s timeout)
- *        c. Upload to Supabase storage bucket "generations"
- *        d. UPDATE generation_log: output_url, fal_status "done", fal_duration_ms
- *        e. return { status: "completed", artifactUrl }
- *
- * Artifact write decision:
- *   artifacts.generation_id is NOT NULL REFERENCES generations(id).
- *   This panel writes to generation_log, not generations.
- *   Writing to artifacts would require writing to generations — coupling the
- *   standalone panel to the existing system. That violates the standalone contract.
- *   Output URL is stored in generation_log.output_url only.
- *   The panel's library reads from generation_log.
- *
- * Upload pattern:
- *   Copied from video-runtime/storage/uploadVideoArtifact.ts — not imported.
- *   Bucket: "generations" (existing, confirmed in migrations).
- *   Path: {workspaceId}/{uuid}.{ext}
+ * This route also supports public Streams test-mode polling when the request
+ * explicitly uses TEST_USER_ID. In that case, if no generation_log row exists,
+ * the route still polls fal and returns a durable storage URL.
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { resolveStreamsRouteContext } from "@/lib/streams/test-mode-auth";
 import { falPoll, extractVideoUrl, extractAudioUrl, extractMusicUrl, extractImageUrl } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const DOWNLOAD_TIMEOUT_MS = 60_000;
-const STORAGE_BUCKET      = "generations";
-
-// ─── Input contract ───────────────────────────────────────────────────────────
+const STORAGE_BUCKET = "generations";
 
 type RequestBody = {
-  responseUrl:  string;
+  userId?: string;
+  workspaceId?: string;
+  responseUrl: string;
   generationId: string;
 };
 
 type ValidationError = { field: string; message: string };
 
-function validateBody(
-  raw: unknown,
-): { body: RequestBody } | { errors: ValidationError[] } {
+function validateBody(raw: unknown): { body: RequestBody } | { errors: ValidationError[] } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return { errors: [{ field: "body", message: "Request body must be a JSON object" }] };
   }
@@ -81,20 +49,15 @@ function validateBody(
 
   return {
     body: {
-      responseUrl:  (obj.responseUrl  as string).trim(),
+      userId: typeof obj.userId === "string" ? obj.userId.trim() : undefined,
+      workspaceId: typeof obj.workspaceId === "string" ? obj.workspaceId.trim() : undefined,
+      responseUrl: (obj.responseUrl as string).trim(),
       generationId: (obj.generationId as string).trim(),
     },
   };
 }
 
-// ─── Storage: download from fal + upload to Supabase ─────────────────────────
-// Pattern copied from video-runtime/storage/uploadVideoArtifact.ts.
-// Not imported — owned by this module.
-
-async function downloadAndUpload(
-  providerUrl: string,
-  workspaceId: string,
-): Promise<{ storageUrl: string; mimeType: string }> {
+async function downloadAndUpload(providerUrl: string, workspaceId: string): Promise<{ storageUrl: string; mimeType: string }> {
   const res = await fetch(providerUrl, {
     signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
   });
@@ -104,7 +67,20 @@ async function downloadAndUpload(
   }
 
   const contentType = res.headers.get("content-type") ?? "video/mp4";
-  const ext         = contentType.includes("webm") ? "webm" : "mp4";
+  const ext = contentType.includes("png")
+    ? "png"
+    : contentType.includes("jpeg") || contentType.includes("jpg")
+      ? "jpg"
+      : contentType.includes("webp")
+        ? "webp"
+        : contentType.includes("mp3") || contentType.includes("mpeg")
+          ? "mp3"
+          : contentType.includes("wav")
+            ? "wav"
+            : contentType.includes("webm")
+              ? "webm"
+              : "mp4";
+
   const storagePath = `${workspaceId}/${crypto.randomUUID()}.${ext}`;
   const arrayBuffer = await res.arrayBuffer();
 
@@ -117,92 +93,83 @@ async function downloadAndUpload(
     throw new Error(`STORAGE_UPLOAD_FAILED: ${uploadError.message}`);
   }
 
-  const { data } = admin.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(storagePath);
-
+  const { data } = admin.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
   return { storageUrl: data.publicUrl, mimeType: contentType };
 }
 
-// ─── Route handler ────────────────────────────────────────────────────────────
+function extractProviderArtifactUrl(raw: unknown, generationType: string): string | null {
+  if (generationType === "music") {
+    return extractMusicUrl(raw) ?? extractAudioUrl(raw);
+  }
+
+  if (generationType === "voice") {
+    return extractAudioUrl(raw);
+  }
+
+  if (generationType === "image") {
+    return extractImageUrl(raw) ?? extractVideoUrl(raw);
+  }
+
+  return extractVideoUrl(raw) ?? extractAudioUrl(raw) ?? extractImageUrl(raw);
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
-  // 1. Parse body
   let rawBody: unknown;
   try {
     rawBody = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON in request body" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
 
-  // 2. Validate body
   const validated = validateBody(rawBody);
   if ("errors" in validated) {
-    return NextResponse.json(
-      { error: "Validation failed", details: validated.errors },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Validation failed", details: validated.errors }, { status: 400 });
   }
 
-  const { responseUrl, generationId } = validated.body;
+  const { responseUrl, generationId, workspaceId: requestedWorkspaceId } = validated.body;
 
-  // 3. Authenticate
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const ctx = await resolveStreamsRouteContext({
+    request,
+    body: validated.body as Record<string, unknown>,
+    requireWorkspace: false,
+    allowTestMode: true,
+  });
 
-  if (authError || !user) {
+  if (!ctx?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 4. Resolve workspace
-  const admin = createAdminClient();
-  let workspaceId: string;
-  try {
-    const selection = await getCurrentWorkspaceSelection(admin, user);
-    workspaceId = selection.current.workspace.id;
-  } catch (err) {
-    console.error(JSON.stringify({
-      level: "error",
-      event: "STREAMS_STATUS_WORKSPACE_FAILED",
-      userId: user.id,
-      reason: err instanceof Error ? err.message : String(err),
-    }));
-    return NextResponse.json({ error: "Could not resolve workspace" }, { status: 500 });
-  }
+  const admin = ctx.admin as ReturnType<typeof createAdminClient>;
+  const workspaceId = requestedWorkspaceId ?? ctx.workspaceId ?? "streams-public-test";
 
-  // 5. Authorization — verify this generation_log row belongs to this workspace
-  // Prevents one workspace from polling another workspace's fal job
-  const { data: logRow, error: logError } = await admin
+  let generationType = "video";
+  let persistedLog = false;
+  let finalizedUrl: string | null = null;
+
+  const { data: logRow } = await admin
     .from("generation_log")
     .select("id, fal_status, output_url, generation_type")
     .eq("id", generationId)
     .eq("workspace_id", workspaceId)
-    .single();
+    .maybeSingle();
 
-  if (logError || !logRow) {
-    return NextResponse.json(
-      { error: "Generation not found" },
-      { status: 404 },
-    );
+  if (logRow) {
+    persistedLog = true;
+    generationType = (logRow as Record<string, unknown>).generation_type as string ?? "video";
+
+    if (logRow.fal_status === "done" && logRow.output_url) {
+      return NextResponse.json({
+        status: "completed",
+        artifactUrl: logRow.output_url,
+        generationId,
+      });
+    }
+
+    if (logRow.fal_status === "failed") {
+      return NextResponse.json({ status: "failed", generationId });
+    }
   }
 
-  // 6. If already finalized — return current state without polling fal again
-  if (logRow.fal_status === "done" && logRow.output_url) {
-    return NextResponse.json({
-      status:      "completed",
-      artifactUrl: logRow.output_url,
-      generationId,
-    });
-  }
-
-  if (logRow.fal_status === "failed") {
-    return NextResponse.json({ status: "failed", generationId });
-  }
-
-  // 7. Poll fal
   const pollResult = await falPoll(responseUrl);
 
   if (pollResult.status === "processing") {
@@ -210,88 +177,47 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (pollResult.status === "failed") {
-    await admin
-      .from("generation_log")
-      .update({ fal_status: "failed", fal_error: "fal reported FAILED" })
-      .eq("id", generationId);
-
-    console.error(JSON.stringify({
-      level: "error",
-      event: "STREAMS_VIDEO_FAL_FAILED",
-      generationId,
-      workspaceId,
-    }));
-
+    if (persistedLog) {
+      await admin
+        .from("generation_log")
+        .update({ fal_status: "failed", fal_error: "fal reported FAILED" })
+        .eq("id", generationId);
+    }
     return NextResponse.json({ status: "failed", generationId });
   }
 
-  // pollResult.status === "completed"
+  const providerArtifactUrl = extractProviderArtifactUrl(pollResult.raw, generationType);
 
-  // 8a. Extract output URL — strategy depends on generation_type
-  // Video:        extractVideoUrl  (Kling, Veo, etc.)
-  // Music/Voice:  extractAudioUrl  (ElevenLabs TTS, MiniMax)
-  // Music cover:  extractMusicUrl  (MiniMax Music)
-  // Image:        extractVideoUrl  falls back gracefully; images often return { url: string }
-  const genType = (logRow as Record<string, unknown>).generation_type as string ?? "video";
-
-  let providerVideoUrl: string | null = null;
-  if (genType === "music") {
-    providerVideoUrl = extractMusicUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
-  } else if (genType === "voice") {
-    providerVideoUrl = extractAudioUrl(pollResult.raw);
-  } else if (genType === "image") {
-    // FLUX: { images: [{ url }] } — use extractImageUrl
-    providerVideoUrl = extractImageUrl(pollResult.raw) ?? extractVideoUrl(pollResult.raw);
-  } else {
-    // video_t2v, video_i2v, video_motion — try video first
-    providerVideoUrl = extractVideoUrl(pollResult.raw) ?? extractAudioUrl(pollResult.raw);
-  }
-
-  if (!providerVideoUrl) {
-    await admin
-      .from("generation_log")
-      .update({
-        fal_status: "failed",
-        fal_error:  "fal completed but returned no video URL",
-      })
-      .eq("id", generationId);
-
-    console.error(JSON.stringify({
-      level: "error",
-      event: "STREAMS_VIDEO_NO_URL",
-      generationId,
-      workspaceId,
-      raw: JSON.stringify(pollResult.raw).slice(0, 200),
-    }));
+  if (!providerArtifactUrl) {
+    if (persistedLog) {
+      await admin
+        .from("generation_log")
+        .update({ fal_status: "failed", fal_error: "Provider completed but returned no artifact URL" })
+        .eq("id", generationId);
+    }
 
     return NextResponse.json(
-      { status: "failed", error: "Provider returned no video URL", generationId },
+      { status: "failed", error: "Provider returned no artifact URL", generationId },
       { status: 502 },
     );
   }
 
-  // 8b + 8c. Download from fal's temporary URL → upload to durable Supabase storage
-  const uploadStart = Date.now();
   let storageUrl: string;
   let mimeType: string;
+  const uploadStart = Date.now();
 
   try {
-    ({ storageUrl, mimeType } = await downloadAndUpload(providerVideoUrl, workspaceId));
+    ({ storageUrl, mimeType } = await downloadAndUpload(providerArtifactUrl, workspaceId));
+    finalizedUrl = storageUrl;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
 
-    await admin
-      .from("generation_log")
-      .update({ fal_status: "failed", fal_error: reason })
-      .eq("id", generationId);
-
-    console.error(JSON.stringify({
-      level: "error",
-      event: "STREAMS_VIDEO_UPLOAD_FAILED",
-      generationId,
-      workspaceId,
-      reason,
-    }));
+    if (persistedLog) {
+      await admin
+        .from("generation_log")
+        .update({ fal_status: "failed", fal_error: reason })
+        .eq("id", generationId);
+    }
 
     return NextResponse.json(
       { status: "failed", error: "Upload to storage failed", generationId },
@@ -300,39 +226,32 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const falDurationMs = Date.now() - uploadStart;
+  const rawResult = pollResult.raw as Record<string, unknown> | null;
+  const costObj = rawResult ? (rawResult.cost as Record<string, unknown> | undefined) : undefined;
+  const falCostUsd = costObj?.total_cost != null
+    ? Number(costObj.total_cost)
+    : rawResult?.cost != null
+      ? Number(rawResult.cost)
+      : null;
 
-  // 8d. Extract cost from fal result (returned as result.cost.total_cost or metrics.cost)
-  const rawResult  = pollResult.raw as Record<string, unknown> | null;
-  const costObj    = rawResult ? (rawResult.cost as Record<string,unknown> | undefined) : undefined;
-  const falCostUsd = costObj?.total_cost != null ? Number(costObj.total_cost)
-    : rawResult?.cost != null ? Number(rawResult.cost)
-    : null;
+  if (persistedLog && finalizedUrl) {
+    await admin
+      .from("generation_log")
+      .update({
+        output_url: finalizedUrl,
+        fal_status: "done",
+        fal_duration_ms: falDurationMs,
+        ...(falCostUsd != null && { cost_usd: falCostUsd }),
+      })
+      .eq("id", generationId);
+  }
 
-  // 8e. Finalize generation_log — durable URL only, never the fal temporary URL
-  await admin
-    .from("generation_log")
-    .update({
-      output_url:      storageUrl,
-      fal_status:      "done",
-      fal_duration_ms: falDurationMs,
-      ...(falCostUsd != null && { cost_usd: falCostUsd }),
-    })
-    .eq("id", generationId);
-
-  console.log(JSON.stringify({
-    level: "info",
-    event: "STREAMS_VIDEO_COMPLETED",
-    generationId,
-    workspaceId,
-    storageUrl,
-    mimeType,
-    falDurationMs,
-  }));
-
-  // 8e. Return durable storage URL — never the fal temporary URL
   return NextResponse.json({
-    status:      "completed",
-    artifactUrl: storageUrl,
+    status: "completed",
+    artifactUrl: finalizedUrl,
     generationId,
+    mimeType,
+    persisted: persistedLog,
+    testMode: ctx.isTestMode,
   });
 }
