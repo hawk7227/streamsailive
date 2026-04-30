@@ -94,7 +94,7 @@ When the assistant shows command output, audit results, or any
 tool-generated text, that text is verbatim from the tool. The
 assistant does not paraphrase tool output, summarize it as if quoted,
 or reconstruct what it "would have said."
-
+Rule AC.4.5 — Staging environment exception. If the deployment target is a staging or testing environment that does not serve production traffic, push-before-screenshot is permitted. The assistant captures rendering evidence from the staging URL after deploy and before the user merges or promotes to production. The user explicitly designates which deployment targets count as staging.
 ---
 
 ## SECTION 5 — HONEST REPORTING
