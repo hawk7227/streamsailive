@@ -807,9 +807,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   display: 'block',
                   width: '100%',
                   height: 'auto',
-                  borderRadius: 18,
+                  borderRadius: 20,
                   border: `1px solid ${CT.border}`,
-                  background: '#ffffff',
+                  background: CT.bg,
                 }}
               />
             </div>
