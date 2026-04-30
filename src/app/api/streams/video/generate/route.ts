@@ -26,9 +26,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { resolveStreamsRouteContext, isFallbackTestWorkspace } from "@/lib/streams/test-mode-auth";
 import { falSubmit, FAL_ENDPOINTS } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
@@ -45,6 +43,8 @@ type VideoMode = "t2v" | "i2v" | "motion";
 
 type RequestBody = {
   prompt:       string;
+  userId?:      string;
+  workspaceId?: string;
   mode?:        VideoMode;       // t2v (default) | i2v | motion
   imageUrl?:    string;          // I2V: start_image_url. Motion: character reference
   refVideoUrl?: string;          // Motion-control: reference video URL
@@ -158,29 +158,26 @@ export async function POST(request: Request): Promise<NextResponse> {
                 : mode === "motion" ? "video_motion"
                 : "video_t2v";
 
-  // 3. Authenticate
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  // 3. Resolve auth/workspace.
+  // Real users use Supabase auth. Public /streams testing may use TEST_USER_ID only.
+  const ctx = await resolveStreamsRouteContext({
+    request,
+    body: rawBody as Record<string, unknown>,
+    requireWorkspace: false,
+    allowTestMode: true,
+  });
 
-  if (authError || !user) {
+  if (!ctx?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 4. Resolve workspace
-  const admin = createAdminClient();
-  let workspaceId: string;
-  try {
-    const selection = await getCurrentWorkspaceSelection(admin, user);
-    workspaceId = selection.current.workspace.id;
-  } catch (err) {
-    console.error(JSON.stringify({
-      level: "error",
-      event: "STREAMS_VIDEO_WORKSPACE_FAILED",
-      userId: user.id,
-      reason: err instanceof Error ? err.message : String(err),
-    }));
-    return NextResponse.json({ error: "Could not resolve workspace" }, { status: 500 });
-  }
+  const admin = ctx.admin;
+  const requestedWorkspaceId =
+    typeof (rawBody as Record<string, unknown>).workspaceId === "string"
+      ? ((rawBody as Record<string, unknown>).workspaceId as string)
+      : null;
+  const workspaceId = requestedWorkspaceId ?? ctx.workspaceId ?? "streams-public-test";
+  const shouldPersist = !ctx.isTestMode || !isFallbackTestWorkspace(workspaceId);
 
   // 5. Persistence-first — insert generation_log before any fal call
   const generationId = crypto.randomUUID();
@@ -245,6 +242,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: `Daily cost limit $${limitUsd.toFixed(2)} reached. Spent: $${spent.toFixed(2)}` }, { status: 402 });
     }
   }
+  }
 
   const submitResult = await falSubmit(endpoint, falInput);
 
@@ -295,5 +293,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     status:   "queued",
     endpoint,
     model:    "kling-v3-standard",
+    persisted: persistedLog,
+    testMode:  ctx.isTestMode,
   });
 }
