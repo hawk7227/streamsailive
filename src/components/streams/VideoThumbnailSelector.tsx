@@ -235,8 +235,8 @@ export function VideoThumbnailSelector({
               position: 'absolute',
               height: '100%',
               background: C.acc,
-              width: `${(currentTime / duration) * 100}%`,
-              transition: 'width 0.1s ease',
+              width: '100%', transformOrigin: 'left', transform: `scaleX(${currentTime / duration})`,
+              transition: 'transform 150ms ease',
             }}
           />
           {/* Scrubber handle */}
@@ -264,7 +264,7 @@ export function VideoThumbnailSelector({
             key={size}
             onClick={() => setGridSize(size as GridSize)}
             style={{
-              padding: '6px 12px',
+              padding: '8px 12px',
               borderRadius: R.r1,
               border: `1px solid ${gridSize === size ? C.acc : C.bdr}`,
               background: gridSize === size ? C.acc : C.bg3,
@@ -272,7 +272,7 @@ export function VideoThumbnailSelector({
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 500,
-              transition: 'all 150ms ease',
+              transition: 'transform 150ms ease, opacity 150ms ease',
             }}
             onMouseOver={(e) => {
               if (gridSize !== size) {
@@ -316,7 +316,7 @@ export function VideoThumbnailSelector({
                 overflow: 'hidden',
                 border: `2px solid ${selectedFrameIndex === index ? C.acc : 'transparent'}`,
                 aspectRatio: '16/9',
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
               onMouseOver={(e) => {
                 (e.currentTarget as HTMLDivElement).style.opacity = '0.8';
@@ -349,7 +349,7 @@ export function VideoThumbnailSelector({
                     justifyContent: 'center',
                     color: '#fff',
                     fontSize: 12,
-                    fontWeight: 600,
+                    fontWeight: 500,
                   }}
                 >
                   ✓
@@ -360,11 +360,11 @@ export function VideoThumbnailSelector({
                   position: 'absolute',
                   bottom: 4,
                   left: 4,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: '#fff',
                   background: 'rgba(0,0,0,0.5)',
                   padding: '2px 6px',
-                  borderRadius: 2,
+                  borderRadius: 8,
                   fontWeight: 500,
                 }}
               >
@@ -382,7 +382,7 @@ export function VideoThumbnailSelector({
           disabled={frames.length === 0}
           style={{
             flex: 1,
-            padding: '10px 16px',
+            padding: '12px 16px',
             borderRadius: R.r1,
             border: 'none',
             background: frames.length === 0 ? C.bg3 : C.acc,
@@ -390,7 +390,7 @@ export function VideoThumbnailSelector({
             cursor: frames.length === 0 ? 'not-allowed' : 'pointer',
             fontSize: 13,
             fontWeight: 500,
-            transition: 'all 150ms ease',
+            transition: 'transform 150ms ease, opacity 150ms ease',
           }}
           onMouseOver={(e) => {
             if (frames.length > 0) {
@@ -408,7 +408,7 @@ export function VideoThumbnailSelector({
         <button
           onClick={onCancel}
           style={{
-            padding: '10px 16px',
+            padding: '12px 16px',
             borderRadius: R.r1,
             border: `1px solid ${C.bdr}`,
             background: 'transparent',
@@ -416,7 +416,7 @@ export function VideoThumbnailSelector({
             cursor: 'pointer',
             fontSize: 13,
             fontWeight: 500,
-            transition: 'all 150ms ease',
+            transition: 'transform 150ms ease, opacity 150ms ease',
           }}
           onMouseOver={(e) => {
             (e.target as HTMLButtonElement).style.background = C.bg3;
@@ -430,14 +430,14 @@ export function VideoThumbnailSelector({
       </div>
 
       {/* Info text */}
-      <div style={{ fontSize: 11, color: C.t4, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: C.t4, lineHeight: 1.5 }}>
         Click on a frame to select it as your thumbnail. You can also drag the timeline scrubber to preview any point in the video. Selected frame will be used as the video thumbnail.
       </div>
 
       {/* Phase 4: Advanced Video Player (Optional) */}
       {showPlayer && (
         <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${C.bdr}` }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.t1, marginBottom: 12 }}>
             ▶ Advanced Video Editing
           </div>
           <AdvancedVideoPlayer

@@ -66,7 +66,7 @@ export function ImageModeControls({
               key={size}
               onClick={() => handleChange({ batchSize: size as 1 | 3 | 5 | 10 })}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.batchSize === size ? C.acc : C.bdr}`,
                 background: config.batchSize === size ? C.acc : 'transparent',
@@ -74,7 +74,7 @@ export function ImageModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {size}
@@ -101,7 +101,7 @@ export function ImageModeControls({
                 fontSize: 12,
                 fontWeight: config.style === value ? 500 : 400,
                 textAlign: 'left',
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {label}
@@ -122,15 +122,15 @@ export function ImageModeControls({
               onClick={() => handleChange({ quality: quality as any })}
               style={{
                 flex: 1,
-                padding: '6px 8px',
+                padding: '8px 8px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.quality === quality ? C.acc : C.bdr}`,
                 background: config.quality === quality ? C.acc : 'transparent',
                 color: config.quality === quality ? '#fff' : C.t2,
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {quality === 'draft' ? 'Draft' : quality === 'standard' ? 'Std' : 'Pro'}
@@ -148,7 +148,7 @@ export function ImageModeControls({
               key={ratio}
               onClick={() => handleChange({ aspectRatio: ratio as any })}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.aspectRatio === ratio ? C.acc : C.bdr}`,
                 background: config.aspectRatio === ratio ? C.acc : 'transparent',
@@ -156,7 +156,7 @@ export function ImageModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {ratio}
@@ -166,7 +166,7 @@ export function ImageModeControls({
       </div>
 
       {/* Info */}
-      <div style={{ fontSize: 11, color: C.t4, marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: C.t4, marginTop: 4 }}>
         Generating {config.batchSize} {config.style} image{config.batchSize > 1 ? 's' : ''} at {config.quality} quality ({config.aspectRatio})
       </div>
     </div>

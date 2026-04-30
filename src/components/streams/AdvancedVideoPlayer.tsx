@@ -212,7 +212,7 @@ export function AdvancedVideoPlayer({
           value={playbackSpeed}
           onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value) as PlaybackSpeed)}
           style={{
-            padding: '6px 8px',
+            padding: '8px 8px',
             borderRadius: R.r1,
             border: `1px solid ${C.bdr}`,
             background: C.bg3,
@@ -233,7 +233,7 @@ export function AdvancedVideoPlayer({
           onClick={() => handleFrameNavigate(-1)}
           title="Previous frame (←)"
           style={{
-            padding: '6px 12px',
+            padding: '8px 12px',
             borderRadius: R.r1,
             border: `1px solid ${C.bdr}`,
             background: 'transparent',
@@ -250,7 +250,7 @@ export function AdvancedVideoPlayer({
           onClick={() => handleFrameNavigate(1)}
           title="Next frame (→)"
           style={{
-            padding: '6px 12px',
+            padding: '8px 12px',
             borderRadius: R.r1,
             border: `1px solid ${C.bdr}`,
             background: 'transparent',
@@ -267,7 +267,7 @@ export function AdvancedVideoPlayer({
         <button
           onClick={() => setIsLoopingSegment(!isLoopingSegment)}
           style={{
-            padding: '6px 12px',
+            padding: '8px 12px',
             borderRadius: R.r1,
             border: `1px solid ${isLoopingSegment ? C.acc : C.bdr}`,
             background: isLoopingSegment ? C.acc : 'transparent',
@@ -287,7 +287,7 @@ export function AdvancedVideoPlayer({
         <button
           onClick={() => setMarkedInPoint(currentTime)}
           style={{
-            padding: '6px 12px',
+            padding: '8px 12px',
             borderRadius: R.r1,
             border: `1px solid ${markedInPoint !== null ? C.acc : C.bdr}`,
             background: markedInPoint !== null ? C.acc : 'transparent',
@@ -308,7 +308,7 @@ export function AdvancedVideoPlayer({
                 setShowSegmentForm(true);
               }}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${C.acc}`,
                 background: 'transparent',
@@ -325,7 +325,7 @@ export function AdvancedVideoPlayer({
             <button
               onClick={() => setMarkedInPoint(null)}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${C.bdr}`,
                 background: 'transparent',
@@ -407,7 +407,7 @@ export function AdvancedVideoPlayer({
                 alignItems: 'center',
               }}
             >
-              <div style={{ fontSize: 11 }}>
+              <div style={{ fontSize: 12 }}>
                 <div style={{ fontWeight: 500, color: C.t1 }}>{segment.label}</div>
                 <div style={{ color: C.t3, marginTop: 2 }}>
                   Frame {segment.startFrame} → {segment.endFrame} ({(segment.startFrame / fps).toFixed(1)}s → {(segment.endFrame / fps).toFixed(1)}s)
@@ -422,7 +422,7 @@ export function AdvancedVideoPlayer({
                   background: 'rgba(239, 68, 68, 0.1)',
                   color: C.red,
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 500,
                 }}
               >
@@ -434,7 +434,7 @@ export function AdvancedVideoPlayer({
       )}
 
       {/* Keyboard shortcuts info */}
-      <div style={{ fontSize: 11, color: C.t4, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: C.t4, lineHeight: 1.6 }}>
         <strong>Keyboard shortcuts:</strong>
         <div>Space: Play/Pause | ← →: Frame nav | [: Mark in | ]: Mark out | L: Loop segment</div>
       </div>

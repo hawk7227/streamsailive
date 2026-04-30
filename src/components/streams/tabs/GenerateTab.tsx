@@ -282,7 +282,7 @@ export default function GenerateTab({
             <button 
               onClick={() => setPersistentJobsOpen(!persistentJobsOpen)}
               title={`${activeJobs.length} job(s) running in background`}
-              style={{ padding: "8px 12px", background: C.acc, border: "none", borderRadius: R.r2, color: "#fff", fontSize: 12, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}
+              style={{ padding: "8px 12px", background: C.acc, border: "none", borderRadius: R.r2, color: "#fff", fontSize: 12, fontFamily: "inherit", cursor: "pointer", fontWeight: 500 }}
             >
               ⟳ {activeJobs.length}
             </button>
@@ -294,22 +294,22 @@ export default function GenerateTab({
       {/* PHASE 0: Persistent jobs panel (if open) */}
       {persistentJobsOpen && activeJobs.length > 0 && (
         <div style={{ background: C.bg2, borderBottom: `1px solid ${C.bdr}`, maxHeight: 200, overflowY: "auto", padding: "12px 16px", flexShrink: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginBottom: 8 }}>Background Jobs</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.t2, marginBottom: 8 }}>Background Jobs</div>
           {activeJobs.map((job: GenerationJob) => (
-            <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, marginBottom: 6, fontSize: 11 }}>
+            <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px", background: C.bg3, border: `1px solid ${C.bdr}`, borderRadius: R.r1, marginBottom: 6, fontSize: 12 }}>
               <div style={{ fontSize: 16 }}>⟳</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, color: C.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {job.mode} - {job.status}
                 </div>
-                <div style={{ color: C.t3, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ color: C.t3, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {job.prompt.substring(0, 40)}...
                 </div>
               </div>
               {job.status === "queued" || job.status === "processing" ? (
                 <button 
                   onClick={() => cancelJob(job.id)}
-                  style={{ padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 11, cursor: "pointer" }}
+                  style={{ padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer" }}
                 >
                   Cancel
                 </button>
@@ -344,7 +344,7 @@ export default function GenerateTab({
       {mode === "Music" && (
         <div style={{ display: "flex", height: 44, flexShrink: 0, gap: 5, padding: "0 8px", borderBottom: `1px solid ${C.bdr}`, alignItems: "center", background: C.bg2, scrollbarWidth: "none" }}>
           {(["style-lyrics", "auto-lyrics", "instrumental", "cover", "my-voice"] as MusicSub[]).map((sub) => (
-            <button key={sub} onClick={() => setMusicSub(sub)} aria-label={`Music mode: ${sub}`} style={{ padding: "5px 12px", borderRadius: 999, border: `1px solid ${musicSub === sub ? C.acc : C.bdr}`, background: musicSub === sub ? C.acc : "transparent", color: musicSub === sub ? "#fff" : C.t3, fontSize: 12, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
+            <button key={sub} onClick={() => setMusicSub(sub)} aria-label={`Music mode: ${sub}`} style={{ padding: "4px 12px", borderRadius: 999, border: `1px solid ${musicSub === sub ? C.acc : C.bdr}`, background: musicSub === sub ? C.acc : "transparent", color: musicSub === sub ? "#fff" : C.t3, fontSize: 12, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
               {sub === "style-lyrics" ? "Style + Lyrics" : sub === "auto-lyrics" ? "Auto-Lyrics" : sub === "instrumental" ? "Instrumental" : sub === "cover" ? "Cover" : "My Voice"}
             </button>
           ))}
@@ -449,7 +449,7 @@ export default function GenerateTab({
                 <span style={{ fontSize: 14 }}>Generate clips — they appear here</span>
               </div>
             ) : (
-              <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div aria-live="polite" style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
                 {grid.map((item: GridItem) => (
                   <div key={item.id} style={{ background: C.bg3, borderRadius: R.r2, border: `1px solid ${item.status === "done" ? C.accBr : C.bdr}`, overflow: "hidden", position: "relative" }}>
                     {item.outputUrl && (
@@ -474,14 +474,14 @@ export default function GenerateTab({
                         {/* PHASE 1: Estimated time + cost */}
                         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>
                           <div>Est. {mode === "Image" ? "8s" : mode === "Voice" ? "10s" : mode === "Music" ? "20s" : "45s"}</div>
-                          <div style={{ marginTop: 4, fontSize: 11 }}>
+                          <div style={{ marginTop: 4, fontSize: 12 }}>
                             Cost: ${cost}
                           </div>
                         </div>
                         
                         <button
                           onClick={() => cancelJob(item.id)}
-                          style={{ marginTop: 8, padding: "6px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
+                          style={{ marginTop: 8, padding: "8px 12px", background: C.red, border: "none", borderRadius: R.r1, color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
                         >
                           Cancel
                         </button>

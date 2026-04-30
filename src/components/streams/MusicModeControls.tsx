@@ -81,7 +81,7 @@ export function MusicModeControls({
             accentColor: C.acc,
           }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.t4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.t4 }}>
           <span>60</span>
           <span>120</span>
           <span>180</span>
@@ -106,13 +106,13 @@ export function MusicModeControls({
                 fontSize: 12,
                 fontWeight: config.mood === value ? 500 : 400,
                 textAlign: 'left',
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               <div style={{ marginBottom: 2 }}>
                 {emoji} {value.charAt(0).toUpperCase() + value.slice(1)}
               </div>
-              <div style={{ fontSize: 11, color: C.t4 }}>{description}</div>
+              <div style={{ fontSize: 12, color: C.t4 }}>{description}</div>
             </button>
           ))}
         </div>
@@ -128,7 +128,7 @@ export function MusicModeControls({
               onClick={() => handleChange({ duration: duration as any })}
               style={{
                 flex: 1,
-                padding: '6px 8px',
+                padding: '8px 8px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.duration === duration ? C.acc : C.bdr}`,
                 background: config.duration === duration ? C.acc : 'transparent',
@@ -136,7 +136,7 @@ export function MusicModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {duration === 30 ? '30s' : duration === 60 ? '1m' : '2m'}
@@ -156,7 +156,7 @@ export function MusicModeControls({
           cursor: 'pointer',
           fontSize: 12,
           fontWeight: 500,
-          transition: 'all 150ms ease',
+          transition: 'transform 150ms ease, opacity 150ms ease',
         }}
         onMouseOver={(e) => {
           (e.target as HTMLButtonElement).style.background = C.acc;
@@ -171,7 +171,7 @@ export function MusicModeControls({
       </button>
 
       {/* Info */}
-      <div style={{ fontSize: 11, color: C.t4, marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: C.t4, marginTop: 4 }}>
         {config.bpm} BPM • {config.mood} • {config.duration}s
       </div>
     </div>

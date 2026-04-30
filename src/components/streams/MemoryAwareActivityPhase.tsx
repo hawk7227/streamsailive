@@ -60,7 +60,7 @@ export function MemoryAwareActivityPhase({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
+        zIndex: 400,
       }}
     >
       <div
@@ -93,11 +93,11 @@ export function MemoryAwareActivityPhase({
         />
 
         {/* Content */}
-        <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ position: 'relative', zIndex: 10 }}>
           <div
             style={{
               fontSize: 16,
-              fontWeight: 600,
+              fontWeight: 500,
               color: C.t1,
               marginBottom: 24,
               display: 'flex',
@@ -164,7 +164,7 @@ export function MemoryAwareActivityPhase({
                     justifyContent: 'center',
                     borderRadius: '50%',
                     fontSize: 12,
-                    fontWeight: 600,
+                    fontWeight: 500,
                     color: '#fff',
                     background:
                       step.status === 'complete'
@@ -193,7 +193,7 @@ export function MemoryAwareActivityPhase({
                   {step.sublabel && (
                     <div
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: C.t3,
                         marginTop: 2,
                       }}

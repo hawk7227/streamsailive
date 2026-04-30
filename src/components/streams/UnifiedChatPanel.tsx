@@ -155,7 +155,7 @@ function inlineMarkdown(text: string): React.ReactNode[] {
             href={linkMatch[2]}
             target="_blank"
             rel="noreferrer"
-            style={{ color: '#0f5bff', textDecoration: 'underline', textUnderlineOffset: 2 }}
+            style={{ color: C.blueLink, textDecoration: 'underline', textUnderlineOffset: 2 }}
           >
             {linkMatch[1]}
           </a>
@@ -195,7 +195,6 @@ function MarkdownMessage({ content }: { content: string }) {
         color: CT.t1,
         fontSize: CHAT_TEXT_FONT_SIZE,
         lineHeight: CHAT_TEXT_LINE_HEIGHT,
-        letterSpacing: '-0.003em',
       }}
     >
       {blocks.map((block, blockIndex) => {
@@ -206,8 +205,8 @@ function MarkdownMessage({ content }: { content: string }) {
               style={{
                 margin: '12px 0',
                 padding: 14,
-                overflowX: 'auto',
-                borderRadius: 10,
+                overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
+                borderRadius: 12,
                 background: '#0d1228',
                 color: '#f0f2ff',
                 fontSize: 14,
@@ -341,6 +340,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const assistantMsgIdRef = useRef<string | null>(null);
   const activeActivityRef = useRef<ChatActivity | null>(null);
   const activeArtifactRef = useRef<ChatArtifact | null>(null);
+  const inputBarRef = useRef<HTMLDivElement>(null);
 
   const { containerRef, bottomRef, onScroll, scrollToBottom } = useSmartAutoScroll<HTMLDivElement>({
     bottomThresholdPx: 112,
@@ -404,6 +404,20 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     } catch (error) {
       console.error('Failed to initialize iframe:', error);
     }
+  }, []);
+
+  // Rule 3.1 - keep bottom-anchored input above iOS software keyboard
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const handler = () => {
+      const offset = window.innerHeight - vv.height;
+      if (inputBarRef.current) {
+        inputBarRef.current.style.transform = offset > 0 ? `translateY(-${offset}px)` : '';
+      }
+    };
+    vv.addEventListener('resize', handler);
+    return () => vv.removeEventListener('resize', handler);
   }, []);
 
   const latestArtifact = messages
@@ -690,14 +704,14 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               onClick={() => console.log('Regenerate clicked')}
               style={{
                 flex: 1,
-                padding: '9px 12px',
+                padding: '8px 12px',
                 backgroundColor: C.acc,
                 color: '#fff',
                 border: 'none',
                 borderRadius: 8,
                 cursor: 'pointer',
                 fontSize: 12,
-                fontWeight: 600,
+                fontWeight: 500,
                 lineHeight: 1.4,
               }}
             >
@@ -706,7 +720,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             <button
               onClick={() => navigator.clipboard.writeText(latestArtifact.code)}
               style={{
-                padding: '9px 12px',
+                padding: '8px 12px',
                 backgroundColor: C.bg3,
                 color: C.t1,
                 border: `1px solid ${C.bdr}`,
@@ -725,7 +739,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             style={{
               flex: 1,
               border: `1px solid ${C.bdr}`,
-              borderRadius: 10,
+              borderRadius: 12,
               backgroundColor: '#fff',
               minHeight: 300,
             }}
@@ -740,7 +754,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               padding: 10,
               backgroundColor: C.bg3,
               borderRadius: 8,
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
               color: C.t2,
               lineHeight: 1.45,
@@ -789,9 +803,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             gap: 8,
             marginBottom: 8,
             padding: '8px 10px',
-            backgroundColor: '#f7f7f8',
+            backgroundColor: CT.statusBg,
             border: `1px solid ${CT.border}`,
-            borderRadius: 10,
+            borderRadius: 12,
             fontSize: 13,
             color: CT.t2,
           }}
@@ -808,15 +822,17 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       )}
 
       <div
+        ref={inputBarRef}
         style={{
           display: 'flex',
           gap: 10,
           alignItems: 'flex-end',
           minHeight: 58,
-          padding: '9px 10px',
-          background: '#ffffff',
+          padding: '8px 12px',
+          paddingBottom: 'calc(8px + env(safe-area-inset-bottom))',
+          background: CT.bg,
           border: `1px solid ${CT.inputBorder}`,
-          borderRadius: 18,
+          borderRadius: 20,
           boxShadow: '0 10px 32px rgba(0,0,0,0.10)',
         }}
       >
@@ -867,7 +883,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             flex: 1,
             minHeight: 38,
             maxHeight: 112,
-            padding: '9px 2px',
+            padding: '8px 4px',
             border: 'none',
             outline: 'none',
             resize: 'none',
@@ -887,11 +903,11 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             height: 40,
             borderRadius: 999,
             border: 'none',
-            background: isLoading || !inputValue.trim() ? '#d4d4d8' : '#f97316',
+            background: isLoading || !inputValue.trim() ? CT.chipBorder : C.orange,
             color: '#fff',
             cursor: isLoading || !inputValue.trim() ? 'not-allowed' : 'pointer',
             fontSize: 18,
-            fontWeight: 700,
+            fontWeight: 500,
             lineHeight: '40px',
             flexShrink: 0,
             boxShadow: isLoading || !inputValue.trim() ? 'none' : '0 8px 22px rgba(249,115,22,0.28)',
@@ -942,15 +958,15 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: '54px clamp(48px, 8vw, 160px) 34px',
+                padding: '48px clamp(48px, 8vw, 160px) 32px',
               }}
             >
-              <div style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
+              <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
               <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
             </div>
             <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>
           </div>
-          {latestArtifact && <div style={{ padding: '14px 14px 14px 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>{artifactPanel}</div>}
+          {latestArtifact && <div style={{ padding: '16px 16px 16px 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>{artifactPanel}</div>}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -964,8 +980,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               padding: '24px 16px 24px',
             }}
           >
-            <div style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
-            {latestArtifact && <div style={{ margin: '14px 0' }}>{artifactPanel}</div>}
+            <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
+            {latestArtifact && <div style={{ margin: '16px 0' }}>{artifactPanel}</div>}
             <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
           </div>
           <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>

@@ -46,7 +46,7 @@ export function TypeSpecificControls({ mode, onConfigChange }: TypeSpecificContr
       <div
         style={{
           fontSize: 12,
-          fontWeight: 600,
+          fontWeight: 500,
           color: C.t1,
           marginBottom: 12,
           display: 'flex',
@@ -81,7 +81,7 @@ export function TypeSpecificControls({ mode, onConfigChange }: TypeSpecificContr
             style={{
               paddingTop: 12,
               borderTop: `1px solid ${C.bdr}`,
-              fontSize: 11,
+              fontSize: 12,
               color: C.t4,
             }}
           >

@@ -58,7 +58,7 @@ export function VideoModeControls({
               key={ratio}
               onClick={() => handleChange({ aspectRatio: ratio as any })}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.aspectRatio === ratio ? C.acc : C.bdr}`,
                 background: config.aspectRatio === ratio ? C.acc : 'transparent',
@@ -66,7 +66,7 @@ export function VideoModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {ratio}
@@ -93,11 +93,11 @@ export function VideoModeControls({
                 fontSize: 12,
                 fontWeight: config.motionIntensity === value ? 500 : 400,
                 textAlign: 'left',
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               <div style={{ textTransform: 'capitalize', marginBottom: 2 }}>{value}</div>
-              <div style={{ fontSize: 11, color: C.t4 }}>{description}</div>
+              <div style={{ fontSize: 12, color: C.t4 }}>{description}</div>
             </button>
           ))}
         </div>
@@ -113,7 +113,7 @@ export function VideoModeControls({
               onClick={() => handleChange({ fps: fps as any })}
               style={{
                 flex: 1,
-                padding: '6px 8px',
+                padding: '8px 8px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.fps === fps ? C.acc : C.bdr}`,
                 background: config.fps === fps ? C.acc : 'transparent',
@@ -121,7 +121,7 @@ export function VideoModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {fps}fps
@@ -140,7 +140,7 @@ export function VideoModeControls({
               onClick={() => handleChange({ duration: duration as any })}
               style={{
                 flex: 1,
-                padding: '6px 8px',
+                padding: '8px 8px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.duration === duration ? C.acc : C.bdr}`,
                 background: config.duration === duration ? C.acc : 'transparent',
@@ -148,7 +148,7 @@ export function VideoModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {duration}s
@@ -158,7 +158,7 @@ export function VideoModeControls({
       </div>
 
       {/* Info */}
-      <div style={{ fontSize: 11, color: C.t4, marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: C.t4, marginTop: 4 }}>
         {config.aspectRatio} • {config.motionIntensity} • {config.fps}fps • {config.duration}s
       </div>
     </div>

@@ -110,7 +110,7 @@ export function InlineCodeEditor({
             <button
               onClick={onCancel}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 backgroundColor: C.bg3,
                 border: `1px solid ${C.t4}`,
                 borderRadius: '4px',
@@ -128,7 +128,7 @@ export function InlineCodeEditor({
               onClick={handleSave}
               disabled={!hasChanges}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 backgroundColor: hasChanges ? C.acc : C.t4,
                 border: 'none',
                 borderRadius: '4px',

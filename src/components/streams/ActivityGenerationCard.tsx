@@ -124,7 +124,7 @@ export function ActivityGenerationCard({
       <div
         style={{
           position: 'relative',
-          zIndex: 2,
+          zIndex: 10,
           minHeight: compact ? 132 : 218,
           display: 'flex',
           flexDirection: 'column',
@@ -139,12 +139,12 @@ export function ActivityGenerationCard({
             display: 'inline-flex',
             alignItems: 'center',
             minHeight: 24,
-            padding: '6px 10px',
+            padding: '8px 12px',
             borderRadius: 999,
             background: 'rgba(255,255,255,.15)',
             border: '1px solid rgba(255,255,255,.30)',
             color: 'rgba(255,255,255,.94)',
-            fontSize: 11,
+            fontSize: 12,
             lineHeight: '12px',
             fontWeight: 900,
             letterSpacing: '.12em',
@@ -161,7 +161,6 @@ export function ActivityGenerationCard({
             fontSize: compact ? 30 : 44,
             fontWeight: 900,
             lineHeight: compact ? 1 : 0.95,
-            letterSpacing: '-0.05em',
             textShadow: '0 2px 0 rgba(0,0,0,.2), 0 8px 20px rgba(0,0,0,.4), 0 16px 40px rgba(0,0,0,.4)',
           }}
         >
@@ -173,7 +172,7 @@ export function ActivityGenerationCard({
               marginTop: 10,
               maxWidth: 620,
               fontSize: compact ? 14 : 16,
-              fontWeight: 700,
+              fontWeight: 500,
               lineHeight: 1.35,
               color: 'rgba(255,255,255,.9)',
               textShadow: '0 4px 20px rgba(0,0,0,.5)',

@@ -64,7 +64,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               fontSize: '12px',
               color: C.t3,
               lineHeight: 1.4,
-              fontFamily: 'monospace',
             }}
           >
             {this.state.error.message}
