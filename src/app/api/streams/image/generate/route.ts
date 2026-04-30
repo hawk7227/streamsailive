@@ -3,33 +3,29 @@
  *
  * FLUX Kontext (aspect ratio) or FLUX Dev/LoRA (custom px with rounding).
  * Custom sizing rule: Math.round(value / 8) * 8 — enforced server-side.
- * Models that support custom px: flux-dev, flux-lora, seedream
- * Models that use aspect ratio enum: kontext, kontext-max, recraft-v4
+ * Custom-px models: flux-dev, flux-lora, seedream, flux-pro
+ * Aspect-ratio models: kontext, kontext-max, design
  *
  * Returns { generationId, responseUrl } — client polls /api/streams/video/status.
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
+import { resolveStreamsRouteContext, isFallbackTestWorkspace } from "@/lib/streams/test-mode-auth";
 import { checkRateLimit } from "@/lib/streams/rate-limiter";
 import { falSubmit, FAL_ENDPOINTS } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
 
-// Custom-px models — others use aspect ratio enum
 const CUSTOM_PX_MODELS = new Set(["flux-dev", "flux-lora", "seedream", "flux-pro"]);
 
-// Brand name → fal endpoint
 const MODEL_ENDPOINTS: Record<string, string> = {
-  "kontext":     FAL_ENDPOINTS.FLUX_KONTEXT,
+  kontext: FAL_ENDPOINTS.FLUX_KONTEXT,
   "kontext-max": FAL_ENDPOINTS.FLUX_KONTEXT_MAX,
-  "flux-pro":    FAL_ENDPOINTS.FLUX_PRO,
-  "flux-dev":    FAL_ENDPOINTS.FLUX_DEV,
-  "flux-lora":   FAL_ENDPOINTS.FLUX_LORA,
-  "design":      FAL_ENDPOINTS.RECRAFT_V4,
-  "seedream":    FAL_ENDPOINTS.SEEDREAM,
+  "flux-pro": FAL_ENDPOINTS.FLUX_PRO,
+  "flux-dev": FAL_ENDPOINTS.FLUX_DEV,
+  "flux-lora": FAL_ENDPOINTS.FLUX_LORA,
+  design: FAL_ENDPOINTS.RECRAFT_V4,
+  seedream: FAL_ENDPOINTS.SEEDREAM,
 };
 
 function roundTo8(v: number): number {
@@ -37,17 +33,21 @@ function roundTo8(v: number): number {
 }
 
 type RequestBody = {
-  model?:       string;
-  prompt:       string;
+  userId?: string;
+  workspaceId?: string;
+  model?: string;
+  prompt: string;
   aspectRatio?: string;
-  width?:       number;
-  height?:      number;
-  numImages?:   number;
+  width?: number;
+  height?: number;
+  numImages?: number;
 };
 
 export async function POST(request: Request): Promise<NextResponse> {
   let rawBody: unknown;
-  try { rawBody = await request.json(); } catch {
+  try {
+    rawBody = await request.json();
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -57,79 +57,122 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "prompt is required" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await resolveStreamsRouteContext({
+    request,
+    body: body as Record<string, unknown>,
+    requireWorkspace: false,
+    allowTestMode: true,
+  });
 
-  const admin = createAdminClient();
-  let workspaceId: string;
-  try {
-    const sel = await getCurrentWorkspaceSelection(admin, user);
-    workspaceId = sel.current.workspace.id;
-  } catch {
-    return NextResponse.json({ error: "Could not resolve workspace" }, { status: 500 });
+  if (!ctx?.userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const model    = (body.model ?? "kontext").toLowerCase().replace(/\s+/g, "-");
+  const workspaceId = body.workspaceId ?? ctx.workspaceId ?? "streams-public-test";
+  const model = (body.model ?? "kontext").toLowerCase().replace(/\s+/g, "-");
   const endpoint = MODEL_ENDPOINTS[model] ?? FAL_ENDPOINTS.FLUX_KONTEXT;
   const useCustom = CUSTOM_PX_MODELS.has(model) && body.width && body.height;
 
-  // Build fal input
   const falInput: Record<string, unknown> = {
-    prompt:     body.prompt.trim(),
+    prompt: body.prompt.trim(),
     num_images: Math.min(body.numImages ?? 1, 4),
   };
 
   if (useCustom && body.width && body.height) {
-    // Server-side rounding — client preview value was already rounded but enforce here too
-    falInput.width  = roundTo8(body.width);
+    falInput.width = roundTo8(body.width);
     falInput.height = roundTo8(body.height);
   } else {
     falInput.aspect_ratio = body.aspectRatio ?? "1:1";
   }
 
   const generationId = crypto.randomUUID();
-  await admin.from("generation_log").insert({
-    id:              generationId,
-    workspace_id:    workspaceId,
-    generation_type: "image",
-    model,
-    fal_endpoint:    endpoint,
-    input_params:    falInput,
-    fal_status:      "pending",
-  });
+  let persistedLog = false;
 
-  // ── Rate limit ────────────────────────────────────────────────────────────
-  const rateResult = checkRateLimit(workspaceId);
-  if (!rateResult.allowed) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded. Try again shortly." },
-      { status: 429, headers: { "Retry-After": "60" } }
-    );
+  if (!ctx.isTestMode || !isFallbackTestWorkspace(workspaceId)) {
+    const insertResult = await ctx.admin.from("generation_log").insert({
+      id: generationId,
+      workspace_id: workspaceId,
+      generation_type: "image",
+      model,
+      fal_endpoint: endpoint,
+      input_params: falInput,
+      fal_status: "pending",
+    });
+
+    if (insertResult.error) {
+      if (!ctx.isTestMode) {
+        return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
+      }
+    } else {
+      persistedLog = true;
+    }
   }
 
-  // ── Cost enforcement ──────────────────────────────────────────────────────
-  const { data: wSettings } = await admin
-    .from("workspace_settings").select("cost_limit_daily_usd").eq("workspace_id", workspaceId).maybeSingle();
-  const limitUsd = wSettings?.cost_limit_daily_usd ?? null;
-  if (limitUsd != null && limitUsd > 0) {
-    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const { data: rows } = await admin.from("generation_log").select("cost_usd")
-      .eq("workspace_id", workspaceId).gte("created_at", todayStart.toISOString());
-    const spent = (rows ?? []).reduce((s: number, r: {cost_usd: number|null}) => s + (r.cost_usd ?? 0), 0);
-    if (spent >= limitUsd) {
-      return NextResponse.json({ error: `Daily cost limit $${limitUsd.toFixed(2)} reached. Spent: $${spent.toFixed(2)}` }, { status: 402 });
+  if (!ctx.isTestMode || persistedLog) {
+    const rateResult = checkRateLimit(workspaceId);
+    if (!rateResult.allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Try again shortly." },
+        { status: 429, headers: { "Retry-After": "60" } },
+      );
+    }
+
+    const { data: wSettings } = await ctx.admin
+      .from("workspace_settings")
+      .select("cost_limit_daily_usd")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const limitUsd = wSettings?.cost_limit_daily_usd ?? null;
+    if (limitUsd != null && limitUsd > 0) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { data: rows } = await ctx.admin
+        .from("generation_log")
+        .select("cost_usd")
+        .eq("workspace_id", workspaceId)
+        .gte("created_at", todayStart.toISOString());
+
+      const spent = (rows ?? []).reduce(
+        (sum: number, row: { cost_usd: number | null }) => sum + (row.cost_usd ?? 0),
+        0,
+      );
+
+      if (spent >= limitUsd) {
+        return NextResponse.json(
+          { error: `Daily cost limit $${limitUsd.toFixed(2)} reached. Spent: $${spent.toFixed(2)}` },
+          { status: 402 },
+        );
+      }
     }
   }
 
   const submitResult = await falSubmit(endpoint, falInput);
 
   if (!submitResult.ok) {
-    await admin.from("generation_log").update({ fal_status: "failed", fal_error: submitResult.error }).eq("id", generationId);
+    if (persistedLog) {
+      await ctx.admin
+        .from("generation_log")
+        .update({ fal_status: "failed", fal_error: submitResult.error })
+        .eq("id", generationId);
+    }
     return NextResponse.json({ error: submitResult.error }, { status: 502 });
   }
 
-  await admin.from("generation_log").update({ fal_request_id: submitResult.responseUrl }).eq("id", generationId);
+  if (persistedLog) {
+    await ctx.admin
+      .from("generation_log")
+      .update({ fal_request_id: submitResult.responseUrl })
+      .eq("id", generationId);
+  }
 
-  return NextResponse.json({ generationId, responseUrl: submitResult.responseUrl, status: "queued", model, endpoint });
+  return NextResponse.json({
+    generationId,
+    responseUrl: submitResult.responseUrl,
+    status: "queued",
+    model,
+    endpoint,
+    persisted: persistedLog,
+    testMode: ctx.isTestMode,
+  });
 }
