@@ -10,8 +10,8 @@ import { C, R } from '@/components/streams/tokens';
 
 // Build rule compliant colors
 const COLORS = {
-  successBg: '#dbeafe', // Light blue for thumbs up
-  errorBg: '#fee2e2', // Light red for thumbs down (use C.red with opacity)
+  successBg: C.blueDim, // Light blue for thumbs up
+  errorBg: C.redDim, // Light red for thumbs down (use C.red with opacity)
 };
 
 export interface MessageAction {

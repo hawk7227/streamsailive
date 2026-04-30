@@ -77,7 +77,7 @@ export function VoiceModeControls({
               key={value}
               onClick={() => handleChange({ accent: value as any })}
               style={{
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: R.r1,
                 border: `1px solid ${config.accent === value ? C.acc : C.bdr}`,
                 background: config.accent === value ? C.acc : 'transparent',
@@ -85,7 +85,7 @@ export function VoiceModeControls({
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 500,
-                transition: 'all 150ms ease',
+                transition: 'transform 150ms ease, opacity 150ms ease',
               }}
             >
               {label}
@@ -111,7 +111,7 @@ export function VoiceModeControls({
             accentColor: C.acc,
           }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.t4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.t4 }}>
           <span>Variable</span>
           <span>Consistent</span>
         </div>
@@ -134,7 +134,7 @@ export function VoiceModeControls({
             accentColor: C.acc,
           }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.t4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.t4 }}>
           <span>Lower</span>
           <span>Higher</span>
         </div>
@@ -157,7 +157,7 @@ export function VoiceModeControls({
             accentColor: C.acc,
           }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.t4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.t4 }}>
           <span>Slower</span>
           <span>Faster</span>
         </div>
@@ -174,7 +174,7 @@ export function VoiceModeControls({
           cursor: 'pointer',
           fontSize: 12,
           fontWeight: 500,
-          transition: 'all 150ms ease',
+          transition: 'transform 150ms ease, opacity 150ms ease',
         }}
         onMouseOver={(e) => {
           (e.target as HTMLButtonElement).style.background = C.acc;
@@ -189,7 +189,7 @@ export function VoiceModeControls({
       </button>
 
       {/* Info */}
-      <div style={{ fontSize: 11, color: C.t4, marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: C.t4, marginTop: 4 }}>
         {ACCENT_LABELS[config.accent]} • {getStabilityLabel(config.stability).split('(')[0].trim()} • {getPitchLabel(config.pitch).split('(')[0].trim()}
       </div>
     </div>

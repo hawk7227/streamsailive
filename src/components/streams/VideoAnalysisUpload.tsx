@@ -134,7 +134,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
         marginBottom: "16px",
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: "12px" }}>
+      <div style={{ fontSize: 13, fontWeight: 500, color: C.t1, marginBottom: "12px" }}>
         📹 Video Analysis (Phase 2)
       </div>
 
@@ -145,7 +145,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             key={m}
             onClick={() => setMode(m)}
             style={{
-              padding: "6px 12px",
+              padding: "8px 12px",
               borderRadius: R.r1,
               border: `1px solid ${mode === m ? C.acc : C.bdr}`,
               background: mode === m ? C.accDim : "transparent",
@@ -287,7 +287,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             color: C.red,
           }}
         >
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>⚠ Error</div>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>⚠ Error</div>
           <div>{error}</div>
         </div>
       )}
@@ -303,7 +303,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             color: C.t2,
           }}
         >
-          <div style={{ fontWeight: 600, color: C.t1, marginBottom: 8 }}>✓ Analysis Results</div>
+          <div style={{ fontWeight: 500, color: C.t1, marginBottom: 8 }}>✓ Analysis Results</div>
           <div style={{ marginBottom: 4 }}>
             <strong>Platform:</strong> {analysis.detectedPlatform}
           </div>
@@ -313,7 +313,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
           <div style={{ marginBottom: 8 }}>
             <strong>Confidence:</strong> {(analysis.confidence * 100).toFixed(0)}%
           </div>
-          <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: C.t3, marginTop: 8 }}>
             <strong>Suggested prompt:</strong>
             <div style={{ marginTop: 4, fontStyle: "italic" }}>{analysis.suggestedPrompt}</div>
           </div>
@@ -333,7 +333,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
                 fontSize: 12,
                 fontWeight: 500,
                 cursor: "pointer",
-                transition: "all 150ms ease",
+                transition: "transform 150ms ease, opacity 150ms ease",
                 fontFamily: "inherit",
               }}
               onMouseOver={(e) => {
@@ -378,7 +378,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             borderRadius: R.r1,
           }}
         >
-          <div style={{ fontWeight: 600, color: C.t1, marginBottom: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 500, color: C.t1, marginBottom: 8, fontSize: 12 }}>
             ✓ Thumbnail Selected
           </div>
           <img
@@ -392,7 +392,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
               objectFit: "cover",
             }}
           />
-          <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: C.t3, marginBottom: 8 }}>
             Frame @ {selectedThumbnail.timestamp.toFixed(2)}s
             <br />
             Grid size: {selectedThumbnail.gridSize} frames
@@ -401,7 +401,7 @@ export default function VideoAnalysisUpload({ onAnalysisComplete }: VideoAnalysi
             onClick={() => setSelectedThumbnail(null)}
             style={{
               width: "100%",
-              padding: "6px 12px",
+              padding: "8px 12px",
               borderRadius: R.r1,
               border: `1px solid ${C.bdr}`,
               background: "transparent",

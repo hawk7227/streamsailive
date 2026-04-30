@@ -207,6 +207,7 @@ def check_monospace_prose(files):
         "whiteSpace", "lineHeight: 1.6", "lineHeight:1.6", "pre-wrap",
         "overflowX", "overflowWrap", "pre-wrap", "result",
         "<code", "code>", "monospace\", background",  # inline code elements
+        "MonacoEditor", "monaco-editor", "vs-dark", "minimap", "automaticLayout",  # Monaco code editor
     ]
     for path in files:
         if "tokens.ts" in str(path) or "StreamsPanel.tsx" in str(path):

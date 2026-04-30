@@ -40,6 +40,9 @@ export const C = {
   sky:     "#60a5fa",
   gray:    "#6b7280",
   dark:    "#374151",
+  blueLink: "#0f5bff",
+  blueDim:  "rgba(59,130,246,0.15)",
+  redDim:   "rgba(239,68,68,0.15)",
 } as const;
 
 /** Light-mode chat theme — used by ChatTab (white background) */
