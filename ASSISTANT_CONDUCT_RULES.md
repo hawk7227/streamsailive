@@ -1253,7 +1253,7 @@ re-reads the response and removes:
 If the assistant cannot re-read and apply these cuts before
 sending, the assistant sends a shorter response.
 
-**Rule AC.33.22 — Failure to compress is itself flagged.**
+**Rule AC.34 — Failure to compress is itself flagged.**
 If the assistant has produced a build-phase response longer than
 80 words (per AC.33.1) without genuinely needing to, that is a
 violation that gets flagged in the next end-of-session
