@@ -25,6 +25,8 @@ const INITIAL_KEYS: ApiKey[] = [
   { label: "Runway API Key",     provider: "Runway",        placeholder: "key_……",        status: "untested", hint: "Runway Gen4 Turbo — high-quality video generation alternative to fal." },
 ];
 
+const TEST_USER_ID = "streams-test-user";
+
 const DEFAULT_MODELS = [
   { mode: "Video",  current: "Standard",    options: ["Standard","Pro","Precision","Cinema","Native Audio"] },
   { mode: "Image",  current: "Kontext",     options: ["Kontext","Kontext Max","FLUX Pro","Design","Nano"]   },
@@ -88,8 +90,11 @@ export default function SettingsTab() {
     try {
       const res  = await fetch("/api/streams/settings/test-key", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ provider, key: keyVal }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-streams-user-id": TEST_USER_ID,
+        },
+        body:    JSON.stringify({ provider, key: keyVal, userId: TEST_USER_ID }),
       });
       const data = await res.json() as { valid?: boolean; latencyMs?: number; error?: string };
       const newStatus: "valid" | "invalid" = (res.ok && data.valid) ? "valid" : "invalid";
@@ -122,7 +127,9 @@ export default function SettingsTab() {
   // Load settings on mount
   useEffect(() => {
     // Load settings
-    fetch("/api/streams/settings")
+    fetch("/api/streams/settings", {
+      headers: { "x-streams-user-id": TEST_USER_ID },
+    })
       .then(r => r.json())
       .then((d: { settings?: { default_video_model?: string; default_image_model?: string; default_voice_model?: string; default_music_model?: string; cost_limit_daily_usd?: number; cost_limit_monthly_usd?: number; quality_preset?: "fast"|"standard"|"pro"; watermark_enabled?: boolean } | null }) => {
         if (d.settings) {
@@ -261,7 +268,7 @@ export default function SettingsTab() {
       const res = await fetch("/api/streams/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(body),
+        body:    JSON.stringify({ ...body, userId: TEST_USER_ID }),
       });
 
       if (!res.ok) {
