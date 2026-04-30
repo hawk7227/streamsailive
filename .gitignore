@@ -44,3 +44,4 @@ public/build-report.json
 # Backups and locks
 *.backup
 package-lock.json
+.env.local
