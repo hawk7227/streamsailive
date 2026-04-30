@@ -1258,7 +1258,59 @@ If the assistant has produced a build-phase response longer than
 80 words (per AC.33.1) without genuinely needing to, that is a
 violation that gets flagged in the next end-of-session
 retrospective per AC.20.
-
+Rule AC.34.1 — Unlimited phases per session for pre-approved build plans.
+If the user provides a build plan covering multiple discrete phases
+and explicitly designates the plan as a multi-session build, the
+assistant may execute any number of phases in a single session. There
+is no cap on phase count per session.
+All other rules in this file remain in full force per phase:
+AC.8 (Pre-edit handshake) — each phase produces its own 7-item
+handshake before any edit in that phase. The handshake is not
+shared across phases. "We already handshook the build" is not
+acceptable. Each phase earns its own.
+AC.4 (Evidence of work) — each phase that affects rendered UI
+requires rendering evidence per AC.4.2 before the phase is claimed
+done. AC.4.5 staging exception applies per-phase if the deployment
+target is designated staging.
+AC.10 (Closing report) — each phase produces its own closing
+report per AC.10.1 listing files changed, rules satisfied, rules
+at risk, audit output, tsc output, and rendering evidence still
+required. The session does not produce one combined closing report
+at the end; it produces one per phase.
+AC.10.2 ("Done" requires user-supplied evidence) — each phase
+reaches "done" only when the user has supplied the evidence listed
+in that phase's handshake item 6 and the assistant has acknowledged
+having seen it. Phase N+1 does not begin until phase N is "done."
+AC.21 / AC.30 / AC.33 (Response compression during build) —
+apply per phase. Mid-phase responses follow the fixed shape, word
+caps, sentence caps, paragraph caps. Between phases, a brief
+transition acknowledgment is permitted (one sentence) before the
+next handshake begins.
+AC.11.1 (Session-start state verification) — runs once at
+session start, not per phase. Phase transitions do not require a
+new git status check unless the prior phase ended in an error or
+recovery state.
+AC.18 (Assumption tracking), AC.5 (Honest reporting),
+AC.7 (Failure acknowledgment) — apply continuously across all
+phases.
+The build plan must be committed to a tracked file in the repo (e.g.
+BUILD_PLAN.md) so it survives across sessions and the assistant can
+re-read it at session start per AC.1.3. The user explicitly designates
+the plan as a multi-session build by stating so, by reference to a
+specific committed plan file, or by an in-conversation invocation
+matched to such a file.
+When the user invokes a phase ("begin Phase 3"), the assistant locates
+that phase in the committed plan, runs the AC.8 handshake for that
+phase scope only, and proceeds. The assistant does not pre-handshake
+later phases or pre-commit to scope beyond the current phase.
+A phase that exceeds the scope written in the committed plan is not
+permitted under this rule. If the assistant identifies that the work
+required for a phase exceeds what the plan describes, the assistant
+stops, names the discrepancy, and asks whether to (a) reduce scope to
+match the plan, (b) amend the plan in the file, or (c) split the
+overflow into a new phase.
+This rule does not exempt the assistant from any other rule in this
+file. It only removes the limit on phase count per session.
 ---
 
 ## End of Assistant Conduct Rules
