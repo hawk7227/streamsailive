@@ -45,6 +45,8 @@ type RequestBody = {
   prompt:       string;
   userId?:      string;
   workspaceId?: string;
+  userId?:      string;
+  workspaceId?: string;
   mode?:        VideoMode;       // t2v (default) | i2v | motion
   imageUrl?:    string;          // I2V: start_image_url. Motion: character reference
   refVideoUrl?: string;          // Motion-control: reference video URL
@@ -248,10 +250,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (!submitResult.ok) {
     // Mark generation failed — do not leave a dangling pending record
-    await admin.from("generation_log").update({
-      fal_status: "failed",
-      fal_error:  submitResult.error,
-    }).eq("id", generationId);
+    if (persistedLog) {
+      await admin.from("generation_log").update({
+        fal_status: "failed",
+        fal_error:  submitResult.error,
+      }).eq("id", generationId);
+    }
 
     console.error(JSON.stringify({
       level: "error",
