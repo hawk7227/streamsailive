@@ -1,0 +1,98 @@
+name: Rule Confirmation Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-rule-confirmations:
+    name: Validate rule-read confirmations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Skip automated dependency bots
+        id: bot-check
+        run: |
+          actor="${{ github.event.pull_request.user.login }}"
+          if [[ "$actor" == "dependabot[bot]" || "$actor" == "renovate[bot]" || "$actor" == "github-actions[bot]" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout PR branch
+        if: steps.bot-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up pnpm
+        if: steps.bot-check.outputs.skip == 'false'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        if: steps.bot-check.outputs.skip == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.bot-check.outputs.skip == 'false'
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate PR description
+        if: steps.bot-check.outputs.skip == 'false'
+        id: validate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          node scripts/validate-rule-confirmation.js "$PR_BODY" > validation-output.txt
+
+      - name: Comment failures
+        if: failure() && steps.bot-check.outputs.skip == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.existsSync('validation-output.txt')
+              ? fs.readFileSync('validation-output.txt', 'utf8').trim()
+              : 'INVALID\n- validation script failed before writing output.';
+
+            const lines = output.split('\n').filter(Boolean).slice(1);
+            const body = [
+              'Rule confirmation check failed. The PR description must include valid confirmation lines for all four rule files.',
+              '',
+              ...lines,
+              '',
+              'Expected one line per file including filename, accurate section count, and at least three valid identifiers from that file.',
+            ].join('\n');
+
+            const marker = 'Rule confirmation check failed.';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.user.type === 'Bot' && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
