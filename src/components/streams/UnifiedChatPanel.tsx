@@ -340,6 +340,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const [isMobile, setIsMobile] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -362,6 +363,46 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       scrollToBottom();
     },
     [scrollToBottom]
+  );
+
+  const ensureChatSession = useCallback(
+    async (firstMessage?: string): Promise<string | null> => {
+      if (sessionId) return sessionId;
+      if (!userId) return null;
+
+      const title =
+        firstMessage && firstMessage.trim()
+          ? firstMessage.trim().slice(0, 80)
+          : 'New conversation';
+
+      const res = await fetch('/api/streams/chat/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-streams-user-id': userId,
+        },
+        body: JSON.stringify({
+          userId,
+          workspaceId: projectId || 'streams-public-test',
+          title,
+          activeTab: 'chat',
+          metadata: {
+            source: 'UnifiedChatPanel',
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'Failed to create chat session.');
+        throw new Error(text || 'Failed to create chat session.');
+      }
+
+      const payload = (await res.json()) as { data?: { id?: string } };
+      const createdSessionId = payload.data?.id ?? null;
+      if (createdSessionId) setSessionId(createdSessionId);
+      return createdSessionId;
+    },
+    [projectId, sessionId, userId],
   );
 
   const calmStream = useCalmStream(
@@ -535,7 +576,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   );
 
   const handleGenerateImageMessage = useCallback(
-    async (message: string, assistantMessageId: string, abortController: AbortController) => {
+    async (message: string, assistantMessageId: string, abortController: AbortController, chatSessionId: string | null) => {
       const startedAt = Date.now();
 
       updateAssistantMessage(assistantMessageId, {
@@ -554,6 +595,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           aspectRatio: '1:1',
           numImages: 1,
           userId,
+          sessionId: chatSessionId,
         }),
         signal: abortController.signal,
       });
@@ -594,6 +636,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             generationId: generationData.generationId,
             responseUrl: generationData.responseUrl,
             userId,
+            sessionId: chatSessionId,
           }),
           signal: abortController.signal,
         });
@@ -676,8 +719,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       abortControllerRef.current = abortController;
 
       try {
+        const chatSessionId = await ensureChatSession(normalizedMessage);
+
         if (isDirectImageRequest) {
-          await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController);
+          await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
           return;
         }
         const response = await fetch('/api/streams/chat', {
@@ -687,6 +732,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             message,
             projectId: projectId || null,
             userId,
+            sessionId: chatSessionId,
             file: fileData
               ? {
                   name: fileData.name,
@@ -747,7 +793,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         setIsLoading(false);
       }
     },
-    [calmStream, handleStreamEvent, isLoading, projectId, scrollToBottom, updateAssistantMessage, userId]
+    [calmStream, ensureChatSession, handleGenerateImageMessage, handleStreamEvent, isLoading, projectId, scrollToBottom, updateAssistantMessage, userId]
   );
 
   const handleSend = useCallback(async () => {
