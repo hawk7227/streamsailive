@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveStreamsRouteContext } from "@/lib/streams/test-mode-auth";
 import { falPoll, extractVideoUrl, extractAudioUrl, extractMusicUrl, extractImageUrl } from "@/lib/streams/fal-client";
+import { saveStreamsArtifactRecord } from "@/lib/streams/artifacts/save-streams-artifact";
 
 export const maxDuration = 60;
 
@@ -23,6 +24,7 @@ const STORAGE_BUCKET = "generations";
 type RequestBody = {
   userId?: string;
   workspaceId?: string;
+  sessionId?: string;
   responseUrl: string;
   generationId: string;
 };
@@ -51,6 +53,7 @@ function validateBody(raw: unknown): { body: RequestBody } | { errors: Validatio
     body: {
       userId: typeof obj.userId === "string" ? obj.userId.trim() : undefined,
       workspaceId: typeof obj.workspaceId === "string" ? obj.workspaceId.trim() : undefined,
+      sessionId: typeof obj.sessionId === "string" ? obj.sessionId.trim() : undefined,
       responseUrl: (obj.responseUrl as string).trim(),
       generationId: (obj.generationId as string).trim(),
     },
@@ -126,7 +129,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Validation failed", details: validated.errors }, { status: 400 });
   }
 
-  const { responseUrl, generationId, workspaceId: requestedWorkspaceId } = validated.body;
+  const { responseUrl, generationId, workspaceId: requestedWorkspaceId, sessionId } = validated.body;
 
   const ctx = await resolveStreamsRouteContext({
     request,
@@ -246,12 +249,57 @@ export async function POST(request: Request): Promise<NextResponse> {
       .eq("id", generationId);
   }
 
+  let artifactRecord: unknown = null;
+  let artifactPersisted = false;
+  let artifactPersistError: string | null = null;
+
+  if (finalizedUrl) {
+    const artifactType = mimeType.startsWith("image/")
+      ? "image"
+      : mimeType.startsWith("audio/")
+        ? "audio"
+        : "video";
+
+    const savedArtifact = await saveStreamsArtifactRecord({
+      admin,
+      userId: ctx.userId,
+      workspaceId,
+      sessionId,
+      type: artifactType,
+      subtype: "generated",
+      title: `${artifactType} generation`,
+      mime: mimeType,
+      previewUrl: finalizedUrl,
+      downloadUrl: finalizedUrl,
+      sourceTool: "streams.media.status",
+      createdByChat: Boolean(sessionId),
+      createdByTab: sessionId ? null : "generate",
+      metadata: {
+        generationId,
+        generationType,
+        provider: "fal",
+        persistedLog,
+        testMode: ctx.isTestMode,
+      },
+    });
+
+    if (savedArtifact.ok) {
+      artifactPersisted = true;
+      artifactRecord = savedArtifact.artifact;
+    } else {
+      artifactPersistError = savedArtifact.error;
+    }
+  }
+
   return NextResponse.json({
     status: "completed",
     artifactUrl: finalizedUrl,
     generationId,
     mimeType,
     persisted: persistedLog,
+    artifactPersisted,
+    artifact: artifactRecord,
+    artifactPersistError,
     testMode: ctx.isTestMode,
   });
 }
