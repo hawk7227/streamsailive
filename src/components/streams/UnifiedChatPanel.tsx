@@ -1044,9 +1044,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   display: 'block',
                   width: '100%',
                   height: 'auto',
-                  borderRadius: 18,
+                  borderRadius: 20,
                   border: `1px solid ${CT.border}`,
-                  background: '#ffffff',
+                  background: 'var(--streams-surface, #ffffff)',
                 }}
               />
             </div>
@@ -1060,9 +1060,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 style={{
                   display: 'block',
                   width: '100%',
-                  borderRadius: 18,
+                  borderRadius: 20,
                   border: `1px solid ${CT.border}`,
-                  background: '#000000',
+                  background: 'var(--streams-ink, #000000)',
                 }}
               />
             </div>
