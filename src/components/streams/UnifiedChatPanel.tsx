@@ -14,6 +14,12 @@ import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
 import { C, CT } from './tokens';
 import { isImageGenerationPrompt } from '@/lib/assistant-ui/imageIntent';
+import {
+  createStreamsChatSession,
+  getLatestStreamsChatSession,
+  getStreamsChatMessages,
+  persistStreamsChatMessage,
+} from '@/lib/streams/chat/chat-history-client';
 
 export interface ChatArtifact {
   id: string;
@@ -42,7 +48,9 @@ export interface ChatMessage {
   error?: boolean;
   elapsedMs?: number;
   generatedImageUrl?: string;
+  generatedVideoUrl?: string;
   generationId?: string;
+  artifactId?: string;
 }
 
 interface UnifiedChatPanelProps {
@@ -95,6 +103,11 @@ function formatCompleteStatus(mode: ActivityMode | undefined, elapsedMs?: number
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isVideoGenerationPrompt(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return /\b(video|clip|footage|animate)\b/.test(normalized) && /\b(generate|create|make|render)\b/.test(normalized);
 }
 
 function parseSseChunk(buffer: string): { events: Array<{ event: StreamEventName; data: StreamPayload }>; rest: string } {
@@ -341,6 +354,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video'; url: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -365,6 +380,13 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     [scrollToBottom]
   );
 
+  const revealActiveGeneration = useCallback(
+    (force = false) => {
+      scrollToBottom({ force, behavior: force ? 'smooth' : 'auto' });
+    },
+    [scrollToBottom],
+  );
+
   const ensureChatSession = useCallback(
     async (firstMessage?: string): Promise<string | null> => {
       if (sessionId) return sessionId;
@@ -375,35 +397,65 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           ? firstMessage.trim().slice(0, 80)
           : 'New conversation';
 
-      const res = await fetch('/api/streams/chat/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-streams-user-id': userId,
-        },
-        body: JSON.stringify({
-          userId,
-          workspaceId: projectId || 'streams-public-test',
-          title,
-          activeTab: 'chat',
-          metadata: {
-            source: 'UnifiedChatPanel',
-          },
-        }),
+      const createdSessionId = await createStreamsChatSession({
+        userId,
+        workspaceId: projectId || 'streams-public-test',
+        title,
       });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => 'Failed to create chat session.');
-        throw new Error(text || 'Failed to create chat session.');
-      }
-
-      const payload = (await res.json()) as { data?: { id?: string } };
-      const createdSessionId = payload.data?.id ?? null;
       if (createdSessionId) setSessionId(createdSessionId);
       return createdSessionId;
     },
     [projectId, sessionId, userId],
   );
+
+  const hydrateLatestSession = useCallback(async () => {
+    if (!userId) {
+      setSessionHydrated(true);
+      return;
+    }
+    try {
+      const workspaceId = projectId || 'streams-public-test';
+      const latestSessionId = await getLatestStreamsChatSession({ userId, workspaceId });
+      if (!latestSessionId) return;
+      setSessionId(latestSessionId);
+      const persistedMessages = await getStreamsChatMessages({ userId, sessionId: latestSessionId });
+      const hydrated = persistedMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => {
+          const metadata = (m.metadata ?? {}) as Record<string, unknown>;
+          const artifactIds = Array.isArray(m.artifact_ids) ? m.artifact_ids : [];
+          return {
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content || '',
+            generatedImageUrl:
+              typeof metadata.generatedImageUrl === 'string'
+                ? metadata.generatedImageUrl
+                : typeof metadata.artifactUrl === 'string'
+                  ? metadata.artifactUrl
+                  : undefined,
+            generatedVideoUrl:
+              typeof metadata.generatedVideoUrl === 'string'
+                ? metadata.generatedVideoUrl
+                : typeof metadata.kind === 'string' && metadata.kind === 'generated_video' && typeof metadata.artifactUrl === 'string'
+                  ? metadata.artifactUrl
+                  : undefined,
+            generationId: typeof metadata.generationId === 'string' ? metadata.generationId : undefined,
+            artifactId:
+              artifactIds[0] ??
+              (typeof metadata.artifactId === 'string' ? metadata.artifactId : undefined),
+          } as ChatMessage;
+        });
+      setMessages(hydrated);
+      setTimeout(() => revealActiveGeneration(true), 40);
+    } finally {
+      setSessionHydrated(true);
+    }
+  }, [projectId, revealActiveGeneration, userId]);
+
+  useEffect(() => {
+    hydrateLatestSession();
+  }, [hydrateLatestSession]);
 
   const calmStream = useCalmStream(
     (visibleText) => {
@@ -556,7 +608,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           statusText: formatCompleteStatus(mode, data.elapsedMs, hasArtifact),
         });
         setIsLoading(false);
-        setTimeout(() => scrollToBottom({ force: true, behavior: 'smooth' }), 60);
+        revealActiveGeneration(true);
         return;
       }
 
@@ -572,7 +624,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         setIsLoading(false);
       }
     },
-    [calmStream, onArtifactGenerated, scrollToBottom, updateAssistantMessage, writeArtifactToIframe]
+    [calmStream, onArtifactGenerated, revealActiveGeneration, updateAssistantMessage, writeArtifactToIframe]
   );
 
   const handleGenerateImageMessage = useCallback(
@@ -581,10 +633,11 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       updateAssistantMessage(assistantMessageId, {
         content: '',
-        statusText: 'Submitting image generation…',
+        statusText: 'Submitting to provider…',
         isStreaming: true,
         activity: null,
       });
+      revealActiveGeneration(true);
 
       const generationRes = await fetch('/api/streams/image/generate', {
         method: 'POST',
@@ -617,9 +670,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       updateAssistantMessage(assistantMessageId, {
         generationId: generationData.generationId,
-        statusText: 'Generating image…',
+        statusText: 'Generation is running…',
         isStreaming: true,
       });
+      revealActiveGeneration();
 
       const maxPolls = 90;
       for (let attempt = 0; attempt < maxPolls; attempt += 1) {
@@ -649,10 +703,21 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         const statusData = (await statusRes.json()) as {
           status?: string;
           artifactUrl?: string;
+          artifactPersisted?: boolean;
+          mimeType?: string;
+          artifact?: {
+            id?: string;
+            preview_url?: string;
+            download_url?: string;
+            type?: string;
+            session_id?: string | null;
+            created_by_chat?: boolean;
+          } | null;
           error?: string;
         };
 
         if (statusData.status === 'completed' && statusData.artifactUrl) {
+          const artifactId = statusData.artifact?.id;
           const elapsedMs = Date.now() - startedAt;
           updateAssistantMessage(assistantMessageId, {
             isStreaming: false,
@@ -660,10 +725,31 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             elapsedMs,
             content: '',
             generatedImageUrl: statusData.artifactUrl,
+            generationId: generationData.generationId,
+            artifactId,
             statusText: formatCompleteStatus('image', elapsedMs, false),
           });
+          if (chatSessionId && userId) {
+            await persistStreamsChatMessage({
+              userId,
+              workspaceId: projectId || 'streams-public-test',
+              sessionId: chatSessionId,
+              role: 'assistant',
+              content: '',
+              artifactIds: artifactId ? [artifactId] : [],
+              metadata: {
+                kind: 'generated_image',
+                generatedImageUrl: statusData.artifactUrl,
+                artifactUrl: statusData.artifactUrl,
+                artifactId,
+                generationId: generationData.generationId,
+                artifactPersisted: Boolean(statusData.artifactPersisted),
+                mimeType: statusData.mimeType,
+              },
+            });
+          }
           setIsLoading(false);
-          setTimeout(() => scrollToBottom({ force: true, behavior: 'smooth' }), 60);
+          revealActiveGeneration(true);
           return;
         }
 
@@ -672,14 +758,120 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         }
 
         updateAssistantMessage(assistantMessageId, {
-          statusText: attempt > 0 ? 'Still generating image…' : 'Generating image…',
+          statusText: attempt > 0 ? 'Generation is running…' : 'Preparing generation…',
           isStreaming: true,
         });
+        revealActiveGeneration();
       }
 
       throw new Error('Image generation timed out.');
     },
-    [scrollToBottom, updateAssistantMessage, userId]
+    [projectId, revealActiveGeneration, updateAssistantMessage, userId]
+  );
+
+  const handleGenerateVideoMessage = useCallback(
+    async (message: string, assistantMessageId: string, abortController: AbortController, chatSessionId: string | null) => {
+      const startedAt = Date.now();
+      updateAssistantMessage(assistantMessageId, {
+        content: '',
+        statusText: 'Submitting to provider…',
+        isStreaming: true,
+        activity: null,
+      });
+      revealActiveGeneration(true);
+
+      const generationRes = await fetch('/api/streams/video/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: message,
+          mode: 't2v',
+          model: 'pro',
+          duration: 5,
+          aspectRatio: '16:9',
+          userId,
+          sessionId: chatSessionId,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!generationRes.ok) throw new Error((await generationRes.text()) || 'Video generation request failed.');
+      const generationData = (await generationRes.json()) as { generationId?: string; responseUrl?: string; error?: string };
+      if (!generationData.generationId || !generationData.responseUrl) {
+        throw new Error(generationData.error || 'Video generation did not return a valid job.');
+      }
+
+      updateAssistantMessage(assistantMessageId, {
+        generationId: generationData.generationId,
+        statusText: 'Generation is running…',
+        isStreaming: true,
+      });
+      revealActiveGeneration();
+
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        if (abortController.signal.aborted) throw new DOMException('Video generation aborted.', 'AbortError');
+        await sleep(2500);
+        const statusRes = await fetch('/api/streams/video/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            generationId: generationData.generationId,
+            responseUrl: generationData.responseUrl,
+            userId,
+            sessionId: chatSessionId,
+          }),
+          signal: abortController.signal,
+        });
+        if (!statusRes.ok) throw new Error((await statusRes.text()) || 'Video status check failed.');
+        const statusData = (await statusRes.json()) as {
+          status?: string; artifactUrl?: string; artifactPersisted?: boolean; mimeType?: string; artifact?: { id?: string } | null; error?: string;
+        };
+        if (statusData.status === 'completed' && statusData.artifactUrl) {
+          const artifactId = statusData.artifact?.id;
+          const elapsedMs = Date.now() - startedAt;
+          updateAssistantMessage(assistantMessageId, {
+            isStreaming: false,
+            activity: null,
+            elapsedMs,
+            content: '',
+            generatedVideoUrl: statusData.artifactUrl,
+            generationId: generationData.generationId,
+            artifactId,
+            statusText: formatCompleteStatus('conversation', elapsedMs, false),
+          });
+          if (chatSessionId && userId) {
+            await persistStreamsChatMessage({
+              userId,
+              workspaceId: projectId || 'streams-public-test',
+              sessionId: chatSessionId,
+              role: 'assistant',
+              content: '',
+              artifactIds: artifactId ? [artifactId] : [],
+              metadata: {
+                kind: 'generated_video',
+                generatedVideoUrl: statusData.artifactUrl,
+                artifactUrl: statusData.artifactUrl,
+                artifactId,
+                generationId: generationData.generationId,
+                artifactPersisted: Boolean(statusData.artifactPersisted),
+                mimeType: statusData.mimeType,
+              },
+            });
+          }
+          setIsLoading(false);
+          revealActiveGeneration(true);
+          return;
+        }
+        updateAssistantMessage(assistantMessageId, {
+          statusText: attempt > 0 ? 'Generation is running…' : 'Preparing generation…',
+          isStreaming: true,
+        });
+        revealActiveGeneration();
+        if (statusData.status === 'failed') throw new Error(statusData.error || 'Video generation failed.');
+      }
+      throw new Error('Video generation timed out.');
+    },
+    [projectId, revealActiveGeneration, updateAssistantMessage, userId],
   );
 
   const handleSendMessage = useCallback(
@@ -687,7 +879,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       const normalizedMessage = message.trim();
       if (!normalizedMessage || !userId || isLoading) return;
 
-      const isDirectImageRequest = !fileData && isImageGenerationPrompt(normalizedMessage);
+      const isDirectVideoRequest = !fileData && isVideoGenerationPrompt(normalizedMessage);
+      const isDirectImageRequest = !fileData && !isDirectVideoRequest && isImageGenerationPrompt(normalizedMessage);
       const now = Date.now();
       const userMsg: ChatMessage = {
         id: `msg-${now}`,
@@ -698,31 +891,49 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: isDirectImageRequest ? 'Generating image…' : 'Thinking…',
+        statusText: isDirectImageRequest ? 'Generating image…' : isDirectVideoRequest ? 'Generating video…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
 
       assistantMsgIdRef.current = assistantMsg.id;
       activeActivityRef.current = {
-        mode: isDirectImageRequest ? 'image' : fileData ? 'file' : 'conversation',
-        phase: isDirectImageRequest ? 'generating' : 'thinking',
+        mode: isDirectImageRequest ? 'image' : isDirectVideoRequest ? 'image' : fileData ? 'file' : 'conversation',
+        phase: isDirectImageRequest || isDirectVideoRequest ? 'generating' : 'thinking',
       };
       activeArtifactRef.current = null;
       calmStream.reset('');
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsLoading(true);
-      setTimeout(() => scrollToBottom({ force: true, behavior: 'smooth' }), 40);
+      revealActiveGeneration(true);
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
       try {
         const chatSessionId = await ensureChatSession(normalizedMessage);
+        if (chatSessionId) {
+          await persistStreamsChatMessage({
+            userId,
+            workspaceId: projectId || 'streams-public-test',
+            sessionId: chatSessionId,
+            role: 'user',
+            content: normalizedMessage,
+              metadata: {
+                hasFile: Boolean(fileData),
+                directImageRequest: isDirectImageRequest,
+                directVideoRequest: isDirectVideoRequest,
+              },
+          });
+        }
 
         if (isDirectImageRequest) {
           await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
+          return;
+        }
+        if (isDirectVideoRequest) {
+          await handleGenerateVideoMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
           return;
         }
         const response = await fetch('/api/streams/chat', {
@@ -793,7 +1004,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         setIsLoading(false);
       }
     },
-    [calmStream, ensureChatSession, handleGenerateImageMessage, handleStreamEvent, isLoading, projectId, scrollToBottom, updateAssistantMessage, userId]
+    [calmStream, ensureChatSession, handleGenerateImageMessage, handleGenerateVideoMessage, handleStreamEvent, isLoading, projectId, revealActiveGeneration, updateAssistantMessage, userId]
   );
 
   const handleSend = useCallback(async () => {
@@ -817,6 +1028,35 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   }, [handleSendMessage, inputValue, isLoading, uploadedFile]);
 
   const activeChatMaxWidth = isMobile ? '100%' : CHAT_MAX_WIDTH;
+
+  const copyToClipboard = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (error) {
+      console.error('Copy failed:', error);
+    }
+  }, []);
+
+  const renderMediaActions = (url: string, type: 'image' | 'video', artifactId?: string) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+      <button type="button" onClick={() => setPreviewMedia({ type, url })} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Preview</button>
+      <a href={url} download target="_blank" rel="noreferrer" style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, textDecoration: 'none' }}>Download</a>
+      <button type="button" onClick={() => copyToClipboard(url)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Copy URL</button>
+      {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
+        <button type="button" onClick={() => navigator.share({ url }).catch(() => null)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Share</button>
+      ) : null}
+      {artifactId ? (
+        <button type="button" onClick={() => copyToClipboard(artifactId)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Inspect</button>
+      ) : null}
+    </div>
+  );
+
+  const renderGenerationActivityCard = (statusText?: string) => (
+    <div style={{ marginTop: 12, borderRadius: 16, padding: 14, overflow: 'hidden', position: 'relative', border: `1px solid ${CT.border}`, background: 'linear-gradient(120deg, rgba(124,58,237,.18), rgba(14,165,233,.16), rgba(16,185,129,.14))' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(255,255,255,.08) 22px, rgba(255,255,255,.08) 23px)', animation: 'streamsShimmer 2.2s linear infinite' }} />
+      <div style={{ position: 'relative', zIndex: 1, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generation…'}</div>
+    </div>
+  );
 
   const renderMessage = (msg: ChatMessage) => {
     if (msg.role === 'user') {
@@ -844,8 +1084,13 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         <div style={{ maxWidth: activeChatMaxWidth, width: '100%' }}>
           <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
           {msg.content ? <MarkdownMessage content={msg.content} /> : null}
+          {msg.isStreaming && !msg.generatedImageUrl && !msg.generatedVideoUrl ? renderGenerationActivityCard(msg.statusText) : null}
           {msg.generatedImageUrl ? (
-            <div style={{ marginTop: msg.content ? 12 : 0 }}>
+            <div style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 18, padding: 10, background: CT.bg }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: CT.t3 }}>IMAGE</span>
+                <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
+              </div>
               <img
                 src={msg.generatedImageUrl}
                 alt="Generated image"
@@ -858,6 +1103,28 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   background: '#ffffff',
                 }}
               />
+              {renderMediaActions(msg.generatedImageUrl, 'image', msg.artifactId)}
+            </div>
+          ) : null}
+          {msg.generatedVideoUrl ? (
+            <div style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 18, padding: 10, background: CT.bg }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: CT.t3 }}>VIDEO</span>
+                <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
+              </div>
+              <video
+                src={msg.generatedVideoUrl}
+                controls
+                playsInline
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  borderRadius: 18,
+                  border: `1px solid ${CT.border}`,
+                  background: '#000000',
+                }}
+              />
+              {renderMediaActions(msg.generatedVideoUrl, 'video', msg.artifactId)}
             </div>
           ) : null}
         </div>
@@ -1118,6 +1385,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           0%, 100% { opacity: .35; transform: scale(.82); }
           50% { opacity: .85; transform: scale(1); }
         }
+        @keyframes streamsShimmer {
+          0% { transform: translateX(-40px); }
+          100% { transform: translateX(40px); }
+        }
         .streams-chat-scroll::-webkit-scrollbar { width: 10px; }
         .streams-chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
         .streams-chat-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -1170,9 +1441,19 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>
         </div>
       )}
+      {previewMedia ? (
+        <div onClick={() => setPreviewMedia(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(96vw, 1080px)', maxHeight: '90vh', borderRadius: 16, overflow: 'hidden', background: '#000' }}>
+            {previewMedia.type === 'image' ? (
+              <img src={previewMedia.url} alt="Preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
+            ) : (
+              <video src={previewMedia.url} controls playsInline autoPlay style={{ width: '100%', display: 'block' }} />
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 export default UnifiedChatPanel;
-
