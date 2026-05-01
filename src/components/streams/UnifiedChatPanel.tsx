@@ -48,6 +48,7 @@ export interface ChatMessage {
   error?: boolean;
   elapsedMs?: number;
   generatedImageUrl?: string;
+  generatedVideoUrl?: string;
   generationId?: string;
   artifactId?: string;
 }
@@ -102,6 +103,11 @@ function formatCompleteStatus(mode: ActivityMode | undefined, elapsedMs?: number
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isVideoGenerationPrompt(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return /\b(video|clip|footage|animate)\b/.test(normalized) && /\b(generate|create|make|render)\b/.test(normalized);
 }
 
 function parseSseChunk(buffer: string): { events: Array<{ event: StreamEventName; data: StreamPayload }>; rest: string } {
@@ -418,6 +424,12 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               typeof metadata.generatedImageUrl === 'string'
                 ? metadata.generatedImageUrl
                 : typeof metadata.artifactUrl === 'string'
+                  ? metadata.artifactUrl
+                  : undefined,
+            generatedVideoUrl:
+              typeof metadata.generatedVideoUrl === 'string'
+                ? metadata.generatedVideoUrl
+                : typeof metadata.kind === 'string' && metadata.kind === 'generated_video' && typeof metadata.artifactUrl === 'string'
                   ? metadata.artifactUrl
                   : undefined,
             generationId: typeof metadata.generationId === 'string' ? metadata.generationId : undefined,
@@ -746,12 +758,109 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     [projectId, scrollToBottom, updateAssistantMessage, userId]
   );
 
+  const handleGenerateVideoMessage = useCallback(
+    async (message: string, assistantMessageId: string, abortController: AbortController, chatSessionId: string | null) => {
+      const startedAt = Date.now();
+      updateAssistantMessage(assistantMessageId, {
+        content: '',
+        statusText: 'Submitting video generation…',
+        isStreaming: true,
+        activity: null,
+      });
+
+      const generationRes = await fetch('/api/streams/video/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: message,
+          mode: 't2v',
+          duration: 5,
+          aspectRatio: '16:9',
+          userId,
+          sessionId: chatSessionId,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!generationRes.ok) throw new Error((await generationRes.text()) || 'Video generation request failed.');
+      const generationData = (await generationRes.json()) as { generationId?: string; responseUrl?: string; error?: string };
+      if (!generationData.generationId || !generationData.responseUrl) {
+        throw new Error(generationData.error || 'Video generation did not return a valid job.');
+      }
+
+      updateAssistantMessage(assistantMessageId, {
+        generationId: generationData.generationId,
+        statusText: 'Generating video…',
+        isStreaming: true,
+      });
+
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        if (abortController.signal.aborted) throw new DOMException('Video generation aborted.', 'AbortError');
+        await sleep(2500);
+        const statusRes = await fetch('/api/streams/video/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            generationId: generationData.generationId,
+            responseUrl: generationData.responseUrl,
+            userId,
+            sessionId: chatSessionId,
+          }),
+          signal: abortController.signal,
+        });
+        if (!statusRes.ok) throw new Error((await statusRes.text()) || 'Video status check failed.');
+        const statusData = (await statusRes.json()) as {
+          status?: string; artifactUrl?: string; artifactPersisted?: boolean; mimeType?: string; artifact?: { id?: string } | null; error?: string;
+        };
+        if (statusData.status === 'completed' && statusData.artifactUrl) {
+          const artifactId = statusData.artifact?.id;
+          const elapsedMs = Date.now() - startedAt;
+          updateAssistantMessage(assistantMessageId, {
+            isStreaming: false,
+            activity: null,
+            elapsedMs,
+            content: '',
+            generatedVideoUrl: statusData.artifactUrl,
+            generationId: generationData.generationId,
+            artifactId,
+            statusText: formatCompleteStatus('conversation', elapsedMs, false),
+          });
+          if (chatSessionId && userId) {
+            await persistStreamsChatMessage({
+              userId,
+              workspaceId: projectId || 'streams-public-test',
+              sessionId: chatSessionId,
+              role: 'assistant',
+              content: '',
+              artifactIds: artifactId ? [artifactId] : [],
+              metadata: {
+                kind: 'generated_video',
+                generatedVideoUrl: statusData.artifactUrl,
+                artifactUrl: statusData.artifactUrl,
+                artifactId,
+                generationId: generationData.generationId,
+                artifactPersisted: Boolean(statusData.artifactPersisted),
+                mimeType: statusData.mimeType,
+              },
+            });
+          }
+          setIsLoading(false);
+          return;
+        }
+        if (statusData.status === 'failed') throw new Error(statusData.error || 'Video generation failed.');
+      }
+      throw new Error('Video generation timed out.');
+    },
+    [projectId, updateAssistantMessage, userId],
+  );
+
   const handleSendMessage = useCallback(
     async (message: string, fileData?: { name: string; type: string; content: string }) => {
       const normalizedMessage = message.trim();
       if (!normalizedMessage || !userId || isLoading) return;
 
       const isDirectImageRequest = !fileData && isImageGenerationPrompt(normalizedMessage);
+      const isDirectVideoRequest = !fileData && !isDirectImageRequest && isVideoGenerationPrompt(normalizedMessage);
       const now = Date.now();
       const userMsg: ChatMessage = {
         id: `msg-${now}`,
@@ -762,15 +871,15 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: isDirectImageRequest ? 'Generating image…' : 'Thinking…',
+        statusText: isDirectImageRequest ? 'Generating image…' : isDirectVideoRequest ? 'Generating video…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
 
       assistantMsgIdRef.current = assistantMsg.id;
       activeActivityRef.current = {
-        mode: isDirectImageRequest ? 'image' : fileData ? 'file' : 'conversation',
-        phase: isDirectImageRequest ? 'generating' : 'thinking',
+        mode: isDirectImageRequest ? 'image' : isDirectVideoRequest ? 'image' : fileData ? 'file' : 'conversation',
+        phase: isDirectImageRequest || isDirectVideoRequest ? 'generating' : 'thinking',
       };
       activeArtifactRef.current = null;
       calmStream.reset('');
@@ -791,15 +900,20 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             sessionId: chatSessionId,
             role: 'user',
             content: normalizedMessage,
-            metadata: {
-              hasFile: Boolean(fileData),
-              directImageRequest: isDirectImageRequest,
-            },
+              metadata: {
+                hasFile: Boolean(fileData),
+                directImageRequest: isDirectImageRequest,
+                directVideoRequest: isDirectVideoRequest,
+              },
           });
         }
 
         if (isDirectImageRequest) {
           await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
+          return;
+        }
+        if (isDirectVideoRequest) {
+          await handleGenerateVideoMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
           return;
         }
         const response = await fetch('/api/streams/chat', {
@@ -870,7 +984,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         setIsLoading(false);
       }
     },
-    [calmStream, ensureChatSession, handleGenerateImageMessage, handleStreamEvent, isLoading, projectId, scrollToBottom, updateAssistantMessage, userId]
+    [calmStream, ensureChatSession, handleGenerateImageMessage, handleGenerateVideoMessage, handleStreamEvent, isLoading, projectId, scrollToBottom, updateAssistantMessage, userId]
   );
 
   const handleSend = useCallback(async () => {
@@ -930,9 +1044,25 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   display: 'block',
                   width: '100%',
                   height: 'auto',
-                  borderRadius: 18,
+                  borderRadius: 20,
                   border: `1px solid ${CT.border}`,
-                  background: '#ffffff',
+                  background: 'var(--streams-surface, #ffffff)',
+                }}
+              />
+            </div>
+          ) : null}
+          {msg.generatedVideoUrl ? (
+            <div style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0 }}>
+              <video
+                src={msg.generatedVideoUrl}
+                controls
+                playsInline
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  borderRadius: 20,
+                  border: `1px solid ${CT.border}`,
+                  background: 'var(--streams-ink, #000000)',
                 }}
               />
             </div>
