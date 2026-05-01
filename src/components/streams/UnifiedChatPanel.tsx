@@ -14,6 +14,12 @@ import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
 import { C, CT } from './tokens';
 import { isImageGenerationPrompt } from '@/lib/assistant-ui/imageIntent';
+import {
+  createStreamsChatSession,
+  getLatestStreamsChatSession,
+  getStreamsChatMessages,
+  persistStreamsChatMessage,
+} from '@/lib/streams/chat/chat-history-client';
 
 export interface ChatArtifact {
   id: string;
@@ -43,6 +49,7 @@ export interface ChatMessage {
   elapsedMs?: number;
   generatedImageUrl?: string;
   generationId?: string;
+  artifactId?: string;
 }
 
 interface UnifiedChatPanelProps {
@@ -341,6 +348,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const [inputValue, setInputValue] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -375,35 +383,59 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           ? firstMessage.trim().slice(0, 80)
           : 'New conversation';
 
-      const res = await fetch('/api/streams/chat/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-streams-user-id': userId,
-        },
-        body: JSON.stringify({
-          userId,
-          workspaceId: projectId || 'streams-public-test',
-          title,
-          activeTab: 'chat',
-          metadata: {
-            source: 'UnifiedChatPanel',
-          },
-        }),
+      const createdSessionId = await createStreamsChatSession({
+        userId,
+        workspaceId: projectId || 'streams-public-test',
+        title,
       });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => 'Failed to create chat session.');
-        throw new Error(text || 'Failed to create chat session.');
-      }
-
-      const payload = (await res.json()) as { data?: { id?: string } };
-      const createdSessionId = payload.data?.id ?? null;
       if (createdSessionId) setSessionId(createdSessionId);
       return createdSessionId;
     },
     [projectId, sessionId, userId],
   );
+
+  const hydrateLatestSession = useCallback(async () => {
+    if (!userId) {
+      setSessionHydrated(true);
+      return;
+    }
+    try {
+      const workspaceId = projectId || 'streams-public-test';
+      const latestSessionId = await getLatestStreamsChatSession({ userId, workspaceId });
+      if (!latestSessionId) return;
+      setSessionId(latestSessionId);
+      const persistedMessages = await getStreamsChatMessages({ userId, sessionId: latestSessionId });
+      const hydrated = persistedMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => {
+          const metadata = (m.metadata ?? {}) as Record<string, unknown>;
+          const artifactIds = Array.isArray(m.artifact_ids) ? m.artifact_ids : [];
+          return {
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content || '',
+            generatedImageUrl:
+              typeof metadata.generatedImageUrl === 'string'
+                ? metadata.generatedImageUrl
+                : typeof metadata.artifactUrl === 'string'
+                  ? metadata.artifactUrl
+                  : undefined,
+            generationId: typeof metadata.generationId === 'string' ? metadata.generationId : undefined,
+            artifactId:
+              artifactIds[0] ??
+              (typeof metadata.artifactId === 'string' ? metadata.artifactId : undefined),
+          } as ChatMessage;
+        });
+      setMessages(hydrated);
+      setTimeout(() => scrollToBottom({ force: true }), 40);
+    } finally {
+      setSessionHydrated(true);
+    }
+  }, [projectId, scrollToBottom, userId]);
+
+  useEffect(() => {
+    hydrateLatestSession();
+  }, [hydrateLatestSession]);
 
   const calmStream = useCalmStream(
     (visibleText) => {
@@ -649,10 +681,21 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         const statusData = (await statusRes.json()) as {
           status?: string;
           artifactUrl?: string;
+          artifactPersisted?: boolean;
+          mimeType?: string;
+          artifact?: {
+            id?: string;
+            preview_url?: string;
+            download_url?: string;
+            type?: string;
+            session_id?: string | null;
+            created_by_chat?: boolean;
+          } | null;
           error?: string;
         };
 
         if (statusData.status === 'completed' && statusData.artifactUrl) {
+          const artifactId = statusData.artifact?.id;
           const elapsedMs = Date.now() - startedAt;
           updateAssistantMessage(assistantMessageId, {
             isStreaming: false,
@@ -660,8 +703,29 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             elapsedMs,
             content: '',
             generatedImageUrl: statusData.artifactUrl,
+            generationId: generationData.generationId,
+            artifactId,
             statusText: formatCompleteStatus('image', elapsedMs, false),
           });
+          if (chatSessionId && userId) {
+            await persistStreamsChatMessage({
+              userId,
+              workspaceId: projectId || 'streams-public-test',
+              sessionId: chatSessionId,
+              role: 'assistant',
+              content: '',
+              artifactIds: artifactId ? [artifactId] : [],
+              metadata: {
+                kind: 'generated_image',
+                generatedImageUrl: statusData.artifactUrl,
+                artifactUrl: statusData.artifactUrl,
+                artifactId,
+                generationId: generationData.generationId,
+                artifactPersisted: Boolean(statusData.artifactPersisted),
+                mimeType: statusData.mimeType,
+              },
+            });
+          }
           setIsLoading(false);
           setTimeout(() => scrollToBottom({ force: true, behavior: 'smooth' }), 60);
           return;
@@ -679,7 +743,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       throw new Error('Image generation timed out.');
     },
-    [scrollToBottom, updateAssistantMessage, userId]
+    [projectId, scrollToBottom, updateAssistantMessage, userId]
   );
 
   const handleSendMessage = useCallback(
@@ -720,6 +784,19 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       try {
         const chatSessionId = await ensureChatSession(normalizedMessage);
+        if (chatSessionId) {
+          await persistStreamsChatMessage({
+            userId,
+            workspaceId: projectId || 'streams-public-test',
+            sessionId: chatSessionId,
+            role: 'user',
+            content: normalizedMessage,
+            metadata: {
+              hasFile: Boolean(fileData),
+              directImageRequest: isDirectImageRequest,
+            },
+          });
+        }
 
         if (isDirectImageRequest) {
           await handleGenerateImageMessage(normalizedMessage, assistantMsg.id, abortController, chatSessionId);
@@ -1175,4 +1252,3 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 }
 
 export default UnifiedChatPanel;
-
