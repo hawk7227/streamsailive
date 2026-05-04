@@ -276,13 +276,13 @@ export default function MediaEditor({
   // ── Add text to canvas ──────────────────────────────────────────────────────
   async function addText() {
     if (!fabricRef.current) return;
-    const { IText } = await import("fabric");
+    const { IText, Shadow } = await import("fabric");
     const txt = new IText(textInput, {
       left: 60, top: 60,
       fontSize, fill: textColor,
       fontFamily: "Inter, sans-serif",
       fontWeight: "700",
-      shadow: new (require("fabric").Shadow)({ color: "rgba(0,0,0,0.6)", blur: 4, offsetX: 2, offsetY: 2 }),
+      shadow: new Shadow({ color: "rgba(0,0,0,0.6)", blur: 4, offsetX: 2, offsetY: 2 }),
     });
     fabricRef.current.add(txt);
     fabricRef.current.setActiveObject(txt);

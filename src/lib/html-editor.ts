@@ -7,7 +7,7 @@ export interface ReplacementChunk {
 }
 
 export function updateHtmlContent(originalHtml: string, chunks: ReplacementChunk[]): string {
-    let lines = originalHtml.split('\n');
+    const lines = originalHtml.split('\n');
     let content = originalHtml;
 
     // We will process chunks. 

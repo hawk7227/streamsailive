@@ -2,6 +2,9 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'node:module';
+
+const requireFromScript = createRequire(import.meta.url);
 
 // Load .env.local manually if dotenv doesn't pick it up automatically or checks .env
 const envLocalPath = path.resolve(process.cwd(), '.env.local');
@@ -25,8 +28,7 @@ async function test() {
     console.log("API Key found:", apiKey.substring(0, 5) + "...");
 
     try {
-        // @ts-ignore
-        const SDK = require('json2video-sdk');
+        const SDK = requireFromScript('json2video-sdk');
         const Movie = SDK.Movie;
 
         const movie = new Movie();

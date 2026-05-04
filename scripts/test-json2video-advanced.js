@@ -1,6 +1,6 @@
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Manually verify env 
 const envLocalPath = path.resolve(process.cwd(), '.env.local');
@@ -61,7 +61,7 @@ async function test() {
     const context = {};
 
     try {
-        const SDK = require('json2video-sdk');
+        const SDK = await import('json2video-sdk');
         const Movie = SDK.Movie;
 
         const movie = new Movie();

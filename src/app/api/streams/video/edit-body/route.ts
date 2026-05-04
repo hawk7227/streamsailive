@@ -87,7 +87,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Determine audio source
-  let audioUrl = body.audioUrl;
+  const audioUrl = body.audioUrl;
 
   if (!audioUrl && body.newText) {
     // Generate TTS audio first, then pass to OmniHuman
