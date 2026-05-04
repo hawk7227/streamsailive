@@ -7,6 +7,7 @@ Use `STREAMS_ACTIVE_SLICE` env var (or `--policy`) to select policy:
 - `chat-ui-slice`
 - `video-quality-slice`
 - `build-quality-prevention-slice`
+- `streams-live-preview-artifact-workspace-runtime`
 
 ## Generated files
 Generated-file guard blocks generated artifacts by default, including `public/build-report.json`, to prevent accidental build output drift in PRs.
