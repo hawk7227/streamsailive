@@ -102,7 +102,7 @@ function JSONPreview({ code }: { code: string }) {
 // ── Audio inline player ───────────────────────────────────────────────────
 function AudioPlayer({ src }: { src: string }) {
   return<div style={{padding:"16px 20px",background:"#f6f8fa"}}>
-    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+    { }
     <audio controls style={{width:"100%",minHeight:40}} src={src}/>
   </div>;
 }

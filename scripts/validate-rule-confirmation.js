@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-const fs = require('fs');
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 function countSections(content) {
   return content.split(/\r?\n/).filter((l) => l.startsWith('## ')).length;
@@ -96,7 +97,9 @@ function validate(body) {
   return failures;
 }
 
-if (require.main === module) {
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMainModule) {
   const body = process.argv[2] ?? fs.readFileSync(0, 'utf8');
   const failures = validate(body);
   if (failures.length) {
@@ -107,4 +110,4 @@ if (require.main === module) {
   console.log('VALID');
 }
 
-module.exports = { validate };
+export { validate };

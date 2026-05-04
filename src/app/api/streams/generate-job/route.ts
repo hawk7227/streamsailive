@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     // Rule 7.1: Call provider endpoint (don't wait for completion)
     // This is a simplified example - real implementation calls actual provider
-    let generationId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const generationId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     let estimatedDuration = 30; // seconds, varies by mode
 
     // Mode-specific estimated durations

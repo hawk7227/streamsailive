@@ -9,7 +9,7 @@
  * Key:    STREAMS_CREDENTIAL_KEY env — 64-char hex. Generate: openssl rand -hex 32
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 declare const process: { env: Record<string, string | undefined> };
 
 const ALGORITHM = "AES-GCM";

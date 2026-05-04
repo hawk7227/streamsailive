@@ -1,4 +1,4 @@
-const { updateHtmlContent } = require('../src/lib/html-editor');
+import { updateHtmlContent } from '../src/lib/html-editor';
 
 const sampleHtml = `<!DOCTYPE html>
 <html lang="en">
