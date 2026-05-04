@@ -1,33 +1,40 @@
 # Streams Current Status
 
-## Browser Chat image history/session persistence
+## Active slice
 
-Status: PROVEN
+- STREAMS Self-Build Runtime Foundation
 
-Proof recorded:
-- deployed build report passed for commit `b530c2362abcd5fc97c9574527a2ed9982352644`
-- browser generated image rendered inline
-- browser refresh survived and hydrated chat image message
-- `streams_artifacts` row exists with:
-  - `id = 948de4e1-ef33-46c3-9a8e-990d13a2bc22`
-  - `session_id = 88ec72fc-a249-476a-bfb7-1b65f7215702`
-  - `type = image`
-  - `created_by_chat = true`
-  - `created_by_tab = null`
-  - `preview_url = Supabase storage URL`
-- `streams_chat_messages` rows exist:
-  - user image prompt persisted with `metadata.directImageRequest = true`
-  - assistant generated-image message persisted with `artifact_ids` containing `948de4e1-ef33-46c3-9a8e-990d13a2bc22`
-  - assistant `metadata.kind = generated_image`
-  - assistant `metadata.generatedImageUrl = Supabase URL`
-  - assistant `metadata.artifactPersisted = true`
+## Proven items
 
-## New active bug
+- Browser Chat image history/session persistence (see previous proof on commit `b530c2362abcd5fc97c9574527a2ed9982352644`).
 
-Observed bug:
-- Prompt: `Generate a VIDEO of a woman walking and talking on the phone.`
-- Persisted metadata showed `metadata.directImageRequest = false`
-- UI responded with plain-text fallback instead of native video generation path.
+## Implemented but unproven items
 
-Current active slice:
-- Route Chat video-generation intent to native Streams video generation path.
+- STREAMS Self-Build Runtime Foundation (in progress in this slice).
+
+## Blocked items
+
+- Full Codex-like self-build loop remains blocked on runtime integrations (workspace orchestration beyond local process, durable task persistence wiring, GitHub write path, CI log APIs, browser proof runner).
+
+## Target files for this slice
+
+- `docs/streams-current-status.md`
+- `src/lib/streams/build-runtime/**`
+- `src/app/api/streams/build/tasks/**`
+- `docs/streams-knowledge/**`
+
+## Files that must not be touched
+
+- Provider image/video routes
+- DB migrations (unless explicitly approved)
+- `scripts/validate-rule-confirmation.js`
+- unrelated chat UI/editor/upload/settings/provider files
+- `public/build-report.json`
+
+## Required proof before any item can be marked Proven
+
+- Source proof in changed files
+- Runtime proof through real API invocation
+- Command/check proof from real command runner output
+- Persistence proof when durable storage is claimed
+- Browser/runtime proof where UI behavior is claimed
