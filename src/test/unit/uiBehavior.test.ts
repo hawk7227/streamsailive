@@ -119,7 +119,7 @@ describe('Production Workspace', () => {
   })
 
   it('Final Output tab is active by default', () => {
-    let activeTab = 'Final Output'
+    const activeTab = 'Final Output'
     expect(activeTab).toBe('Final Output')
   })
 
@@ -367,7 +367,7 @@ describe('Generation Queue Tray', () => {
 
   it('tray disappears completely when 0 active and user collapses', () => {
     const activeCount = 0
-    let trayExpanded = false
+    const trayExpanded = false
     const pillVisible = activeCount > 0 || trayExpanded
     expect(pillVisible).toBe(false)
   })
@@ -506,7 +506,7 @@ describe('Preview Screens (Row 3)', () => {
   })
 
   it('Approve button sends output to Production Workspace', () => {
-    let approvedOutputs = { image: null as string | null }
+    const approvedOutputs = { image: null as string | null }
     function approve(url: string) { approvedOutputs.image = url }
     approve('https://example.com/concept1.png')
     expect(approvedOutputs.image).toBe('https://example.com/concept1.png')
@@ -601,7 +601,7 @@ describe('AI Assistant Chat', () => {
   })
 
   it('assistant actions execute in state', () => {
-    let prompts = { strategy: 'old strategy', copy: '', image: '', video: '', qa: '' }
+    const prompts = { strategy: 'old strategy', copy: '', image: '', video: '', qa: '' }
     function executeAction(action: { type: string; value?: string }) {
       if (action.type === 'update_strategy_prompt' && action.value) {
         prompts.strategy = action.value

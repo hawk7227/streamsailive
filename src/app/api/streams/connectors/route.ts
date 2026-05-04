@@ -15,7 +15,7 @@ import {
   type Provider,
 } from "@/lib/streams/connectors/index";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 declare const process: { env: Record<string, string | undefined> };
 
 export const maxDuration = 30;
