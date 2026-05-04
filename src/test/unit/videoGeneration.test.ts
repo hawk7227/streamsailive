@@ -9,11 +9,11 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { createHmac } from "node:crypto";
 
 // ── JWT structure ─────────────────────────────────────────────────────────
 
 function makeKlingJWT(ak: string, sk: string): string {
-  const { createHmac } = require("crypto") as typeof import("crypto");
   const header  = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const now     = Math.floor(Date.now() / 1000);
   const payload = Buffer.from(JSON.stringify({ iss: ak, exp: now + 1800, nbf: now - 5 })).toString("base64url");

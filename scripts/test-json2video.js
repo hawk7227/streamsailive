@@ -1,6 +1,6 @@
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Manually verify env if dotenv fails
 const envLocalPath = path.resolve(process.cwd(), '.env.local');
@@ -24,7 +24,7 @@ async function test() {
     console.log("API Key found:", apiKey.substring(0, 5) + "...");
 
     try {
-        const SDK = require('json2video-sdk');
+        const SDK = await import('json2video-sdk');
         console.log("SDK loaded:", Object.keys(SDK));
 
         const Movie = SDK.Movie;
