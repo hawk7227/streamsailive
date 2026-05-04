@@ -1058,7 +1058,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const renderGenerationActivityCard = (statusText?: string) => (
     <div style={{ marginTop: 12, borderRadius: 16, padding: 14, overflow: 'hidden', position: 'relative', border: `1px solid ${CT.border}`, background: 'linear-gradient(120deg, rgba(124,58,237,.18), rgba(14,165,233,.16), rgba(16,185,129,.14))' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(255,255,255,.08) 22px, rgba(255,255,255,.08) 23px)', animation: 'streamsShimmer 2.2s linear infinite' }} />
-      <div style={{ position: 'relative', zIndex: 1, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generation…'}</div>
+      <div style={{ position: 'relative', zIndex: 10, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generation…'}</div>
     </div>
   );
 
@@ -1090,7 +1090,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           {msg.content ? <MarkdownMessage content={msg.content} /> : null}
           {msg.isStreaming && !msg.generatedImageUrl && !msg.generatedVideoUrl ? renderGenerationActivityCard(msg.statusText) : null}
           {msg.generatedImageUrl ? (
-            <div style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 18, padding: 10, background: CT.bg }}>
+            <div style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: CT.t3 }}>IMAGE</span>
                 <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
@@ -1103,9 +1103,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   display: 'block',
                   width: '100%',
                   height: 'auto',
-                  borderRadius: 18,
+                  borderRadius: 16,
                   border: `1px solid ${CT.border}`,
-                  background: '#ffffff',
+                  background: CT.bg,
                   cursor: 'zoom-in',
                 }}
               />
@@ -1113,7 +1113,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             </div>
           ) : null}
           {msg.generatedVideoUrl ? (
-            <div style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 18, padding: 10, background: CT.bg }}>
+            <div style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: CT.t3 }}>VIDEO</span>
                 <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
@@ -1126,9 +1126,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 style={{
                   display: 'block',
                   width: '100%',
-                  borderRadius: 18,
+                  borderRadius: 16,
                   border: `1px solid ${CT.border}`,
-                  background: '#000000',
+                  background: CT.bg,
                   cursor: 'pointer',
                 }}
               />
@@ -1455,8 +1455,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         </div>
       )}
       {previewMedia ? (
-        <div onClick={() => setPreviewMedia(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(96vw, 1080px)', maxHeight: '90vh', borderRadius: 16, overflow: 'hidden', background: '#000' }}>
+        <div onClick={() => setPreviewMedia(null)} onKeyDown={(e) => e.key === 'Escape' && setPreviewMedia(null)} role="button" tabIndex={0} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="button" tabIndex={0} style={{ width: 'min(96vw, 1080px)', maxHeight: '90vh', borderRadius: 16, overflow: 'hidden', background: CT.bg }}>
             {previewMedia.type === 'image' ? (
               <img src={previewMedia.url} alt="Preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
             ) : (

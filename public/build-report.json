@@ -1,20 +1,19 @@
 {
-  "generatedAt": "2026-04-28T15:31:19.622Z",
-  "commit": "78c79fca738912a132e939dd48d7b268ecab2a9a",
-  "branch": "main",
+  "generatedAt": "2026-05-04T17:42:14.985Z",
+  "commit": "8b623efdb33b3238a75ec05c75df63c56bda0429",
+  "branch": "work",
   "environment": "unknown",
   "env": {
-    "required": [
+    "required": [],
+    "optional": [
       {
         "key": "OPENAI_API_KEY",
-        "present": true
+        "present": false
       },
       {
         "key": "NEXT_PUBLIC_SUPABASE_URL",
-        "present": true
-      }
-    ],
-    "optional": [
+        "present": false
+      },
       {
         "key": "SUPABASE_SERVICE_ROLE_KEY",
         "present": false
