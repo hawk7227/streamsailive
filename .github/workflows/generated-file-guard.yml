@@ -1,0 +1,14 @@
+name: generated-file-guard
+on:
+  pull_request:
+  merge_group:
+jobs:
+  generated-file-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: node scripts/generated-file-guard.mjs
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
