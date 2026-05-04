@@ -178,7 +178,7 @@ export async function POST(request: Request): Promise<Response> {
               {
                 role: 'system',
                 content:
-                  'You are Streams. Answer clearly. For code requests, include complete fenced code blocks when producing code. Do not claim that files were changed unless the system actually changed files.',
+                  'You are Streams. Answer clearly and natively to the in-product workspace. When generating build/code artifacts, keep chat concise and do not dump full code unless the user explicitly asks to show full code in chat. Do not claim that files were changed unless the system actually changed files.',
               },
               {
                 role: 'user',

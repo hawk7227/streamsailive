@@ -22,12 +22,12 @@ Proof recorded:
   - assistant `metadata.generatedImageUrl = Supabase URL`
   - assistant `metadata.artifactPersisted = true`
 
-## New active bug
-
-Observed bug:
-- Prompt: `Generate a VIDEO of a woman walking and talking on the phone.`
-- Persisted metadata showed `metadata.directImageRequest = false`
-- UI responded with plain-text fallback instead of native video generation path.
+## New active slice
 
 Current active slice:
-- Route Chat video-generation intent to native Streams video generation path.
+- STREAMS Live Preview / Artifact Workspace Runtime.
+
+Scope:
+- Fix Preview panel runtime/rendering behavior for generated code artifacts.
+- Keep full code in Preview/Code by default; keep chat concise for artifact builds.
+- Remove corrupted glyph text in Streams chat/preview runtime UI.
