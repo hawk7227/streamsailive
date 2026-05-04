@@ -1,5 +1,9 @@
 # Streams Current Status
 
+## Current active slice
+
+- Full Build Only API Enforcement / OpenAI Call Prevention and Cost Control Runtime.
+
 ## Proven items
 
 ### Browser Chat image history/session persistence
@@ -24,6 +28,51 @@ Proof recorded:
   - assistant `metadata.generatedImageUrl = Supabase URL`
   - assistant `metadata.artifactPersisted = true`
 
+## Implemented but unproven items
+
+### General Builder Runtime / STREAMS Self-Build Profile
+
+Status:
+- Implemented but unproven.
+
+Notes:
+- General Builder Runtime foundation work remains preserved as baseline context for this slice.
+- STREAMS Self-Build Profile is one project profile/use case inside the General Builder Runtime.
+- This is not the current active slice for the OpenAI prevention PR.
+
+### Full Build Only API Enforcement / OpenAI Call Prevention and Cost Control Runtime
+
+Status:
+- Implemented but unproven.
+
+Target files for this slice:
+- `ASSISTANT_CONDUCT_RULES.md`
+- `BUILD_RULES.md`
+- `docs/streams-current-status.md`
+- `docs/streams-knowledge/proof-classification.md`
+- `docs/streams-knowledge/self-build-runtime.md`
+- `docs/merge-policies/openai-call-prevention-slice.md`
+- `scripts/full-build-gate.mjs`
+- `scripts/scope-guard.mjs`
+- `src/lib/assistant-core/orchestrator.ts`
+- `src/lib/streams/ai-prevention/**`
+- `src/lib/streams/openai-prevention/**`
+- `src/lib/streams/build-runtime/build-quality-gate.ts`
+- `src/lib/streams/build-runtime/context-packet-builder.ts`
+- `src/lib/streams/build-runtime/correction-loop.ts`
+- `src/lib/streams/build-runtime/knowledge-access.ts`
+
+Files that must not be touched:
+- Provider image/video routes
+- DB migrations unless explicitly approved
+- `scripts/validate-rule-confirmation.js`
+- unrelated chat UI/editor/upload/settings/provider files
+- repo-wide lint cleanup files
+- `public/build-report.json`
+
+Classification target for this slice:
+- Implemented but unproven until runtime/provider/browser proof is captured.
+
 ## Historical inactive items
 
 ### Route Chat video-generation intent to native Streams video generation path
@@ -38,51 +87,26 @@ Original observed bug:
 
 This item is historical/inactive and is not the current active slice.
 
-## Current active slice
-
-Active slice:
-- STREAMS Premium Unified Video Editor Layout and Tool Surface
-
-Allowed files:
-- `src/components/streams/tabs/VideoEditorTab.tsx`
-- `src/components/streams/editor/**`
-- `docs/streams-current-status.md`
-- `docs/merge-policies/editor-layout-slice.md`
-- `scripts/scope-guard.mjs` policy registration only
-
-Forbidden files:
-- Provider image/video routes
-- DB migrations unless explicitly approved
-- `scripts/validate-rule-confirmation.js`
-- unrelated chat UI/upload/settings/provider files
-- repo-wide lint files
-- `public/build-report.json`
-
-Classification target for this slice:
-- Implemented but unproven until browser/runtime evidence is captured.
-
-## Implemented but unproven items
-
-### STREAMS Self-Build Runtime Foundation
-
-Status:
-- Implemented but unproven.
-
-Notes:
-- This item is not the current active slice for this editor-layout PR.
-- General Builder Runtime / STREAMS Self-Build Profile foundation work remains preserved as baseline context.
-- Full Codex-like / General Builder execution loop is not complete until external runtime integrations are proven.
-
 ## Blocked items
 
 ### Full Codex-like / General Builder execution loop
 
 Blocked on:
-- workspace orchestration beyond local process
+- isolated workspace orchestration beyond local process
 - durable task persistence wiring
 - GitHub write path
 - CI log APIs
 - browser proof runner
+
+### Claude runtime integration
+
+Blocked where:
+- no Anthropic provider call path is wired in the active runtime path.
+
+### Batch dispatch execution
+
+Blocked where:
+- no async batch queue/dispatch worker is configured.
 
 ## Required proof before any item can be marked Proven
 
@@ -91,3 +115,4 @@ Blocked on:
 - Command/check proof from real command runner output
 - Persistence proof when durable storage is claimed
 - Browser/runtime proof where UI behavior is claimed
+- Runtime/provider usage proof where token/cost savings are claimed
