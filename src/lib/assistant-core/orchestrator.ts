@@ -425,6 +425,7 @@ export async function runOrchestrator(req: NextRequest) {
           timer.mark("context_built");
           const contextPacket = buildContextPacket({
             activeSlice: "Full Build Only API Enforcement / OpenAI Call Prevention and Cost Control Runtime",
+            mergePolicy: "openai-call-prevention-slice",
             allowedFiles: [], forbiddenFiles: [], proofRequirements: ["runtime proof", "output proof"],
             snippets: [{ path: "src/lib/assistant-core/orchestrator.ts", excerpt: normalized.userText.slice(0, 400) }],
           });
