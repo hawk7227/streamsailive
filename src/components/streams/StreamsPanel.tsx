@@ -39,6 +39,7 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
 
 export default function StreamsPanel() {
   const [active, setActive] = useState<Tab>("generate");
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [showSearch, setShowSearch] = useState(false);
@@ -254,7 +255,32 @@ export default function StreamsPanel() {
         </nav>
 
         {/* ── Content ─────────────────────────────────────────── */}
-        <main style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+        <main style={{ flex: 1, overflow: "hidden", position: "relative", display: 'flex' }}>
+          <aside
+            style={{
+              width: railCollapsed ? 64 : 220,
+              borderRight: `1px solid ${C.bdr}`,
+              background: C.bg,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              padding: 8,
+            }}
+            className="streams-desktop-nav"
+          >
+            <button onClick={() => setRailCollapsed((v) => !v)} style={{ border: `1px solid ${C.bdr}`, background: C.bg2, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer' }}>{railCollapsed ? '»' : '«'} {!railCollapsed ? 'Collapse' : ''}</button>
+            <button onClick={() => switchTab('chat')} style={{ border: `1px solid ${C.bdr}`, background: active === 'chat' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>💬 {!railCollapsed && 'Chat'}</button>
+            <button onClick={() => switchTab('generate')} style={{ border: `1px solid ${C.bdr}`, background: active === 'generate' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ {!railCollapsed && 'Generate'}</button>
+            <button onClick={() => switchTab('editor')} style={{ border: `1px solid ${C.bdr}`, background: active === 'editor' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🎬 {!railCollapsed && 'Editor'}</button>
+            <button onClick={() => switchTab('reference')} style={{ border: `1px solid ${C.bdr}`, background: active === 'reference' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ {!railCollapsed && 'Reference'}</button>
+            <button onClick={() => switchTab('person')} style={{ border: `1px solid ${C.bdr}`, background: active === 'person' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>◈ {!railCollapsed && 'Person'}</button>
+            <button onClick={() => switchTab('builder')} style={{ border: `1px solid ${C.bdr}`, background: active === 'builder' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬢ {!railCollapsed && 'Build'}</button>
+            <button onClick={() => switchTab('settings')} style={{ border: `1px solid ${C.bdr}`, background: active === 'settings' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⚙ {!railCollapsed && 'Settings'}</button>
+            <button onClick={() => switchTab('chat')} style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t3, cursor: 'pointer', textAlign: 'left' }}>＋ {!railCollapsed && 'New Chat'}</button>
+            <button disabled title="Chat search panel wiring is not available in this shell yet." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🔎 {!railCollapsed && 'Search (blocked)'}</button>
+            <button disabled title="Workspace library surface is not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🗂 {!railCollapsed && 'Library (blocked)'}</button>
+          </aside>
+          <div style={{ flex: 1, minWidth: 0 }}>
           {active === "chat"      && <ChatTab />}
           {active === "editor"    && (
             <VideoEditorTab
@@ -282,6 +308,7 @@ export default function StreamsPanel() {
           )}
           {active === "settings"  && <SettingsTab />}
           {active === "builder"   && <BuilderTab />}
+          </div>
         </main>
 
         {/* ── Mobile bottom nav ───────────────────────────────── */}
