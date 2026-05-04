@@ -12,3 +12,6 @@ Forbidden:
 - supabase/migrations/
 - public/build-report.json
 - scripts/validate-rule-confirmation.js
+- src/components/streams/UnifiedChatPanel.tsx
+- pnpm-lock.yaml
+
