@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActivityMode } from './ActivityGenerationCard';
 import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
+import { VoiceBar } from '@/components/ai-chat/VoiceBar';
 import { C, CT } from './tokens';
 import { isImageGenerationPrompt } from '@/lib/assistant-ui/imageIntent';
 import {
@@ -1039,6 +1040,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
   const renderMediaActions = (url: string, type: 'image' | 'video', artifactId?: string) => (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+      {type === 'image' ? (
+        <button type="button" disabled title="Edit is not yet wired to a confirmed Streams image-edit target in this chat surface." style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t4, cursor: 'not-allowed' }}>Edit</button>
+      ) : null}
       <button type="button" onClick={() => setPreviewMedia({ type, url })} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Preview</button>
       <a href={url} download target="_blank" rel="noreferrer" style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, textDecoration: 'none' }}>Download</a>
       <button type="button" onClick={() => copyToClipboard(url)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Copy URL</button>
@@ -1094,6 +1098,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               <img
                 src={msg.generatedImageUrl}
                 alt="Generated image"
+                onClick={() => setPreviewMedia({ type: 'image', url: msg.generatedImageUrl! })}
                 style={{
                   display: 'block',
                   width: '100%',
@@ -1101,6 +1106,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                   borderRadius: 18,
                   border: `1px solid ${CT.border}`,
                   background: '#ffffff',
+                  cursor: 'zoom-in',
                 }}
               />
               {renderMediaActions(msg.generatedImageUrl, 'image', msg.artifactId)}
@@ -1116,12 +1122,14 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 src={msg.generatedVideoUrl}
                 controls
                 playsInline
+                onClick={() => setPreviewMedia({ type: 'video', url: msg.generatedVideoUrl! })}
                 style={{
                   display: 'block',
                   width: '100%',
                   borderRadius: 18,
                   border: `1px solid ${CT.border}`,
                   background: '#000000',
+                  cursor: 'pointer',
                 }}
               />
               {renderMediaActions(msg.generatedVideoUrl, 'video', msg.artifactId)}
@@ -1438,7 +1446,12 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             {latestArtifact && <div style={{ margin: '16px 0' }}>{artifactPanel}</div>}
             <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
           </div>
-          <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>
+      <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>
+        <div style={{ padding: isMobile ? '8px 12px' : '8px 24px' }}>
+          <VoiceBar onTranscript={(text) => setInputValue((prev) => [prev, text].filter(Boolean).join(' ').trim())} speakText={messages.filter((m) => m.role === 'assistant').slice(-1)[0]?.content} />
+        </div>
+        {composer}
+      </div>
         </div>
       )}
       {previewMedia ? (
