@@ -8,6 +8,10 @@ import { client } from "./openai";
 import { buildAssistantTools, executeAssistantTool } from "./tools";
 import { TurnTimer } from "./timing";
 import { isChatQueryComplex } from "./complexQuerySignals";
+import { classifyIntent, applyCostPreventionPolicy, buildPromptCacheParts, runPostCallGuards, updateCostMetrics } from "@/lib/streams/openai-prevention";
+import { buildContextPacket } from "@/lib/streams/build-runtime/context-packet-builder";
+import { runBuildQualityGate } from "@/lib/streams/build-runtime/build-quality-gate";
+import { runSingleCorrectionPass } from "@/lib/streams/build-runtime/correction-loop";
 import type {
   AssistantMode,
   ChatMessage,
@@ -369,6 +373,8 @@ async function streamFirstResponse(
 export async function runOrchestrator(req: NextRequest) {
   const body = (await req.json()) as RequestBody;
   const normalized = normalizeRequest(body);
+  const intent = classifyIntent(normalized.userText);
+  const preCall = applyCostPreventionPolicy(intent, normalized.userText);
 
   // Each turn gets a timer. turnId derived from context if present, else new UUID.
   const turnId =
@@ -417,6 +423,11 @@ export async function runOrchestrator(req: NextRequest) {
           });
 
           timer.mark("context_built");
+          const contextPacket = buildContextPacket({
+            activeSlice: "Full Build Only API Enforcement / OpenAI Call Prevention and Cost Control Runtime",
+            allowedFiles: [], forbiddenFiles: [], proofRequirements: ["runtime proof", "output proof"],
+            snippets: [{ path: "src/lib/assistant-core/orchestrator.ts", excerpt: normalized.userText.slice(0, 400) }],
+          });
 
           // Computed once — used in both timer annotation and model selection
           const isComplexChat = route === "chat" && isChatQueryComplex(normalized.userText);
@@ -445,7 +456,13 @@ export async function runOrchestrator(req: NextRequest) {
             imageUrls,
           );
 
-          send("phase", { phase: "calling_openai", model: initialModel });
+          if (!preCall.shouldCallModel) {
+            send("phase", { phase: "tool_first_skip", reason: preCall.reason });
+            closeStream({ ok: true, skippedModelCall: true, reason: preCall.reason });
+            return;
+          }
+          const cacheParts = buildPromptCacheParts("streams-full-build-rulepack-v1", JSON.stringify(contextPacket));
+          send("phase", { phase: "calling_openai", model: initialModel, promptCacheKey: cacheParts.prompt_cache_key });
 
           // ── First OpenAI call — streaming, measured ───────────────────
           // Uses mini for chat/image/video routes; full model for build/file
@@ -628,6 +645,26 @@ export async function runOrchestrator(req: NextRequest) {
             });
           }
 
+          let finalText = getTextFromResponse(response);
+          let gate = route === "build" ? runBuildQualityGate({ userRequest: normalized.userText, assistantOutput: finalText, checksRun: ["tsc"], classification: "Implemented but unproven" }) : { passed: true, failures: [] as string[] };
+          let post = runPostCallGuards(finalText);
+          if (route === "build" && (!gate.passed || !post.passed)) {
+            const failures = [...(gate.failures || []), ...(post.failures || [])];
+            const correctionPrompt = `Full Build Only Gate failed. Fix all failures and return complete build response. Failures: ${failures.join(", ")}`;
+            const corrected = await client.responses.create({ model: continuationModel, input: [{ role: "user", content: correctionPrompt }] });
+            finalText = getTextFromResponse(corrected);
+            const correction = runSingleCorrectionPass({ userRequest: normalized.userText, assistantOutput: finalText, checksRun: ["tsc"], classification: "Implemented but unproven" }, finalText);
+            gate = correction.final;
+            post = runPostCallGuards(finalText);
+            if (!gate.passed || !post.passed) {
+              closeStream({ ok: false, classification: "Blocked", reason: "Full Build Only Gate failed.", failures: [...(gate.failures||[]), ...(post.failures||[])] });
+              return;
+            }
+            if (finalText) send("text_delta", { delta: finalText });
+          } else if (!gate.passed || !post.passed) {
+            closeStream({ ok: false, classification: "Blocked", failures: [...(gate.failures||[]), ...(post.failures||[])] });
+            return;
+          }
           closeStream({ ok: true });
         } catch (error) {
           const message = error instanceof Error ? error.message : "orchestrator failed";

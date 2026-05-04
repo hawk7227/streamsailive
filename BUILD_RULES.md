@@ -255,3 +255,11 @@ If a deployment was previously green and a new push turns it red, all other work
 □ All new files committed before push
 □ tsc --noEmit on streams/ = 0 errors
 ```
+
+
+---
+
+## 13. FULL BUILD ONLY CROSS-REFERENCE
+
+**Rule 13.1 — Full Build Only applies to API build mode.**
+For STREAMS build/fix/implement flows, enforce AC.9.x from `ASSISTANT_CONDUCT_RULES.md` in runtime gates, not prompt text only.

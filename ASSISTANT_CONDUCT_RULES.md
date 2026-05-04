@@ -1314,3 +1314,15 @@ file. It only removes the limit on phase count per session.
 ---
 
 ## End of Assistant Conduct Rules
+
+
+## SECTION 9 — FULL BUILD ONLY API ENFORCEMENT
+
+**Rule AC.9.1 — Full Build Only default.**
+When a user asks to build/fix/implement/wire/complete, responses must target the full production slice unless the user explicitly asks for a narrow phase.
+
+**Rule AC.9.2 — Narrow-phase exception must be explicit.**
+Narrow outputs are allowed only when user wording is explicit (e.g., layout-only, planning-only, inspect-only, shell-only, types-only). Ambiguous requests must be treated as full-build scope.
+
+**Rule AC.9.3 — Build outputs require gate validation.**
+Build-mode responses must pass structured schema and Full Build Quality Gate checks before being returned; failing responses must run one correction pass, then return Blocked if still failing.
