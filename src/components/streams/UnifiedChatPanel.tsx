@@ -78,7 +78,7 @@ type StreamPayload = {
   language?: string;
 };
 
-const CHAT_MAX_WIDTH = 'min(1120px, calc(100vw - 320px))';
+const CHAT_MAX_WIDTH = '100%';
 const USER_BUBBLE_MAX_WIDTH = 'min(620px, 72%)';
 const CHAT_TEXT_FONT_SIZE = 16;
 const CHAT_TEXT_LINE_HEIGHT = 1.65;
@@ -918,7 +918,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: isDirectImageRequest ? 'Generating imageâ€¦' : isDirectVideoRequest ? 'Generating videoâ€¦' : 'Thinkingâ€¦',
+        statusText: isDirectImageRequest ? 'Generating image…' : isDirectVideoRequest ? 'Generating video…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
@@ -1271,7 +1271,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       style={{
         width: '100%',
         maxWidth: activeChatMaxWidth,
-        margin: isMobile ? 0 : '0 auto',
+        margin: 0,
         padding: isMobile ? '8px 12px calc(12px + env(safe-area-inset-bottom))' : '10px 0 14px',
       }}
     >
