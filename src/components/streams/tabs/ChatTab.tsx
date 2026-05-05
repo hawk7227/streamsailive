@@ -21,9 +21,11 @@ const TEST_USER_ID = "streams-test-user";
 
 export default function ChatTab() {
   return (
-    <UnifiedChatPanel
-      projectId={TEST_PROJECT_ID}
-      userId={TEST_USER_ID}
-    />
+    <div style={{ width: "100%", minWidth: 0, maxWidth: "100vw", overflowX: "hidden" }}>
+      <UnifiedChatPanel
+        projectId={TEST_PROJECT_ID}
+        userId={TEST_USER_ID}
+      />
+    </div>
   );
 }

@@ -3,6 +3,7 @@
 ## Active slice
 
 - STREAMS Self-Build Runtime Foundation
+- Chat UI Slice (chat rail, composer UX, mobile shell fixes)
 
 ## Proven items
 
