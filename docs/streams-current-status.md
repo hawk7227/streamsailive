@@ -30,4 +30,4 @@ Observed bug:
 - UI responded with plain-text fallback instead of native video generation path.
 
 Current active slice:
-- Route Chat video-generation intent to native Streams video generation path.
+- STREAMS Chat Runtime / Mobile Shell / Media UX Fix.

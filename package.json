@@ -10,7 +10,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "streams:generated-file-guard": "node scripts/generated-file-guard.mjs",
+    "streams:pr-ready": "node scripts/check-pr-ready.mjs",
+    "streams:scope-guard": "node scripts/scope-guard.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
