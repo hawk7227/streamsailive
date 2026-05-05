@@ -1064,7 +1064,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     }
   }, []);
 
-  const actionChip = { width: 32, height: 32, borderRadius: 999, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, cursor: 'pointer' } as const;
+  const actionChip = { width: 44, height: 44, minHeight: 44, borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, cursor: 'pointer', fontSize: 14, fontWeight: 500 } as const;
   const renderMediaActions = (url: string, type: 'image' | 'video', artifactId?: string) => (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
       <button type="button" title="Preview" aria-label="Preview" onClick={() => setPreviewMedia({ type, url })} style={actionChip}>◉</button>
