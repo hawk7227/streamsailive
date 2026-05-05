@@ -199,6 +199,12 @@ export default function StreamsPanel() {
             minWidth:  0,
             overflowX: "hidden",
           }} className="streams-desktop-nav">
+            {/* Brand */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginRight: 24 }}>
+              <span style={{ fontSize: 20, fontWeight: 600 }}>+</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: C.t1 }}>Streams</span>
+            </div>
+
             {TABS.map((tab) => (
               <button
                 key={tab.id}
