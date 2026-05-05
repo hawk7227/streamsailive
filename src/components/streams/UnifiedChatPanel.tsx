@@ -76,6 +76,8 @@ type StreamPayload = {
   code?: string;
   type?: 'react' | 'html' | 'svg';
   language?: string;
+  preview?: boolean;
+  suppressInChat?: boolean;
 };
 
 const CHAT_MAX_WIDTH = '100%';
@@ -618,9 +620,17 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           language: data.language,
         };
         activeArtifactRef.current = artifact;
-        writeArtifactToIframe(artifact);
-        onArtifactGenerated?.(artifact.id);
-        updateAssistantMessage(id, { artifacts: [artifact] });
+        
+        // If preview mode, don't show in chat artifacts - just show in preview panel
+        if (data.preview) {
+          writeArtifactToIframe(artifact);
+          onArtifactGenerated?.(artifact.id);
+          // Don't add to chat message artifacts
+        } else {
+          writeArtifactToIframe(artifact);
+          onArtifactGenerated?.(artifact.id);
+          updateAssistantMessage(id, { artifacts: [artifact] });
+        }
         return;
       }
 
