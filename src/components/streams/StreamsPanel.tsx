@@ -289,11 +289,7 @@ export default function StreamsPanel() {
                 <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: railCollapsed ? 'auto' : 0, minWidth: 180, border: `1px solid ${C.bdr}`, borderRadius: 12, background: C.bg2, padding: 8, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button onClick={() => { switchTab('generate'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ Images</button>
                   <button onClick={() => { setShowSearch(true); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🔍 Search</button>
-                  <button disabled title="Library surface is not yet exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🗂 Library</button>
                   <button onClick={() => { switchTab('reference'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ Deep Research</button>
-                  <button disabled title="No Pulse activity surface is wired in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>◔ Pulse</button>
-                  <button disabled title="Apps/connectors are not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>▦ Apps</button>
-                  <button disabled title="GPT templates/personas are not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>◇ GPTs</button>
                 </div>
               ) : null}
             </div>
