@@ -264,7 +264,7 @@ export default function StreamsPanel() {
         <main className="streams-mobile-shell" data-testid="streams-mobile-shell" style={{ flex: 1, overflow: "hidden", position: "relative", display: 'flex', minWidth: 0, maxWidth: "100vw" }}>
           <aside
             style={{
-              width: railCollapsed ? 64 : 220,
+              width: railCollapsed ? 72 : 278,
               borderRight: `1px solid ${C.bdr}`,
               background: C.bg,
               display: 'flex',
