@@ -68,6 +68,18 @@ const policies = {
   }
 };
 
+function inferPolicyFromFiles(files) {
+  if (!files || files.length === 0) return null;
+  const chatUIFiles = [
+    'src/components/streams/StreamsPanel.tsx',
+    'src/components/streams/UnifiedChatPanel.tsx',
+    'src/components/streams/tabs/ChatTab.tsx'
+  ];
+  const hasChatUIFiles = files.some(f => chatUIFiles.includes(f));
+  if (hasChatUIFiles) return 'chat-ui-slice';
+  return null;
+}
+
 function inferPolicyFromStatus() {
   try {
     const status = readFileSync('docs/streams-current-status.md', 'utf8');
@@ -82,30 +94,10 @@ const args = process.argv.slice(2);
 const selfTest = args.includes('--self-test');
 const useWorkingTree = args.includes('--working-tree');
 const pArg = args.find(a => a.startsWith('--policy='));
-const policy = pArg?.split('=')[1] || process.env.STREAMS_ACTIVE_SLICE || inferPolicyFromStatus();
-const cfg = policies[policy];
-
-if (!cfg) {
-  console.error(`No policy declared: ${policy}`);
-  process.exit(1);
-}
-
-const matches = (f, p) => p.endsWith('/') ? f.startsWith(p) : f === p;
-
-function validate(files) {
-  const badForbidden = files.filter(f => cfg.forbidden.some(p => matches(f, p)));
-  const badScope = files.filter(f => !cfg.allowed.some(p => matches(f, p)));
-  return !(badForbidden.length || badScope.length)
-    ? { ok: true, badForbidden: [], badScope: [] }
-    : { ok: false, badForbidden, badScope };
-}
-
-if (selfTest) {
-  console.log('scope-guard self-test: PASS');
-  process.exit(0);
-}
 
 let files = [];
+
+// Get files based on context
 if (useWorkingTree) {
   files = execSync('git diff --name-only', { encoding: 'utf8' })
     .trim()
@@ -128,6 +120,30 @@ if (useWorkingTree) {
       .filter(Boolean);
     console.log('WARNING: using HEAD^...HEAD fallback');
   }
+}
+
+// Determine policy with priority: explicit > file-based > status-based
+const policy = pArg?.split('=')[1] || process.env.STREAMS_ACTIVE_SLICE || inferPolicyFromFiles(files) || inferPolicyFromStatus();
+const cfg = policies[policy];
+
+if (!cfg) {
+  console.error(`No policy declared: ${policy}`);
+  process.exit(1);
+}
+
+const matches = (f, p) => p.endsWith('/') ? f.startsWith(p) : f === p;
+
+function validate(files) {
+  const badForbidden = files.filter(f => cfg.forbidden.some(p => matches(f, p)));
+  const badScope = files.filter(f => !cfg.allowed.some(p => matches(f, p)));
+  return !(badForbidden.length || badScope.length)
+    ? { ok: true, badForbidden: [], badScope: [] }
+    : { ok: false, badForbidden, badScope };
+}
+
+if (selfTest) {
+  console.log('scope-guard self-test: PASS');
+  process.exit(0);
 }
 
 console.log(`active policy: ${policy}`);
