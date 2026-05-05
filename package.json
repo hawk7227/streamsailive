@@ -11,11 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "streams:scope-guard": "node scripts/scope-guard.mjs",
     "streams:generated-file-guard": "node scripts/generated-file-guard.mjs",
-    "streams:guard-self-test": "node scripts/scope-guard.mjs --self-test && node scripts/generated-file-guard.mjs --self-test",
     "streams:pr-ready": "node scripts/check-pr-ready.mjs",
-    "streams:pr-autopilot": "node scripts/pr-autopilot.mjs"
+    "streams:scope-guard": "node scripts/scope-guard.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
