@@ -396,9 +396,7 @@ export default function StreamsPanel() {
             paddingBottom:  "env(safe-area-inset-bottom)",
           }}
         >
-          {TABS.map((tab) => {
-            const IconComponent = tab.icon;
-            return (
+          {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => switchTab(tab.id)}
@@ -415,15 +413,14 @@ export default function StreamsPanel() {
                 minHeight:      48,
               }}
             >
-              <IconComponent
-                size={20}
-                strokeWidth={1.5}
-                color={active === tab.id ? C.acc2 : C.t4}
-                style={{
-                  lineHeight: 1,
-                  transition: `color ${DUR.fast} ${EASE}`,
-                }}
-              />
+              <span style={{
+                fontSize: 18,
+                lineHeight: 1,
+                color:      active === tab.id ? C.acc2 : C.t4,
+                transition: `color ${DUR.fast} ${EASE}`,
+              }}>
+                {tab.icon}
+              </span>
               <span style={{
                 fontSize: 13,
                 color:      active === tab.id ? C.acc2 : C.t4,
@@ -433,8 +430,7 @@ export default function StreamsPanel() {
                 {tab.label}
               </span>
             </button>
-            );
-          })}
+          ))}
         </nav>
 
         {/* Responsive styles — scoped to streams panel */}
