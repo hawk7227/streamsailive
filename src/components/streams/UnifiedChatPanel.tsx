@@ -1064,7 +1064,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     }
   }, []);
 
-  const actionChip = { width: 32, height: 32, borderRadius: 999, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, cursor: 'pointer' } as const;
+  const actionChip = { width: 44, height: 44, minHeight: 44, borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, cursor: 'pointer', fontSize: 14, fontWeight: 500 } as const;
   const renderMediaActions = (url: string, type: 'image' | 'video', artifactId?: string) => (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
       <button type="button" title="Preview" aria-label="Preview" onClick={() => setPreviewMedia({ type, url })} style={actionChip}>◉</button>
@@ -1078,7 +1078,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const renderGenerationActivityCard = (statusText?: string) => (
     <div style={{ marginTop: 12, borderRadius: 16, padding: 14, overflow: 'hidden', position: 'relative', border: `1px solid ${CT.border}`, background: 'linear-gradient(120deg, rgba(124,58,237,.18), rgba(14,165,233,.16), rgba(16,185,129,.14))' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(255,255,255,.08) 22px, rgba(255,255,255,.08) 23px)', animation: 'streamsShimmer 2.2s linear infinite' }} />
-      <div style={{ position: 'relative', zIndex: 10, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generationâ€¦'}</div>
+      <div style={{ position: 'relative', zIndex: 10, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generation…'}</div>
     </div>
   );
 
