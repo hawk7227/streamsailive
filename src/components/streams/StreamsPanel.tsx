@@ -44,6 +44,7 @@ export default function StreamsPanel() {
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [showSearch, setShowSearch] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Get current user from auth
   useEffect(() => {
@@ -258,6 +259,57 @@ export default function StreamsPanel() {
             🔍
             <span style={{ display: 'none' }} className="streams-desktop-nav">Search</span>
           </button>
+
+          {/* Notification + Profile */}
+          <div style={{ position: 'relative', marginLeft: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 20, cursor: 'pointer' }}>🔔</span>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                backgroundColor: '#9333ea',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              title="Profile menu"
+            >
+              MH
+            </button>
+
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: 220,
+                backgroundColor: C.bg2,
+                border: `1px solid ${C.bdr}`,
+                borderRadius: 12,
+                padding: 12,
+                zIndex: 1000,
+                boxShadow: '0 10px 32px rgba(0,0,0,0.15)',
+              }}>
+                <div style={{ paddingBottom: 12, borderBottom: `1px solid ${C.bdr}`, marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>MARCUS HAWKINS</div>
+                  <div style={{ fontSize: 12, color: C.t3 }}>Pro</div>
+                </div>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>⬆ Upgrade plan</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>🎨 Personalization</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>👤 Profile</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>⚙ Settings</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 12 }}>❓ Help</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 13 }}>🚪 Log out</button>
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* ── Content ─────────────────────────────────────────── */}
