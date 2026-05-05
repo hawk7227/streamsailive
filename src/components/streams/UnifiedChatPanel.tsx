@@ -918,7 +918,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: isDirectImageRequest ? 'Generating imageâ€¦' : isDirectVideoRequest ? 'Generating videoâ€¦' : 'Thinkingâ€¦',
+        statusText: isDirectImageRequest ? 'Generating image…' : isDirectVideoRequest ? 'Generating video…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
