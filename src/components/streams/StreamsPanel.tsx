@@ -24,8 +24,9 @@ import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
 import SettingsTab   from "./tabs/SettingsTab";
 import BuilderTab    from "./tabs/BuilderTab";
+import VideosTab     from "./tabs/VideosTab";
 
-type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder";
+type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder" | "videos";
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "chat",      icon: "💬", label: "Chat"      },
@@ -43,6 +44,8 @@ export default function StreamsPanel() {
   const [userId, setUserId] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [showSearch, setShowSearch] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Get current user from auth
   useEffect(() => {
@@ -156,7 +159,7 @@ export default function StreamsPanel() {
         }
       `}</style>
 
-      <div className="streams-root" style={{
+      <div className="streams-root streams-shell" data-testid="streams-shell" style={{
         display:       "flex",
         flexDirection: "column",
         height:        "100dvh",
@@ -175,6 +178,8 @@ export default function StreamsPanel() {
           background:     C.bg,
           padding:        "0 20px",
           gap:            8,
+          minWidth:       0,
+          overflowX:      "hidden",
         }}>
           {/* Brand */}
           <div className="streams-serif" style={{
@@ -192,7 +197,15 @@ export default function StreamsPanel() {
             display:   "flex",
             gap:       2,
             flex:      1,
+            minWidth:  0,
+            overflowX: "hidden",
           }} className="streams-desktop-nav">
+            {/* Brand */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginRight: 24 }}>
+              <span style={{ fontSize: 20, fontWeight: 600 }}>+</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: C.t1 }}>Streams</span>
+            </div>
+
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -224,6 +237,7 @@ export default function StreamsPanel() {
 
           {/* Search button - right aligned */}
           <button
+            className="streams-desktop-nav"
             onClick={() => setShowSearch(true)}
             style={{
               display: 'flex',
@@ -252,13 +266,64 @@ export default function StreamsPanel() {
             🔍
             <span style={{ display: 'none' }} className="streams-desktop-nav">Search</span>
           </button>
+
+          {/* Notification + Profile */}
+          <div style={{ position: 'relative', marginLeft: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 20, cursor: 'pointer' }}>🔔</span>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                backgroundColor: '#9333ea',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              title="Profile menu"
+            >
+              MH
+            </button>
+
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: 220,
+                backgroundColor: C.bg2,
+                border: `1px solid ${C.bdr}`,
+                borderRadius: 12,
+                padding: 12,
+                zIndex: 1000,
+                boxShadow: '0 10px 32px rgba(0,0,0,0.15)',
+              }}>
+                <div style={{ paddingBottom: 12, borderBottom: `1px solid ${C.bdr}`, marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>MARCUS HAWKINS</div>
+                  <div style={{ fontSize: 12, color: C.t3 }}>Pro</div>
+                </div>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>⬆ Upgrade plan</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>🎨 Personalization</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>👤 Profile</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>⚙ Settings</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 12 }}>❓ Help</button>
+                <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 13 }}>🚪 Log out</button>
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* ── Content ─────────────────────────────────────────── */}
-        <main style={{ flex: 1, overflow: "hidden", position: "relative", display: 'flex' }}>
+        <main className="streams-mobile-shell" data-testid="streams-mobile-shell" style={{ flex: 1, overflow: "hidden", position: "relative", display: 'flex', minWidth: 0, maxWidth: "100vw" }}>
           <aside
             style={{
-              width: railCollapsed ? 64 : 220,
+              width: railCollapsed ? 72 : 278,
               borderRight: `1px solid ${C.bdr}`,
               background: C.bg,
               display: 'flex',
@@ -277,10 +342,19 @@ export default function StreamsPanel() {
             <button onClick={() => switchTab('builder')} style={{ border: `1px solid ${C.bdr}`, background: active === 'builder' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬢ {!railCollapsed && 'Build'}</button>
             <button onClick={() => switchTab('settings')} style={{ border: `1px solid ${C.bdr}`, background: active === 'settings' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⚙ {!railCollapsed && 'Settings'}</button>
             <button onClick={() => switchTab('chat')} style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t3, cursor: 'pointer', textAlign: 'left' }}>＋ {!railCollapsed && 'New Chat'}</button>
-            <button disabled title="Chat search panel wiring is not available in this shell yet." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🔎 {!railCollapsed && 'Search (blocked)'}</button>
-            <button disabled title="Workspace library surface is not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🗂 {!railCollapsed && 'Library (blocked)'}</button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowMoreMenu((v) => !v)} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', width: '100%' }}>⋯ {!railCollapsed && 'More'}</button>
+              {showMoreMenu ? (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: railCollapsed ? 'auto' : 0, minWidth: 180, border: `1px solid ${C.bdr}`, borderRadius: 12, background: C.bg2, padding: 8, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button onClick={() => { switchTab('generate'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ Images</button>
+                  <button onClick={() => { switchTab('videos'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🎬 Videos</button>
+                  <button onClick={() => { setShowSearch(true); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🔍 Search</button>
+                  <button onClick={() => { switchTab('reference'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ Deep Research</button>
+                </div>
+              ) : null}
+            </div>
           </aside>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, maxWidth: "100vw", overflowX: "hidden" }}>
           {active === "chat"      && <ChatTab />}
           {active === "editor"    && (
             <VideoEditorTab
@@ -308,6 +382,7 @@ export default function StreamsPanel() {
           )}
           {active === "settings"  && <SettingsTab />}
           {active === "builder"   && <BuilderTab />}
+          {active === "videos"    && <VideosTab />}
           </div>
         </main>
 
@@ -365,9 +440,17 @@ export default function StreamsPanel() {
         {/* Responsive styles — scoped to streams panel */}
         <style>{`
           .streams-root .streams-mobile-nav { display: none; }
+          .streams-root { overflow-x: hidden; }
           @media (max-width: 767px) {
             .streams-root .streams-desktop-nav { display: none; }
             .streams-root .streams-mobile-nav  { display: flex; }
+            .streams-root .streams-mobile-shell {
+              display: block;
+              min-width: 0;
+              width: 100%;
+              max-width: 100vw;
+              overflow-x: hidden;
+            }
           }
         `}</style>
 

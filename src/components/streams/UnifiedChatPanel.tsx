@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActivityMode } from './ActivityGenerationCard';
 import { useCalmStream } from './useCalmStream';
 import { useSmartAutoScroll } from './useSmartAutoScroll';
-import { VoiceBar } from '@/components/ai-chat/VoiceBar';
+import { useVoiceConversation } from '@/components/ai-chat/useVoiceConversation';
 import { C, CT } from './tokens';
 import { isImageGenerationPrompt } from '@/lib/assistant-ui/imageIntent';
 import {
@@ -60,13 +60,6 @@ interface UnifiedChatPanelProps {
   onArtifactGenerated?: (artifactId: string) => void;
 }
 
-function userExplicitlyAskedForCodeInChat(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return ['show me the full code', 'show me the code in chat', 'paste the code here', 'paste the full file here', 'give me the full code', 'full file in chat'].some((needle) =>
-    normalized.includes(needle),
-  );
-}
-
 type StreamEventName = 'activity' | 'response' | 'artifact' | 'complete' | 'error' | 'message';
 
 type StreamPayload = {
@@ -83,9 +76,11 @@ type StreamPayload = {
   code?: string;
   type?: 'react' | 'html' | 'svg';
   language?: string;
+  preview?: boolean;
+  suppressInChat?: boolean;
 };
 
-const CHAT_MAX_WIDTH = 'min(1120px, calc(100vw - 320px))';
+const CHAT_MAX_WIDTH = '100%';
 const USER_BUBBLE_MAX_WIDTH = 'min(620px, 72%)';
 const CHAT_TEXT_FONT_SIZE = 16;
 const CHAT_TEXT_LINE_HEIGHT = 1.65;
@@ -94,18 +89,18 @@ const COMPOSER_FONT_SIZE = 16;
 const MOBILE_BREAKPOINT = 768;
 
 function formatElapsedStatus(elapsedMs?: number): string {
-  if (!elapsedMs || elapsedMs < 900) return 'Thought briefly';
-  if (elapsedMs < 4500) return 'Thought for a couple of seconds';
+  if (!elapsedMs || elapsedMs < 900) return 'Thought briefly ›';
+  if (elapsedMs < 4500) return 'Thought for a couple of seconds ›';
   const seconds = Math.max(1, Math.round(elapsedMs / 1000));
-  return `Thought for ${seconds} seconds`;
+  return `Thought for ${seconds} seconds ›`;
 }
 
 function formatCompleteStatus(mode: ActivityMode | undefined, elapsedMs?: number, hasArtifact?: boolean): string {
   const seconds = Math.max(1, Math.round((elapsedMs ?? 0) / 1000));
-  if (hasArtifact || mode === 'build' || mode === 'code') return `Built code in ${seconds} seconds`;
-  if (mode === 'image') return `Generated image in ${seconds} seconds`;
-  if (mode === 'image-edit') return `Edited image in ${seconds} seconds`;
-  if (mode === 'file') return `Analyzed file in ${seconds} seconds`;
+  if (hasArtifact || mode === 'build' || mode === 'code') return `Built code in ${seconds} seconds ›`;
+  if (mode === 'image') return `Generated image in ${seconds} seconds ›`;
+  if (mode === 'image-edit') return `Edited image in ${seconds} seconds ›`;
+  if (mode === 'file') return `Analyzed file in ${seconds} seconds ›`;
   return formatElapsedStatus(elapsedMs);
 }
 
@@ -319,7 +314,7 @@ function AssistantStatusRow({ text, active }: { text?: string; active?: boolean 
   return (
     <button
       type="button"
-      aria-label={text.trim()}
+      aria-label={text.replace('›', '').trim()}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -364,17 +359,17 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video'; url: string } | null>(null);
+  const [isVoiceSupported, setIsVoiceSupported] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const userScrolledRef = useRef(false);
+  const { isRecording, isTranscribing, transcript, error: voiceError, startRecording, stopRecording } = useVoiceConversation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const assistantMsgIdRef = useRef<string | null>(null);
   const activeActivityRef = useRef<ChatActivity | null>(null);
   const activeArtifactRef = useRef<ChatArtifact | null>(null);
-  const explicitCodeInChatRef = useRef(false);
-  const [artifactTab, setArtifactTab] = useState<'preview' | 'code'>('preview');
-  const [previewStatus, setPreviewStatus] = useState<'idle' | 'rendering' | 'ready' | 'failed'>('idle');
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const inputBarRef = useRef<HTMLDivElement>(null);
 
   const { containerRef, bottomRef, onScroll, scrollToBottom } = useSmartAutoScroll<HTMLDivElement>({
@@ -398,6 +393,21 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     },
     [scrollToBottom],
   );
+  const onChatScroll = useCallback(() => {
+    onScroll();
+    const node = containerRef.current;
+    if (!node) return;
+    userScrolledRef.current = node.scrollHeight - (node.scrollTop + node.clientHeight) > 220;
+  }, [containerRef, onScroll]);
+
+  useEffect(() => {
+    setIsVoiceSupported(typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
+  }, []);
+
+  useEffect(() => {
+    if (!transcript) return;
+    setInputValue(transcript);
+  }, [transcript]);
 
   const ensureChatSession = useCallback(
     async (firstMessage?: string): Promise<string | null> => {
@@ -464,6 +474,13 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       setSessionHydrated(true);
     }
   }, [projectId, revealActiveGeneration, userId]);
+
+  useEffect(() => {
+    const latestMediaMessage = [...messages].reverse().find((m) => m.generatedImageUrl || m.generatedVideoUrl);
+    if (!latestMediaMessage || userScrolledRef.current) return;
+    const node = mediaCardRefs.current[latestMediaMessage.id];
+    if (node) node.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     hydrateLatestSession();
@@ -539,28 +556,34 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const writeArtifactToIframe = useCallback((artifact: ChatArtifact) => {
     if (!iframeRef.current) return;
     try {
-      if (artifact.type === 'html' || artifact.type === 'svg') {
-        iframeRef.current.srcdoc = artifact.code;
-        setPreviewStatus('ready');
-        return;
-      }
-      if (artifact.type === 'react') {
-        iframeRef.current.srcdoc = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>html,body,#root{height:100%;margin:0;font-family:Inter,system-ui,sans-serif;}</style></head><body><div id="root"></div><script type="text/babel">${artifact.code}\nconst __Root = typeof App !== 'undefined' ? App : (typeof defaultExport !== 'undefined' ? defaultExport : null); if(!__Root){ throw new Error('React preview requires an App component symbol.'); } ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__Root));</script></body></html>`;
-        setPreviewStatus('ready');
+      if (artifact.type === 'html') {
+        // Ensure HTML is wrapped properly
+        let html = artifact.code;
+        if (!html.includes('<html')) {
+          if (!html.includes('<body')) {
+            html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;}</style></head><body>${html}</body></html>`;
+          } else {
+            html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>${html}</html>`;
+          }
+        }
+        iframeRef.current.srcdoc = html;
         return;
       }
 
+      if (artifact.type === 'svg') {
+        iframeRef.current.srcdoc = artifact.code;
+        return;
+      }
+
+      // React code - display as code
       const escaped = artifact.code
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
       iframeRef.current.srcdoc = `<html><body style="margin:0;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#ffffff;color:#18181b;"><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.5;margin:0;"><code>${escaped}</code></pre></body></html>`;
-      setPreviewStatus('ready');
     } catch (error) {
       console.error('Failed to write artifact preview:', error);
-      setPreviewStatus('failed');
-      setPreviewError(error instanceof Error ? error.message : 'Preview render failed');
     }
   }, []);
 
@@ -582,12 +605,12 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         const phaseText =
           data.statusText ??
           (data.phase === 'responding'
-            ? 'Responding...'
+            ? 'Respondingâ€¦'
             : data.phase === 'tool' || data.phase === 'using_tools'
-              ? 'Using tools...'
+              ? 'Using toolsâ€¦'
               : data.phase === 'generating'
-                ? 'Generating...'
-                : 'Thinking...');
+                ? 'Generatingâ€¦'
+                : 'Thinkingâ€¦');
 
         updateAssistantMessage(id, {
           activity: null,
@@ -612,11 +635,17 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           language: data.language,
         };
         activeArtifactRef.current = artifact;
-        setPreviewStatus('rendering');
-        setPreviewError(null);
-        writeArtifactToIframe(artifact);
-        onArtifactGenerated?.(artifact.id);
-        updateAssistantMessage(id, { artifacts: [artifact] });
+        
+        // If preview mode, don't show in chat artifacts - just show in preview panel
+        if (data.preview) {
+          writeArtifactToIframe(artifact);
+          onArtifactGenerated?.(artifact.id);
+          // Don't add to chat message artifacts
+        } else {
+          writeArtifactToIframe(artifact);
+          onArtifactGenerated?.(artifact.id);
+          updateAssistantMessage(id, { artifacts: [artifact] });
+        }
         return;
       }
 
@@ -624,14 +653,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         calmStream.flush();
         const mode = activeActivityRef.current?.mode;
         const hasArtifact = Boolean(activeArtifactRef.current);
-        const contentOverride =
-          hasArtifact && !explicitCodeInChatRef.current
-            ? 'Built the artifact and opened it in Preview. You can edit, copy, or download it from the Preview panel.'
-            : undefined;
         updateAssistantMessage(id, {
           isStreaming: false,
           activity: null,
-          content: contentOverride ?? calmStream.getVisibleText(),
           elapsedMs: data.elapsedMs,
           statusText: formatCompleteStatus(mode, data.elapsedMs, hasArtifact),
         });
@@ -661,7 +685,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       updateAssistantMessage(assistantMessageId, {
         content: '',
-        statusText: 'Submitting to provider...',
+        statusText: 'Submitting to providerâ€¦',
         isStreaming: true,
         activity: null,
       });
@@ -698,7 +722,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       updateAssistantMessage(assistantMessageId, {
         generationId: generationData.generationId,
-        statusText: 'Generation is running...',
+        statusText: 'Generation is runningâ€¦',
         isStreaming: true,
       });
       revealActiveGeneration();
@@ -786,7 +810,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         }
 
         updateAssistantMessage(assistantMessageId, {
-          statusText: attempt > 0 ? 'Generation is running...' : 'Preparing generation...',
+          statusText: attempt > 0 ? 'Generation is runningâ€¦' : 'Preparing generationâ€¦',
           isStreaming: true,
         });
         revealActiveGeneration();
@@ -802,7 +826,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       const startedAt = Date.now();
       updateAssistantMessage(assistantMessageId, {
         content: '',
-        statusText: 'Submitting to provider...',
+        statusText: 'Submitting to providerâ€¦',
         isStreaming: true,
         activity: null,
       });
@@ -831,7 +855,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       updateAssistantMessage(assistantMessageId, {
         generationId: generationData.generationId,
-        statusText: 'Generation is running...',
+        statusText: 'Generation is runningâ€¦',
         isStreaming: true,
       });
       revealActiveGeneration();
@@ -891,7 +915,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           return;
         }
         updateAssistantMessage(assistantMessageId, {
-          statusText: attempt > 0 ? 'Generation is running...' : 'Preparing generation...',
+          statusText: attempt > 0 ? 'Generation is runningâ€¦' : 'Preparing generationâ€¦',
           isStreaming: true,
         });
         revealActiveGeneration();
@@ -909,7 +933,6 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
       const isDirectVideoRequest = !fileData && isVideoGenerationPrompt(normalizedMessage);
       const isDirectImageRequest = !fileData && !isDirectVideoRequest && isImageGenerationPrompt(normalizedMessage);
-      explicitCodeInChatRef.current = userExplicitlyAskedForCodeInChat(normalizedMessage);
       const now = Date.now();
       const userMsg: ChatMessage = {
         id: `msg-${now}`,
@@ -920,7 +943,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         id: `msg-${now}-assistant`,
         role: 'assistant',
         content: '',
-        statusText: isDirectImageRequest ? 'Generating image...' : isDirectVideoRequest ? 'Generating video...' : 'Thinking...',
+        statusText: isDirectImageRequest ? 'Generating image…' : isDirectVideoRequest ? 'Generating video…' : 'Thinking…',
         isStreaming: true,
         activity: null,
       };
@@ -1066,27 +1089,21 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     }
   }, []);
 
+  const actionChip = { width: 44, height: 44, minHeight: 44, borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, cursor: 'pointer', fontSize: 14, fontWeight: 500 } as const;
   const renderMediaActions = (url: string, type: 'image' | 'video', artifactId?: string) => (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-      {type === 'image' ? (
-        <button type="button" disabled title="Edit is not yet wired to a confirmed Streams image-edit target in this chat surface." style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t4, cursor: 'not-allowed' }}>Edit</button>
-      ) : null}
-      <button type="button" onClick={() => setPreviewMedia({ type, url })} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Preview</button>
-      <a href={url} download target="_blank" rel="noreferrer" style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2, textDecoration: 'none' }}>Download</a>
-      <button type="button" onClick={() => copyToClipboard(url)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Copy URL</button>
-      {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
-        <button type="button" onClick={() => navigator.share({ url }).catch(() => null)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Share</button>
-      ) : null}
-      {artifactId ? (
-        <button type="button" onClick={() => copyToClipboard(artifactId)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${CT.border}`, background: CT.bg, color: CT.t2 }}>Inspect</button>
-      ) : null}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+      <button type="button" title="Preview" aria-label="Preview" onClick={() => setPreviewMedia({ type, url })} style={actionChip}>◉</button>
+      <a href={url} download target="_blank" rel="noreferrer" title="Download" aria-label="Download" style={{ ...actionChip, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>↓</a>
+      <button type="button" title="Copy URL" aria-label="Copy URL" onClick={() => copyToClipboard(url)} style={actionChip}>⎘</button>
+      {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? <button type="button" title="Share" aria-label="Share" onClick={() => navigator.share({ url }).catch(() => null)} style={actionChip}>⇪</button> : null}
+      {artifactId ? <button type="button" title="Inspect artifact id" aria-label="Inspect artifact id" onClick={() => copyToClipboard(artifactId)} style={actionChip}>⌕</button> : null}
     </div>
   );
 
   const renderGenerationActivityCard = (statusText?: string) => (
     <div style={{ marginTop: 12, borderRadius: 16, padding: 14, overflow: 'hidden', position: 'relative', border: `1px solid ${CT.border}`, background: 'linear-gradient(120deg, rgba(124,58,237,.18), rgba(14,165,233,.16), rgba(16,185,129,.14))' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(255,255,255,.08) 22px, rgba(255,255,255,.08) 23px)', animation: 'streamsShimmer 2.2s linear infinite' }} />
-      <div style={{ position: 'relative', zIndex: 10, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generation...'}</div>
+      <div style={{ position: 'relative', zIndex: 10, color: CT.t2, fontSize: 13, lineHeight: 1.4 }}>{statusText || 'Preparing generationâ€¦'}</div>
     </div>
   );
 
@@ -1118,7 +1135,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           {msg.content ? <MarkdownMessage content={msg.content} /> : null}
           {msg.isStreaming && !msg.generatedImageUrl && !msg.generatedVideoUrl ? renderGenerationActivityCard(msg.statusText) : null}
           {msg.generatedImageUrl ? (
-            <div style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg }}>
+            <div className="streams-media-card" data-testid="streams-media-card" ref={(node) => { mediaCardRefs.current[msg.id] = node; }} style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg, maxWidth: '100%', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: CT.t3 }}>IMAGE</span>
                 <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
@@ -1141,7 +1158,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             </div>
           ) : null}
           {msg.generatedVideoUrl ? (
-            <div style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg }}>
+            <div className="streams-media-card" data-testid="streams-media-card" ref={(node) => { mediaCardRefs.current[msg.id] = node; }} style={{ marginTop: msg.content || msg.generatedImageUrl ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg, maxWidth: '100%', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: CT.t3 }}>VIDEO</span>
                 <span style={{ fontSize: 12, color: CT.t4 }}>{msg.artifactId ? 'saved' : 'generated'}</span>
@@ -1185,10 +1202,24 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
     >
       {latestArtifact ? (
         <>
-          <div style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ padding: '8px 12px', borderRadius: 999, border: `1px solid ${C.bdr}`, color: C.t3 }}>
-              {previewStatus === 'failed' ? 'Preview failed' : previewStatus === 'ready' ? 'Preview ready' : 'Rendering'}
-            </span>
+<div style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center' }}>
+            <button
+              onClick={() => console.log('Regenerate clicked')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                backgroundColor: C.acc,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 500,
+                lineHeight: 1.4,
+              }}
+            >
+              â†» Regenerate
+            </button>
             <button
               onClick={() => navigator.clipboard.writeText(latestArtifact.code)}
               style={{
@@ -1204,15 +1235,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             >
               Copy
             </button>
-            <a href={`data:text/plain;charset=utf-8,${encodeURIComponent(latestArtifact.code)}`} download={`${latestArtifact.title || 'artifact'}.${latestArtifact.language || latestArtifact.type || 'txt'}`} style={{ padding: '8px 12px', backgroundColor: C.bg3, color: C.t1, border: `1px solid ${C.bdr}`, borderRadius: 8, cursor: 'pointer', fontSize: 12, lineHeight: 1.4, textDecoration: 'none' }}>
-              Download
-            </a>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={() => setArtifactTab('preview')} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.bdr}`, background: artifactTab === 'preview' ? C.bg3 : 'transparent', color: C.t2 }}>Preview</button>
-            <button type="button" onClick={() => setArtifactTab('code')} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.bdr}`, background: artifactTab === 'code' ? C.bg3 : 'transparent', color: C.t2 }}>Code</button>
-          </div>
-          {artifactTab === 'preview' ? <iframe
+
+          <iframe
             ref={iframeRef}
             style={{
               flex: 1,
@@ -1222,10 +1247,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               minHeight: 300,
             }}
             title="artifact-preview"
-          /> : null}
-          {previewStatus === 'failed' ? <div style={{ color: C.red, fontSize: 12 }}>{previewError || 'Preview failed. Code is available in Code tab.'}</div> : null}
+          />
 
-          {artifactTab === 'code' ? <pre
+          <pre
             style={{
               maxHeight: 200,
               overflow: 'auto',
@@ -1243,7 +1267,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           >
             {latestArtifact.code.substring(0, 600)}
             {latestArtifact.code.length > 600 && '...'}
-          </pre> : null}
+          </pre>
         </>
       ) : (
         <div
@@ -1267,10 +1291,12 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
   const composer = (
     <div
+      className="streams-composer"
+      data-testid="streams-composer"
       style={{
         width: '100%',
         maxWidth: activeChatMaxWidth,
-        margin: isMobile ? 0 : '0 auto',
+        margin: 0,
         padding: isMobile ? '8px 12px calc(12px + env(safe-area-inset-bottom))' : '10px 0 14px',
       }}
     >
@@ -1289,7 +1315,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             color: CT.t2,
           }}
         >
-          <span>ðŸ“Ž</span>
+          <span aria-hidden="true">📎</span>
           <span>{uploadedFile.name}</span>
           <button
             onClick={() => setUploadedFile(null)}
@@ -1374,6 +1400,33 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
           }}
         />
         <button
+          type="button"
+          onClick={async () => {
+            if (!isVoiceSupported) return;
+            if (isRecording) {
+              const result = await stopRecording();
+              if (result) setInputValue((prev) => [prev, result].filter(Boolean).join(' ').trim());
+              return;
+            }
+            await startRecording();
+          }}
+          disabled={!isVoiceSupported || isLoading}
+          title={!isVoiceSupported ? 'Speech recognition is not supported in this browser.' : voiceError || (isRecording ? 'Stop voice input' : 'Start voice input')}
+          aria-label={isRecording ? 'Stop voice input' : 'Start voice input'}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 999,
+            border: `1px solid ${isRecording ? C.orange : CT.border}`,
+            background: isRecording ? 'rgba(249,115,22,.14)' : CT.bg,
+            color: isVoiceSupported ? (isRecording ? C.orange : CT.t2) : CT.t4,
+            cursor: !isVoiceSupported || isLoading ? 'not-allowed' : 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          {isRecording || isTranscribing ? '●' : '🎤'}
+        </button>
+        <button
           onClick={handleSend}
           disabled={isLoading || !inputValue.trim()}
           aria-label="Send message"
@@ -1392,7 +1445,9 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             boxShadow: isLoading || !inputValue.trim() ? 'none' : '0 8px 22px rgba(249,115,22,0.28)',
           }}
         >
-          â†‘
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 4l-7 7h4v9h6v-9h4z" />
+          </svg>
         </button>
       </div>
     </div>
@@ -1400,6 +1455,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
 
   return (
     <div
+      className="streams-chat-root"
+      data-testid="streams-chat-root"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -1407,6 +1464,8 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         backgroundColor: CT.bg,
         color: CT.t1,
         overflow: 'hidden',
+        minWidth: 0,
+        maxWidth: '100vw',
       }}
     >
       <style>{`
@@ -1433,10 +1492,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
             overflow: 'hidden',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', maxWidth: '100%' }}>
             <div
               ref={containerRef}
-              onScroll={onScroll}
+              onScroll={onChatScroll}
               className="streams-chat-scroll"
               style={{
                 flex: 1,
@@ -1444,10 +1503,10 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
                 padding: '48px clamp(48px, 8vw, 160px) 32px',
               }}
             >
-              <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
+              <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%', minWidth: 0 }}>{messages.map(renderMessage)}</div>
               <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
             </div>
-            <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>{composer}</div>
+            <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg, minWidth: 0 }}>{composer}</div>
           </div>
           {latestArtifact && <div style={{ padding: '16px 16px 16px 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>{artifactPanel}</div>}
         </div>
@@ -1455,7 +1514,7 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
           <div
             ref={containerRef}
-            onScroll={onScroll}
+            onScroll={onChatScroll}
             className="streams-chat-scroll"
             style={{
               flex: 1,
@@ -1463,25 +1522,27 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
               padding: '24px 16px 24px',
             }}
           >
-            <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%' }}>{messages.map(renderMessage)}</div>
+            <div role="log" aria-live="polite" style={{ maxWidth: activeChatMaxWidth, margin: isMobile ? 0 : '0 auto', width: '100%', minWidth: 0 }}>{messages.map(renderMessage)}</div>
             {latestArtifact && <div style={{ margin: '16px 0' }}>{artifactPanel}</div>}
             <div ref={bottomRef} aria-hidden="true" style={{ height: 1 }} />
           </div>
-      <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg }}>
-        <div style={{ padding: isMobile ? '8px 12px' : '8px 24px' }}>
-          <VoiceBar onTranscript={(text) => setInputValue((prev) => [prev, text].filter(Boolean).join(' ').trim())} speakText={messages.filter((m) => m.role === 'assistant').slice(-1)[0]?.content} />
-        </div>
-        {composer}
-      </div>
+      <div style={{ borderTop: `1px solid ${CT.border}`, background: CT.bg, minWidth: 0 }}>{composer}</div>
         </div>
       )}
       {previewMedia ? (
         <div onClick={() => setPreviewMedia(null)} onKeyDown={(e) => e.key === 'Escape' && setPreviewMedia(null)} role="button" tabIndex={0} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="button" tabIndex={0} style={{ width: 'min(96vw, 1080px)', maxHeight: '90vh', borderRadius: 16, overflow: 'hidden', background: CT.bg }}>
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="button" tabIndex={0} style={{ width: 'min(96vw, 1080px)', maxWidth: 'calc(100vw - 48px)', maxHeight: 'calc(100vh - 120px)', borderRadius: 16, overflow: 'hidden', background: CT.bg, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: `1px solid ${CT.border}` }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" title="Download" onClick={() => window.open(previewMedia.url, '_blank', 'noopener,noreferrer')} style={{ ...actionChip, width: 30, height: 30 }}>↓</button>
+                <button type="button" title="Copy URL" onClick={() => copyToClipboard(previewMedia.url)} style={{ ...actionChip, width: 30, height: 30 }}>⎘</button>
+              </div>
+              <button type="button" title="Close" onClick={() => setPreviewMedia(null)} style={{ ...actionChip, width: 30, height: 30 }}>✕</button>
+            </div>
             {previewMedia.type === 'image' ? (
-              <img src={previewMedia.url} alt="Preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              <img src={previewMedia.url} alt="Preview" style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 170px)', objectFit: 'contain', display: 'block' }} />
             ) : (
-              <video src={previewMedia.url} controls playsInline autoPlay style={{ width: '100%', display: 'block' }} />
+              <video src={previewMedia.url} controls playsInline autoPlay style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 170px)', objectFit: 'contain', display: 'block' }} />
             )}
           </div>
         </div>
