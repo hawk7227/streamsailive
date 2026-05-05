@@ -73,7 +73,7 @@ export async function claimNextJob(type?: JobType): Promise<Job | null> {
   const admin = createAdminClient();
 
   // Use raw SQL for SELECT FOR UPDATE SKIP LOCKED — safe concurrent claiming
-  let query = `
+  const query = `
     UPDATE pipeline_jobs
     SET status = 'claimed', claimed_at = now(), updated_at = now()
     WHERE id = (

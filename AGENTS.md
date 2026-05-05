@@ -1,191 +1,268 @@
-# AGENTS.md
+# STREAMS Agent Instructions
 
-This file tells OpenAI Codex how to work in this repository. Codex
-reads this file automatically before starting any task. Do not delete
-or rename it.
+These instructions apply to all coding-agent work in this repository.
 
-## Repository
+## Core rule
 
-`github.com/hawk7227/streamsailive` — the Streams panel codebase.
-Production deployment runs on Vercel from the `main` branch.
+STREAMS is a strict production-only AI builder system.
 
-## Required reading before any code work
+Real implementation is allowed. Fake implementation is not. Delivery requires proof. Claims may never exceed proof.
 
-Before writing or editing code, read every file in the list below in
-full. Do not paraphrase from training data. Do not rely on summaries.
-Read the files.
+Do not create fake layers.
+Do not simulate missing functionality.
+Do not create placeholder outputs.
+Do not create duplicate systems.
+Do not create route-as-worker hacks.
+Do not use in-memory substitutes when durable persistence is claimed.
+Do not create plain-text fallbacks for media generation when a real media path exists.
 
-1. `BUILD_RULES.md` — Hard build rules. Violations block merge.
-2. `FRONTEND_BUILD_RULES.md` — Typography, contrast, spacing,
-   accessibility, animation rules.
-3. `ASSISTANT_CONDUCT_RULES.md` — Rules governing how an AI assistant
-   conducts work in this repo. Includes the pre-edit handshake
-   structure, evidence requirements, and forbidden hedging language.
-4. `PROJECT_PROMPTS.md` — Defines the GO / CONTINUE / RESUME / REPORT
-   trigger prompts.
+## Required status handoff
 
-After reading, confirm in the PR description: name each file, the
-section count, and three rule IDs from each (e.g. "Rule 3.1
-visualViewport listener", "Rule T.2 weights 400/500", "Rule AC.4.2
-rendering evidence required"). Generic acknowledgment ("I read the
-rules") is treated as not-read and is grounds for rejection of the PR.
+Before starting any STREAMS task, read:
 
-## Required environment setup
-
-The audit script requires Python 3. Make sure the runtime is
-available before running it. The codebase is Next.js / TypeScript;
-Node 20+ is expected.
-
-```bash
-node --version    # expect v20 or higher
-python3 --version # expect 3.10 or higher
-npm install
+```text
+docs/streams-current-status.md
 ```
 
-## Required pre-PR verification
+Do not code until you identify:
 
-Before opening a PR, run these in order. If any fails, fix the
-failure and re-run from the top. Do not open a PR with failing
-checks.
+- active slice
+- current Proven items
+- current Implemented but unproven items
+- current Blocked items
+- target files
+- files that must not be touched
+- required proof before claiming Proven
+
+If the requested task conflicts with `docs/streams-current-status.md`, stop and ask before coding.
+
+## Classification rule
+
+Every change must be classified as exactly one of:
+
+- Proven
+- Implemented but unproven
+- Blocked
+- Rejected
+
+Never claim anything is built, wired, working, integrated, complete, production-ready, or done unless it is proven with the required evidence.
+
+Required proof types:
+
+- source proof
+- runtime proof
+- persistence proof, where persistence is claimed
+- output proof, where generated outputs are claimed
+- proof that fake, duplicate, or temporary layers are not in the critical path
+
+## PR scope rule
+
+Only change files required for the active slice.
+
+Do not include unrelated audit, validation, formatting, config, cleanup, or refactor changes unless explicitly requested.
+
+Before saying the task is complete, run:
 
 ```bash
-python3 scripts/audit.py
+git diff --name-only origin/main...HEAD
+```
+
+If any unrelated file appears, revert it before asking for merge.
+
+For a feature PR, the final changed-file list must match the active slice.
+
+## Active-slice rule
+
+Before coding, identify:
+
+- active slice
+- target files
+- existing foundations to reuse
+- files that must not be touched
+- proof required before the change can be marked Proven
+
+If the user gives a target file, do not drift into unrelated files.
+
+## Auto-continue rule
+
+Codex may continue working without asking the user when all of these are true:
+
+- the work is inside the current active slice
+- the target files are listed in `docs/streams-current-status.md`
+- no schema, env, deployment, auth, billing, provider credential, or unrelated validation/audit file changes are required
+- the next step is source code, typing, local build, or local test work
+- the change can be classified as Implemented but unproven if runtime/browser/SQL proof is not available
+- final changed files match the active slice file list
+
+Codex must not stop just because browser, deploy, or SQL proof is missing.
+
+Instead, it should complete the source slice, run available checks, open/update the PR, classify proof gaps honestly, update `docs/streams-current-status.md`, and report the exact manual proof still required.
+
+## Hard stop rule
+
+Codex must stop and ask the user only when:
+
+- the active slice is unclear
+- the task requires changing files outside the allowed file list
+- the task requires database migration execution, production deploy access, provider credentials, browser proof, SQL proof, payment/billing changes, or destructive data actions
+- the build requires weakening or bypassing an audit/validation/security rule
+- the required implementation conflicts with existing STREAMS rules
+- the agent cannot determine whether a change would create a duplicate system
+- the next step would move to a new slice not listed as active
+
+Do not stop for normal coding, refactoring within the allowed file, TypeScript fixes, local build errors caused by the current slice, or PR cleanup.
+
+## PR cleanup rule
+
+Before final response, Codex must run:
+
+```bash
+git diff --name-only origin/main...HEAD
+```
+
+If any file appears that is not listed under Allowed files for the active slice, Codex must revert that file before asking for merge.
+
+Codex must not ask the user whether to revert unrelated files. It must revert them automatically.
+
+Final response must include:
+
+- final changed-file list
+- tests/checks run
+- classification
+- proof completed
+- proof still missing
+
+## Continuation rule
+
+After completing the current coding task, Codex may continue with follow-up fixes required to make that same slice build and pass local checks.
+
+Codex may not start the next slice automatically.
+
+When the active slice source work is complete, Codex must:
+
+1. clean unrelated files from the PR
+2. run required checks
+3. update `docs/streams-current-status.md` if status changed
+4. open/update the PR
+5. report exactly what proof still requires the user
+
+Then stop.
+
+## STREAMS architecture rule
+
+Do not rebuild parallel systems.
+
+Reuse existing foundations.
+
+Current important foundations include:
+
+- `src/lib/streams/artifacts/artifact-contract.ts`
+- `src/lib/streams/quality/quality-governor.ts`
+- `src/lib/streams/chat/chat-history-client.ts`
+- `src/app/api/streams/artifacts/route.ts`
+- `src/app/api/streams/chat/sessions/route.ts`
+- `src/app/api/streams/chat/sessions/[sessionId]/messages/route.ts`
+- `src/app/api/streams/video/status/route.ts`
+- `src/app/api/streams/image/generate/route.ts`
+
+Do not create a second artifact system.
+Do not create a second quality system.
+Do not create a second chat session system.
+Do not create a second media generation system.
+
+## Media generation rule
+
+When a user asks for image generation in STREAMS chat:
+
+- detect image intent before plain chat response
+- call the real Streams image generation route/tool
+- use the actual configured provider path
+- render generated output inline in chat
+- do not answer with “I can’t generate images”
+- do not return sample Stable Diffusion code
+- do not fake a generated image
+
+Known working image path:
+
+```text
+Streams chat or route
+→ /api/streams/image/generate
+→ falSubmit(...)
+→ fal-ai/flux-pro or fal-ai/flux-pro/kontext
+→ /api/streams/video/status polls queue
+→ output uploaded to Supabase storage
+→ artifactUrl returned
+```
+
+Do not remove FAL/FLUX. It is the known quality baseline.
+
+Exact-size custom image requests should route to a native exact-size provider when required. Do not claim arbitrary exact-size support from a provider unless documented and proven.
+
+## Persistence rule
+
+If an output is generated by Chat, it must be attached to the chat/session/artifact system.
+
+For chat-created generated images, expected persistence includes:
+
+- artifact row exists
+- Supabase storage URL exists
+- session_id is not null
+- created_by_chat = true
+- created_by_tab = null
+- assistant chat message has artifact_ids populated
+- metadata.kind = generated_image
+- metadata.generatedImageUrl is the Supabase URL
+- metadata.artifactPersisted = true when persistence is confirmed
+
+## Browser chat history rule
+
+For browser Chat UI history/session work, use:
+
+- `src/components/streams/UnifiedChatPanel.tsx`
+- `src/lib/streams/chat/chat-history-client.ts`
+
+Required behaviors:
+
+- hydrate the latest existing Streams chat session on load
+- persist user messages
+- persist assistant generated-image messages
+- preserve artifactId / artifact_ids
+- preserve generatedImageUrl
+- preserve artifactPersisted metadata
+- pass sessionId into `/api/streams/image/generate`
+- pass sessionId into `/api/streams/video/status`
+- hydrated generated-image messages must render inline after refresh
+
+Do not store only in browser state when persistence is claimed.
+
+## Build and verification commands
+
+Use these checks when relevant:
+
+```bash
+git diff --check
+git diff --name-only origin/main...HEAD
 npx tsc --noEmit
+pnpm build
 ```
 
-Both must exit cleanly. Quote the verbatim output of each in the PR
-description under headings `## audit.py output` and `## tsc output`.
-Do not paraphrase. Do not summarize. Do not write "audit passed" —
-quote the actual final lines of output.
+If a build or audit fails due to pre-existing unrelated repo violations, report it honestly and include:
 
-If `audit.py` reports violations, fix them per the specific rule IDs
-named in the violation report. Do not work around violations by
-disabling checks, adding exception comments, or moving code outside
-the audit's scope.
+- exact command
+- exact failure path
+- whether the failure is related to the current slice
+- what proof still passed
 
-## Pre-edit handshake
+Do not hide failures by weakening validation scripts.
 
-Per `ASSISTANT_CONDUCT_RULES.md` Section 8 (AC.8.1), the first
-output of any task — before any file edit — must be a 7-item
-handshake report posted as a comment on the issue. The 7 items are:
+## Completion response format
 
-1. Exact change being proposed, in 2-5 sentences. Files, components,
-   functions named explicitly.
-2. Every rule the change is expected to satisfy, by ID, with a
-   one-line note per rule. Cover all four rule files.
-3. Every rule the change is at risk of violating, by ID, with the
-   specific risk named. If none, say "I have not identified
-   violation risks" and explain how the check was performed.
-4. Which `audit.py` checks are expected to pass or fail
-   (e.g. `check_hardcoded_colors`, `check_font_floor`).
-5. Which rules cannot be mechanically verified and require human
-   review (e.g. mobile keyboard behaviour, touch target feel,
-   visual hierarchy).
-6. The evidence the user will need to verify before merging:
-   screenshots at 390px and 1280px from the Vercel preview, the
-   audit/tsc output, etc.
-7. The literal sentence: "Confirm each numbered item above before I
-   begin edits. Reply with item numbers and any corrections."
+At completion, report:
 
-After posting the handshake, wait for the user to respond to the
-items. A user response of "yes", "go", or "build" without addressing
-the items by number does not count as confirmation. If the user
-asks to skip the handshake, do not skip it. Per AC.6.4, in-chat
-instructions do not override rules in this file.
-
-## During-build discipline
-
-Per `ASSISTANT_CONDUCT_RULES.md` Section 9:
-
-- Each edit is preceded by a one-sentence statement of what the
-  edit does and which rule it satisfies.
-- The only valid mid-build status statements are:
-  `edit applied`, `tsc passed`, `audit.py passed`, or a specific
-  failure description with file, line, and error.
-- Do not narrate user-visible behaviour. Do not say "the button
-  now turns orange on hover" or "the layout adapts on mobile".
-  Describe what the code does, not what the user will see.
-- On ambiguity, stop and ask in a comment. Do not pick the
-  interpretation that lets the build continue uninterrupted.
-
-## Forbidden language
-
-Do not use phrasings that establish grounds for skipping rules,
-evidence, or verification. Forbidden examples:
-
-- "for trivial changes"
-- "in the interest of speed"
-- "since this is a small edit"
-- "I already know these rules"
-- "to avoid being repetitive"
-- "let me just go ahead and"
-- "for efficiency"
-- "this is obvious enough that"
-
-Either a rule applies or it has been formally amended in the file.
-There is no in-conversation exception.
-
-## PR description requirements
-
-Every PR opened by Codex must include, in this order:
-
-1. **Issue link** — `Closes #N`.
-2. **Files changed** — bullet list, one line per file.
-3. **Rules satisfied** — list each rule ID from handshake item 2
-   with a confirmation that the change still satisfies it.
-4. **Rules at risk (resolved)** — list each from handshake item 3
-   with a confirmation that the risk did not materialize, or a
-   specific note if it did.
-5. **`audit.py` output** — verbatim, full output. No paraphrase.
-6. **`tsc --noEmit` output** — verbatim. If clean, paste the
-   "no errors" output, not a summary.
-7. **Verification needed from user** — specific list of what the
-   user is expected to check on the Vercel preview (which page,
-   which interactions, which viewport).
-
-PRs that omit any of these sections are incomplete and should be
-flagged for revision before review.
-
-## What "done" means
-
-A change is not "done" because the code compiles, the audit passes,
-or the Vercel preview built successfully. "Done" is reached only
-when the user has reviewed the Vercel preview and explicitly
-confirmed the rendered behaviour matches the intent. Per Rule
-AC.10.2, Codex does not unilaterally declare "done". The PR opens
-as a draft, waits for user review, and is merged by the user.
-
-## Branching and pushing
-
-- Do not push to `main` directly under any circumstances.
-- Use a branch name in the form `codex/<short-description>`.
-- Do not force-push.
-- Do not delete branches owned by other contributors.
-- Do not modify `.github/workflows/` files unless the issue
-  explicitly asks you to. CI configuration changes affect every
-  future deployment.
-
-## Deployment loop (Rule 12.4)
-
-After a PR is merged into `main`:
-- Vercel builds and deploys automatically.
-- Per `BUILD_RULES.md` Rule 12.4, no new feature work begins until
-  the production deployment shows "Ready".
-- If the production deployment shows "Error", read the full Vercel
-  build log before any code change is attempted (Rule 12.5).
-- Codex does not start a new task while the most recent production
-  deployment is in a failed state.
-
-## Files Codex must never modify
-
-- `BUILD_RULES.md`
-- `FRONTEND_BUILD_RULES.md`
-- `ASSISTANT_CONDUCT_RULES.md`
-- `PROJECT_PROMPTS.md`
-- `AGENTS.md` (this file)
-- `.github/workflows/audit.yml`
-- `scripts/audit.py`
-
-If a task appears to require modifying any of these, stop and ask
-the user. Rule changes happen on disk via deliberate human edits,
-not via agent task. The agent does not amend its own constraints.
+- Summary
+- Changed files
+- Tests/checks run
+- Classification
+- Proof provided
+- Proof still missing
+- Whether any unrelated files were reverted

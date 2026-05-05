@@ -13,13 +13,20 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables");
+  }
+
+  return createClient(url, key);
+}
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseAdmin();
     const body = await request.json();
 
     const {
@@ -45,7 +52,7 @@ export async function POST(request: Request) {
 
     // Rule 7.1: Call provider endpoint (don't wait for completion)
     // This is a simplified example - real implementation calls actual provider
-    let generationId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const generationId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     let estimatedDuration = 30; // seconds, varies by mode
 
     // Mode-specific estimated durations

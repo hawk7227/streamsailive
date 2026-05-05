@@ -40,6 +40,11 @@ function encodeEvent(event: ChatEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
 }
 
+function shouldSuppressCodeInChat(message: string): boolean {
+  const text = message.toLowerCase();
+  return /\b(no code|don't show code|don't show|show in preview|in preview|render it|display it)\b/.test(text);
+}
+
 function inferActivityMode(message: string, hasFile: boolean, tier: string): ActivityMode {
   const text = message.toLowerCase();
 
@@ -208,7 +213,9 @@ export async function POST(request: Request): Promise<Response> {
           }
 
           const artifact = extractFirstCodeArtifact(responseText);
-          if (artifact) {
+          const suppressCode = shouldSuppressCodeInChat(message);
+          
+          if (artifact && !suppressCode) {
             send({
               type: 'artifact',
               data: {
@@ -217,6 +224,20 @@ export async function POST(request: Request): Promise<Response> {
                 code: artifact.code,
                 language: artifact.language,
                 title: 'Generated Code',
+              },
+            });
+          }
+
+          // If preview requested, send to preview panel instead
+          if (artifact && suppressCode) {
+            send({
+              type: 'artifact',
+              data: {
+                id: `artifact_${Date.now()}`,
+                type: artifact.type,
+                code: artifact.code,
+                preview: true,
+                suppressInChat: true,
               },
             });
           }

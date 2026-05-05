@@ -13,6 +13,8 @@ import { NextResponse } from "next/server";
 import { resolveStreamsRouteContext, isFallbackTestWorkspace } from "@/lib/streams/test-mode-auth";
 import { checkRateLimit } from "@/lib/streams/rate-limiter";
 import { falSubmit, FAL_ENDPOINTS } from "@/lib/streams/fal-client";
+import { chooseProviderForQuality, compileImagePrompt } from "@/lib/streams/quality/quality-governor";
+import { STREAMS_IMAGE_PROVIDER_CAPABILITIES, isExactSizeRequest, normalizeStreamsImageModel } from "@/lib/streams/quality/provider-capabilities";
 
 export const maxDuration = 60;
 
@@ -69,12 +71,51 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const workspaceId = body.workspaceId ?? ctx.workspaceId ?? "streams-public-test";
-  const model = (body.model ?? "kontext").toLowerCase().replace(/\s+/g, "-");
+  const requestedModel = normalizeStreamsImageModel(body.model);
+  const exactSize = isExactSizeRequest(body.width, body.height);
+
+  const routingDecision = chooseProviderForQuality(
+    {
+      mediaType: "image",
+      prompt: body.prompt,
+      width: exactSize ? body.width : null,
+      height: exactSize ? body.height : null,
+      aspectRatio: exactSize ? null : body.aspectRatio ?? "1:1",
+      bulkCount: body.numImages ?? 1,
+      requiresRealism: true,
+    },
+    STREAMS_IMAGE_PROVIDER_CAPABILITIES,
+  );
+
+  const model = exactSize
+    ? routingDecision?.model ?? "flux-pro"
+    : MODEL_ENDPOINTS[requestedModel]
+      ? requestedModel
+      : routingDecision?.model ?? "kontext";
+
   const endpoint = MODEL_ENDPOINTS[model] ?? FAL_ENDPOINTS.FLUX_KONTEXT;
-  const useCustom = CUSTOM_PX_MODELS.has(model) && body.width && body.height;
+  const useCustom = exactSize && CUSTOM_PX_MODELS.has(model);
+
+  if (exactSize && !useCustom) {
+    return NextResponse.json(
+      {
+        error: "Requested exact image size requires a native custom-dimension provider",
+        detail: `No approved native-size image model selected for ${body.width}x${body.height}.`,
+      },
+      { status: 422 },
+    );
+  }
+
+  const compiledPrompt = compileImagePrompt({
+    prompt: body.prompt.trim(),
+    realism: true,
+    width: useCustom ? body.width : null,
+    height: useCustom ? body.height : null,
+    aspectRatio: useCustom ? null : body.aspectRatio ?? "1:1",
+  });
 
   const falInput: Record<string, unknown> = {
-    prompt: body.prompt.trim(),
+    prompt: compiledPrompt,
     num_images: Math.min(body.numImages ?? 1, 4),
   };
 
@@ -172,6 +213,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     status: "queued",
     model,
     endpoint,
+    exactSize,
+    width: useCustom && body.width ? roundTo8(body.width) : undefined,
+    height: useCustom && body.height ? roundTo8(body.height) : undefined,
+    aspectRatio: useCustom ? undefined : body.aspectRatio ?? "1:1",
+    qualityPolicy: {
+      tier: "premium_realistic",
+      provider: "fal",
+      noSilentDowngrade: true,
+      allowCrop: false,
+      reason: routingDecision?.reason ?? "default premium Kontext route",
+    },
     persisted: persistedLog,
     testMode: ctx.isTestMode,
   });

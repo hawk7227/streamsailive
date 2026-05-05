@@ -1,132 +1,79 @@
-/**
- * GET  /api/streams/artifacts?projectId=&type=&state=&limit=
- * POST /api/streams/artifacts
- *
- * GET — list artifacts for the current workspace/project.
- * POST — create a new artifact with its first version atomically.
- *
- * POST body: {
- *   projectId?:       string
- *   name:             string
- *   slug:             string        — url-safe, unique within project
- *   description?:     string
- *   artifactType:     ArtifactType
- *   origin?:          'generated' | 'edited' | 'imported'
- *   tags?:            string[]
- *   sessionId?:       string
- *   generationLogId?: string
- *   contentText?:     string        — inline content (code, doc, html, etc.)
- *   contentUrl?:      string        — asset URL (image, video)
- *   contentType?:     string        — MIME type
- *   contentSizeBytes?: number
- *   previewUrl?:      string
- *   changeSummary?:   string
- * }
- */
-
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentWorkspaceSelection } from "@/lib/team-server";
-import { createArtifact, listArtifacts } from "@/lib/streams/artifacts";
-import type { ArtifactType, ArtifactState } from "@/lib/streams/artifacts";
+import { resolveStreamsRouteContext } from "@/lib/streams/test-mode-auth";
+import { decidePreviewPlacement } from "@/lib/streams/artifacts/artifact-contract";
 
+export const runtime = "nodejs";
 export const maxDuration = 30;
 
-async function resolveUser() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, workspaceId: null, admin: null };
-  const admin = createAdminClient();
-  try {
-    const sel = await getCurrentWorkspaceSelection(admin, user);
-    return { user, workspaceId: sel.current.workspace.id, admin };
-  } catch {
-    return { user: null, workspaceId: null, admin: null };
-  }
-}
-
 export async function GET(request: Request): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
-  if (!user || !workspaceId || !admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const ctx = await resolveStreamsRouteContext({ request, requireWorkspace: false, allowTestMode: true });
+  if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
+  const url = new URL(request.url);
+  const workspaceId = url.searchParams.get("workspaceId") ?? ctx.workspaceId ?? "streams-public-test";
+  const sessionId = url.searchParams.get("sessionId");
+  const type = url.searchParams.get("type");
 
-  const data = await listArtifacts(admin, workspaceId, {
-    projectId:    searchParams.get("projectId") ?? undefined,
-    artifactType: searchParams.get("type") as ArtifactType | undefined,
-    state:        searchParams.get("state") as ArtifactState | undefined,
-    limit:        searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
-  });
+  let q = ctx.admin
+    .from("streams_artifacts")
+    .select("*")
+    .eq("user_id", ctx.userId)
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .limit(100);
 
-  return NextResponse.json({ data });
+  if (sessionId) q = q.eq("session_id", sessionId);
+  if (type) q = q.eq("type", type);
+
+  const { data, error } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ data: data ?? [], testMode: ctx.isTestMode });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const { user, workspaceId, admin } = await resolveUser();
-  if (!user || !workspaceId || !admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  let body: Record<string, unknown> = {};
+  try { body = await request.json(); } catch { body = {}; }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const ctx = await resolveStreamsRouteContext({ request, body, requireWorkspace: false, allowTestMode: true });
+  if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, slug, artifactType } = body;
+  const type = typeof body.type === "string" ? body.type : null;
+  const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : null;
+  if (!type || !title) return NextResponse.json({ error: "type and title are required" }, { status: 400 });
 
-  if (!name || typeof name !== "string") {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
-  }
-  if (!slug || typeof slug !== "string") {
-    return NextResponse.json({ error: "slug is required" }, { status: 400 });
-  }
-  if (!artifactType || typeof artifactType !== "string") {
-    return NextResponse.json({ error: "artifactType is required" }, { status: 400 });
-  }
+  const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId : ctx.workspaceId ?? "streams-public-test";
+  const decision = decidePreviewPlacement({
+    type: type as never,
+    subtype: typeof body.subtype === "string" ? body.subtype : null,
+    mime: typeof body.mime === "string" ? body.mime : null,
+  });
 
-  const VALID_TYPES = ["code","doc","image","video","svg","react","html","schema","prompt_pack"];
-  if (!VALID_TYPES.includes(artifactType)) {
-    return NextResponse.json(
-      { error: `artifactType must be one of: ${VALID_TYPES.join(", ")}` },
-      { status: 400 }
-    );
-  }
+  const { data, error } = await ctx.admin
+    .from("streams_artifacts")
+    .insert({
+      user_id: ctx.userId,
+      workspace_id: workspaceId,
+      session_id: typeof body.sessionId === "string" ? body.sessionId : null,
+      type,
+      subtype: typeof body.subtype === "string" ? body.subtype : null,
+      title,
+      mime: typeof body.mime === "string" ? body.mime : null,
+      preview_url: typeof body.previewUrl === "string" ? body.previewUrl : null,
+      download_url: typeof body.downloadUrl === "string" ? body.downloadUrl : null,
+      storage_path: typeof body.storagePath === "string" ? body.storagePath : null,
+      source_tool: typeof body.sourceTool === "string" ? body.sourceTool : null,
+      created_by_chat: Boolean(body.createdByChat),
+      created_by_tab: typeof body.createdByTab === "string" ? body.createdByTab : null,
+      metadata: {
+        ...(typeof body.metadata === "object" && body.metadata ? body.metadata : {}),
+        previewDecision: decision,
+      },
+    })
+    .select("*")
+    .single();
 
-  try {
-    const artifact = await createArtifact(admin, user.id, {
-      workspaceId,
-      projectId:        body.projectId as string | undefined,
-      name,
-      slug,
-      description:      body.description as string | undefined,
-      artifactType:     artifactType as ArtifactType,
-      origin:           (body.origin as "generated" | "edited" | "imported") ?? "generated",
-      tags:             body.tags as string[] | undefined,
-      sessionId:        body.sessionId as string | undefined,
-      generationLogId:  body.generationLogId as string | undefined,
-      contentText:      body.contentText as string | undefined,
-      contentUrl:       body.contentUrl as string | undefined,
-      contentType:      body.contentType as string | undefined,
-      contentSizeBytes: body.contentSizeBytes as number | undefined,
-      previewUrl:       body.previewUrl as string | undefined,
-      changeSummary:    body.changeSummary as string | undefined,
-    });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ data: artifact }, { status: 201 });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Artifact create failed";
-    // Duplicate slug returns a clear error
-    if (msg.includes("unique") || msg.includes("duplicate")) {
-      return NextResponse.json(
-        { error: `Slug '${slug}' already exists in this project` },
-        { status: 409 }
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  return NextResponse.json({ data, preview: decision, testMode: ctx.isTestMode }, { status: 201 });
 }

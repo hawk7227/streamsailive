@@ -42,7 +42,7 @@ export async function runImageGenerationWithQc(params: {
   const { scenePlan, layoutPlan, prompt } = validateAndAugmentImagePrompt(params);
   const maxAttempts = params.maxAttempts ?? 3;
   const rejectedCandidates: ImageGenerationResult["rejectedCandidates"] = [];
-  let allAccepted: Array<{ candidate: GeneratedImageCandidate; score: ImageQcScore }> = [];
+  const allAccepted: Array<{ candidate: GeneratedImageCandidate; score: ImageQcScore }> = [];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const candidates = await generateImageCandidatesFromProvider({
