@@ -24,7 +24,7 @@ import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
 import SettingsTab   from "./tabs/SettingsTab";
 import BuilderTab    from "./tabs/BuilderTab";
-import { MessageCircle, Clapperboard, Sparkles, BookOpen, User, Hammer, Settings, Bell, Search } from "lucide-react";
+import { MessageCircle, Clapperboard, Sparkles, BookOpen, User, Hammer, Settings, Bell, LogOut, Search } from "lucide-react";
 
 type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder";
 
