@@ -2,6 +2,7 @@
 
 Allowed:
 - src/components/streams/tabs/VideoEditorTab.tsx
+- src/components/streams/StreamsPanel.tsx
 - src/components/streams/editor/
 - docs/streams-current-status.md
 - docs/merge-policies/editor-layout-slice.md
@@ -14,4 +15,3 @@ Forbidden:
 - scripts/validate-rule-confirmation.js
 - src/components/streams/UnifiedChatPanel.tsx
 - pnpm-lock.yaml
-

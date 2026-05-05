@@ -38,6 +38,7 @@ const policies = {
   'editor-layout-slice': {
     allowed: [
       'src/components/streams/tabs/VideoEditorTab.tsx',
+      'src/components/streams/StreamsPanel.tsx',
       'src/components/streams/editor/',
       'docs/streams-current-status.md',
       'docs/merge-policies/editor-layout-slice.md',

@@ -113,6 +113,7 @@ export default function StreamsPanel() {
   const [sharedGenLogId,   setSharedGenLogId]   = useState<string|null>(null);
   const [sharedVoiceId,    setSharedVoiceId]    = useState<string|null>(null);
   const [sharedVideoUrl,   setSharedVideoUrl]   = useState<string|null>(null);
+  const [sharedArtifactId, setSharedArtifactId] = useState<string|null>(null);
 
   // Called by PersonTab when ingest completes
   const onIngestComplete = useCallback((data: {
@@ -124,9 +125,10 @@ export default function StreamsPanel() {
   }, []);
 
   // Called by GenerateTab/VideoEditorTab when a generation completes
-  const onGenerationComplete = useCallback((url: string, generationId?: string) => {
+  const onGenerationComplete = useCallback((url: string, generationId?: string, artifactId?: string) => {
     setSharedVideoUrl(url);
     if (generationId) setSharedGenLogId(generationId);
+    if (artifactId) setSharedArtifactId(artifactId);
   }, []);
 
   return (
@@ -164,6 +166,8 @@ export default function StreamsPanel() {
         flexDirection: "column",
         height:        "100dvh",
         overflow:      "hidden",
+        width:         "100%",
+        maxWidth:      "100vw",
         background:    C.bg,
         color:         C.t1,
       }}>
@@ -361,6 +365,7 @@ export default function StreamsPanel() {
               analysisId={sharedAnalysisId}
               genLogId={sharedGenLogId}
               videoUrl={sharedVideoUrl}
+              artifactId={sharedArtifactId}
             />
           )}
           {active === "generate"  && (
