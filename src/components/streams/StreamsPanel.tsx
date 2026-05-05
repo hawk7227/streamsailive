@@ -24,8 +24,9 @@ import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
 import SettingsTab   from "./tabs/SettingsTab";
 import BuilderTab    from "./tabs/BuilderTab";
+import VideosTab     from "./tabs/VideosTab";
 
-type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder";
+type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder" | "videos";
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "chat",      icon: "💬", label: "Chat"      },
@@ -346,6 +347,7 @@ export default function StreamsPanel() {
               {showMoreMenu ? (
                 <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: railCollapsed ? 'auto' : 0, minWidth: 180, border: `1px solid ${C.bdr}`, borderRadius: 12, background: C.bg2, padding: 8, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button onClick={() => { switchTab('generate'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ Images</button>
+                  <button onClick={() => { switchTab('videos'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🎬 Videos</button>
                   <button onClick={() => { setShowSearch(true); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🔍 Search</button>
                   <button onClick={() => { switchTab('reference'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ Deep Research</button>
                 </div>
@@ -380,6 +382,7 @@ export default function StreamsPanel() {
           )}
           {active === "settings"  && <SettingsTab />}
           {active === "builder"   && <BuilderTab />}
+          {active === "videos"    && <VideosTab />}
           </div>
         </main>
 
