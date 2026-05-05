@@ -24,18 +24,17 @@ import ReferenceTab  from "./tabs/ReferenceTab";
 import PersonTab     from "./tabs/PersonTab";
 import SettingsTab   from "./tabs/SettingsTab";
 import BuilderTab    from "./tabs/BuilderTab";
-import { MessageCircle, Clapperboard, Sparkles, BookOpen, User, Hammer, Settings, Bell, LogOut, Search } from "lucide-react";
 
 type Tab = "chat" | "editor" | "generate" | "reference" | "person" | "settings" | "builder";
 
-const TABS: { id: Tab; icon: any; label: string }[] = [
-  { id: "chat",      icon: MessageCircle, label: "Chat"      },
-  { id: "editor",    icon: Clapperboard, label: "Editor"    },
-  { id: "generate",  icon: Sparkles,     label: "Generate"  },
-  { id: "reference", icon: BookOpen,     label: "Reference" },
-  { id: "person",    icon: User,         label: "Person"    },
-  { id: "builder",   icon: Hammer,       label: "Build"     },
-  { id: "settings",  icon: Settings,     label: "Settings"  },
+const TABS: { id: Tab; icon: string; label: string }[] = [
+  { id: "chat",      icon: "💬", label: "Chat"      },
+  { id: "editor",    icon: "🎬", label: "Editor"    },
+  { id: "generate",  icon: "✦",  label: "Generate"  },
+  { id: "reference", icon: "⬡",  label: "Reference" },
+  { id: "person",    icon: "◈",  label: "Person"    },
+  { id: "builder",   icon: "⬢",  label: "Build"     },
+  { id: "settings",  icon: "⚙",  label: "Settings"  },
 ];
 
 export default function StreamsPanel() {
@@ -199,9 +198,7 @@ export default function StreamsPanel() {
             minWidth:  0,
             overflowX: "hidden",
           }} className="streams-desktop-nav">
-            {TABS.map((tab) => {
-              const IconComponent = tab.icon;
-              return (
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => switchTab(tab.id)}
@@ -224,11 +221,10 @@ export default function StreamsPanel() {
                   transition:     `color ${DUR.fast} ${EASE}, background ${DUR.fast} ${EASE}`,
                 }}
               >
-                <IconComponent size={20} strokeWidth={1.5} />
+                <span style={{ fontSize: 16 }}>{tab.icon}</span>
                 {tab.label}
               </button>
-            );
-            })}
+            ))}
           </div>
 
           {/* Search button - right aligned */}
@@ -259,7 +255,7 @@ export default function StreamsPanel() {
             }}
             title="Search conversations (Cmd+K)"
           >
-            <Search size={16} />
+            🔍
             <span style={{ display: 'none' }} className="streams-desktop-nav">Search</span>
           </button>
         </nav>
@@ -268,7 +264,7 @@ export default function StreamsPanel() {
         <main className="streams-mobile-shell" data-testid="streams-mobile-shell" style={{ flex: 1, overflow: "hidden", position: "relative", display: 'flex', minWidth: 0, maxWidth: "100vw" }}>
           <aside
             style={{
-              width: railCollapsed ? 72 : 278,
+              width: railCollapsed ? 64 : 220,
               borderRight: `1px solid ${C.bdr}`,
               background: C.bg,
               display: 'flex',
@@ -279,13 +275,13 @@ export default function StreamsPanel() {
             className="streams-desktop-nav"
           >
             <button onClick={() => setRailCollapsed((v) => !v)} style={{ border: `1px solid ${C.bdr}`, background: C.bg2, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer' }}>{railCollapsed ? '»' : '«'} {!railCollapsed ? 'Collapse' : ''}</button>
-            <button onClick={() => switchTab('chat')} style={{ border: `1px solid ${C.bdr}`, background: active === 'chat' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><MessageCircle size={18} /> {!railCollapsed && 'Chat'}</button>
-            <button onClick={() => switchTab('generate')} style={{ border: `1px solid ${C.bdr}`, background: active === 'generate' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><Sparkles size={18} /> {!railCollapsed && 'Generate'}</button>
-            <button onClick={() => switchTab('editor')} style={{ border: `1px solid ${C.bdr}`, background: active === 'editor' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><Clapperboard size={18} /> {!railCollapsed && 'Editor'}</button>
-            <button onClick={() => switchTab('reference')} style={{ border: `1px solid ${C.bdr}`, background: active === 'reference' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> {!railCollapsed && 'Reference'}</button>
-            <button onClick={() => switchTab('person')} style={{ border: `1px solid ${C.bdr}`, background: active === 'person' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><User size={18} /> {!railCollapsed && 'Person'}</button>
-            <button onClick={() => switchTab('builder')} style={{ border: `1px solid ${C.bdr}`, background: active === 'builder' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><Hammer size={18} /> {!railCollapsed && 'Build'}</button>
-            <button onClick={() => switchTab('settings')} style={{ border: `1px solid ${C.bdr}`, background: active === 'settings' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={18} /> {!railCollapsed && 'Settings'}</button>
+            <button onClick={() => switchTab('chat')} style={{ border: `1px solid ${C.bdr}`, background: active === 'chat' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>💬 {!railCollapsed && 'Chat'}</button>
+            <button onClick={() => switchTab('generate')} style={{ border: `1px solid ${C.bdr}`, background: active === 'generate' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ {!railCollapsed && 'Generate'}</button>
+            <button onClick={() => switchTab('editor')} style={{ border: `1px solid ${C.bdr}`, background: active === 'editor' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🎬 {!railCollapsed && 'Editor'}</button>
+            <button onClick={() => switchTab('reference')} style={{ border: `1px solid ${C.bdr}`, background: active === 'reference' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ {!railCollapsed && 'Reference'}</button>
+            <button onClick={() => switchTab('person')} style={{ border: `1px solid ${C.bdr}`, background: active === 'person' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>◈ {!railCollapsed && 'Person'}</button>
+            <button onClick={() => switchTab('builder')} style={{ border: `1px solid ${C.bdr}`, background: active === 'builder' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬢ {!railCollapsed && 'Build'}</button>
+            <button onClick={() => switchTab('settings')} style={{ border: `1px solid ${C.bdr}`, background: active === 'settings' ? C.surf2 : C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⚙ {!railCollapsed && 'Settings'}</button>
             <button onClick={() => switchTab('chat')} style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t3, cursor: 'pointer', textAlign: 'left' }}>＋ {!railCollapsed && 'New Chat'}</button>
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowMoreMenu((v) => !v)} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 10px', color: C.t2, cursor: 'pointer', textAlign: 'left', width: '100%' }}>⋯ {!railCollapsed && 'More'}</button>
@@ -293,7 +289,11 @@ export default function StreamsPanel() {
                 <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: railCollapsed ? 'auto' : 0, minWidth: 180, border: `1px solid ${C.bdr}`, borderRadius: 12, background: C.bg2, padding: 8, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button onClick={() => { switchTab('generate'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>✦ Images</button>
                   <button onClick={() => { setShowSearch(true); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>🔍 Search</button>
+                  <button disabled title="Library surface is not yet exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>🗂 Library</button>
                   <button onClick={() => { switchTab('reference'); setShowMoreMenu(false); }} style={{ border: `1px solid ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t2, cursor: 'pointer', textAlign: 'left' }}>⬡ Deep Research</button>
+                  <button disabled title="No Pulse activity surface is wired in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>◔ Pulse</button>
+                  <button disabled title="Apps/connectors are not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>▦ Apps</button>
+                  <button disabled title="GPT templates/personas are not exposed in this shell." style={{ border: `1px dashed ${C.bdr}`, background: C.bg, borderRadius: 12, padding: '8px 12px', color: C.t4, cursor: 'not-allowed', textAlign: 'left' }}>◇ GPTs</button>
                 </div>
               ) : null}
             </div>
