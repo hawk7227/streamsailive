@@ -316,6 +316,23 @@ function extractFirstCodeBlock(content: string): { language: string; code: strin
   };
 }
 
+function stripFencedCodeBlocks(content: string): string {
+  return content.replace(/```[\s\S]*?```/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function trimCodeLikeTail(content: string): string {
+  const lines = content.split('\n');
+  const codeStartIndex = lines.findIndex((line) => {
+    const t = line.trim();
+    if (!t) return false;
+    return /^<(div|header|main|section|article|footer|h[1-6]|p|span|button|img|video|nav)\b/i.test(t)
+      || /^(import|export|const|let|var|function)\b/.test(t)
+      || /^(<[^>]+>|<\/[^>]+>)$/.test(t);
+  });
+  if (codeStartIndex <= 0) return content;
+  return lines.slice(0, codeStartIndex).join('\n').trim();
+}
+
 function AssistantStatusRow({ text, active }: { text?: string; active?: boolean }) {
   if (!text) return null;
   return (
@@ -1124,7 +1141,24 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
       <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-start', width: '100%', margin: '0 0 30px' }}>
         <div style={{ maxWidth: activeChatMaxWidth, width: '100%' }}>
           <AssistantStatusRow text={msg.statusText} active={msg.isStreaming && !msg.content} />
-          {msg.content ? <MarkdownMessage content={msg.content} /> : null}
+          {msg.content ? (
+            <MarkdownMessage
+              content={
+                msg.role === 'assistant'
+                  ? (() => {
+                      const withoutFenced = stripFencedCodeBlocks(msg.content);
+                      const shouldTrimCodeTail =
+                        Boolean(msg.artifacts?.length) ||
+                        Boolean(msg.generatedImageUrl) ||
+                        Boolean(msg.generatedVideoUrl) ||
+                        (msg.statusText?.toLowerCase().includes('built code') ?? false) ||
+                        Boolean(extractFirstCodeBlock(msg.content));
+                      return shouldTrimCodeTail ? trimCodeLikeTail(withoutFenced) : withoutFenced;
+                    })()
+                  : msg.content
+              }
+            />
+          ) : null}
           {msg.isStreaming && !msg.generatedImageUrl && !msg.generatedVideoUrl ? renderGenerationActivityCard(msg.statusText) : null}
           {msg.generatedImageUrl ? (
             <div style={{ marginTop: msg.content ? 12 : 0, border: `1px solid ${CT.border}`, borderRadius: 16, padding: 10, background: CT.bg }}>
