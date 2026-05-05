@@ -556,11 +556,26 @@ export function UnifiedChatPanel({ projectId, userId, onArtifactGenerated }: Uni
   const writeArtifactToIframe = useCallback((artifact: ChatArtifact) => {
     if (!iframeRef.current) return;
     try {
-      if (artifact.type === 'html' || artifact.type === 'svg') {
+      if (artifact.type === 'html') {
+        // Ensure HTML is wrapped properly
+        let html = artifact.code;
+        if (!html.includes('<html')) {
+          if (!html.includes('<body')) {
+            html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;}</style></head><body>${html}</body></html>`;
+          } else {
+            html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>${html}</html>`;
+          }
+        }
+        iframeRef.current.srcdoc = html;
+        return;
+      }
+
+      if (artifact.type === 'svg') {
         iframeRef.current.srcdoc = artifact.code;
         return;
       }
 
+      // React code - display as code
       const escaped = artifact.code
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
