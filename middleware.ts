@@ -1,7 +1,28 @@
 import { updateSession } from '@/lib/supabase/middleware'
-import { type NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+
+function isStandaloneStreamsPanelMode() {
+  return (
+    process.env.STREAMS_STANDALONE_PANEL === 'true' ||
+    process.env.NEXT_PUBLIC_STREAMS_STANDALONE_PANEL === 'true'
+  )
+}
+
+function shouldServeStandalonePanel(pathname: string) {
+  if (pathname.startsWith('/api')) return false
+  if (pathname.startsWith('/_next')) return false
+  if (pathname === '/favicon.ico') return false
+  if (/\.[a-zA-Z0-9]+$/.test(pathname)) return false
+  return pathname !== '/streams'
+}
 
 export async function middleware(request: NextRequest) {
+  if (isStandaloneStreamsPanelMode() && shouldServeStandalonePanel(request.nextUrl.pathname)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/streams'
+    return NextResponse.rewrite(url)
+  }
+
   return await updateSession(request)
 }
 

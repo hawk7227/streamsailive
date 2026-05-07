@@ -2,8 +2,7 @@
 
 ## Active slice
 
-- STREAMS Self-Build Runtime Foundation
-- Chat UI Slice (chat rail, composer UX, mobile shell fixes)
+- Standalone Streams Workspace Runtime Slice
 
 ## Proven items
 
@@ -11,31 +10,47 @@
 
 ## Implemented but unproven items
 
-- STREAMS Self-Build Runtime Foundation (in progress in this slice).
+- `lumen_chat_workspace_ui(1).jsx` was requested as the approved face, but that file is not present in this checkout; the production TSX shell is placed under `src/components/streams/workspace/**` and must be compared against the uploaded source before claiming exact visual parity.
+- Standalone Streams Workspace Runtime Slice is authorized for a workspace runtime correction that serves the approved Streams workspace shell in standalone mode and wires it to real `/api/streams/chat` SSE events plus real chat session routes when `STREAMS_STANDALONE_PANEL=true` or `NEXT_PUBLIC_STREAMS_STANDALONE_PANEL=true` is configured.
+- Target Vercel project name: `streamsailive-streamsai`.
+- Target production URL: `https://streamsailive-streamsai.vercel.app`.
 
 ## Blocked items
 
-- Full Codex-like self-build loop remains blocked on runtime integrations (workspace orchestration beyond local process, durable task persistence wiring, GitHub write path, CI log APIs, browser proof runner).
+- Live Vercel deployment proof is blocked until the Vercel token is available through a safe environment secret path and the separate Vercel project is configured with `STREAMS_STANDALONE_PANEL=true` and `NEXT_PUBLIC_STREAMS_STANDALONE_PANEL=true`.
+- Production URL proof remains blocked until `https://streamsailive-streamsai.vercel.app` opens directly to the Streams panel without login, signup, marketing homepage, or auth redirect.
+- Provider-backed runtime behavior remains unproven until required provider environment variables are configured in the separate Vercel project.
+- Database-backed runtime behavior remains unproven until the separate deployment is pointed at an approved Supabase project and required migrations/env vars are applied.
 
 ## Target files for this slice
 
 - `docs/streams-current-status.md`
-- `src/lib/streams/build-runtime/**`
-- `src/app/api/streams/build/tasks/**`
-- `docs/streams-knowledge/**`
+- `middleware.ts`
+- `src/app/layout.tsx`
+- `src/app/page.tsx`
+- `src/app/streams/page.tsx`
+- `src/components/streams/StreamsPanel.tsx`
+- `src/components/streams/workspace/**`
+- `src/contexts/AuthContext.tsx`
+- `src/lib/streams/standalone-panel-mode.ts`
 
 ## Files that must not be touched
 
 - Provider image/video routes
-- DB migrations (unless explicitly approved)
+- DB migrations unless explicitly approved
 - `scripts/validate-rule-confirmation.js`
 - unrelated chat UI/editor/upload/settings/provider files
 - `public/build-report.json`
+- Provider credentials or secret-bearing `.env*` files
+- `.git/**`
+- `node_modules/**`
+- `.next/**`
 
 ## Required proof before any item can be marked Proven
 
 - Source proof in changed files
-- Runtime proof through real API invocation
 - Command/check proof from real command runner output
-- Persistence proof when durable storage is claimed
-- Browser/runtime proof where UI behavior is claimed
+- Local build proof before claiming the source deploy target builds
+- Vercel runtime proof before claiming the live domain works
+- Browser/runtime proof that `/`, `/login`, `/signup`, and `/streams` render the workspace shell in standalone mode without login or marketing pages
+- Persistence proof when durable storage/database behavior is claimed

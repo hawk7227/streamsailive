@@ -22,6 +22,7 @@ import {
   type PlanLimits,
 } from "@/lib/plans";
 import type { WorkspaceRole } from "@/lib/team";
+import { isStandaloneStreamsPanelMode } from "@/lib/streams/standalone-panel-mode";
 
 interface Profile {
   id: string;
@@ -82,7 +83,37 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+const disabledAuthContext: AuthContextType = {
+  user: null,
+  session: null,
+  profile: null,
+  plan: null,
+  limits: null,
+  usage: null,
+  workspace: null,
+  membershipRole: null,
+  loading: false,
+  profileLoading: false,
+  usageLoading: false,
+  workspaceLoading: false,
+  signOut: async () => {},
+  refreshSession: async () => {},
+  refreshProfile: async () => {},
+  refreshUsage: async () => {},
+  refreshWorkspace: async () => {},
+  incrementUsage: async () => ({ error: "No active session", usage: null }),
+  updateProfile: async () => ({ error: "No active session", profile: null }),
+};
+
+function DisabledAuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthContext.Provider value={disabledAuthContext}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -409,6 +440,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  if (isStandaloneStreamsPanelMode()) {
+    return <DisabledAuthProvider>{children}</DisabledAuthProvider>;
+  }
+
+  return <SupabaseAuthProvider>{children}</SupabaseAuthProvider>;
 }
 
 export function useAuth() {

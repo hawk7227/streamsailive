@@ -47,13 +47,18 @@ export default function StreamsPanel() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  // Get current user from auth
+  // Get current user from auth when Supabase browser env is configured.
+  // The standalone panel deployment must render without forcing auth setup.
   useEffect(() => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-    );
-    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
