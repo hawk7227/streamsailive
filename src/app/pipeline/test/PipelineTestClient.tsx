@@ -42,6 +42,126 @@ type MediaTab = "Image" | "Video";
 type ImageApiMode = "responses" | "images";
 type ReferencePriority = "low" | "medium" | "high";
 type VideoGenMode = "scratch_t2v" | "i2v";
+type ComfyLabMode = "image" | "imageToVideo" | "videoScratch" | "motionTransfer" | "voice" | "music";
+type ComfyWorkspaceView = "preview" | "edit" | "graph" | "compare" | "output";
+type ComfyBottomView = "capabilities" | "timeline";
+
+const COMFY_WORKSPACE_TABS: ComfyWorkspaceView[] = ["preview", "edit", "graph", "compare", "output"];
+
+const COMFY_LAB_MODES: {
+  id: ComfyLabMode;
+  label: string;
+  title: string;
+  subtitle: string;
+  leftPreview: string;
+  rightPreview: string;
+  heroLabel: string;
+  capabilities: string[];
+  timelineRows: [string, string[]][];
+}[] = [
+  {
+    id: "image",
+    label: "Image Single/Bulk",
+    title: "Image Visual Workspace",
+    subtitle: "Single image, bulk generation, inpaint, retouch, upscale, compare, and export.",
+    leftPreview: "Reference / mobile crop",
+    rightPreview: "Generated mobile output",
+    heroLabel: "Image canvas + variation grid",
+    capabilities: ["Flux", "SDXL", "SD3.5", "QWEN", "WAN Image", "Inpaint", "Bulk", "Upscale"],
+    timelineRows: [
+      ["PROMPT", ["Prompt Parse", "Encode Text", "CLIP Encode", "Conditioning", "Prompt Cached"]],
+      ["MODEL STACK", ["Load Flux", "Load VAE", "Load CLIP", "Model Warmup", "Ready"]],
+      ["LORA STACK", ["Load LoRA", "Apply Stack", "Merge Weights", "LoRA Active", "Cached"]],
+      ["SAMPLER", ["Init Noise", "Sample 1-10", "Sample 11-20", "Sample 21-30", "Denoise"]],
+      ["OUTPUT", ["VAE Decode", "Upscale", "Save Images", "Store Asset", "Complete"]],
+    ],
+  },
+  {
+    id: "imageToVideo",
+    label: "Image-to-Video",
+    title: "Image-to-Video Workspace",
+    subtitle: "Turn still images into motion, cinematic camera moves, short clips, and mobile previews.",
+    leftPreview: "Still source preview",
+    rightPreview: "Generated motion preview",
+    heroLabel: "Still image to motion preview",
+    capabilities: ["WAN 2.2", "LTX", "Mocha", "Camera Push", "Loop", "Talking Image", "Transparent Video"],
+    timelineRows: [
+      ["INPUT IMAGE", ["Load Image", "Encode Image", "Image Fidelity", "Source Ready", "Cached"]],
+      ["MOTION", ["Motion Prompt", "Camera Path", "Motion Solve", "Motion Apply", "Ready"]],
+      ["FRAMES", ["Frame 1-24", "Frame 25-48", "Frame 49-72", "Interpolate", "Smooth"]],
+      ["POST", ["Stabilize", "Sharpen", "Upscale", "Color Pass", "Ready"]],
+      ["EXPORT", ["Encode MP4", "Preview", "Save Asset", "Store Output", "Complete"]],
+    ],
+  },
+  {
+    id: "videoScratch",
+    label: "Video from Scratch",
+    title: "Video From Scratch Workspace",
+    subtitle: "Build scenes from prompt, storyboard, camera, lighting, and generated preview.",
+    leftPreview: "Vertical storyboard",
+    rightPreview: "Vertical video output",
+    heroLabel: "Concept to storyboard to video",
+    capabilities: ["Text-to-Video", "Scene Builder", "Storyboard", "Camera", "Lighting", "Render", "Export"],
+    timelineRows: [
+      ["CONCEPT", ["Parse Idea", "Scene Intent", "Shot Setup", "Storyboard", "Ready"]],
+      ["SCENE PLAN", ["Build Scene", "Camera", "Lighting", "Style", "Plan Ready"]],
+      ["GENERATION", ["Load Model", "Sample Frames", "Decode", "Refine", "Ready"]],
+      ["VIDEO", ["Combine", "Interpolate", "Encode", "Preview", "Complete"]],
+    ],
+  },
+  {
+    id: "motionTransfer",
+    label: "Motion Transfer",
+    title: "Motion Transfer Workspace",
+    subtitle: "Copy movement from a source performer to a target character with tracking and retargeting.",
+    leftPreview: "Source performer",
+    rightPreview: "Target character result",
+    heroLabel: "Source performer to target character",
+    capabilities: ["OpenPose", "Pose Extract", "Retarget", "Hand Track", "Face Track", "Body Lock", "Preview"],
+    timelineRows: [
+      ["SOURCE", ["Load Video", "Trim", "Normalize", "Stabilize", "Ready"]],
+      ["POSE", ["Body Detect", "Hands", "Face", "Skeleton", "Pose Ready"]],
+      ["SOLVE", ["Track Motion", "Confidence", "Retarget", "Smooth", "Solved"]],
+      ["CHARACTER", ["Load Target", "Map Rig", "Apply", "Preview", "Ready"]],
+      ["EXPORT", ["Render", "Encode", "Save", "Store", "Complete"]],
+    ],
+  },
+  {
+    id: "voice",
+    label: "Voice",
+    title: "Voice Workspace",
+    subtitle: "Record, analyze, clone, generate, clean, and play back voice output.",
+    leftPreview: "Recording / transcript",
+    rightPreview: "Voice playback waveform",
+    heroLabel: "Voice recording to generated playback",
+    capabilities: ["TTS", "Voice Clone", "Voice Changer", "Cleanup", "Transcript", "Translate", "Export"],
+    timelineRows: [
+      ["SCRIPT", ["Parse", "Split", "Tokenize", "Language", "Ready"]],
+      ["VOICE INPUT", ["Record", "Trim", "Clean", "Level", "Ready"]],
+      ["ANALYSIS", ["Features", "Embedding", "Prosody", "Identity", "Ready"]],
+      ["GENERATE", ["Clone", "TTS", "Enhance", "Master", "Ready"]],
+      ["EXPORT", ["WAV", "MP3", "Store", "Preview", "Complete"]],
+    ],
+  },
+  {
+    id: "music",
+    label: "Music/Song",
+    title: "Music / Song Workspace",
+    subtitle: "Compose, generate, mix, master, and export songs, beats, and stems.",
+    leftPreview: "Lyrics / idea",
+    rightPreview: "Song player result",
+    heroLabel: "Lyrics to compose to mix to play",
+    capabilities: ["Lyrics", "Melody", "Chords", "Beat", "Vocals", "Stems", "Mix", "Master"],
+    timelineRows: [
+      ["LYRICS", ["Parse", "Verse", "Chorus", "Flow", "Ready"]],
+      ["COMPOSE", ["Melody", "Chords", "Drums", "Bass", "Ready"]],
+      ["GENERATE", ["Vocals", "Synth", "FX", "Layers", "Ready"]],
+      ["MIX", ["Balance", "EQ", "Comp", "Reverb", "Ready"]],
+      ["MASTER", ["Limiter", "Loudness", "Stereo", "Export", "Complete"]],
+    ],
+  },
+];
+
 type RefClassification = "usable" | "risky" | "reject";
 interface UploadedRef { id: string; url: string; name: string; kind: "image" | "video"; classification: RefClassification; }
 
@@ -353,6 +473,9 @@ export default function PipelineTestPage() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [iPhoneWidth, setIPhoneWidth] = useState(220);
   const iphoneDragRef = React.useRef<{side:"left"|"right";startX:number;startW:number}|null>(null);
+  const [comfyLabMode, setComfyLabMode] = useState<ComfyLabMode>("image");
+  const [comfyWorkspaceView, setComfyWorkspaceView] = useState<ComfyWorkspaceView>("preview");
+  const [comfyBottomView, setComfyBottomView] = useState<ComfyBottomView>("capabilities");
 
   // Step prompts — keyed by step id
   // strategy prompt is updated via useEffect when nicheId changes
@@ -3370,54 +3493,196 @@ Accept only if:
                           <div style={{ width: 2, height: "60%", background: "rgba(255,255,255,0.12)", borderRadius: 1 }} />
                         </div>
 
-                        {/* Center — DesktopPlatformView or MediaEditor */}
-                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
-                          {/* Platform toolbar */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.09)", flexShrink: 0 }}>
-                            {desktopPlatform && (
-                              <button type="button" onClick={() => setDesktopPlatform(null)}
-                                style={{ fontSize: 10, color: "#67e8f9", background: "rgba(103,232,249,0.08)", border: "1px solid rgba(103,232,249,0.2)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
-                                ✕ Exit platform view
-                              </button>
-                            )}
-                            <button type="button" onClick={() => setBatchModalOpen(true)}
-                              style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.065)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
-                              ⊞ Batch preview
-                            </button>
-                            <button type="button" onClick={() => setWireframeMode(w => !w)}
-                              style={{ fontSize: 10, color: wireframeMode ? "#a78bfa" : "rgba(255,255,255,0.4)", background: wireframeMode ? "rgba(167,139,250,0.1)" : "rgba(255,255,255,0.065)", border: `1px solid ${wireframeMode ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
-                              ⬜ Wireframe
-                            </button>
-                            <button type="button" onClick={() => setShowSafeZone(s => !s)}
-                              style={{ fontSize: 10, color: showSafeZone ? "#fb923c" : "rgba(255,255,255,0.4)", background: showSafeZone ? "rgba(251,146,60,0.1)" : "rgba(255,255,255,0.065)", border: `1px solid ${showSafeZone ? "rgba(251,146,60,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
-                              ◫ Safe zones
-                            </button>
-                          </div>
-                          {desktopPlatform ? (
-                            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                              <DesktopPlatformView
-                                platformId={desktopPlatform.platformId}
-                                viewId={desktopPlatform.viewId}
-                                imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
-                                videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
-                                conceptId="c2"
-                                nicheId={nicheId}
-                                copyOutput={stepPrompts.copy}
-                                strategyOutput={stepPrompts.strategy}
-                                conceptHeadline={concepts[1]?.headline}
-                                wireframe={wireframeMode}
-                                showSafeZone={showSafeZone}
-                                onDismiss={() => setDesktopPlatform(null)}
-                              />
-                            </div>
-                          ) : (
-                            <MediaEditor
-                              imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
-                              videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
-                              onSendToScreen={(url, type) => triggerDestPicker(url, type)}
-                              onLog={log}
-                            />
-                          )}
+                        {/* Center — ComfyUI Lab Visual Workspace */}
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0, gap: 8 }}>
+                          {(() => {
+                            const activeMode = COMFY_LAB_MODES.find(mode => mode.id === comfyLabMode) ?? COMFY_LAB_MODES[0];
+                            const chipStyle = (active: boolean, accent: "violet" | "cyan" = "violet"): React.CSSProperties => ({
+                              border: active
+                                ? accent === "violet" ? "1px solid rgba(167,139,250,0.55)" : "1px solid rgba(103,232,249,0.45)"
+                                : "1px solid rgba(255,255,255,0.1)",
+                              background: active
+                                ? accent === "violet" ? "rgba(167,139,250,0.14)" : "rgba(103,232,249,0.12)"
+                                : "rgba(255,255,255,0.055)",
+                              color: active ? "#f8fafc" : "rgba(226,232,240,0.68)",
+                              borderRadius: 9,
+                              padding: "6px 10px",
+                              fontSize: 10,
+                              fontWeight: 800,
+                              letterSpacing: "0.04em",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            });
+                            const panelStyle: React.CSSProperties = {
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              background: "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(2,6,23,0.74))",
+                              borderRadius: 18,
+                              boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                            };
+
+                            return (
+                              <>
+                                {/* Six ComfyUI Lab mode tabs */}
+                                <div style={{ ...panelStyle, padding: 8, flexShrink: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                                    <div>
+                                      <div style={{ fontSize: 9, color: "rgba(148,163,184,0.78)", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                                        ComfyUI Lab Modes
+                                      </div>
+                                      <div style={{ fontSize: 13, color: "#f8fafc", fontWeight: 900, marginTop: 2 }}>
+                                        {activeMode.title}
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                      <span style={{ ...chipStyle(true, "cyan"), cursor: "default" }}>Visual Workspace</span>
+                                      <span style={{ ...chipStyle(false), cursor: "default" }}>ComfyUI Engine</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                    {COMFY_LAB_MODES.map(mode => (
+                                      <button key={mode.id} type="button" onClick={() => setComfyLabMode(mode.id)} style={chipStyle(comfyLabMode === mode.id)}>
+                                        {mode.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Workspace toolbar */}
+                                <div style={{ ...panelStyle, padding: "7px 8px", flexShrink: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                      {COMFY_WORKSPACE_TABS.map(tab => (
+                                        <button key={tab} type="button" onClick={() => setComfyWorkspaceView(tab)} style={chipStyle(comfyWorkspaceView === tab, "cyan")}>
+                                          {tab.toUpperCase()}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                      {desktopPlatform && (
+                                        <button type="button" onClick={() => setDesktopPlatform(null)} style={chipStyle(false, "cyan")}>
+                                          ✕ Exit platform
+                                        </button>
+                                      )}
+                                      <button type="button" onClick={() => setBatchModalOpen(true)} style={chipStyle(false, "cyan")}>⊞ Batch preview</button>
+                                      <button type="button" onClick={() => setWireframeMode(w => !w)} style={chipStyle(wireframeMode)}>⬜ Wireframe</button>
+                                      <button type="button" onClick={() => setShowSafeZone(s => !s)} style={chipStyle(showSafeZone)}>◫ Safe zones</button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Main visual workspace */}
+                                <div style={{ ...panelStyle, flex: 1, minHeight: 0, overflow: "hidden", padding: 10 }}>
+                                  {desktopPlatform ? (
+                                    <div style={{ height: "100%", minHeight: 0, overflow: "hidden" }}>
+                                      <DesktopPlatformView
+                                        platformId={desktopPlatform.platformId}
+                                        viewId={desktopPlatform.viewId}
+                                        imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
+                                        videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
+                                        conceptId="c2"
+                                        nicheId={nicheId}
+                                        copyOutput={stepPrompts.copy}
+                                        strategyOutput={stepPrompts.strategy}
+                                        conceptHeadline={concepts[1]?.headline}
+                                        wireframe={wireframeMode}
+                                        showSafeZone={showSafeZone}
+                                        onDismiss={() => setDesktopPlatform(null)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: "grid", gridTemplateRows: "1fr auto", gap: 10, height: "100%", minHeight: 0 }}>
+                                      <div style={{ display: "grid", gridTemplateColumns: comfyLabMode === "motionTransfer" ? "1fr 1fr 1fr" : "1.2fr 0.8fr", gap: 10, minHeight: 0 }}>
+                                        {comfyWorkspaceView === "preview" || comfyWorkspaceView === "edit" ? (
+                                          <div style={{ minHeight: 0, overflow: "hidden", borderRadius: 18, border: "1px solid rgba(103,232,249,0.18)" }}>
+                                            <MediaEditor
+                                              imageUrl={approvedOutputs.image || conceptOutputs.c1.image || conceptOutputs.c2.image || imageResult || null}
+                                              videoUrl={approvedOutputs.video || conceptOutputs.c1.video || conceptOutputs.c2.video || videoResult || null}
+                                              onSendToScreen={(url, type) => triggerDestPicker(url, type)}
+                                              onLog={log}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div style={{ position: "relative", overflow: "hidden", borderRadius: 18, border: "1px solid rgba(103,232,249,0.18)", background: "radial-gradient(circle at 45% 30%, rgba(103,232,249,0.16), transparent 30%), radial-gradient(circle at 62% 72%, rgba(167,139,250,0.14), transparent 28%), linear-gradient(180deg, rgba(15,23,42,0.78), rgba(2,6,23,0.82))", minHeight: 0 }}>
+                                            <div style={{ position: "absolute", inset: 0, opacity: 0.18, backgroundImage: "linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+                                            <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
+                                              <div>
+                                                <div style={{ fontSize: 48, marginBottom: 12 }}>{comfyLabMode === "image" ? "◧" : comfyLabMode === "imageToVideo" ? "▶" : comfyLabMode === "videoScratch" ? "▭" : comfyLabMode === "motionTransfer" ? "◇" : comfyLabMode === "voice" ? "≋" : "♫"}</div>
+                                                <div style={{ color: "#f8fafc", fontSize: 22, fontWeight: 950, letterSpacing: "-0.03em" }}>{activeMode.heroLabel}</div>
+                                                <div style={{ color: "rgba(203,213,225,0.72)", fontSize: 12, lineHeight: 1.7, marginTop: 8, maxWidth: 560 }}>{activeMode.subtitle}</div>
+                                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginTop: 14 }}>
+                                                  <span style={{ ...chipStyle(true, "cyan"), cursor: "default" }}>{comfyWorkspaceView.toUpperCase()}</span>
+                                                  <span style={{ ...chipStyle(false), cursor: "default" }}>Visual Create/Edit</span>
+                                                  <span style={{ ...chipStyle(false), cursor: "default" }}>Graph Available</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {comfyLabMode === "motionTransfer" ? (
+                                          <>
+                                            <div style={{ borderRadius: 18, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.055)", padding: 12 }}>
+                                              <div style={{ fontSize: 10, color: "rgba(148,163,184,0.8)", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" }}>Tracking / Skeleton</div>
+                                              <div style={{ marginTop: 10, height: "calc(100% - 28px)", borderRadius: 14, background: "radial-gradient(circle, rgba(103,232,249,0.18), transparent 60%)", border: "1px dashed rgba(103,232,249,0.25)" }} />
+                                            </div>
+                                            <div style={{ borderRadius: 18, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.055)", padding: 12 }}>
+                                              <div style={{ fontSize: 10, color: "rgba(148,163,184,0.8)", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" }}>Target Character</div>
+                                              <div style={{ marginTop: 10, height: "calc(100% - 28px)", borderRadius: 14, background: "radial-gradient(circle, rgba(167,139,250,0.18), transparent 60%)", border: "1px dashed rgba(167,139,250,0.25)" }} />
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div style={{ display: "grid", gridTemplateRows: "repeat(4, 1fr)", gap: 8, minHeight: 0 }}>
+                                            {activeMode.capabilities.slice(0, 4).map(item => (
+                                              <div key={item} style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.055)", padding: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                                <div>
+                                                  <div style={{ color: "#f8fafc", fontSize: 12, fontWeight: 850 }}>{item}</div>
+                                                  <div style={{ color: "rgba(148,163,184,0.7)", fontSize: 10, marginTop: 3 }}>Mode capability</div>
+                                                </div>
+                                                <span style={{ color: "rgba(103,232,249,0.8)", fontSize: 14 }}>●</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div style={{ ...panelStyle, padding: 8, flexShrink: 0 }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                                          <div style={{ color: "#f8fafc", fontSize: 12, fontWeight: 900 }}>
+                                            {comfyBottomView === "capabilities" ? "Capability / Options Surface" : "Timeline / Translator / Execution Matrix"}
+                                          </div>
+                                          <div style={{ display: "flex", gap: 6 }}>
+                                            <button type="button" onClick={() => setComfyBottomView("capabilities")} style={chipStyle(comfyBottomView === "capabilities", "cyan")}>Capabilities</button>
+                                            <button type="button" onClick={() => setComfyBottomView("timeline")} style={chipStyle(comfyBottomView === "timeline")}>Timeline</button>
+                                          </div>
+                                        </div>
+
+                                        {comfyBottomView === "capabilities" ? (
+                                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 }}>
+                                            {activeMode.capabilities.map(item => (
+                                              <div key={item} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.055)", padding: "8px 10px" }}>
+                                                <div style={{ color: "#e2e8f0", fontSize: 11, fontWeight: 800 }}>{item}</div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div style={{ display: "grid", gap: 5 }}>
+                                            {activeMode.timelineRows.map(([label, steps]) => (
+                                              <div key={label} style={{ display: "grid", gridTemplateColumns: "110px repeat(5, minmax(0, 1fr))", gap: 5 }}>
+                                                <div style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.055)", padding: "6px 8px", color: "#cbd5e1", fontSize: 10, fontWeight: 900 }}>{label}</div>
+                                                {steps.map(step => (
+                                                  <div key={step} style={{ borderRadius: 8, border: "1px solid rgba(167,139,250,0.18)", background: "rgba(167,139,250,0.09)", padding: "6px 8px", color: "rgba(226,232,240,0.82)", fontSize: 10, fontWeight: 700, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step}</div>
+                                                ))}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* Right drag handle */}
@@ -4032,6 +4297,13 @@ Accept only if:
     </>
   );
 }
+
+
+
+
+
+
+
 
 
 
