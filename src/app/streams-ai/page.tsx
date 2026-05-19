@@ -1,5 +1,5 @@
-import CurrentChatBridge from "@/components/streams-ai/current-chat/CurrentChatBridge";
+import LocalStreamsAIChat from "@/components/streams-ai/current-chat/StreamsAIChatShell";
 
 export default function StreamsAIPage() {
-  return <CurrentChatBridge />;
+  return <LocalStreamsAIChat />;
 }
