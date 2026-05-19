@@ -128,6 +128,22 @@ body {
     opacity: 1;
   }
 }
+
+/* STREAMS AI landing: desktop should use the available viewport width, not a narrow centered strip. */
+@media (min-width: 1280px) {
+  #features > div.relative.mx-auto {
+    max-width: none !important;
+    width: 100% !important;
+    padding-left: clamp(24px, 2.25vw, 56px) !important;
+    padding-right: clamp(24px, 2.25vw, 56px) !important;
+  }
+
+  #features > div.relative.mx-auto > div.grid {
+    width: 100% !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
 /* ACC.11 — respect prefers-reduced-motion across all streams components */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
