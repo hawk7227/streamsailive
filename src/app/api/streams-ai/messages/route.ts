@@ -31,29 +31,44 @@ export async function POST(request: NextRequest) {
       sessionId?: string;
       role?: "user" | "assistant" | "system" | "tool";
       content?: string;
+      message?: string;
       status?: string;
       metadata?: Record<string, unknown>;
       runAssistant?: boolean;
+      userId?: string;
     }>(request);
 
-    if (!body.sessionId) return streamsAIJson({ ok: false, error: "sessionId is required" }, 400);
-    if (!body.content?.trim()) return streamsAIJson({ ok: false, error: "content is required" }, 400);
+    const content = (body.content || body.message || "").trim();
+    if (!content) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
 
-    const userMessage = await messages.create(scope, {
-      sessionId: body.sessionId,
-      role: body.role || "user",
-      content: body.content,
-      status: body.status || "complete",
-      metadata: body.metadata,
-    });
-
-    if (!body.runAssistant) {
-      return streamsAIJson({ ok: true, message: userMessage }, 201);
+    let sessionId = body.sessionId || "";
+    if (!sessionId) {
+      const created = await sessions.create(scope, {
+        title: titleFromMessage(content),
+        metadata: { source: "copied-streams-chat-ui", adapter: "legacy-message-body" },
+      });
+      sessionId = created.id;
     }
 
-    const assistantContent = await runGuidanceResponse(body.content);
+    const userMessage = await messages.create(scope, {
+      sessionId,
+      role: body.role || "user",
+      content,
+      status: body.status || "complete",
+      metadata: {
+        ...(body.metadata || {}),
+        copiedUiUserId: body.userId || null,
+      },
+    });
+
+    const shouldRunAssistant = body.runAssistant !== false;
+    if (!shouldRunAssistant) {
+      return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
+    }
+
+    const assistantContent = await runGuidanceResponse(content);
     const assistantMessage = await messages.create(scope, {
-      sessionId: body.sessionId,
+      sessionId,
       role: "assistant",
       content: assistantContent,
       status: "complete",
@@ -63,10 +78,29 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return streamsAIJson({ ok: true, message: userMessage, assistantMessage }, 201);
+    return streamsAIJson(
+      {
+        ok: true,
+        sessionId,
+        message: assistantMessage,
+        userMessage,
+        assistantMessage,
+        messages: [userMessage, assistantMessage],
+        reply: assistantContent,
+        content: assistantContent,
+        text: assistantContent,
+      },
+      201,
+    );
   } catch (error) {
     return streamsAIError(error);
   }
+}
+
+function titleFromMessage(message: string) {
+  const clean = message.replace(/\s+/g, " ").trim();
+  if (!clean) return "New chat";
+  return clean.length > 58 ? `${clean.slice(0, 58)}…` : clean;
 }
 
 async function runGuidanceResponse(userContent: string) {
