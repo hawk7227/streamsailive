@@ -1,4 +1,4 @@
-import { createStreamsAIServiceClient, streamsAISchema } from "../server";
+import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
 import type { CreateCreditLedgerInput } from "./types";
 
@@ -9,7 +9,7 @@ export class StreamsAICreditsRepository {
 
   async balance(scope: StreamsAIScope) {
     const { data, error } = await this.db()
-      .from("credit_ledger")
+      .from(streamsAITables.creditLedger)
       .select("amount")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId);
@@ -20,7 +20,7 @@ export class StreamsAICreditsRepository {
 
   async list(scope: StreamsAIScope, limit = 50) {
     const { data, error } = await this.db()
-      .from("credit_ledger")
+      .from(streamsAITables.creditLedger)
       .select("*")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
@@ -36,7 +36,7 @@ export class StreamsAICreditsRepository {
     const balanceAfter = currentBalance + Number(input.amount || 0);
 
     const { data, error } = await this.db()
-      .from("credit_ledger")
+      .from(streamsAITables.creditLedger)
       .insert({
         tenant_id: scope.tenantId,
         user_id: scope.userId,
