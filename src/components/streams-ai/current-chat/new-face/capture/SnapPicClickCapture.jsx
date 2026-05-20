@@ -3,11 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./snap-pic-click-capture.css";
 
-const LIBRARY_KEY = "streams.library.files.v1";
+const LIBRARY_KEY = "streams-ai.assets.cache.v1";
 
 function readLibraryFiles() {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(LIBRARY_KEY) || "[]");
+    const parsed = JSON.parse(window.sessionStorage.getItem(LIBRARY_KEY) || "[]");
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -22,7 +22,7 @@ function writeLibraryFiles(files) {
     seen.add(key);
     return true;
   }).slice(0, 300);
-  window.localStorage.setItem(LIBRARY_KEY, JSON.stringify(unique));
+  window.sessionStorage.setItem(LIBRARY_KEY, JSON.stringify(unique));
   window.dispatchEvent(new Event("streams:videos-changed"));
   window.dispatchEvent(new Event("streams:images-changed"));
 }
