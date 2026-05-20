@@ -8,11 +8,11 @@ import {
   MOTIVATION_TONES,
 } from "../../runtime/snapPicClick/sameSceneNewAction";
 
-const LIBRARY_KEY = "streams.library.files.v1";
+const LIBRARY_KEY = "streams-ai.assets.cache.v1";
 
 function readLibraryFiles() {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(LIBRARY_KEY) || "[]");
+    const parsed = JSON.parse(window.sessionStorage.getItem(LIBRARY_KEY) || "[]");
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
