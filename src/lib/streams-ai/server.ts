@@ -56,5 +56,21 @@ export function createStreamsAIUserClient(accessToken: string): SupabaseClient {
 }
 
 export function streamsAISchema(client: SupabaseClient) {
-  return client.schema("streams_ai");
+  return client.schema("streams");
 }
+
+export const streamsAITables = {
+  tenants: "streams_ai_tenants",
+  memberships: "streams_ai_memberships",
+  projects: "streams_ai_projects",
+  productEntitlements: "streams_ai_product_entitlements",
+  chatSessions: "streams_ai_chat_sessions",
+  chatMessages: "streams_ai_chat_messages",
+  chatToolCalls: "streams_ai_chat_tool_calls",
+  assets: "streams_ai_assets",
+  jobs: "streams_ai_jobs",
+  jobEvents: "streams_ai_job_events",
+  providerRuns: "streams_ai_provider_runs",
+  creditLedger: "streams_ai_credit_ledger",
+  usageEvents: "streams_ai_usage_events",
+} as const;
