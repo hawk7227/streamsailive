@@ -1,4 +1,4 @@
-import { createStreamsAIServiceClient, streamsAISchema } from "../server";
+import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
 import type { CreateAssetInput } from "./types";
 
@@ -13,7 +13,7 @@ export class StreamsAIAssetsRepository {
 
   async list(scope: StreamsAIScope, filters: { projectId?: string | null; sessionId?: string | null } = {}) {
     let query = this.db()
-      .from("assets")
+      .from(streamsAITables.assets)
       .select("*")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
@@ -29,7 +29,7 @@ export class StreamsAIAssetsRepository {
 
   async create(scope: StreamsAIScope, input: CreateAssetInput) {
     const { data, error } = await this.db()
-      .from("assets")
+      .from(streamsAITables.assets)
       .insert({
         tenant_id: scope.tenantId,
         user_id: scope.userId,
