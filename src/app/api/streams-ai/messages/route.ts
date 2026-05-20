@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import OpenAI from "openai";
-import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
+import { requireStreamsAIScope, type StreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
@@ -66,13 +66,13 @@ export async function POST(request: NextRequest) {
       return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
 
-    return streamAssistantResponse({ sessionId, content });
+    return streamAssistantResponse({ scope, sessionId, content });
   } catch (error) {
     return streamsAIError(error);
   }
 }
 
-function streamAssistantResponse({ sessionId, content }: { sessionId: string; content: string }) {
+function streamAssistantResponse({ scope, sessionId, content }: { scope: StreamsAIScope; sessionId: string; content: string }) {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -85,7 +85,7 @@ function streamAssistantResponse({ sessionId, content }: { sessionId: string; co
         send("activity", { statusText: "Thinking" });
         const assistantContent = await runGuidanceResponse(content);
 
-        await messages.create(await requireScopeForStream(), {
+        const assistantMessage = await messages.create(scope, {
           sessionId,
           role: "assistant",
           content: assistantContent,
@@ -101,7 +101,7 @@ function streamAssistantResponse({ sessionId, content }: { sessionId: string; co
           send("response", { token });
         }
 
-        send("complete", { ok: true, sessionId });
+        send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id });
       } catch (error) {
         send("error", { message: error instanceof Error ? error.message : String(error) });
       } finally {
@@ -117,18 +117,6 @@ function streamAssistantResponse({ sessionId, content }: { sessionId: string; co
       Connection: "keep-alive",
     },
   });
-}
-
-async function requireScopeForStream() {
-  const testUserId = process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-4000-8000-000000000001";
-  return {
-    tenantId: "",
-    userId: testUserId,
-    defaultProjectId: null,
-    workspaceId: "streams-ai" as const,
-    moduleId: "streams-ai-core" as const,
-    productId: "streams-ai" as const,
-  };
 }
 
 function chunkText(text: string) {
