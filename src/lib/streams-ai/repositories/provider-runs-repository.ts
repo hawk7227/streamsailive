@@ -1,4 +1,4 @@
-import { createStreamsAIServiceClient, streamsAISchema } from "../server";
+import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
 
 export type CreateProviderRunInput = {
@@ -21,7 +21,7 @@ export class StreamsAIProviderRunsRepository {
 
   async create(scope: StreamsAIScope, input: CreateProviderRunInput) {
     const { data, error } = await this.db()
-      .from("provider_runs")
+      .from(streamsAITables.providerRuns)
       .insert({
         tenant_id: scope.tenantId,
         user_id: scope.userId,
@@ -45,7 +45,7 @@ export class StreamsAIProviderRunsRepository {
 
   async list(scope: StreamsAIScope, filters: { jobId?: string | null } = {}) {
     let query = this.db()
-      .from("provider_runs")
+      .from(streamsAITables.providerRuns)
       .select("*")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
