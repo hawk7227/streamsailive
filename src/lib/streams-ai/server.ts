@@ -6,15 +6,30 @@ export type StreamsAIConfig = {
   supabaseServiceRoleKey: string;
 };
 
+function firstEnv(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 export function getStreamsAIConfig(): StreamsAIConfig {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const supabaseUrl = firstEnv("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL", "DATABASE_SUPABASE_URL");
+  const supabaseAnonKey = firstEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY");
+  const supabaseServiceRoleKey = firstEnv(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SERVICE_ROLE",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_SECRET",
+    "SERVICE_ROLE_KEY",
+  );
 
   const missing = [
     !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL",
     !supabaseAnonKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY",
-    !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+    !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY",
   ].filter(Boolean);
 
   if (missing.length) {
