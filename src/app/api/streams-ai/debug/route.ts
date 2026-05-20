@@ -47,6 +47,8 @@ export async function GET() {
     serviceKeyStatus: masked(serviceKey.value),
     streamsAiTestMode: process.env.STREAMS_AI_TEST_MODE || null,
     streamsAiTestUserId: process.env.STREAMS_AI_TEST_USER_ID || null,
+    expectedSchema: "streams",
+    expectedTable: "streams_ai_memberships",
   };
 
   if (!supabaseUrl.value || !serviceKey.value) {
@@ -62,8 +64,8 @@ export async function GET() {
     });
 
     const { data, error } = await service
-      .schema("streams_ai")
-      .from("memberships")
+      .schema("streams")
+      .from("streams_ai_memberships")
       .select("id, tenant_id, user_id, role, created_at")
       .limit(1);
 
