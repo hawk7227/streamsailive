@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { createStreamsAIServiceClient, createStreamsAIUserClient, streamsAISchema } from "./server";
+import { createStreamsAIServiceClient, createStreamsAIUserClient, streamsAISchema, streamsAITables } from "./server";
 
 export type StreamsAIScope = {
   tenantId: string;
@@ -84,7 +84,7 @@ async function ensureStreamsAIAccountScope(
 
   if (!tenantId) {
     const { data: membership, error: membershipError } = await service
-      .from("memberships")
+      .from(streamsAITables.memberships)
       .select("tenant_id")
       .eq("user_id", userId)
       .order("created_at", { ascending: true })
@@ -100,7 +100,7 @@ async function ensureStreamsAIAccountScope(
 
   if (!tenantId) {
     const { data: tenant, error: tenantError } = await service
-      .from("tenants")
+      .from(streamsAITables.tenants)
       .insert({ name: testMode ? "STREAMS AI test workspace" : "Personal workspace" })
       .select("id")
       .single();
@@ -113,7 +113,7 @@ async function ensureStreamsAIAccountScope(
   }
 
   const { error: memberUpsertError } = await service
-    .from("memberships")
+    .from(streamsAITables.memberships)
     .upsert(
       { tenant_id: tenantId, user_id: userId, role: "owner" },
       { onConflict: "tenant_id,user_id" },
@@ -124,7 +124,7 @@ async function ensureStreamsAIAccountScope(
   }
 
   await service
-    .from("product_entitlements")
+    .from(streamsAITables.productEntitlements)
     .upsert(
       {
         tenant_id: tenantId,
@@ -138,7 +138,7 @@ async function ensureStreamsAIAccountScope(
     );
 
   const { data: project, error: projectError } = await service
-    .from("projects")
+    .from(streamsAITables.projects)
     .select("id")
     .eq("tenant_id", tenantId)
     .eq("user_id", userId)
@@ -153,7 +153,7 @@ async function ensureStreamsAIAccountScope(
   let defaultProjectId = project?.id as string | undefined;
   if (!defaultProjectId) {
     const { data: createdProject, error: createProjectError } = await service
-      .from("projects")
+      .from(streamsAITables.projects)
       .insert({ tenant_id: tenantId, user_id: userId, name: options.projectName || "Default STREAMS AI project" })
       .select("id")
       .single();
