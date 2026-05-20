@@ -1,4 +1,4 @@
-import { createStreamsAIServiceClient, streamsAISchema } from "../server";
+import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
 
 export type CreateToolCallInput = {
@@ -18,7 +18,7 @@ export class StreamsAIToolCallsRepository {
 
   async create(scope: StreamsAIScope, input: CreateToolCallInput) {
     const { data, error } = await this.db()
-      .from("chat_tool_calls")
+      .from(streamsAITables.chatToolCalls)
       .insert({
         tenant_id: scope.tenantId,
         user_id: scope.userId,
@@ -33,20 +33,20 @@ export class StreamsAIToolCallsRepository {
       .select("*")
       .single();
 
-    if (error) throw new Error(`Failed to create STREAMS AI tool call: ${error.message}`);
+    if (error) throw new Error(`Failed to create STREAMS AI tool row: ${error.message}`);
     return data;
   }
 
   async list(scope: StreamsAIScope, sessionId: string) {
     const { data, error } = await this.db()
-      .from("chat_tool_calls")
+      .from(streamsAITables.chatToolCalls)
       .select("*")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
       .eq("session_id", sessionId)
       .order("created_at", { ascending: false });
 
-    if (error) throw new Error(`Failed to list STREAMS AI tool calls: ${error.message}`);
+    if (error) throw new Error(`Failed to list STREAMS AI tool rows: ${error.message}`);
     return data || [];
   }
 }
