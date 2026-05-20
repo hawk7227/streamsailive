@@ -28,12 +28,34 @@ import {
   updateGeneratedImage,
 } from "../../runtime/streamsAssetStore";
 
+const CHAT_STATUS_FALLBACK = "Understanding…";
+const CHAT_STREAM_FLUSH_MS = 38;
+const CHAT_STREAM_CHUNK_SIZE = 18;
+
 function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function defaultActivity() {
   return { phase: "idle", mode: "chat", statusText: "Ready" };
+}
+
+function buildChatStatusMessage(statusText = CHAT_STATUS_FALLBACK) {
+  const clean = String(statusText || CHAT_STATUS_FALLBACK).replace(/\s+/g, " ").trim();
+  return `✦ ${clean || CHAT_STATUS_FALLBACK}`;
+}
+
+function scrollActiveChatToBottom() {
+  if (typeof window === "undefined") return;
+  window.requestAnimationFrame(() => {
+    const activeSurface = document.querySelector(".startChatSurface");
+    if (activeSurface) {
+      activeSurface.scrollTo({ top: activeSurface.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    const splitSurface = document.querySelector(".splitChatScroll");
+    if (splitSurface) splitSurface.scrollTo({ top: splitSurface.scrollHeight, behavior: "smooth" });
+  });
 }
 
 function buildRequestedSizeLabel(aspectRatio = "1:1") {
@@ -196,7 +218,7 @@ export function useStreamsChatRuntime() {
       let lastUserIndex = -1;
       for (let index = current.length - 1; index >= 0; index -= 1) if (current[index]?.role === "user") { lastUserIndex = index; break; }
       if (lastUserIndex === -1) return current;
-      const hasAssistantAfterLastUser = current.slice(lastUserIndex + 1).some((message) => message?.role === "assistant" && String(message?.content || "").trim());
+      const hasAssistantAfterLastUser = current.slice(lastUserIndex + 1).some((message) => message?.role === "assistant" && String(message?.content || "").trim() && !message?.isStatusOnly);
       if (hasAssistantAfterLastUser) return current;
       return [...current, { id: createId("assistant"), role: "assistant", content, status: "error", chunks: [content], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }];
     });
@@ -207,9 +229,10 @@ export function useStreamsChatRuntime() {
   const appendAssistantFallback = useCallback((assistantId, content) => {
     setMessages((current) => {
       const target = current.find((item) => item.id === assistantId);
-      if (!target || String(target.content || "").trim()) return current;
-      return current.map((item) => item.id === assistantId ? { ...item, content, isStreaming: false, status: "error" } : item);
+      if (!target || (String(target.content || "").trim() && !target.isStatusOnly)) return current;
+      return current.map((item) => item.id === assistantId ? { ...item, content, isStreaming: false, isStatusOnly: false, status: "error" } : item);
     });
+    scrollActiveChatToBottom();
   }, []);
 
   const updateMessageImage = useCallback((assistantId, patch) => {
@@ -295,6 +318,7 @@ export function useStreamsChatRuntime() {
     const route = detectPreCallRoute(trimmed);
 
     setMessages((current) => [...current, { id: userId, role: "user", content: trimmed }]);
+    scrollActiveChatToBottom();
 
     if (isLinkIntent(trimmed, composerMode)) {
       setActivity(createActivity("thinking", "link", "Reading link…"));
@@ -367,17 +391,57 @@ export function useStreamsChatRuntime() {
       }
     }
 
-    setMessages((current) => [...current, { id: assistantId, role: "assistant", content: "", isStreaming: true }]);
-    setActivity(createActivity("thinking", "chat", "Thinking"));
+    setMessages((current) => [...current, { id: assistantId, role: "assistant", content: buildChatStatusMessage(CHAT_STATUS_FALLBACK), isStreaming: true, isStatusOnly: true, status: "thinking", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }]);
+    setActivity(createActivity("thinking", "chat", CHAT_STATUS_FALLBACK));
     setIsStreaming(true);
+    scrollActiveChatToBottom();
+
     let assistantOutputStarted = false;
+    let queuedTokens = "";
+    let flushTimer = 0;
+
+    const clearFlushTimer = () => {
+      if (flushTimer) window.clearTimeout(flushTimer);
+      flushTimer = 0;
+    };
+
+    const flushQueuedTokens = (force = false) => {
+      clearFlushTimer();
+      if (!queuedTokens) return;
+      const next = force ? queuedTokens : queuedTokens.slice(0, Math.min(CHAT_STREAM_CHUNK_SIZE, queuedTokens.length));
+      queuedTokens = queuedTokens.slice(next.length);
+      setMessages((current) => current.map((item) => {
+        if (item.id !== assistantId) return item;
+        const existing = item.isStatusOnly ? "" : String(item.content || "");
+        return { ...item, content: `${existing}${next}`, chunks: [...(item.chunks || []), next], isStreaming: true, isStatusOnly: false, status: "streaming" };
+      }));
+      scrollActiveChatToBottom();
+      if (queuedTokens) flushTimer = window.setTimeout(() => flushQueuedTokens(false), CHAT_STREAM_FLUSH_MS);
+    };
+
+    const queueAssistantToken = (token) => {
+      const text = String(token || "");
+      if (!text) return;
+      queuedTokens += text;
+      if (!flushTimer) flushTimer = window.setTimeout(() => flushQueuedTokens(false), CHAT_STREAM_FLUSH_MS);
+    };
+
+    const updateAssistantStatus = (statusText) => {
+      const nextStatus = statusText || CHAT_STATUS_FALLBACK;
+      setActivity(createActivity("thinking", "chat", nextStatus));
+      if (assistantOutputStarted) return;
+      setMessages((current) => current.map((item) => item.id === assistantId && item.isStatusOnly ? { ...item, content: buildChatStatusMessage(nextStatus), status: "thinking", isStreaming: true } : item));
+      scrollActiveChatToBottom();
+    };
+
     const fallbackTimer = window.setTimeout(() => {
       if (!assistantOutputStarted) {
-        appendAssistantFallback(assistantId, "Chat backend is not configured for a live assistant response in this frontend build.");
+        clearFlushTimer();
+        appendAssistantFallback(assistantId, "The live assistant is taking longer than expected. The message is saved; retry if this does not continue shortly.");
         setActivity(createActivity("complete", "chat", "Ready"));
         setIsStreaming(false);
       }
-    }, 8000);
+    }, 16000);
 
     try {
       const response = await fetch("/api/streams-ai/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, userId }), signal: abortRef.current.signal });
@@ -412,31 +476,40 @@ export function useStreamsChatRuntime() {
         const parsed = parseSSEChunk(buffer);
         buffer = parsed.rest;
         for (const { eventName, payload } of parsed.events) {
-          if (eventName === "activity") setActivity(createActivity("thinking", "chat", payload?.statusText || payload?.text || "Thinking"));
+          if (eventName === "activity") updateAssistantStatus(payload?.statusText || payload?.text || "Thinking…");
           if (eventName === "response") {
             const token = payload?.token || payload?.delta || payload?.text;
             if (token) {
               assistantOutputStarted = true;
-              clearTimeout(fallbackTimer);
-              setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: `${item.content || ""}${token}`, isStreaming: true } : item));
+              window.clearTimeout(fallbackTimer);
+              queueAssistantToken(token);
             }
           }
           if (eventName === "artifact") setActiveArtifact(payload);
           if (eventName === "complete") {
-            clearTimeout(fallbackTimer);
-            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false } : item));
+            window.clearTimeout(fallbackTimer);
+            flushQueuedTokens(true);
+            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, status: "complete" } : item));
             setActivity(createActivity("complete", "chat", "Ready"));
             setIsStreaming(false);
+            scrollActiveChatToBottom();
           }
           if (eventName === "error") throw new Error(payload?.message || payload?.error || "Chat failed");
         }
       }
+      window.clearTimeout(fallbackTimer);
+      flushQueuedTokens(true);
+      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, status: "complete" } : item));
+      setActivity(createActivity("complete", "chat", "Ready"));
+      setIsStreaming(false);
     } catch (error) {
-      clearTimeout(fallbackTimer);
+      window.clearTimeout(fallbackTimer);
+      clearFlushTimer();
       const normalized = normalizeStreamsError(error);
-      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, content: formatErrorForChat(normalized) } : item));
+      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, content: formatErrorForChat(normalized), status: "error" } : item));
       setActivity(createActivity("error", "chat", "Error"));
       setIsStreaming(false);
+      scrollActiveChatToBottom();
     }
   }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback]);
 
