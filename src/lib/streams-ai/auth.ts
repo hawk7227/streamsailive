@@ -20,24 +20,41 @@ function bearerFromRequest(request: NextRequest): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function isTestModeEnabled() {
+function isExplicitTestModeEnabled() {
   return process.env.STREAMS_AI_TEST_MODE === "true";
+}
+
+function isPreviewTestHost(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+  const isVercelGitPreview = host.includes(".vercel.app") && host.includes("-git-");
+  const isVercelPreviewEnv = process.env.VERCEL_ENV === "preview";
+  const explicitlyDisabled = process.env.STREAMS_AI_TEST_MODE === "false";
+  return !explicitlyDisabled && (isLocal || isVercelGitPreview || isVercelPreviewEnv);
+}
+
+function isTestModeEnabled(request?: NextRequest) {
+  return isExplicitTestModeEnabled() || (request ? isPreviewTestHost(request) : false);
 }
 
 function testUserId() {
   return process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-4000-8000-000000000001";
 }
 
+function testScopeOptions(reason: string) {
+  return {
+    tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || null,
+    projectName: "STREAMS AI test project",
+    entitlementPlan: reason,
+  };
+}
+
 export async function requireStreamsAIScope(request: NextRequest): Promise<StreamsAIScope> {
   const accessToken = bearerFromRequest(request);
 
   if (!accessToken) {
-    if (isTestModeEnabled()) {
-      return ensureStreamsAIAccountScope(testUserId(), {
-        tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || null,
-        projectName: "STREAMS AI test project",
-        entitlementPlan: "test",
-      });
+    if (isTestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-no-token"), true);
     }
 
     throw new StreamsAIAuthError("STREAMS AI requires an authenticated Bearer token from the main streamsailive auth session.");
@@ -46,12 +63,8 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   const userClient = createStreamsAIUserClient(accessToken);
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData?.user?.id) {
-    if (isTestModeEnabled()) {
-      return ensureStreamsAIAccountScope(testUserId(), {
-        tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || null,
-        projectName: "STREAMS AI test project",
-        entitlementPlan: "test-invalid-token-fallback",
-      });
+    if (isTestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
     }
 
     throw new StreamsAIAuthError(userError?.message || "Invalid STREAMS AI auth session.");
@@ -63,6 +76,7 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
 async function ensureStreamsAIAccountScope(
   userId: string,
   options: { tenantId?: string | null; projectName?: string; entitlementPlan?: string } = {},
+  testMode = false,
 ): Promise<StreamsAIScope> {
   const service = streamsAISchema(createStreamsAIServiceClient());
 
@@ -87,7 +101,7 @@ async function ensureStreamsAIAccountScope(
   if (!tenantId) {
     const { data: tenant, error: tenantError } = await service
       .from("tenants")
-      .insert({ name: isTestModeEnabled() ? "STREAMS AI test workspace" : "Personal workspace" })
+      .insert({ name: testMode ? "STREAMS AI test workspace" : "Personal workspace" })
       .select("id")
       .single();
 
@@ -118,7 +132,7 @@ async function ensureStreamsAIAccountScope(
         product_id: "streams-ai",
         status: "active",
         plan_id: options.entitlementPlan || "included",
-        metadata: isTestModeEnabled() ? { testMode: true } : {},
+        metadata: testMode ? { testMode: true } : {},
       },
       { onConflict: "tenant_id,user_id,product_id" },
     );
