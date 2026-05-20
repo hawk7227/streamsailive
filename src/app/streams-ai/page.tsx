@@ -1,5 +1,5 @@
-import LocalStreamsAIChat from "@/components/streams-ai/current-chat/StreamsAIChatShell";
+import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
 
 export default function StreamsAIPage() {
-  return <LocalStreamsAIChat />;
+  return <StreamsClientShell />;
 }

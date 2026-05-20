@@ -3,10 +3,12 @@ import type { StreamsAIScope } from "../auth";
 import type { CreateSessionInput, UpdateSessionInput } from "./types";
 
 export class StreamsAISessionsRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async list(scope: StreamsAIScope) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_sessions")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -20,7 +22,7 @@ export class StreamsAISessionsRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateSessionInput = {}) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_sessions")
       .insert({
         tenant_id: scope.tenantId,
@@ -40,7 +42,7 @@ export class StreamsAISessionsRepository {
   }
 
   async get(scope: StreamsAIScope, sessionId: string) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_sessions")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -58,7 +60,7 @@ export class StreamsAISessionsRepository {
     if (typeof input.status === "string") patch.status = input.status;
     if (input.metadata) patch.metadata = input.metadata;
 
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_sessions")
       .update(patch)
       .eq("tenant_id", scope.tenantId)

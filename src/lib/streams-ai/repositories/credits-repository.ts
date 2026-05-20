@@ -3,10 +3,12 @@ import type { StreamsAIScope } from "../auth";
 import type { CreateCreditLedgerInput } from "./types";
 
 export class StreamsAICreditsRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async balance(scope: StreamsAIScope) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("credit_ledger")
       .select("amount")
       .eq("tenant_id", scope.tenantId)
@@ -17,7 +19,7 @@ export class StreamsAICreditsRepository {
   }
 
   async list(scope: StreamsAIScope, limit = 50) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("credit_ledger")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -33,7 +35,7 @@ export class StreamsAICreditsRepository {
     const currentBalance = await this.balance(scope);
     const balanceAfter = currentBalance + Number(input.amount || 0);
 
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("credit_ledger")
       .insert({
         tenant_id: scope.tenantId,

@@ -15,10 +15,12 @@ export type CreateProviderRunInput = {
 };
 
 export class StreamsAIProviderRunsRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async create(scope: StreamsAIScope, input: CreateProviderRunInput) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("provider_runs")
       .insert({
         tenant_id: scope.tenantId,
@@ -42,7 +44,7 @@ export class StreamsAIProviderRunsRepository {
   }
 
   async list(scope: StreamsAIScope, filters: { jobId?: string | null } = {}) {
-    let query = this.db
+    let query = this.db()
       .from("provider_runs")
       .select("*")
       .eq("tenant_id", scope.tenantId)

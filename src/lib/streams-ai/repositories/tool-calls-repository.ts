@@ -12,10 +12,12 @@ export type CreateToolCallInput = {
 };
 
 export class StreamsAIToolCallsRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async create(scope: StreamsAIScope, input: CreateToolCallInput) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_tool_calls")
       .insert({
         tenant_id: scope.tenantId,
@@ -36,7 +38,7 @@ export class StreamsAIToolCallsRepository {
   }
 
   async list(scope: StreamsAIScope, sessionId: string) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_tool_calls")
       .select("*")
       .eq("tenant_id", scope.tenantId)

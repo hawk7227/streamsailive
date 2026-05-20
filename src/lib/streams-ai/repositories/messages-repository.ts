@@ -3,10 +3,12 @@ import type { StreamsAIScope } from "../auth";
 import type { CreateMessageInput } from "./types";
 
 export class StreamsAIMessagesRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async list(scope: StreamsAIScope, sessionId: string) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("chat_messages")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -19,7 +21,9 @@ export class StreamsAIMessagesRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateMessageInput) {
-    const { data: session, error: sessionError } = await this.db
+    const db = this.db();
+
+    const { data: session, error: sessionError } = await db
       .from("chat_sessions")
       .select("id, project_id")
       .eq("tenant_id", scope.tenantId)
@@ -30,7 +34,7 @@ export class StreamsAIMessagesRepository {
     if (sessionError) throw new Error(`Failed to verify STREAMS AI session: ${sessionError.message}`);
     if (!session?.id) throw new Error("STREAMS AI session not found or not owned by user.");
 
-    const { data, error } = await this.db
+    const { data, error } = await db
       .from("chat_messages")
       .insert({
         tenant_id: scope.tenantId,
@@ -47,7 +51,7 @@ export class StreamsAIMessagesRepository {
 
     if (error) throw new Error(`Failed to create STREAMS AI message: ${error.message}`);
 
-    await this.db
+    await db
       .from("chat_sessions")
       .update({ updated_at: new Date().toISOString() })
       .eq("tenant_id", scope.tenantId)

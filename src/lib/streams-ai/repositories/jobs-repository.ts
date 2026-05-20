@@ -3,10 +3,12 @@ import type { StreamsAIScope } from "../auth";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
 
 export class StreamsAIJobsRepository {
-  private readonly db = streamsAISchema(createStreamsAIServiceClient());
+  private db() {
+    return streamsAISchema(createStreamsAIServiceClient());
+  }
 
   async list(scope: StreamsAIScope, filters: { sessionId?: string | null; status?: string | null } = {}) {
-    let query = this.db
+    let query = this.db()
       .from("jobs")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -22,7 +24,7 @@ export class StreamsAIJobsRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateJobInput = {}) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("jobs")
       .insert({
         tenant_id: scope.tenantId,
@@ -55,7 +57,7 @@ export class StreamsAIJobsRepository {
   }
 
   async get(scope: StreamsAIScope, jobId: string) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("jobs")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -68,7 +70,7 @@ export class StreamsAIJobsRepository {
   }
 
   async events(scope: StreamsAIScope, jobId: string) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("job_events")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -81,7 +83,7 @@ export class StreamsAIJobsRepository {
   }
 
   async createEvent(scope: StreamsAIScope, input: CreateJobEventInput) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("job_events")
       .insert({
         tenant_id: scope.tenantId,

@@ -3,11 +3,16 @@ import type { StreamsAIScope } from "../auth";
 import type { CreateAssetInput } from "./types";
 
 export class StreamsAIAssetsRepository {
-  private readonly serviceClient = createStreamsAIServiceClient();
-  private readonly db = streamsAISchema(this.serviceClient);
+  private serviceClient() {
+    return createStreamsAIServiceClient();
+  }
+
+  private db() {
+    return streamsAISchema(this.serviceClient());
+  }
 
   async list(scope: StreamsAIScope, filters: { projectId?: string | null; sessionId?: string | null } = {}) {
-    let query = this.db
+    let query = this.db()
       .from("assets")
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -23,7 +28,7 @@ export class StreamsAIAssetsRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateAssetInput) {
-    const { data, error } = await this.db
+    const { data, error } = await this.db()
       .from("assets")
       .insert({
         tenant_id: scope.tenantId,
@@ -50,17 +55,22 @@ export class StreamsAIAssetsRepository {
     return data;
   }
 
-  async uploadFile(scope: StreamsAIScope, file: File, input: Omit<CreateAssetInput, "name" | "mimeType" | "sizeBytes" | "storageBucket" | "storagePath" | "publicUrl"> = {}) {
+  async uploadFile(
+    scope: StreamsAIScope,
+    file: File,
+    input: Omit<CreateAssetInput, "name" | "mimeType" | "sizeBytes" | "storageBucket" | "storagePath" | "publicUrl"> = {},
+  ) {
+    const serviceClient = this.serviceClient();
     const bucket = process.env.STREAMS_AI_ASSETS_BUCKET || "streams-ai-assets";
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const storagePath = `${scope.tenantId}/${scope.userId}/${crypto.randomUUID()}-${safeName}`;
 
-    const { data: buckets } = await this.serviceClient.storage.listBuckets();
+    const { data: buckets } = await serviceClient.storage.listBuckets();
     if (!buckets?.some((item) => item.name === bucket)) {
-      await this.serviceClient.storage.createBucket(bucket, { public: false });
+      await serviceClient.storage.createBucket(bucket, { public: false });
     }
 
-    const { error: uploadError } = await this.serviceClient.storage
+    const { error: uploadError } = await serviceClient.storage
       .from(bucket)
       .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
 
@@ -73,7 +83,15 @@ export class StreamsAIAssetsRepository {
       sizeBytes: file.size,
       storageBucket: bucket,
       storagePath,
-      kind: input.kind || (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "file"),
+      kind:
+        input.kind ||
+        (file.type.startsWith("image/")
+          ? "image"
+          : file.type.startsWith("video/")
+            ? "video"
+            : file.type.startsWith("audio/")
+              ? "audio"
+              : "file"),
     });
   }
 }
