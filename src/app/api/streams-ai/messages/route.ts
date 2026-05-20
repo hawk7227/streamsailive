@@ -66,35 +66,74 @@ export async function POST(request: NextRequest) {
       return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
 
-    const assistantContent = await runGuidanceResponse(content);
-    const assistantMessage = await messages.create(scope, {
-      sessionId,
-      role: "assistant",
-      content: assistantContent,
-      status: "complete",
-      metadata: {
-        source: "streams-ai-guidance",
-        note: "Guidance-only response. Capability execution still requires tool/job routing.",
-      },
-    });
-
-    return streamsAIJson(
-      {
-        ok: true,
-        sessionId,
-        message: assistantMessage,
-        userMessage,
-        assistantMessage,
-        messages: [userMessage, assistantMessage],
-        reply: assistantContent,
-        content: assistantContent,
-        text: assistantContent,
-      },
-      201,
-    );
+    return streamAssistantResponse({ sessionId, content });
   } catch (error) {
     return streamsAIError(error);
   }
+}
+
+function streamAssistantResponse({ sessionId, content }: { sessionId: string; content: string }) {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      };
+
+      try {
+        send("activity", { statusText: "Thinking" });
+        const assistantContent = await runGuidanceResponse(content);
+
+        await messages.create(await requireScopeForStream(), {
+          sessionId,
+          role: "assistant",
+          content: assistantContent,
+          status: "complete",
+          metadata: {
+            source: "streams-ai-guidance",
+            note: "Guidance-only response. Capability execution still requires tool/job routing.",
+          },
+        });
+
+        const chunks = chunkText(assistantContent);
+        for (const token of chunks) {
+          send("response", { token });
+        }
+
+        send("complete", { ok: true, sessionId });
+      } catch (error) {
+        send("error", { message: error instanceof Error ? error.message : String(error) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+async function requireScopeForStream() {
+  const testUserId = process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-4000-8000-000000000001";
+  return {
+    tenantId: "",
+    userId: testUserId,
+    defaultProjectId: null,
+    workspaceId: "streams-ai" as const,
+    moduleId: "streams-ai-core" as const,
+    productId: "streams-ai" as const,
+  };
+}
+
+function chunkText(text: string) {
+  const parts = text.match(/.{1,24}(\s|$)/g);
+  return parts?.length ? parts : [text];
 }
 
 function titleFromMessage(message: string) {
