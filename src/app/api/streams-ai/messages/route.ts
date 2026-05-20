@@ -34,6 +34,11 @@ type PersistedChatMessage = {
   metadata?: Record<string, unknown> | null;
 };
 
+type OpenAIInputMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type OpenAIStreamEvent = {
   type?: string;
   delta?: string;
@@ -47,6 +52,8 @@ type OpenAIStreamEvent = {
     message?: string;
   };
 };
+
+type ResponsesCreateStream = (args: Record<string, unknown>) => Promise<AsyncIterable<OpenAIStreamEvent>>;
 
 const STREAMS_LIVE_ASSISTANT_INSTRUCTIONS = [
   "You are STREAMS AI, a full live OpenAI-powered assistant inside the STREAMS chat interface.",
@@ -127,13 +134,13 @@ export async function POST(request: NextRequest) {
       return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
 
-    return streamAssistantResponse({ scope, sessionId, content });
+    return streamAssistantResponse({ scope, sessionId });
   } catch (error) {
     return streamsAIError(error);
   }
 }
 
-function streamAssistantResponse({ scope, sessionId, content }: { scope: StreamsAIScope; sessionId: string; content: string }) {
+function streamAssistantResponse({ scope, sessionId }: { scope: StreamsAIScope; sessionId: string }) {
   const encoder = new TextEncoder();
   const startedAt = Date.now();
 
@@ -276,7 +283,8 @@ async function runLiveOpenAIResponse({
       source: LIVE_ASSISTANT_SOURCE,
     });
 
-    const responseStream = (await client.responses.create({
+    const createStream = client.responses.create.bind(client.responses) as unknown as ResponsesCreateStream;
+    const responseStream = await createStream({
       model,
       instructions: STREAMS_LIVE_ASSISTANT_INSTRUCTIONS,
       input,
@@ -288,7 +296,7 @@ async function runLiveOpenAIResponse({
         tenantId: String(scope.tenantId || ""),
         sessionId: String(sessionId || ""),
       },
-    })) as unknown as AsyncIterable<OpenAIStreamEvent>;
+    });
 
     for await (const event of responseStream) {
       if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
@@ -331,7 +339,7 @@ async function runLiveOpenAIResponse({
   }
 }
 
-function buildOpenAIInput(history: PersistedChatMessage[]) {
+function buildOpenAIInput(history: PersistedChatMessage[]): OpenAIInputMessage[] {
   const safeHistory = history
     .filter((message) => String(message.content || "").trim())
     .slice(-MAX_HISTORY_MESSAGES);
@@ -346,10 +354,8 @@ function buildOpenAIInput(history: PersistedChatMessage[]) {
   }));
 }
 
-function normalizeOpenAIRole(role: string | null | undefined) {
-  if (role === "assistant") return "assistant";
-  if (role === "system") return "system";
-  return "user";
+function normalizeOpenAIRole(role: string | null | undefined): "user" | "assistant" {
+  return role === "assistant" ? "assistant" : "user";
 }
 
 function chunkText(text: string) {
