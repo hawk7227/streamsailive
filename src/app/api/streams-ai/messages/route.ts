@@ -8,6 +8,12 @@ import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessi
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
 
+type GuidanceResult = {
+  content: string;
+  providerStatus: "ok" | "not_configured" | "failed";
+  providerError?: string;
+};
+
 export async function GET(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
@@ -83,27 +89,55 @@ function streamAssistantResponse({ scope, sessionId, content }: { scope: Streams
 
       try {
         send("activity", { statusText: "Thinking" });
-        const assistantContent = await runGuidanceResponse(content);
+        const guidance = await runGuidanceResponse(content);
 
         const assistantMessage = await messages.create(scope, {
           sessionId,
           role: "assistant",
-          content: assistantContent,
+          content: guidance.content,
           status: "complete",
           metadata: {
             source: "streams-ai-guidance",
+            providerStatus: guidance.providerStatus,
+            providerError: guidance.providerError || null,
             note: "Guidance-only response. Capability execution still requires tool/job routing.",
           },
         });
 
-        const chunks = chunkText(assistantContent);
+        const chunks = chunkText(guidance.content);
         for (const token of chunks) {
           send("response", { token });
         }
 
-        send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id });
+        send("complete", {
+          ok: true,
+          sessionId,
+          assistantMessageId: assistantMessage.id,
+          providerStatus: guidance.providerStatus,
+        });
       } catch (error) {
-        send("error", { message: error instanceof Error ? error.message : String(error) });
+        const fallback = providerFallback(error);
+        try {
+          const assistantMessage = await messages.create(scope, {
+            sessionId,
+            role: "assistant",
+            content: fallback.content,
+            status: "complete",
+            metadata: {
+              source: "streams-ai-guidance",
+              providerStatus: "failed",
+              providerError: fallback.providerError || null,
+              note: "Fallback response saved after assistant provider failure.",
+            },
+          });
+
+          for (const token of chunkText(fallback.content)) {
+            send("response", { token });
+          }
+          send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, providerStatus: "failed" });
+        } catch (persistError) {
+          send("error", { message: persistError instanceof Error ? persistError.message : String(persistError) });
+        }
       } finally {
         controller.close();
       }
@@ -130,28 +164,51 @@ function titleFromMessage(message: string) {
   return clean.length > 58 ? `${clean.slice(0, 58)}…` : clean;
 }
 
-async function runGuidanceResponse(userContent: string) {
+function providerFallback(error: unknown): GuidanceResult {
+  const message = error instanceof Error ? error.message : String(error || "Unknown provider failure");
+  return {
+    providerStatus: "failed",
+    providerError: message,
+    content: [
+      "STREAMS AI saved your message, but the live assistant provider did not complete successfully.",
+      "",
+      "The chat session and your message are stored. Check OPENAI_API_KEY / OPENAI_MODEL in the deployment environment, then retry.",
+    ].join("\n"),
+  };
+}
+
+async function runGuidanceResponse(userContent: string): Promise<GuidanceResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return [
-      "STREAMS AI saved your message, but assistant generation is not enabled because OPENAI_API_KEY is not configured in this deployment.",
-      "",
-      "Next production step: configure OpenAI, then route this request through the STREAMS AI orchestrator with scoped sessions, messages, assets, jobs, credits, and provider-run tracking.",
-    ].join("\n");
+    return {
+      providerStatus: "not_configured",
+      content: [
+        "STREAMS AI saved your message, but assistant generation is not enabled because OPENAI_API_KEY is not configured in this deployment.",
+        "",
+        "Next production step: configure OpenAI, then route this request through the STREAMS AI orchestrator with scoped sessions, messages, assets, jobs, credits, and provider-run tracking.",
+      ].join("\n"),
+    };
   }
 
-  const client = new OpenAI({ apiKey });
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL || "gpt-4.1",
-    input: [
-      {
-        role: "system",
-        content:
-          "You are STREAMS AI. Give business/growth guidance only. Do not claim that media generation, jobs, credits, or storage actions have run unless the request is routed through the production tool/job APIs.",
-      },
-      { role: "user", content: userContent },
-    ],
-  });
+  try {
+    const client = new OpenAI({ apiKey });
+    const response = await client.responses.create({
+      model: process.env.OPENAI_MODEL || "gpt-4.1",
+      input: [
+        {
+          role: "system",
+          content:
+            "You are STREAMS AI. Give business/growth guidance only. Do not claim that media generation, jobs, credits, or storage actions have run unless the request is routed through the production tool/job APIs.",
+        },
+        { role: "user", content: userContent },
+      ],
+    });
 
-  return response.output_text || "STREAMS AI completed the guidance response.";
+    return {
+      providerStatus: "ok",
+      content: response.output_text || "STREAMS AI completed the guidance response.",
+    };
+  } catch (error) {
+    return providerFallback(error);
+  }
 }
