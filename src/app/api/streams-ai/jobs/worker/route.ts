@@ -31,8 +31,11 @@ type WorkerResult = {
 };
 
 function isAuthorized(request: NextRequest) {
-  const expected = process.env.STREAMS_AI_WORKER_SECRET || process.env.CRON_SECRET || "";
-  if (!expected && process.env.NODE_ENV !== "production") return true;
+  const expected = (process.env.STREAMS_AI_WORKER_SECRET || process.env.CRON_SECRET || "").trim();
+  if (!expected) {
+    return process.env.NODE_ENV !== "production";
+  }
+
   const auth = request.headers.get("authorization") || "";
   const querySecret = request.nextUrl.searchParams.get("secret") || "";
   return auth === `Bearer ${expected}` || querySecret === expected;
