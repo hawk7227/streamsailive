@@ -1,6 +1,12 @@
+import { getCapabilityProduct } from "../capabilities/capability-products";
 import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
+import { StreamsAICreditLedgerRepository } from "./credit-ledger-repository";
+import { StreamsAIEntitlementsRepository } from "./entitlements-repository";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
+
+const creditLedger = new StreamsAICreditLedgerRepository();
+const entitlements = new StreamsAIEntitlementsRepository();
 
 export type UpdateJobInput = {
   status?: string;
@@ -8,6 +14,10 @@ export type UpdateJobInput = {
   creditEstimate?: number;
   metadata?: Record<string, unknown>;
 };
+
+function shouldEnforceCredits() {
+  return process.env.STREAMS_AI_ENFORCE_CREDITS !== "false";
+}
 
 export class StreamsAIJobsRepository {
   private db() {
@@ -31,6 +41,18 @@ export class StreamsAIJobsRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateJobInput = {}) {
+    const capability = getCapabilityProduct(input.kind || "chat_tool");
+    const effectiveProductId = input.productId && input.productId !== "streams-ai" ? input.productId : capability.productId;
+    const effectiveCreditEstimate = input.creditEstimate ?? capability.estimatedCredits ?? 0;
+
+    if (capability.entitlementRequired) {
+      await entitlements.require(scope, effectiveProductId);
+    }
+
+    if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) {
+      await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
+    }
+
     const { data, error } = await this.db()
       .from(streamsAITables.jobs)
       .insert({
@@ -42,11 +64,19 @@ export class StreamsAIJobsRepository {
         tool_call_id: input.toolCallId ?? null,
         workspace_id: scope.workspaceId,
         module_id: scope.moduleId,
-        product_id: input.productId ?? scope.productId,
+        product_id: effectiveProductId,
         status: input.status || "queued",
-        kind: input.kind || "chat",
-        input_json: input.inputJson || {},
-        credit_estimate: input.creditEstimate || 0,
+        kind: capability.kind,
+        input_json: {
+          ...(input.inputJson || {}),
+          capability: {
+            kind: capability.kind,
+            productId: effectiveProductId,
+            displayName: capability.displayName,
+            executionStatus: capability.executionStatus,
+          },
+        },
+        credit_estimate: effectiveCreditEstimate,
       })
       .select("*")
       .single();
@@ -57,7 +87,7 @@ export class StreamsAIJobsRepository {
       jobId: data.id,
       eventType: "created",
       message: "Job created",
-      data: { status: data.status, kind: data.kind },
+      data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate },
     });
 
     return data;
