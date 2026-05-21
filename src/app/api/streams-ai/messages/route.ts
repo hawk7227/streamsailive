@@ -5,12 +5,14 @@ import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/ap
 import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
+import { StreamsAIProviderRunsRepository } from "@/lib/streams-ai/repositories/provider-runs-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 import { StreamsAIToolCallsRepository } from "@/lib/streams-ai/repositories/tool-calls-repository";
 
 const assets = new StreamsAIAssetsRepository();
 const jobs = new StreamsAIJobsRepository();
 const messages = new StreamsAIMessagesRepository();
+const providerRuns = new StreamsAIProviderRunsRepository();
 const sessions = new StreamsAISessionsRepository();
 const toolCalls = new StreamsAIToolCallsRepository();
 
@@ -71,7 +73,8 @@ const STREAMS_LIVE_ASSISTANT_INSTRUCTIONS = [
   "OpenAI is the single reasoning brain. STREAMS owns runtime, UI, persistence, tools, jobs, assets, providers, storage, previews, credits, permissions, and proof.",
   "When STREAMS backend tool results are provided in context, answer from those results and do not pretend another lookup was performed.",
   "Tool/job rows prove persistence only. They do not prove worker pickup, provider execution, provider_runs, storage upload, generated output, or preview rendering unless those records are present in the supplied tool results.",
-  "Use OpenAI knowledge and the conversation/file context supplied by STREAMS. Do not pretend to have hidden access to ChatGPT private account tools, Gmail, calendar, local computer, browser, Vercel, Supabase, provider dashboards, or repositories unless STREAMS has explicitly supplied that information through the request or a real tool result.",
+  "Provider_runs rows prove provider tracking exists. They prove provider execution only when status/metadata shows a real provider request/response, not merely a placeholder row.",
+  "Assets prove generated output only when they contain storage bucket/path or URL metadata tied to the job/provider run.",
   "Never fake external actions. Do not claim images, videos, voice, files, emails, calendar actions, provider runs, storage uploads, database writes, repo edits, browser actions, or deployments happened unless a real STREAMS backend tool/job/provider/storage path has executed and returned proof.",
   "For production build/audit work, classify claims as Proven, Implemented but unproven, Blocked, or Rejected. Do not call something complete unless source, runtime, persistence, output, and fake-layer-removal proof exist where relevant.",
   "For STREAMS architecture, preserve the locked flow: normalize -> route -> context -> OpenAI -> stream -> tools -> continue -> complete.",
@@ -162,22 +165,11 @@ function streamAssistantResponse({ scope, sessionId, userContent }: { scope: Str
       };
 
       try {
-        send("activity", {
-          phase: "turn.started",
-          statusText: "Understanding…",
-          source: LIVE_ASSISTANT_SOURCE,
-          startedAt,
-        });
+        send("activity", { phase: "turn.started", statusText: "Understanding…", source: LIVE_ASSISTANT_SOURCE, startedAt });
 
         const history = await messages.list(scope, sessionId);
         const toolResults = await executeRequestedBackendTools({ userContent, scope, sessionId, send });
-        const assistant = await runLiveOpenAIResponse({
-          history,
-          scope,
-          sessionId,
-          toolResults,
-          send,
-        });
+        const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, toolResults, send });
 
         const assistantMessage = await messages.create(scope, {
           sessionId,
@@ -194,7 +186,7 @@ function streamAssistantResponse({ scope, sessionId, userContent }: { scope: Str
             openaiUsage: assistant.usage || null,
             backendTools: "deterministic-approved-tools",
             toolResults: assistant.toolResults || toolResults,
-            runtimeContract: "full_live_assistant_with_approved_backend_tool_results",
+            runtimeContract: "full_live_assistant_with_provider_run_lookup",
             proofNote: "Assistant text was generated through the server-side OpenAI Responses API path. Approved STREAMS backend tools may create/read real backend records. Provider output still requires workers/providers/storage before output claims are made.",
           },
         });
@@ -232,15 +224,7 @@ function streamAssistantResponse({ scope, sessionId, userContent }: { scope: Str
           });
 
           for (const token of chunkText(fallback.content)) send("response", { token });
-          send("complete", {
-            ok: true,
-            sessionId,
-            assistantMessageId: assistantMessage.id,
-            provider: "openai",
-            providerStatus: "failed",
-            elapsedMs: Date.now() - startedAt,
-            source: LIVE_ASSISTANT_SOURCE,
-          });
+          send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "openai", providerStatus: "failed", elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
         } catch (persistError) {
           send("error", { message: persistError instanceof Error ? persistError.message : String(persistError) });
         }
@@ -346,14 +330,7 @@ async function runLiveOpenAIResponse({
       }
     }
 
-    return {
-      providerStatus: "ok",
-      content: content.trim() || summarizeToolResults(toolResults),
-      responseId,
-      model,
-      usage,
-      toolResults,
-    };
+    return { providerStatus: "ok", content: content.trim() || summarizeToolResults(toolResults), responseId, model, usage, toolResults };
   } catch (error) {
     return providerFallback(error, model, toolResults);
   }
@@ -408,11 +385,7 @@ function detectBackendToolRequests(userContent: string) {
       args: {
         toolName: detectRequestedJobKind(userContent),
         productId: "streams-ai",
-        inputJson: {
-          prompt: extractPrompt(userContent),
-          originalRequest: userContent.slice(0, 12000),
-        },
-        creditEstimate: 0,
+        inputJson: { prompt: extractPrompt(userContent), originalRequest: userContent.slice(0, 12000) },
       },
     });
   }
@@ -426,7 +399,7 @@ function detectBackendToolRequests(userContent: string) {
   }
 
   if (/provider[_\s-]?runs?|provider run records?|provider execution/.test(text)) {
-    requests.push({ name: "provider_runs_lookup", args: {} });
+    requests.push({ name: "provider_runs_lookup", args: { limit: 12 } });
   }
 
   return dedupeRequests(requests);
@@ -450,7 +423,7 @@ async function executeApprovedBackendTool({
         { name: "create_streams_tool_job", status: "wired_persistence_only", proof: "creates real tool_call and queued job rows" },
         { name: "list_streams_jobs", status: "wired", proof: "reads persisted jobs for current session" },
         { name: "list_streams_assets", status: "wired", proof: "reads persisted assets for current session" },
-        { name: "provider_runs_lookup", status: "blocked", proof: "repository/query is not wired in this patch" },
+        { name: "provider_runs_lookup", status: "wired", proof: "reads persisted provider_runs records" },
       ],
     };
   }
@@ -460,23 +433,8 @@ async function executeApprovedBackendTool({
     const productId = safeString(args.productId || "streams-ai").slice(0, 80);
     const inputJson = sanitizeToolInput(args.inputJson) || {};
 
-    const toolCall = await toolCalls.create(scope, {
-      sessionId,
-      toolName,
-      productId,
-      inputJson,
-      status: "queued",
-    });
-
-    const job = await jobs.create(scope, {
-      sessionId,
-      toolCallId: toolCall.id,
-      productId,
-      kind: toolName,
-      status: "queued",
-      inputJson,
-      creditEstimate: 0,
-    });
+    const toolCall = await toolCalls.create(scope, { sessionId, toolName, productId, inputJson, status: "queued" });
+    const job = await jobs.create(scope, { sessionId, toolCallId: toolCall.id, productId, kind: toolName, status: "queued", inputJson, creditEstimate: 0 });
 
     return {
       status: "queued",
@@ -486,70 +444,88 @@ async function executeApprovedBackendTool({
       jobStatus: job.status,
       jobKind: job.kind,
       productId: job.product_id || productId,
-      unproven: [
-        "worker pickup",
-        "provider execution",
-        "provider_runs row",
-        "storage upload",
-        "generated output asset creation",
-        "final preview rendering from stored output",
-      ],
+      unproven: ["worker pickup", "provider execution", "provider_runs row", "storage upload", "generated output asset creation", "final preview rendering from stored output"],
     };
   }
 
   if (name === "list_streams_jobs") {
     const rows = await jobs.list(scope, { sessionId });
-    return {
-      count: rows.length,
-      jobs: rows.slice(0, 12).map((job) => ({
-        id: job.id,
-        kind: job.kind,
-        status: job.status,
-        productId: job.product_id,
-        toolCallId: job.tool_call_id,
-        createdAt: job.created_at,
-        inputJson: job.input_json,
-      })),
-    };
+    return { count: rows.length, jobs: rows.slice(0, clampLimit(args.limit, 12)).map(normalizeJobRow) };
   }
 
   if (name === "list_streams_assets") {
     const rows = await assets.list(scope, { sessionId });
-    return {
-      count: rows.length,
-      assets: rows.slice(0, 12).map((asset) => ({
-        id: asset.id,
-        kind: asset.kind,
-        name: asset.name,
-        mimeType: asset.mime_type,
-        sizeBytes: asset.size_bytes,
-        storageBucket: asset.storage_bucket,
-        storagePath: asset.storage_path,
-        publicUrl: asset.public_url,
-        createdAt: asset.created_at,
-        metadata: asset.metadata,
-      })),
-    };
+    return { count: rows.length, assets: rows.slice(0, clampLimit(args.limit, 12)).map(normalizeAssetRow) };
   }
 
   if (name === "provider_runs_lookup") {
+    const latestJobs = await jobs.list(scope, { sessionId });
+    const latestJob = latestJobs.find((job) => String(job.kind || "").includes("image")) || latestJobs[0] || null;
+    const jobId = latestJob?.id || null;
+    const rows = await providerRuns.list(scope, { jobId });
     return {
-      status: "blocked",
-      proof: "provider_runs_lookup_not_wired",
-      message: "The assistant route does not yet have a provider_runs repository/query. Provider execution cannot be proven from this chat route yet.",
-      requiredNextPatch: "Add provider-runs repository read method and expose approved provider_runs lookup tool.",
+      status: rows.length ? "found" : "none",
+      jobId,
+      count: rows.length,
+      providerRuns: rows.slice(0, clampLimit(args.limit, 12)).map(normalizeProviderRunRow),
+      interpretation: rows.length
+        ? "provider_runs rows exist. Inspect each row status/response_json/output_asset_id to determine provider/output proof."
+        : "No provider_runs rows were found for the latest matching job. Provider execution is not proven from provider_runs yet.",
     };
   }
 
   throw new Error(`Tool is not approved: ${name}`);
 }
 
+function normalizeJobRow(job: Record<string, unknown>) {
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: job.status,
+    productId: job.product_id,
+    toolCallId: job.tool_call_id,
+    createdAt: job.created_at,
+    inputJson: job.input_json,
+  };
+}
+
+function normalizeAssetRow(asset: Record<string, unknown>) {
+  return {
+    id: asset.id,
+    kind: asset.kind,
+    name: asset.name,
+    mimeType: asset.mime_type,
+    sizeBytes: asset.size_bytes,
+    storageBucket: asset.storage_bucket,
+    storagePath: asset.storage_path,
+    publicUrl: asset.public_url,
+    createdAt: asset.created_at,
+    metadata: asset.metadata,
+  };
+}
+
+function normalizeProviderRunRow(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    provider: row.provider,
+    model: row.model,
+    status: row.status,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    outputAssetId: row.output_asset_id,
+    error: row.error || row.error_message,
+    responseJson: row.response_json,
+    requestJson: row.request_json,
+    createdAt: row.created_at,
+  };
+}
+
 function dedupeRequests(requests: Array<{ name: string; args: Record<string, unknown> }>) {
   const seen = new Set<string>();
   return requests.filter((request) => {
-    const key = request.name;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (seen.has(request.name)) return false;
+    seen.add(request.name);
     return true;
   });
 }
@@ -574,10 +550,7 @@ function buildOpenAIInput(history: PersistedChatMessage[], toolResults: Executed
   const safeHistory = history
     .filter((message) => String(message.content || "").trim())
     .slice(-MAX_HISTORY_MESSAGES)
-    .map((message) => ({
-      role: normalizeOpenAIRole(message.role),
-      content: String(message.content || "").slice(0, MAX_MESSAGE_CHARS),
-    }));
+    .map((message) => ({ role: normalizeOpenAIRole(message.role), content: String(message.content || "").slice(0, MAX_MESSAGE_CHARS) }));
 
   if (toolResults.length) {
     safeHistory.push({
@@ -600,13 +573,7 @@ function normalizeOpenAIRole(role: string | null | undefined): "user" | "assista
 
 function summarizeToolResults(results: ExecutedToolResult[]) {
   if (!results.length) return "STREAMS AI completed the live OpenAI response.";
-  return [
-    "STREAMS executed approved backend tool checks.",
-    "",
-    ...results.map((result) => `- ${result.name}: ${result.ok ? "ok" : "failed"}`),
-    "",
-    "Provider execution and generated outputs still require worker/provider/storage proof before they can be claimed as complete.",
-  ].join("\n");
+  return ["STREAMS executed approved backend tool checks.", "", ...results.map((result) => `- ${result.name}: ${result.ok ? "ok" : "failed"}`), "", "Provider execution and generated outputs still require worker/provider/storage proof before they can be claimed as complete."].join("\n");
 }
 
 function sanitizeToolInput(value: unknown): Record<string, unknown> | undefined {
@@ -627,6 +594,11 @@ function safeString(value: unknown) {
   return String(value || "").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._:-]/g, "_");
 }
 
+function clampLimit(value: unknown, fallback: number) {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.max(1, Math.min(50, n));
+}
+
 function chunkText(text: string) {
   const parts = text.match(/.{1,24}(\s|$)/g);
   return parts?.length ? parts : [text];
@@ -645,12 +617,6 @@ function providerFallback(error: unknown, model = process.env.OPENAI_MODEL || DE
     providerError: message,
     model,
     toolResults,
-    content: [
-      "STREAMS AI saved your message, but the live OpenAI assistant did not complete successfully.",
-      "",
-      "The chat session and your message are stored. Check OPENAI_API_KEY / OPENAI_MODEL in the deployment environment, then retry.",
-      "",
-      `Provider error: ${message}`,
-    ].join("\n"),
+    content: ["STREAMS AI saved your message, but the live OpenAI assistant did not complete successfully.", "", "The chat session and your message are stored. Check OPENAI_API_KEY / OPENAI_MODEL in the deployment environment, then retry.", "", `Provider error: ${message}`].join("\n"),
   };
 }
