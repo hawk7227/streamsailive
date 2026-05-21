@@ -63,6 +63,7 @@ export const streamsAITables = {
   tenants: "streams_ai_tenants",
   memberships: "streams_ai_memberships",
   projects: "streams_ai_projects",
+  subscriptions: "streams_ai_subscriptions",
   productEntitlements: "streams_ai_product_entitlements",
   chatSessions: "streams_ai_chat_sessions",
   chatMessages: "streams_ai_chat_messages",
