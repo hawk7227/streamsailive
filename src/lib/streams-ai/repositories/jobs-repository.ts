@@ -2,6 +2,13 @@ import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "
 import type { StreamsAIScope } from "../auth";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
 
+export type UpdateJobInput = {
+  status?: string;
+  inputJson?: Record<string, unknown>;
+  creditEstimate?: number;
+  metadata?: Record<string, unknown>;
+};
+
 export class StreamsAIJobsRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
@@ -53,6 +60,26 @@ export class StreamsAIJobsRepository {
       data: { status: data.status, kind: data.kind },
     });
 
+    return data;
+  }
+
+  async update(scope: StreamsAIScope, jobId: string, input: UpdateJobInput) {
+    const patch: Record<string, unknown> = {};
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.inputJson !== undefined) patch.input_json = input.inputJson;
+    if (input.creditEstimate !== undefined) patch.credit_estimate = input.creditEstimate;
+    if (input.metadata !== undefined) patch.metadata = input.metadata;
+
+    const { data, error } = await this.db()
+      .from(streamsAITables.jobs)
+      .update(patch)
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .eq("id", jobId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(`Failed to update STREAMS AI job: ${error.message}`);
     return data;
   }
 
