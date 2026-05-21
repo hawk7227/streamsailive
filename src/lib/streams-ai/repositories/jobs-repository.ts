@@ -16,7 +16,7 @@ export type UpdateJobInput = {
 };
 
 function shouldEnforceCredits() {
-  return process.env.STREAMS_AI_ENFORCE_CREDITS !== "false";
+  return process.env.STREAMS_AI_ENFORCE_CREDITS === "true";
 }
 
 export class StreamsAIJobsRepository {
@@ -87,7 +87,7 @@ export class StreamsAIJobsRepository {
       jobId: data.id,
       eventType: "created",
       message: "Job created",
-      data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate },
+      data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate, creditsEnforced: shouldEnforceCredits() },
     });
 
     return data;
