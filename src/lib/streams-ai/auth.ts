@@ -24,7 +24,13 @@ function isExplicitTestModeEnabled() {
   return process.env.STREAMS_AI_TEST_MODE === "true";
 }
 
+function isProductionRuntime() {
+  return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+}
+
 function isPreviewTestHost(request: NextRequest) {
+  if (isProductionRuntime()) return false;
+
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
   const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
   const isVercelGitPreview = host.includes(".vercel.app") && host.includes("-git-");
@@ -34,6 +40,7 @@ function isPreviewTestHost(request: NextRequest) {
 }
 
 function isTestModeEnabled(request?: NextRequest) {
+  if (isProductionRuntime()) return false;
   return isExplicitTestModeEnabled() || (request ? isPreviewTestHost(request) : false);
 }
 
