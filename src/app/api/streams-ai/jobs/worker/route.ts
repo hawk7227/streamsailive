@@ -2,15 +2,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "@/lib/streams-ai/server";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
+import { StreamsAICreditLedgerRepository } from "@/lib/streams-ai/repositories/credit-ledger-repository";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
 import { StreamsAIProviderRunsRepository } from "@/lib/streams-ai/repositories/provider-runs-repository";
+import { StreamsAIUsageEventsRepository } from "@/lib/streams-ai/repositories/usage-events-repository";
 import { FAL_ENDPOINTS, extractImageUrl, falPoll, falSubmit } from "@/lib/streams/fal-client";
 
 export const maxDuration = 60;
 
 const assets = new StreamsAIAssetsRepository();
+const creditLedger = new StreamsAICreditLedgerRepository();
 const jobs = new StreamsAIJobsRepository();
 const providerRuns = new StreamsAIProviderRunsRepository();
+const usageEvents = new StreamsAIUsageEventsRepository();
 
 const WORKER_NAME = "streams-ai-durable-cron-worker";
 const STORAGE_BUCKET = process.env.STREAMS_AI_GENERATIONS_BUCKET || "generations";
@@ -32,13 +36,14 @@ type WorkerResult = {
 
 function isAuthorized(request: NextRequest) {
   const expected = (process.env.STREAMS_AI_WORKER_SECRET || process.env.CRON_SECRET || "").trim();
-  if (!expected) {
-    return process.env.NODE_ENV !== "production";
-  }
-
+  if (!expected) return process.env.NODE_ENV !== "production";
   const auth = request.headers.get("authorization") || "";
   const querySecret = request.nextUrl.searchParams.get("secret") || "";
   return auth === `Bearer ${expected}` || querySecret === expected;
+}
+
+function shouldDebitCredits() {
+  return process.env.STREAMS_AI_DEBIT_CREDITS !== "false";
 }
 
 function toScope(row: Record<string, unknown>): StreamsAIScope {
@@ -76,7 +81,6 @@ async function fetchWorkBatch() {
     .in("status", ["queued", "running"])
     .order("created_at", { ascending: true })
     .limit(BATCH_LIMIT);
-
   if (error) throw new Error(`Failed to fetch STREAMS AI worker batch: ${error.message}`);
   return (data || []) as Array<Record<string, unknown>>;
 }
@@ -99,6 +103,46 @@ async function uploadStoredImage(scope: StreamsAIScope, jobId: string, providerU
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
   const { data } = service.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
   return { contentType, sizeBytes: bytes.byteLength, storageBucket: STORAGE_BUCKET, storagePath, publicUrl: data.publicUrl };
+}
+
+async function recordSuccessfulUsage(scope: StreamsAIScope, row: Record<string, unknown>, providerRunId: string, assetId: string, stored: Record<string, unknown>) {
+  const jobId = String(row.id);
+  const creditEstimate = Number(row.credit_estimate || 0);
+  const productId = String(row.product_id || "streams-ai");
+  const sessionId = typeof row.session_id === "string" ? row.session_id : null;
+
+  let debitedCredits = 0;
+  if (creditEstimate > 0 && shouldDebitCredits()) {
+    await creditLedger.create(scope, {
+      amount: -creditEstimate,
+      reason: "image_generation_completed",
+      relatedJobId: jobId,
+      relatedProviderRunId: providerRunId,
+      metadata: { worker: WORKER_NAME, assetId, productId },
+    });
+    debitedCredits = creditEstimate;
+  }
+
+  await usageEvents.create(scope, {
+    sessionId,
+    jobId,
+    providerRunId,
+    productId,
+    eventType: "image_generation_completed",
+    provider: "fal",
+    model: "flux-kontext",
+    inputUnits: 1,
+    outputUnits: 1,
+    creditsDebited: debitedCredits,
+    metadata: { worker: WORKER_NAME, assetId, storage: stored },
+  });
+
+  await jobs.createEvent(scope, {
+    jobId,
+    eventType: "usage.recorded",
+    message: "Usage and credit accounting recorded",
+    data: { creditsDebited: debitedCredits, productId, providerRunId, assetId },
+  });
 }
 
 async function processJob(row: Record<string, unknown>): Promise<WorkerResult> {
@@ -138,9 +182,7 @@ async function processJob(row: Record<string, unknown>): Promise<WorkerResult> {
   const providerRunId = String(run.id);
   const responseJson = (run.response_json || {}) as Record<string, unknown>;
   const responseUrl = String(responseJson.responseUrl || "");
-  if (!responseUrl) {
-    return { ok: true, status: "provider_run_created", jobId, providerRunId, proof: ["worker pickup", "provider_runs row"], unproven: ["provider queue response", "storage upload", "asset creation", "preview rendering"] };
-  }
+  if (!responseUrl) return { ok: true, status: "provider_run_created", jobId, providerRunId, proof: ["worker pickup", "provider_runs row"], unproven: ["provider queue response", "storage upload", "asset creation", "preview rendering"] };
 
   const start = Date.now();
   while (Date.now() - start < POLL_TIME_BUDGET_MS) {
@@ -176,7 +218,7 @@ async function processJob(row: Record<string, unknown>): Promise<WorkerResult> {
     const asset = await assets.create(scope, {
       sessionId: typeof row.session_id === "string" ? row.session_id : null,
       projectId: typeof row.project_id === "string" ? row.project_id : null,
-      productId: "streams-ai",
+      productId: String(row.product_id || "streams-ai"),
       kind: "image",
       name: "Generated STREAMS image",
       mimeType: stored.contentType,
@@ -190,9 +232,10 @@ async function processJob(row: Record<string, unknown>): Promise<WorkerResult> {
     await providerRuns.update(scope, providerRunId, { status: "completed", responseJson: { ...responseJson, raw: poll.raw, stored }, outputAssetId: String(asset.id || ""), completedAt: new Date().toISOString() });
     await jobs.update(scope, jobId, { status: "completed" });
     await jobs.createEvent(scope, { jobId, eventType: "asset.created", message: "Generated output asset created", data: { assetId: asset.id, publicUrl: stored.publicUrl } });
+    await recordSuccessfulUsage(scope, row, providerRunId, String(asset.id || ""), stored);
     await jobs.createEvent(scope, { jobId, eventType: "job.completed", message: "Image generation job completed", data: { providerRunId, assetId: asset.id } });
 
-    return { ok: true, status: "completed", jobId, providerRunId, outputAssetId: String(asset.id || ""), publicUrl: stored.publicUrl, proof: ["worker pickup", "provider execution", "provider_runs row", "storage upload", "generated output asset creation", "stored output preview URL"], unproven: ["browser visual confirmation after refresh"] };
+    return { ok: true, status: "completed", jobId, providerRunId, outputAssetId: String(asset.id || ""), publicUrl: stored.publicUrl, proof: ["worker pickup", "provider execution", "provider_runs row", "storage upload", "generated output asset creation", "usage event", "credit ledger debit when enabled", "stored output preview URL"], unproven: ["browser visual confirmation after refresh"] };
   }
 
   await jobs.update(scope, jobId, { status: "running" });
@@ -202,26 +245,18 @@ async function processJob(row: Record<string, unknown>): Promise<WorkerResult> {
 async function runWorker() {
   const batch = await fetchWorkBatch();
   const results: WorkerResult[] = [];
-  for (const job of batch) {
-    results.push(await processJob(job));
-  }
+  for (const job of batch) results.push(await processJob(job));
   return { ok: true, worker: WORKER_NAME, processed: results.length, results };
 }
 
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized worker request" }, { status: 401 });
-  try {
-    return NextResponse.json(await runWorker());
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
-  }
+  try { return NextResponse.json(await runWorker()); }
+  catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 }); }
 }
 
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized worker request" }, { status: 401 });
-  try {
-    return NextResponse.json(await runWorker());
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
-  }
+  try { return NextResponse.json(await runWorker()); }
+  catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 }); }
 }
