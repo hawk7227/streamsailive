@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 import OpenAI from "openai";
 import { requireStreamsAIScope, type StreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
+import { buildCanonicalCapabilityAnswer, buildRuntimeCapabilityRegistry, isCanonicalCapabilityQuestion } from "@/lib/streams-ai/capabilities/canonical-capabilities";
 import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
@@ -17,6 +18,7 @@ const sessions = new StreamsAISessionsRepository();
 const toolCalls = new StreamsAIToolCallsRepository();
 
 const LIVE_ASSISTANT_SOURCE = "streams-ai-openai-live-assistant";
+const CAPABILITY_SOURCE = "streams-ai-canonical-capability-registry";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1";
 const MAX_HISTORY_MESSAGES = 28;
 const MAX_MESSAGE_CHARS = 32000;
@@ -71,6 +73,7 @@ const STREAMS_LIVE_ASSISTANT_INSTRUCTIONS = [
   "You are STREAMS AI, a full live OpenAI-powered assistant inside the STREAMS chat interface.",
   "You are not limited to business or growth guidance. Help across the full assistant range: general questions, coding, debugging, architecture, files, UI/UX, product strategy, writing, planning, marketplace help, Shopify, AI media systems, terminal guidance, deployment guidance, and production audits.",
   "OpenAI is the single reasoning brain. STREAMS owns runtime, UI, persistence, tools, jobs, assets, providers, storage, previews, credits, permissions, and proof.",
+  "Capability questions are answered from the canonical STREAMS capability registry before generic OpenAI generation.",
   "When STREAMS backend tool results are provided in context, answer from those results and do not pretend another lookup was performed.",
   "Tool/job rows prove persistence only. They do not prove worker pickup, provider execution, provider_runs, storage upload, generated output, or preview rendering unless those records are present in the supplied tool results.",
   "Provider_runs rows prove provider tracking exists. They prove provider execution only when status/metadata shows a real provider request/response, not merely a placeholder row.",
@@ -124,6 +127,7 @@ export async function POST(request: NextRequest) {
           assistantRuntime: LIVE_ASSISTANT_SOURCE,
           mode: "full-live-assistant",
           backendTools: "deterministic-approved-tools",
+          canonicalCapabilities: "enabled",
         },
       });
       sessionId = created.id;
@@ -140,6 +144,7 @@ export async function POST(request: NextRequest) {
         assistantRuntime: LIVE_ASSISTANT_SOURCE,
         mode: "full-live-assistant",
         backendTools: "deterministic-approved-tools",
+        canonicalCapabilities: "enabled",
       },
     });
 
@@ -148,10 +153,74 @@ export async function POST(request: NextRequest) {
       return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
 
+    if (isCanonicalCapabilityQuestion(content)) {
+      return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
+    }
+
     return streamAssistantResponse({ scope, sessionId, userContent: content });
   } catch (error) {
     return streamsAIError(error);
   }
+}
+
+function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
+  const encoder = new TextEncoder();
+  const startedAt = Date.now();
+  const answer = buildCanonicalCapabilityAnswer(userContent);
+  const registry = buildRuntimeCapabilityRegistry();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send: StreamSend = (event, payload) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      };
+
+      try {
+        send("activity", { phase: "capabilities.started", statusText: "Loading canonical STREAMS capabilities…", source: CAPABILITY_SOURCE, startedAt });
+        for (const token of chunkText(answer, 160)) send("response", { token });
+
+        const assistantMessage = await messages.create(scope, {
+          sessionId,
+          role: "assistant",
+          content: answer,
+          status: "complete",
+          metadata: {
+            source: CAPABILITY_SOURCE,
+            provider: "streams",
+            providerStatus: "ok",
+            registryVersion: registry.version,
+            capabilityCount: registry.total,
+            statusCounts: registry.statusCounts,
+            proofNote: "Answered from the canonical STREAMS capability registry, not generic model memory.",
+          },
+        });
+
+        send("complete", {
+          ok: true,
+          sessionId,
+          assistantMessageId: assistantMessage.id,
+          provider: "streams",
+          providerStatus: "ok",
+          source: CAPABILITY_SOURCE,
+          registryVersion: registry.version,
+          capabilityCount: registry.total,
+          elapsedMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        send("error", { message: error instanceof Error ? error.message : String(error) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
 }
 
 function streamAssistantResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
@@ -375,7 +444,7 @@ function detectBackendToolRequests(userContent: string) {
   const text = userContent.toLowerCase();
   const requests: Array<{ name: string; args: Record<string, unknown> }> = [];
 
-  if (/\b(capabilities|approved backend tools|what tools|tool list)\b/.test(text)) {
+  if (/\b(approved backend tools|what tools|tool list)\b/.test(text)) {
     requests.push({ name: "list_streams_capabilities", args: {} });
   }
 
@@ -418,13 +487,12 @@ async function executeApprovedBackendTool({
 }) {
   if (name === "list_streams_capabilities") {
     return {
-      capabilities: [
-        { name: "list_streams_capabilities", status: "wired", proof: "route executor returns approved tool list" },
-        { name: "create_streams_tool_job", status: "wired_persistence_only", proof: "creates real tool_call and queued job rows" },
-        { name: "list_streams_jobs", status: "wired", proof: "reads persisted jobs for current session" },
-        { name: "list_streams_assets", status: "wired", proof: "reads persisted assets for current session" },
-        { name: "provider_runs_lookup", status: "wired", proof: "reads persisted provider_runs records" },
-      ],
+      capabilities: buildRuntimeCapabilityRegistry().capabilities.map((capability) => ({
+        id: capability.id,
+        name: capability.title,
+        status: capability.status,
+        proof: capability.proof,
+      })),
     };
   }
 
@@ -599,8 +667,8 @@ function clampLimit(value: unknown, fallback: number) {
   return Math.max(1, Math.min(50, n));
 }
 
-function chunkText(text: string) {
-  const parts = text.match(/.{1,24}(\s|$)/g);
+function chunkText(text: string, max = 24) {
+  const parts = text.match(new RegExp(`.{1,${max}}(\\s|$)`, "g"));
   return parts?.length ? parts : [text];
 }
 
