@@ -26,12 +26,13 @@ function classifyImageGenerationProof({
   latestAsset: Record<string, unknown> | null;
 }) {
   const eventTypes = new Set(latestEvents.map((event) => String(event.event_type || "")));
+  const providerRunStatus = String(latestProviderRun?.status ?? "");
   const sourceProof = true;
   const runtimeProof = Boolean(latestJob);
   const persistenceProof = Boolean(latestJob?.id);
   const workerProof = eventTypes.has("worker.claimed");
-  const providerProof = Boolean(latestProviderRun?.id) && ["queued", "running", "completed", "failed"].includes(String(latestProviderRun.status || ""));
-  const providerCompletedProof = String(latestProviderRun?.status || "") === "completed";
+  const providerProof = Boolean(latestProviderRun?.id) && ["queued", "running", "completed", "failed"].includes(providerRunStatus);
+  const providerCompletedProof = providerRunStatus === "completed";
   const storageProof = Boolean(latestAsset?.storage_bucket && latestAsset?.storage_path);
   const assetProof = Boolean(latestAsset?.id);
   const previewProof = Boolean(latestAsset?.public_url);
