@@ -60,4 +60,18 @@ export class StreamsAIMessagesRepository {
 
     return data;
   }
+
+  async updateMetadata(scope: StreamsAIScope, id: string, metadata: Record<string, any>) {
+    const { data, error } = await this.db()
+      .from(streamsAITables.chatMessages)
+      .update({ metadata })
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(`Failed to update STREAMS AI message metadata: ${error.message}`);
+    return data;
+  }
 }

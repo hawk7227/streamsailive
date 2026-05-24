@@ -15,7 +15,7 @@ export class StreamsAISessionsRepository {
       .eq("user_id", scope.userId)
       .eq("workspace_id", scope.workspaceId)
       .eq("module_id", scope.moduleId)
-      .order("updated_at", { ascending: false });
+      .order("created_at", { ascending: false });
 
     if (error) throw new Error(`Failed to list STREAMS AI sessions: ${error.message}`);
     return data || [];

@@ -117,6 +117,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     pro: { t2v: FAL_ENDPOINTS.KLING_V3_PRO_T2V, i2v: FAL_ENDPOINTS.KLING_V3_PRO_I2V },
     precision: { t2v: FAL_ENDPOINTS.KLING_O3_T2V, i2v: FAL_ENDPOINTS.KLING_O3_I2V },
     cinema: { t2v: FAL_ENDPOINTS.VEO_T2V, i2v: FAL_ENDPOINTS.VEO_I2V },
+    "fal.ai": { t2v: FAL_ENDPOINTS.KLING_V3_PRO_T2V, i2v: FAL_ENDPOINTS.KLING_V3_PRO_I2V },
+    runway: { t2v: FAL_ENDPOINTS.KLING_V3_PRO_T2V, i2v: FAL_ENDPOINTS.KLING_V3_PRO_I2V },
+    kling: { t2v: FAL_ENDPOINTS.KLING_V3_PRO_T2V, i2v: FAL_ENDPOINTS.KLING_V3_PRO_I2V },
+    veo: { t2v: FAL_ENDPOINTS.VEO_T2V, i2v: FAL_ENDPOINTS.VEO_I2V },
+    elevenlabs: { t2v: FAL_ENDPOINTS.KLING_V3_PRO_T2V, i2v: FAL_ENDPOINTS.KLING_V3_PRO_I2V },
   };
 
   const modelKey = (model ?? "standard").replace(/\s+/g, "-");

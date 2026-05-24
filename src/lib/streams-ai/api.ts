@@ -6,6 +6,7 @@ export function streamsAIJson(data: unknown, status = 200) {
 }
 
 export function streamsAIError(error: unknown) {
+  console.error("[streams-ai-api-error]", error);
   const message = error instanceof Error ? error.message : "Unknown STREAMS AI error";
   const status = error instanceof StreamsAIAuthError ? error.status : 500;
   return NextResponse.json({ ok: false, error: message }, { status });

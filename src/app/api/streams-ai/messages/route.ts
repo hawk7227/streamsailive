@@ -9,6 +9,7 @@ import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messa
 import { StreamsAIProviderRunsRepository } from "@/lib/streams-ai/repositories/provider-runs-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 import { StreamsAIToolCallsRepository } from "@/lib/streams-ai/repositories/tool-calls-repository";
+import { generateAITitle } from "@/lib/streams-ai/services/title-generator";
 
 const assets = new StreamsAIAssetsRepository();
 const jobs = new StreamsAIJobsRepository();
@@ -27,6 +28,7 @@ type AssistantProviderStatus = "ok" | "not_configured" | "failed";
 
 type AssistantResult = {
   content: string;
+  reasoning?: string;
   providerStatus: AssistantProviderStatus;
   providerError?: string;
   responseId?: string | null;
@@ -38,8 +40,10 @@ type AssistantResult = {
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 
 type PersistedChatMessage = {
+  id?: string;
   role?: string | null;
   content?: string | null;
+  metadata?: Record<string, any> | null;
 };
 
 type OpenAIInputMessage = {
@@ -112,6 +116,9 @@ export async function POST(request: NextRequest) {
       metadata?: Record<string, unknown>;
       runAssistant?: boolean;
       userId?: string;
+      mode?: string;
+      provider?: string;
+      attachments?: any[];
     }>(request);
 
     const content = (body.content || body.message || "").trim();
@@ -120,7 +127,7 @@ export async function POST(request: NextRequest) {
     let sessionId = body.sessionId || "";
     if (!sessionId) {
       const created = await sessions.create(scope, {
-        title: titleFromMessage(content),
+        title: await generateAITitle(content),
         metadata: {
           source: "copied-streams-chat-ui",
           adapter: "legacy-message-body",
@@ -145,6 +152,7 @@ export async function POST(request: NextRequest) {
         mode: "full-live-assistant",
         backendTools: "deterministic-approved-tools",
         canonicalCapabilities: "enabled",
+        attachments: body.attachments || [],
       },
     });
 
@@ -157,7 +165,13 @@ export async function POST(request: NextRequest) {
       return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
     }
 
-    return streamAssistantResponse({ scope, sessionId, userContent: content });
+    return streamAssistantResponse({
+      scope,
+      sessionId,
+      userContent: content,
+      mode: body.mode,
+      provider: body.provider,
+    });
   } catch (error) {
     return streamsAIError(error);
   }
@@ -176,7 +190,7 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
       };
 
       try {
-        send("activity", { phase: "capabilities.started", statusText: "Loading canonical STREAMS capabilities…", source: CAPABILITY_SOURCE, startedAt });
+        send("activity", { phase: "capabilities.started", statusText: "Loading canonical STREAMS capabilities…", source: CAPABILITY_SOURCE, startedAt, sessionId });
         for (const token of chunkText(answer, 160)) send("response", { token });
 
         const assistantMessage = await messages.create(scope, {
@@ -223,7 +237,19 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
   });
 }
 
-function streamAssistantResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
+function streamAssistantResponse({
+  scope,
+  sessionId,
+  userContent,
+  mode,
+  provider,
+}: {
+  scope: StreamsAIScope;
+  sessionId: string;
+  userContent: string;
+  mode?: string;
+  provider?: string;
+}) {
   const encoder = new TextEncoder();
   const startedAt = Date.now();
 
@@ -234,11 +260,11 @@ function streamAssistantResponse({ scope, sessionId, userContent }: { scope: Str
       };
 
       try {
-        send("activity", { phase: "turn.started", statusText: "Understanding…", source: LIVE_ASSISTANT_SOURCE, startedAt });
+        send("activity", { phase: "turn.started", source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId });
 
         const history = await messages.list(scope, sessionId);
         const toolResults = await executeRequestedBackendTools({ userContent, scope, sessionId, send });
-        const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, toolResults, send });
+        const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, toolResults, send, mode, provider });
 
         const assistantMessage = await messages.create(scope, {
           sessionId,
@@ -256,7 +282,8 @@ function streamAssistantResponse({ scope, sessionId, userContent }: { scope: Str
             backendTools: "deterministic-approved-tools",
             toolResults: assistant.toolResults || toolResults,
             runtimeContract: "full_live_assistant_with_provider_run_lookup",
-            proofNote: "Assistant text was generated through the server-side OpenAI Responses API path. Approved STREAMS backend tools may create/read real backend records. Provider output still requires workers/providers/storage before output claims are made.",
+            reasoning: assistant.reasoning || null,
+            proofNote: "Assistant text was generated through the server-side OpenAI Chat Completions API path. Approved STREAMS backend tools may create/read real backend records.",
           },
         });
 
@@ -318,15 +345,27 @@ async function runLiveOpenAIResponse({
   sessionId,
   toolResults,
   send,
+  mode = "Thinking",
+  provider = "Auto",
 }: {
   history: PersistedChatMessage[];
   scope: StreamsAIScope;
   sessionId: string;
   toolResults: ExecutedToolResult[];
   send: StreamSend;
+  mode?: string;
+  provider?: string;
 }): Promise<AssistantResult> {
   const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+
+  let model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+  if (mode === "Thinking") {
+    model = "o3-mini";
+  } else if (mode === "Instant") {
+    model = "gpt-4o-mini";
+  } else if (mode === "Pro") {
+    model = "gpt-4o";
+  }
 
   if (!apiKey) {
     return {
@@ -343,23 +382,37 @@ async function runLiveOpenAIResponse({
 
   try {
     const client = new OpenAI({ apiKey });
-    const createStream = client.responses.create.bind(client.responses) as unknown as ResponsesCreateStream;
-    const input = buildOpenAIInput(history, toolResults);
+    const input = await buildOpenAIInput(history, toolResults, client, scope);
+
+    // o3-mini does not support vision (image inputs). Fall back to vision-capable gpt-4o.
+    const hasImage = input.some((msg: any) =>
+      Array.isArray(msg.content) &&
+      msg.content.some((block: any) => block.type === "input_image")
+    );
+    if (hasImage && model === "o3-mini") {
+      console.log("[runLiveOpenAIResponse] Image detected in input history. Overriding o3-mini with vision-capable gpt-4o model.");
+      model = "gpt-4o";
+    }
+
     let content = "";
+    let reasoning = "";
     let responseId: string | null = null;
     let usage: Record<string, unknown> | null = null;
 
-    send("activity", {
-      phase: "openai.started",
-      statusText: toolResults.length ? "Reading backend tool results…" : "Connected to OpenAI live assistant…",
-      model,
-      source: LIVE_ASSISTANT_SOURCE,
-    });
+    if (toolResults.length > 0) {
+      send("activity", {
+        phase: "openai.started",
+        statusText: "Reading backend tool results…",
+        model,
+        source: LIVE_ASSISTANT_SOURCE,
+      });
+    }
 
+    const createStream = client.responses.create.bind(client.responses) as unknown as ResponsesCreateStream;
     const responseStream = await createStream({
       model,
       instructions: STREAMS_LIVE_ASSISTANT_INSTRUCTIONS,
-      input,
+      input: input as any,
       stream: true,
       store: true,
       metadata: {
@@ -399,7 +452,7 @@ async function runLiveOpenAIResponse({
       }
     }
 
-    return { providerStatus: "ok", content: content.trim() || summarizeToolResults(toolResults), responseId, model, usage, toolResults };
+    return { providerStatus: "ok", content: content.trim() || summarizeToolResults(toolResults), reasoning: reasoning || undefined, responseId, model, usage, toolResults };
   } catch (error) {
     return providerFallback(error, model, toolResults);
   }
@@ -614,25 +667,196 @@ function extractPrompt(userContent: string) {
   return (match?.[1] || userContent).trim().slice(0, 8000);
 }
 
-function buildOpenAIInput(history: PersistedChatMessage[], toolResults: ExecutedToolResult[]): OpenAIInputMessage[] {
-  const safeHistory = history
-    .filter((message) => String(message.content || "").trim())
-    .slice(-MAX_HISTORY_MESSAGES)
-    .map((message) => ({ role: normalizeOpenAIRole(message.role), content: String(message.content || "").slice(0, MAX_MESSAGE_CHARS) }));
+async function ensureOpenAIFileId(client: OpenAI, attachment: any): Promise<string | null> {
+  if (attachment.openAIFileId) return attachment.openAIFileId;
+
+  const bucket = attachment.storageBucket || attachment.storage_bucket;
+  const path = attachment.storagePath || attachment.storage_path;
+  const url = attachment.url || attachment.storageUrl || attachment.publicUrl;
+
+  try {
+    let blob: Blob;
+
+    if (bucket && path) {
+      const { createStreamsAIServiceClient } = await import("@/lib/streams-ai/server");
+      const serviceClient = createStreamsAIServiceClient();
+      const { data, error } = await serviceClient.storage.from(bucket).download(path);
+      if (error || !data) {
+        throw new Error(error?.message || "Failed to download from Supabase Storage");
+      }
+      blob = data;
+    } else if (url) {
+      let targetUrl = url;
+      if (targetUrl.startsWith("/")) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+        targetUrl = `${appUrl}${targetUrl}`;
+      }
+      const res = await fetch(targetUrl);
+      if (!res.ok) return null;
+      blob = await res.blob();
+    } else {
+      return null;
+    }
+
+    const fileObj = new File([blob], attachment.name || "file", { type: attachment.mimeType || "application/octet-stream" });
+
+    const openAIFile = await client.files.create({
+      file: fileObj,
+      purpose: "user_data",
+    });
+
+    return openAIFile.id;
+  } catch (err) {
+    console.error("[ensureOpenAIFileId] failed to upload file to OpenAI:", err);
+    return null;
+  }
+}
+
+async function buildOpenAIInput(
+  history: PersistedChatMessage[],
+  toolResults: ExecutedToolResult[],
+  client: OpenAI,
+  scope: StreamsAIScope
+): Promise<any[]> {
+  const inputMessages: any[] = [];
+
+  for (const message of history) {
+    if (!String(message.content || "").trim()) continue;
+
+    const role = normalizeOpenAIRole(message.role);
+
+    // Assistant messages use output_text — no file attachments allowed
+    if (role === "assistant") {
+      inputMessages.push({
+        role: "assistant",
+        content: [{ type: "output_text", text: String(message.content || "") }],
+      });
+      continue;
+    }
+
+    // User messages: process file attachments first, then the text
+    const attachments = message.metadata?.attachments as any[];
+    const contentBlocks: any[] = [];
+
+    if (attachments && attachments.length > 0) {
+      let updated = false;
+      const updatedAttachments = [...attachments];
+
+      for (let index = 0; index < updatedAttachments.length; index += 1) {
+        const file = updatedAttachments[index];
+        const isImage = file.kind === "image" || (file.mimeType || file.mime_type || "").startsWith("image/");
+
+        console.log(`[buildOpenAIInput] Processing attachment index ${index}:`, {
+          id: file.id,
+          name: file.name,
+          kind: file.kind,
+          mimeType: file.mimeType || file.mime_type,
+          isImage
+        });
+
+        if (isImage) {
+          try {
+            const bucket = file.storageBucket || file.storage_bucket;
+            const path = file.storagePath || file.storage_path;
+            let blob: Blob | null = null;
+
+            if (bucket && path) {
+              console.log(`[buildOpenAIInput] Attempting Supabase download: bucket=${bucket}, path=${path}`);
+              const { createStreamsAIServiceClient } = await import("@/lib/streams-ai/server");
+              const serviceClient = createStreamsAIServiceClient();
+              const { data, error } = await serviceClient.storage.from(bucket).download(path);
+              if (error) {
+                console.error(`[buildOpenAIInput] Supabase storage error:`, error.message);
+              } else if (data) {
+                blob = data;
+                console.log(`[buildOpenAIInput] Downloaded from Supabase storage successfully: size=${blob.size} bytes`);
+              }
+            }
+
+            if (!blob) {
+              const url = file.url || file.storageUrl || file.publicUrl;
+              console.log(`[buildOpenAIInput] Supabase download failed or skipped. Falling back to HTTP URL fetch: ${url}`);
+              if (url) {
+                let targetUrl = url;
+                if (targetUrl.startsWith("/")) {
+                  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+                  targetUrl = `${appUrl}${targetUrl}`;
+                  console.log(`[buildOpenAIInput] Prefixed relative path to targetUrl: ${targetUrl}`);
+                }
+                const res = await fetch(targetUrl);
+                if (res.ok) {
+                  blob = await res.blob();
+                  console.log(`[buildOpenAIInput] Fetched from URL successfully: size=${blob.size} bytes`);
+                } else {
+                  console.error(`[buildOpenAIInput] URL fetch failed: status=${res.status}`);
+                }
+              }
+            }
+
+            if (blob) {
+              const buffer = Buffer.from(await blob.arrayBuffer());
+              const mime = file.mimeType || file.mime_type || "image/jpeg";
+              const base64 = buffer.toString("base64");
+              contentBlocks.push({
+                type: "input_image",
+                image_url: `data:${mime};base64,${base64}`
+              });
+              console.log(`[buildOpenAIInput] Embedded base64 input_image block successfully`);
+            } else {
+              console.error(`[buildOpenAIInput] Could not retrieve image blob for: ${file.name}`);
+            }
+          } catch (err) {
+            console.error("[buildOpenAIInput] failed to process base64 image:", err);
+          }
+        } else {
+          // Non-image files use text context stuffing via ensureOpenAIFileId
+          const fileId = await ensureOpenAIFileId(client, file);
+          if (fileId) {
+            contentBlocks.push({ type: "input_file", file_id: fileId });
+            if (file.openAIFileId !== fileId) {
+              file.openAIFileId = fileId;
+              updated = true;
+            }
+          }
+        }
+      }
+
+      if (updated && message.id) {
+        try {
+          await messages.updateMetadata(scope, message.id, {
+            ...(message.metadata || {}),
+            attachments: updatedAttachments,
+          });
+          message.metadata = { ...(message.metadata || {}), attachments: updatedAttachments };
+        } catch (err) {
+          console.error("Failed to update message metadata in database:", err);
+        }
+      }
+    }
+
+    contentBlocks.push({ type: "input_text", text: String(message.content || "") });
+
+    inputMessages.push({ role: "user", content: contentBlocks });
+  }
 
   if (toolResults.length) {
-    safeHistory.push({
+    inputMessages.push({
       role: "user",
       content: [
-        "Approved STREAMS backend tool results for the current turn:",
-        JSON.stringify(toolResults, null, 2),
-        "",
-        "Answer from these real tool results. Do not claim any unproven layer as complete.",
-      ].join("\n"),
+        {
+          type: "input_text",
+          text: [
+            "Approved STREAMS backend tool results for the current turn:",
+            JSON.stringify(toolResults, null, 2),
+            "",
+            "Answer from these real tool results. Do not claim any unproven layer as complete.",
+          ].join("\n"),
+        },
+      ],
     });
   }
 
-  return safeHistory.length ? safeHistory : [{ role: "user", content: "Hello" }];
+  return inputMessages.length ? inputMessages : [{ role: "user", content: [{ type: "input_text", text: "Hello" }] }];
 }
 
 function normalizeOpenAIRole(role: string | null | undefined): "user" | "assistant" {

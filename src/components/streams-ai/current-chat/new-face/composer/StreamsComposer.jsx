@@ -7,11 +7,8 @@ const MODES = ["Instant", "Thinking", "Pro", "Configure..."];
 const TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U" },
   { id: "url", icon: "▣", label: "Add link" },
-  { id: "recent_files", icon: "▤", label: "Recent files", arrow: true },
   { id: "create_image", icon: "✦", label: "Create image" },
-  { id: "deep_research", icon: "⌕", label: "Deep research" },
   { id: "web_search", icon: "◎", label: "Web search" },
-  { id: "more", icon: "…", label: "More", arrow: true },
 ];
 
 export default function StreamsComposer({
@@ -20,21 +17,37 @@ export default function StreamsComposer({
   onToolSelect,
   onProviderChange,
   onModeChange,
+  libraryFiles = [],
+  onRemoveFile,
+  isStreaming = false,
 }) {
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
   const [composerMode, setComposerMode] = useState("chat");
   const [provider, setProvider] = useState("Auto");
   const [mode, setMode] = useState("Thinking");
+  const [selectedTool, setSelectedTool] = useState(null);
   const fileInputRef = useRef(null);
 
-  const placeholder = composerMode === "url" ? "Paste a link to analyze..." : "Ask anything";
+  const placeholder = selectedTool ? (selectedTool.id === "url" ? "Paste a link..." : selectedTool.id === "web_search" ? "Search the web" : "Describe the image...") : "Ask anything";
+
+  const hasUploadingFiles = libraryFiles && libraryFiles.some(file => file.status === "uploading");
+  const isDisabled = isStreaming || hasUploadingFiles;
 
   function submit() {
+    if (isDisabled) return;
     const value = message.trim();
-    if (!value) return;
-    onSubmit?.({ message: value, composerMode, provider, mode });
+    const hasAttachments = libraryFiles && libraryFiles.length > 0;
+    if (!value && !hasAttachments) return;
+    
+    let finalMessage = value || " ";
+    if (selectedTool?.id === "create_image") finalMessage = "Create an image of " + finalMessage;
+    if (selectedTool?.id === "web_search") finalMessage = "Search the web for " + finalMessage;
+    if (selectedTool?.id === "url") finalMessage = "Read the URL: " + finalMessage;
+
+    onSubmit?.({ message: finalMessage, composerMode: selectedTool?.id === "url" ? "url" : "chat", provider, mode });
     setMessage("");
+    setSelectedTool(null);
     setComposerMode("chat");
     setActiveMenu("");
   }
@@ -46,21 +59,98 @@ export default function StreamsComposer({
     setActiveMenu("");
   }
 
-  function activateLinkMode() {
-    setComposerMode("url");
-    setActiveMenu("");
-  }
-
   function handleTool(item) {
-    if (item.id === "files") return fileInputRef.current?.click();
-    if (item.id === "url") return activateLinkMode();
-    if (item.id === "more") return setActiveMenu("more");
+    if (item.id === "files") {
+      setActiveMenu(""); // close the menu first
+      // Use setTimeout to let the menu close before triggering the file dialog
+      setTimeout(() => fileInputRef.current?.click(), 50);
+      return;
+    }
+    if (item.id === "url" || item.id === "create_image" || item.id === "web_search") {
+      if (selectedTool?.id === item.id) {
+        setSelectedTool(null); // Toggle off
+      } else {
+        setSelectedTool(item);
+      }
+      setActiveMenu("");
+      return;
+    }
     onToolSelect?.(item.id);
     setActiveMenu("");
   }
 
   return (
-    <section className="streamsComposer" aria-label="Streams composer">
+    <section 
+      className="streamsComposer" 
+      aria-label="Streams composer"
+      style={libraryFiles && libraryFiles.length > 0 ? {
+        flexDirection: "column",
+        alignItems: "stretch",
+        borderRadius: "24px",
+        padding: "12px 14px 6px 14px"
+      } : {}}
+    >
+      {libraryFiles && libraryFiles.length > 0 && (
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid rgba(0,0,0,0.07)", paddingBottom: "10px", marginBottom: "8px", alignItems: "flex-end" }}>
+          {libraryFiles.map(file => {
+            const isImage = file.kind === "image" || (file.mimeType || "").startsWith("image/");
+            const previewUrl = file.url || file.storageUrl || file.publicUrl || file.previewUrl;
+            const isUploading = file.status === "uploading";
+            const isError = file.status === "error";
+            if (isImage && previewUrl) {
+              return (
+                <div key={file.id} style={{ position: "relative", borderRadius: "10px", overflow: "hidden", width: "64px", height: "64px", flexShrink: 0 }}>
+                  <img
+                    src={previewUrl}
+                    alt={file.name || "Image"}
+                    style={{ width: "64px", height: "64px", objectFit: "cover", display: "block", borderRadius: "10px", opacity: isUploading ? 0.6 : 1, filter: isError ? "brightness(0.5) saturate(0)" : "none" }}
+                  />
+                  {isUploading && (
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 0.9s linear infinite" }}>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                    </div>
+                  )}
+                  {isError && (
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>⚠️</div>
+                  )}
+                  {!isUploading && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveFile?.(file.id)}
+                      style={{
+                        position: "absolute", top: "2px", right: "2px",
+                        background: "rgba(0,0,0,0.55)", border: "none", cursor: "pointer",
+                        borderRadius: "50%", width: "18px", height: "18px",
+                        color: "#fff", fontSize: "11px", display: "flex",
+                        alignItems: "center", justifyContent: "center", lineHeight: 1, padding: 0
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <div key={file.id} style={{ position: "relative", display: "flex", alignItems: "center", gap: "6px", background: isError ? "rgba(220,50,50,0.1)" : "rgba(0,0,0,0.06)", padding: "5px 10px 5px 8px", borderRadius: "10px", fontSize: "12px", color: "#333", maxWidth: "160px" }}>
+                <span style={{ fontSize: "18px", flexShrink: 0 }}>{isError ? "⚠️" : isUploading ? "⏳" : "📄"}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name || "File"}</span>
+                {!isUploading && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFile?.(file.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#888", padding: "0 0 0 4px", lineHeight: 1, flexShrink: 0 }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="streamsComposerRow">
         <button
           type="button"
@@ -70,6 +160,20 @@ export default function StreamsComposer({
         >
           +
         </button>
+
+        {selectedTool && (
+          <div className="streamsComposerToolPill">
+            <span style={{ fontSize: "14px", marginRight: "4px" }}>{selectedTool.icon}</span>
+            <span>{selectedTool.label}</span>
+            <button
+              type="button"
+              className="streamsComposerToolPillClose"
+              onClick={() => setSelectedTool(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         <input
           className="streamsComposerInput"
@@ -92,22 +196,21 @@ export default function StreamsComposer({
         >
           {mode}⌄
         </button>
-
-        <button type="button" className="streamsComposerIconButton" aria-label="Voice">⌕</button>
-        <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit}>↑</button>
+        <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>↑</button>
       </div>
 
       <input
         aria-label="Add photos and files"
         type="file"
         multiple
-        hidden
+        accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md"
+        style={{ display: "none", position: "absolute", pointerEvents: "none" }}
         ref={fileInputRef}
         onChange={handleFileChange}
       />
 
       {activeMenu === "tools" && (
-        <div className="streamsComposerMenu" role="menu">
+        <div className="streamsComposerMenu toolsMenu" role="menu">
           {TOOL_ITEMS.map((item) => (
             <button key={item.id} type="button" onClick={() => handleTool(item)}>
               <span>{item.icon}</span>
@@ -118,15 +221,7 @@ export default function StreamsComposer({
         </div>
       )}
 
-      {activeMenu === "more" && (
-        <div className="streamsComposerMenu" role="menu">
-          <button type="button" onClick={() => onToolSelect?.("agent_mode")}><span>◇</span><strong>Agent mode</strong><em /></button>
-          <button type="button" onClick={() => onToolSelect?.("add_sources")}><span>＋</span><strong>Add sources</strong><em /></button>
-          <button type="button" onClick={() => onToolSelect?.("canvas_editor")}><span>▱</span><strong>Canvas / Editor</strong><em /></button>
-          <button type="button" onClick={() => onToolSelect?.("github")}><span>⌘</span><strong>GitHub</strong><em /></button>
-          <button type="button" onClick={activateLinkMode}><span>▣</span><strong>Read URL</strong><em /></button>
-        </div>
-      )}
+
 
       {activeMenu === "model" && (
         <div className="streamsComposerMenu modelMenu" role="menu">

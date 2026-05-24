@@ -59,12 +59,33 @@ function normalizeSession(row = {}, messages = []) {
   };
 }
 
+let lastSessionsRefreshTime = 0;
+let sessionsRefreshPromise = null;
+
 async function refreshSessionsCache() {
-  const data = await api("/api/streams-ai/sessions");
-  const sessions = Array.isArray(data.sessions) ? data.sessions.map((row) => normalizeSession(row)) : [];
-  writeCache(sessions);
-  if (!getCurrentSessionId() && sessions[0]?.id) setCurrentSessionId(sessions[0].id);
-  return sessions;
+  const now = Date.now();
+  if (now - lastSessionsRefreshTime < 6000) {
+    return readCache();
+  }
+  if (sessionsRefreshPromise) return sessionsRefreshPromise;
+
+  sessionsRefreshPromise = (async () => {
+    try {
+      const data = await api("/api/streams-ai/sessions");
+      const sessions = Array.isArray(data.sessions) ? data.sessions.map((row) => normalizeSession(row)) : [];
+      writeCache(sessions);
+      lastSessionsRefreshTime = Date.now();
+      if (!getCurrentSessionId() && sessions[0]?.id) setCurrentSessionId(sessions[0].id);
+      return sessions;
+    } catch {
+      // ignore
+    } finally {
+      sessionsRefreshPromise = null;
+    }
+    return readCache();
+  })();
+
+  return sessionsRefreshPromise;
 }
 
 async function refreshSessionMessages(sessionId) {
@@ -94,7 +115,7 @@ export function buildSessionTitle(messages = []) {
 export function listChatSessions() {
   refreshSessionsCache().catch(() => {});
   const sessions = readCache();
-  return [...sessions].sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  return [...sessions].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 }
 
 export function getChatSession(id) {
@@ -169,9 +190,18 @@ export function upsertChatSession(session) {
   const sessions = listChatSessions();
   const existing = sessions.find((item) => item.id === session.id);
 
+  // Preserve the existing name if we already have one that is NOT the placeholder 'New chat' or 'New STREAMS AI chat'
+  let title = session.title;
+  if (existing?.title && existing.title !== "New chat" && existing.title !== "New STREAMS AI chat") {
+    title = existing.title;
+  }
+  if (!title || title === "New chat" || title === "New STREAMS AI chat") {
+    title = buildSessionTitle(session.messages || []) || "New chat";
+  }
+
   const normalized = {
     id: session.id,
-    title: session.title || buildSessionTitle(session.messages || []) || "New chat",
+    title,
     createdAt: session.createdAt || existing?.createdAt || nowIso(),
     updatedAt: session.updatedAt || nowIso(),
     messages: Array.isArray(session.messages) ? session.messages : [],

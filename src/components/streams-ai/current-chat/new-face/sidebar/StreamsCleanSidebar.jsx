@@ -20,10 +20,40 @@ const TOOL_ITEMS = [
   { id: "settings", label: "Settings", icon: "settings", disabled: true },
 ];
 
-const HISTORY = {
-  Today: ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"],
-  Yesterday: ["Quarterly report summary", "Website hero concepts"],
-};
+function groupSessionsByDate(sessions = []) {
+  const groups = {
+    Today: [],
+    Yesterday: [],
+    "Previous 7 Days": [],
+    "Previous 30 Days": [],
+    Older: [],
+  };
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const sevenDaysAgoStart = todayStart - 6 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgoStart = todayStart - 29 * 24 * 60 * 60 * 1000;
+
+  sessions.forEach((session) => {
+    const time = new Date(session.created_at || session.createdAt || session.updated_at || session.updatedAt || 0).getTime();
+    if (time >= todayStart) {
+      groups.Today.push(session);
+    } else if (time >= yesterdayStart) {
+      groups.Yesterday.push(session);
+    } else if (time >= sevenDaysAgoStart) {
+      groups["Previous 7 Days"].push(session);
+    } else if (time >= thirtyDaysAgoStart) {
+      groups["Previous 30 Days"].push(session);
+    } else {
+      groups.Older.push(session);
+    }
+  });
+
+  return Object.fromEntries(
+    Object.entries(groups).filter(([_, items]) => items.length > 0)
+  );
+}
 
 function Icon({ name, size = 20 }) {
   const props = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
@@ -80,14 +110,13 @@ function MediaModal({ type, onClose }) {
   );
 }
 
-function HistorySection({ title, items }) {
-  return <section className="cleanSidebarHistory" aria-label={title}><h3>{title}</h3>{items.map((item) => <button key={`${title}-${item}`} type="button"><Icon name="chat" size={17}/><span>{item}</span></button>)}</section>;
-}
-
-export default function StreamsCleanSidebar({ open, setOpen }) {
+export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const toolItems = useMemo(() => TOOL_ITEMS.filter((item) => item?.id && item?.label), []);
+  const grouped = useMemo(() => {
+    return groupSessionsByDate(chatRuntime?.sessions || []);
+  }, [chatRuntime?.sessions]);
 
   useEffect(() => {
     const onKey = (event) => { if (event.key === "Escape") setActiveModal(null); };
@@ -106,29 +135,40 @@ export default function StreamsCleanSidebar({ open, setOpen }) {
   }
 
   if (!open) {
-    return (
-      <aside className="cleanSidebar cleanSidebarCollapsed" aria-label="Collapsed sidebar">
-        <button type="button" className="cleanSidebarIconButton" aria-label="Open sidebar" onClick={() => setOpen(true)}><Icon name="panel"/></button>
-        <nav aria-label="Quick tools">
-          <button type="button" aria-label="Chat" onClick={() => setOpen(true)}><Icon name="chat"/></button>
-          <button type="button" aria-label="Images" onClick={() => { setOpen(true); setActiveModal("images"); }}><Icon name="sparkle"/></button>
-          <button type="button" aria-label="Videos" onClick={() => { setActiveModal(null); window.dispatchEvent(new Event("streams:open-generated-videos")); }}><Icon name="play"/></button>
-          <button type="button" aria-label="Search" onClick={() => { setOpen(true); setActiveModal("search"); }}><Icon name="search"/></button>
-        </nav>
-        <button type="button" className="cleanSidebarAvatarButton" aria-label="Account"><Avatar/></button>
-        <MediaModal type={activeModal} onClose={() => setActiveModal(null)} />
-      </aside>
-    );
+    return null;
   }
 
   return (
-    <aside className="cleanSidebar" aria-label="Workspace sidebar">
-      <div className="cleanSidebarTop"><button type="button" className="cleanSidebarNewChat"><Icon name="plus"/><span>New chat</span><Icon name="down" size={14}/></button><button type="button" className="cleanSidebarIconButton" aria-label="Collapse sidebar" onClick={() => setOpen(false)}><Icon name="panel"/></button></div>
+    <>
+      {/* Backdrop: tap to close on mobile */}
+      <div
+        className="cleanSidebarBackdrop"
+        aria-hidden="true"
+        onClick={() => setOpen(false)}
+      />
+      <aside className="cleanSidebar" aria-label="Workspace sidebar">
+      <div className="cleanSidebarTop"><button type="button" className="cleanSidebarNewChat" onClick={() => chatRuntime?.newChat?.()}><Icon name="plus"/><span>New chat</span><Icon name="down" size={14}/></button><button type="button" className="cleanSidebarIconButton" aria-label="Collapse sidebar" onClick={() => setOpen(false)}><Icon name="panel"/></button></div>
       <nav className="cleanSidebarPrimary" aria-label="Primary navigation">{PRIMARY_ITEMS.map((item) => <button key={item.id} type="button" className={item.active ? "isActive" : ""}><Icon name={item.icon}/><span>{item.label}</span></button>)}</nav>
       <section className="cleanSidebarTools"><button type="button" className="cleanSidebarToolsToggle" onClick={() => setToolsOpen((value) => !value)}><span><Icon name="dots"/> More</span><Icon name="down" size={14}/></button>{toolsOpen ? <nav aria-label="Tools">{toolItems.map((item) => <button key={item.id} type="button" disabled={item.disabled} onClick={() => openTool(item)}><Icon name={item.icon}/><span>{item.label}</span>{item.disabled ? <em>Next</em> : null}</button>)}</nav> : null}</section>
-      {Object.entries(HISTORY).map(([title, items]) => <HistorySection key={title} title={title} items={items}/>) }
+      {Object.entries(grouped).map(([title, items]) => (
+        <section className="cleanSidebarHistory" key={title} aria-label={title}>
+          <h3>{title}</h3>
+          {items.map((session) => (
+            <button 
+              key={session.id} 
+              type="button"
+              className={session.id === chatRuntime?.sessionId ? "isActive" : ""}
+              onClick={() => chatRuntime?.selectSession?.(session.id)}
+            >
+              <Icon name="chat" size={17}/>
+              <span>{session.title || "New Chat"}</span>
+            </button>
+          ))}
+        </section>
+      ))}
       <div className="cleanSidebarAccount"><Avatar/><span><strong>MARCUS HAWKINS</strong><em>Pro</em></span></div>
       <MediaModal type={activeModal} onClose={() => setActiveModal(null)} />
     </aside>
+    </>
   );
 }

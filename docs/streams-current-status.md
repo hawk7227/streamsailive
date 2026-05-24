@@ -12,6 +12,7 @@
 ## Implemented but unproven items
 
 - STREAMS Self-Build Runtime Foundation (in progress in this slice).
+- Chat UI Slice mobile shell & double-sidebar fixes (hidden duplicate inner sidebar, hidden top actions and action status pill on mobile, hidden floating "Snap Pic Click" button on mobile, drawer hamburger menu, full width layout, mobile bottom message scroll spacer).
 
 ## Blocked items
 
@@ -23,13 +24,14 @@
 - `src/lib/streams/build-runtime/**`
 - `src/app/api/streams/build/tasks/**`
 - `docs/streams-knowledge/**`
+- `src/components/streams-ai/**`
+- `src/app/streams-ai/**`
 
 ## Files that must not be touched
 
 - Provider image/video routes
 - DB migrations (unless explicitly approved)
 - `scripts/validate-rule-confirmation.js`
-- unrelated chat UI/editor/upload/settings/provider files
 - `public/build-report.json`
 
 ## Required proof before any item can be marked Proven

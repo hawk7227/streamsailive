@@ -36,15 +36,37 @@ function normalizeAsset(row = {}) {
   };
 }
 
+let lastRefreshTime = 0;
+let refreshPromise = null;
+
 async function refreshAssetCache() {
-  const response = await fetch("/api/streams-ai/assets");
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Asset load failed");
-  const assets = Array.isArray(data.assets) ? data.assets.map(normalizeAsset) : [];
-  safeWriteCache(assets);
-  window.dispatchEvent(new Event("streams:videos-changed"));
-  window.dispatchEvent(new Event("streams:images-changed"));
-  return assets;
+  const now = Date.now();
+  if (now - lastRefreshTime < 6000) {
+    return safeReadCache();
+  }
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch("/api/streams-ai/assets");
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data?.ok !== false) {
+        const assets = Array.isArray(data.assets) ? data.assets.map(normalizeAsset) : [];
+        safeWriteCache(assets);
+        lastRefreshTime = Date.now();
+        window.dispatchEvent(new Event("streams:videos-changed"));
+        window.dispatchEvent(new Event("streams:images-changed"));
+        return assets;
+      }
+    } catch {
+      // ignore
+    } finally {
+      refreshPromise = null;
+    }
+    return safeReadCache();
+  })();
+
+  return refreshPromise;
 }
 
 function listCachedByKind(kind) {
@@ -119,4 +141,12 @@ export function buildShareChatPayload(session) {
     .trim();
 
   return { title, text };
+}
+
+export function deleteLibraryFile(id) {
+  const next = safeReadCache().filter((entry) => entry.id !== id);
+  safeWriteCache(next);
+  window.dispatchEvent(new Event("streams:videos-changed"));
+  window.dispatchEvent(new Event("streams:images-changed"));
+  return next;
 }

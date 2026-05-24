@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { generateStreamsImage, isImageIntent } from "../../runtime/streamsImageClient";
 import { generateStreamsVideo, isVideoIntent } from "../../runtime/streamsVideoClient";
 import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/streamsLinkClient";
@@ -26,11 +27,22 @@ import {
   listLibraryFiles,
   upsertLibraryFile,
   updateGeneratedImage,
+  deleteLibraryFile,
 } from "../../runtime/streamsAssetStore";
 
-const CHAT_STATUS_FALLBACK = "Understanding…";
+const CHAT_STATUS_FALLBACK = "Thinking…";
 const CHAT_STREAM_FLUSH_MS = 38;
 const CHAT_STREAM_CHUNK_SIZE = 18;
+
+function getSessionIdFromUrl() {
+  if (typeof window === "undefined") return "";
+  const path = window.location.pathname;
+  const segments = path.split("/").filter(Boolean);
+  if (segments[0] === "streams-ai" && segments[1]) {
+    return segments[1];
+  }
+  return "";
+}
 
 function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -68,22 +80,25 @@ function buildRequestedSizeLabel(aspectRatio = "1:1") {
 }
 
 function normalizeUploadAsset(asset = {}) {
-  const url = asset.storageUrl || asset.previewUrl || asset.publicUrl || asset.url || "";
-  const mimeType = asset.mimeType || "application/octet-stream";
+  const mimeType = asset.mimeType || asset.mime_type || "application/octet-stream";
   const kind = asset.kind || (mimeType.startsWith("image/") ? "image" : mimeType.startsWith("video/") ? "video" : mimeType.startsWith("audio/") ? "audio" : "file");
+  const id = asset.id || createId("asset");
+  const url = asset.url || asset.publicUrl || asset.public_url || asset.storageUrl || asset.previewUrl || `/api/streams-ai/assets/download?assetId=${id}`;
   return {
     ...asset,
-    id: asset.id || createId("asset"),
+    id,
     kind,
     source: asset.source || "uploaded",
     name: asset.name || asset.title || "Uploaded file",
     mimeType,
-    storageUrl: asset.storageUrl || url,
+    storageBucket: asset.storageBucket || asset.storage_bucket || null,
+    storagePath: asset.storagePath || asset.storage_path || null,
+    storageUrl: asset.storageUrl || asset.storage_path || url,
     previewUrl: asset.previewUrl || url,
-    publicUrl: asset.publicUrl || url,
+    publicUrl: asset.publicUrl || asset.public_url || url,
     url,
     status: asset.status || "ready",
-    createdAt: asset.createdAt || new Date().toISOString(),
+    createdAt: asset.createdAt || asset.created_at || new Date().toISOString(),
   };
 }
 
@@ -150,8 +165,18 @@ export function useStreamsChatRuntime() {
   const [imageGallery, setImageGallery] = useState([]);
   const [videoGallery, setVideoGallery] = useState([]);
   const [libraryFiles, setLibraryFiles] = useState([]);
+  const [composerAttachments, setComposerAttachments] = useState([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(() => {
+    if (typeof window !== "undefined") {
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      return segments[0] === "streams-ai" && !!segments[1];
+    }
+    return false;
+  });
   const [viewerImage, setViewerImage] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [selectedMode, setSelectedMode] = useState("Thinking");
+  const [selectedProvider, setSelectedProvider] = useState("Auto");
 
   useEffect(() => setMounted(true), []);
 
@@ -178,12 +203,50 @@ export function useStreamsChatRuntime() {
     setLibraryFiles(listLibraryFiles());
   }, []);
 
+  const pathname = usePathname();
+
   useEffect(() => {
-    const session = ensureCurrentChatSession();
-    setSessionId(session.id);
-    setMessages(Array.isArray(session.messages) ? session.messages : []);
-    refreshSidebarData();
-  }, [refreshSidebarData]);
+    let urlSessionId = "";
+    if (typeof window !== "undefined") {
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      if (segments[0] === "streams-ai" && segments[1]) {
+        urlSessionId = segments[1];
+      }
+    }
+
+    if (urlSessionId && urlSessionId !== sessionId) {
+      setSessionId(urlSessionId);
+      setMessages([]);
+      setIsLoadingMessages(true);
+      setActivity(createActivity("thinking", "chat", "Loading chat history…"));
+      fetch(`/api/streams-ai/messages?sessionId=${encodeURIComponent(urlSessionId)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("History failed");
+          return res.json();
+        })
+        .then((data) => {
+          const loadedMessages = Array.isArray(data.messages) ? data.messages.map((m) => ({
+            id: m.id || createId("msg"),
+            role: m.role || "assistant",
+            content: m.content || "",
+            status: m.status || "complete",
+            createdAt: m.created_at || m.createdAt || new Date().toISOString(),
+            ...m.metadata,
+          })) : [];
+          setMessages(loadedMessages);
+          setActivity(defaultActivity());
+          setIsLoadingMessages(false);
+        })
+        .catch(() => {
+          setActivity(defaultActivity());
+          setIsLoadingMessages(false);
+        });
+    } else if (!urlSessionId && sessionId) {
+      setSessionId("");
+      setMessages([]);
+      setActivity(defaultActivity());
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -199,15 +262,14 @@ export function useStreamsChatRuntime() {
 
   const newChat = useCallback(() => {
     abortRef.current?.abort?.();
-    const session = createChatSession();
-    setCurrentSessionId(session.id);
-    setSessionId(session.id);
+    window.history.pushState(null, "", "/streams-ai");
+    setSessionId("");
     setMessages([]);
     setActiveArtifact(null);
     setActivity(defaultActivity());
     setIsStreaming(false);
     refreshSidebarData();
-    return session.id;
+    return "";
   }, [refreshSidebarData]);
 
   const openImageViewer = useCallback((image) => { setViewerImage(image); setViewerOpen(true); }, []);
@@ -254,8 +316,19 @@ export function useStreamsChatRuntime() {
 
   const saveAsset = useCallback(async (asset) => {
     if (!asset?.url) return;
+    // For assets served via our download route, append ?download=1 so the
+    // Supabase signed URL has Content-Disposition: attachment.
+    // anchor.download is silently ignored by browsers for cross-origin redirects.
+    let downloadHref = asset.url;
+    if (
+      typeof downloadHref === "string" &&
+      downloadHref.includes("/api/streams-ai/assets/download") &&
+      !downloadHref.includes("download=1")
+    ) {
+      downloadHref += (downloadHref.includes("?") ? "&" : "?") + "download=1";
+    }
     const anchor = document.createElement("a");
-    anchor.href = asset.url;
+    anchor.href = downloadHref;
     anchor.download = asset.name || asset.fileName || "asset";
     document.body.appendChild(anchor);
     anchor.click();
@@ -278,23 +351,61 @@ export function useStreamsChatRuntime() {
   const uploadFiles = useCallback(async (fileList) => {
     const files = Array.from(fileList || []);
     if (!files.length) return [];
-    setActivity(createActivity("thinking", "file", "Uploading and analyzing files…"));
+
+    // 1. Immediately show local previews so the user sees them at once
+    const localPreviews = files.map((file) => {
+      const localUrl = URL.createObjectURL(file);
+      const mimeType = file.type || "application/octet-stream";
+      const kind = mimeType.startsWith("image/") ? "image" : mimeType.startsWith("video/") ? "video" : mimeType.startsWith("audio/") ? "audio" : "file";
+      return {
+        id: createId("local"),
+        name: file.name,
+        mimeType,
+        kind,
+        url: localUrl,
+        storageUrl: localUrl,
+        previewUrl: localUrl,
+        publicUrl: "",
+        sizeBytes: file.size,
+        status: "uploading",
+        _localUrl: localUrl,
+        _file: file,
+      };
+    });
+
+    setComposerAttachments((current) => [...current, ...localPreviews]);
+    setActivity(createActivity("thinking", "file", "Uploading…"));
+
+    // 2. Upload in background and swap the local preview with the server URL
     const form = new FormData();
     files.forEach((file) => form.append("file", file));
+
     try {
       const response = await fetch("/api/streams-ai/assets", { method: "POST", body: form });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data?.ok === false || data?.success === false) throw new Error(data?.error || "Upload failed");
-      const assets = (Array.isArray(data.assets) ? data.assets : Array.isArray(data.files) ? data.files : []).map(normalizeUploadAsset);
-      assets.forEach((asset) => upsertLibraryFile(asset));
+
+      const serverAssets = (Array.isArray(data.assets) ? data.assets : Array.isArray(data.files) ? data.files : []).map(normalizeUploadAsset);
+
+      // Replace local previews with server assets (matched by index)
+      setComposerAttachments((current) => {
+        const localIds = new Set(localPreviews.map((p) => p.id));
+        const withoutLocals = current.filter((f) => !localIds.has(f.id));
+        // Revoke old object URLs to free memory
+        localPreviews.forEach((p) => { try { URL.revokeObjectURL(p._localUrl); } catch { /* ignore */ } });
+        return [...withoutLocals, ...serverAssets];
+      });
+
+      serverAssets.forEach((asset) => upsertLibraryFile(asset));
       setLibraryFiles(listLibraryFiles());
-      setMessages((current) => [...current, { id: createId("assistant"), role: "assistant", content: buildUploadAssistantMessage(assets), uploadedAssets: assets, createdAt: new Date().toISOString() }]);
       setActivity(createActivity("complete", "file", "Files ready"));
       refreshSidebarData();
-      return assets;
+      return serverAssets;
     } catch (error) {
-      const normalized = normalizeStreamsError(error);
-      setMessages((current) => [...current, { id: createId("assistant"), role: "assistant", content: formatErrorForChat(normalized), status: "error" }]);
+      // Keep local previews visible but mark them as failed
+      setComposerAttachments((current) =>
+        current.map((f) => localPreviews.some((p) => p.id === f.id) ? { ...f, status: "error" } : f)
+      );
       setActivity(createActivity("error", "file", "Upload failed"));
       return [];
     }
@@ -306,7 +417,12 @@ export function useStreamsChatRuntime() {
     refreshSidebarData();
   }, [refreshSidebarData]);
 
-  const sendMessage = useCallback(async ({ message, composerMode = "chat" }) => {
+  const removeComposerAttachment = useCallback((fileId) => {
+    if (!fileId) return;
+    setComposerAttachments((current) => current.filter((file) => file.id !== fileId));
+  }, []);
+
+  const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider }) => {
     if (!mounted) return;
     const trimmed = String(message || "").trim();
     if (!trimmed) return;
@@ -317,7 +433,18 @@ export function useStreamsChatRuntime() {
     const assistantId = createId("assistant");
     const route = detectPreCallRoute(trimmed);
 
-    setMessages((current) => [...current, { id: userId, role: "user", content: trimmed }]);
+    const userAttachments = composerAttachments.map(file => ({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType || file.mime_type,
+      kind: file.kind,
+      url: file.url || file.storageUrl || file.publicUrl || file.public_url || `/api/streams-ai/assets/download?assetId=${file.id}`,
+      storageBucket: file.storageBucket || file.storage_bucket,
+      storagePath: file.storagePath || file.storage_path,
+    }));
+
+    setMessages((current) => [...current, { id: userId, role: "user", content: trimmed, attachments: userAttachments }]);
+    setComposerAttachments([]); // Clear composer attachments after sending
     scrollActiveChatToBottom();
 
     if (isLinkIntent(trimmed, composerMode)) {
@@ -365,7 +492,9 @@ export function useStreamsChatRuntime() {
       }
     }
 
-    if (route.mode === "video" || isVideoIntent(trimmed)) {
+    const isExplicitProvider = provider && provider !== "Auto";
+
+    if (!isExplicitProvider && (route.mode === "video" || isVideoIntent(trimmed))) {
       setActivity(createActivity("rendering", "video", "Rendering video…"));
       setIsStreaming(true);
       setMessages((current) => [...current, { id: assistantId, role: "assistant", content: "Rendering video…", isStreaming: true }]);
@@ -429,9 +558,6 @@ export function useStreamsChatRuntime() {
     const updateAssistantStatus = (statusText) => {
       const nextStatus = statusText || CHAT_STATUS_FALLBACK;
       setActivity(createActivity("thinking", "chat", nextStatus));
-      if (assistantOutputStarted) return;
-      setMessages((current) => current.map((item) => item.id === assistantId && item.isStatusOnly ? { ...item, content: buildChatStatusMessage(nextStatus), status: "thinking", isStreaming: true } : item));
-      scrollActiveChatToBottom();
     };
 
     const fallbackTimer = window.setTimeout(() => {
@@ -444,8 +570,33 @@ export function useStreamsChatRuntime() {
     }, 16000);
 
     try {
-      const response = await fetch("/api/streams-ai/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, userId }), signal: abortRef.current.signal });
-      if (!response.ok) throw new Error(`Chat API error: ${response.statusText}`);
+      const requestPayload = {
+        message: trimmed,
+        userId,
+        mode,
+        provider,
+        attachments: userAttachments.map(file => {
+          const fullFile = composerAttachments.find(f => f.id === file.id);
+          return {
+            ...file,
+            sizeBytes: fullFile?.sizeBytes,
+            textPreview: fullFile?.textPreview || ""
+          };
+        })
+      };
+      if (sessionId) {
+        requestPayload.sessionId = sessionId;
+      }
+      const response = await fetch("/api/streams-ai/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+        signal: abortRef.current.signal
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error || `Chat API error: ${response.statusText}`);
+      }
       if (!response.body) throw new Error("No response body");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -476,7 +627,33 @@ export function useStreamsChatRuntime() {
         const parsed = parseSSEChunk(buffer);
         buffer = parsed.rest;
         for (const { eventName, payload } of parsed.events) {
-          if (eventName === "activity") updateAssistantStatus(payload?.statusText || payload?.text || "Thinking…");
+          if (eventName === "activity") {
+            const nextSessionId = payload?.sessionId;
+            if (nextSessionId) {
+              window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
+              setSessionId(nextSessionId);
+            }
+            updateAssistantStatus(payload?.statusText || payload?.text || "Thinking…");
+          }
+          if (eventName === "reasoning") {
+            const token = payload?.token || payload?.delta || payload?.text;
+            if (token) {
+              assistantOutputStarted = true;
+              window.clearTimeout(fallbackTimer);
+              setMessages((current) => current.map((item) => {
+                if (item.id !== assistantId) return item;
+                const existingReasoning = item.reasoning || "";
+                return {
+                  ...item,
+                  reasoning: existingReasoning + token,
+                  isStreaming: true,
+                  isStatusOnly: false,
+                  status: "streaming"
+                };
+              }));
+              scrollActiveChatToBottom();
+            }
+          }
           if (eventName === "response") {
             const token = payload?.token || payload?.delta || payload?.text;
             if (token) {
@@ -489,10 +666,109 @@ export function useStreamsChatRuntime() {
           if (eventName === "complete") {
             window.clearTimeout(fallbackTimer);
             flushQueuedTokens(true);
+            const nextSessionId = payload?.sessionId;
+            if (nextSessionId) {
+              window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
+              setSessionId(nextSessionId);
+            }
             setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, status: "complete" } : item));
             setActivity(createActivity("complete", "chat", "Ready"));
             setIsStreaming(false);
             scrollActiveChatToBottom();
+          }
+          if (eventName === "tool_call") {
+            const { name, args } = payload || {};
+            if (name === "generate_video") {
+              // Asynchronously trigger video generation
+              (async () => {
+                try {
+                  const prompt = args?.prompt || trimmed;
+                  const selectedProv = args?.provider || provider || "Auto";
+                  const referenceImage = wantsImageToVideo(prompt) ? selectLatestUploadedImage() : null;
+                  
+                  const videoResult = await generateStreamsVideo({ 
+                    prompt, 
+                    model: selectedProv.toLowerCase(), // Pass provider as model
+                    imageUrl: referenceImage?.url || undefined, 
+                    mode: referenceImage?.url ? "i2v" : "t2v", 
+                    aspectRatio: args?.aspect_ratio || (referenceImage?.url ? "9:16" : "16:9"), 
+                    signal: abortRef.current.signal, 
+                    onStatus: (statusText) => { 
+                      const nextStatusText = statusText || "Rendering video…"; 
+                      setActivity(createActivity("rendering", "video", nextStatusText)); 
+                      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: nextStatusText, isStreaming: true } : item)); 
+                    } 
+                  });
+                  
+                  const videoId = createId("video");
+                  const videoRecord = { id: videoId, kind: "video", source: "generated", name: referenceImage?.url ? "Generated image-to-video" : "Generated video", mimeType: videoResult.mimeType || "video/mp4", url: videoResult.artifactUrl, storageUrl: videoResult.artifactUrl, previewUrl: videoResult.artifactUrl, generationId: videoResult.generationId, prompt, sourceImageId: referenceImage?.id || "", createdAt: new Date().toISOString() };
+                  addGeneratedVideo(videoRecord);
+                  upsertLibraryFile({ id: videoId, kind: "video", source: "generated", name: videoRecord.name, mimeType: videoRecord.mimeType, sizeBytes: 0, storageUrl: videoRecord.url, previewUrl: videoRecord.url, createdAt: videoRecord.createdAt });
+                  
+                  setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: "", isStreaming: false, generatedVideoUrl: videoResult.artifactUrl, generatedVideo: videoRecord, generationId: videoResult.generationId, mimeType: videoResult.mimeType } : item));
+                  setActivity(createActivity("complete", "video", "Video ready"));
+                  setIsStreaming(false);
+                  refreshSidebarData();
+                } catch (error) {
+                  const normalized = normalizeStreamsError(error);
+                  const errorText = formatErrorForChat(normalized);
+                  setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: errorText, isStreaming: false } : item));
+                  setActivity(createActivity("error", "video", "Video failed"));
+                  setIsStreaming(false);
+                }
+              })();
+            } else if (name === "generate_image") {
+              (async () => {
+                try {
+                  const prompt = args?.prompt || trimmed;
+                  const requestAspectRatio = args?.size === "landscape_16_9" ? "16:9" : args?.size === "portrait_4_3" ? "4:3" : "1:1";
+                  const requestSizeLabel = buildRequestedSizeLabel(requestAspectRatio);
+                  const imageId = createId("image");
+                  
+                  setActivity(createActivity("rendering", "image", "Generating image…"));
+                  setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: true, generatedImage: { id: imageId, status: "streaming", statusText: "Generating image…", requestSizeLabel, aspectRatio: requestAspectRatio, partialUrl: "", url: "" } } : item));
+                  
+                  const result = await generateStreamsImage({ prompt, signal: abortRef.current.signal, onStatus: (statusText) => { updateMessageImage(assistantId, { status: "streaming", statusText: statusText || "Generating image…" }); setActivity(createActivity("rendering", "image", statusText || "Generating image…")); }, onPartial: (partial) => updateMessageImage(assistantId, { status: "streaming", partialUrl: partial?.url || "", statusText: partial?.statusText || "Generating image…" }) });
+                  const imageRecord = { id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: result?.mimeType || "image/png", url: result?.artifactUrl || result?.outputUrl, storageUrl: result?.artifactUrl || result?.outputUrl, previewUrl: result?.artifactUrl || result?.outputUrl, width: result?.width || null, height: result?.height || null, requestSizeLabel, createdAt: new Date().toISOString() };
+                  addGeneratedImage(imageRecord);
+                  upsertLibraryFile({ id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: imageRecord.mimeType, sizeBytes: 0, storageUrl: imageRecord.url, previewUrl: imageRecord.url, createdAt: imageRecord.createdAt });
+                  
+                  setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, generatedImage: { ...item.generatedImage, ...imageRecord, status: "ready", statusText: imageRecord.width && imageRecord.height ? `${imageRecord.width} × ${imageRecord.height}` : requestSizeLabel, url: imageRecord.url, partialUrl: imageRecord.url } } : item));
+                  setActivity(createActivity("complete", "image", "Image ready"));
+                  setIsStreaming(false);
+                  refreshSidebarData();
+                } catch (error) {
+                  const normalized = normalizeStreamsError(error);
+                  setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: formatErrorForChat(normalized), isStreaming: false } : item));
+                  setActivity(createActivity("error", "image", "Image failed"));
+                  setIsStreaming(false);
+                }
+              })();
+            } else if (name === "read_url") {
+              (async () => {
+                try {
+                  const url = args?.url;
+                  setActivity(createActivity("thinking", "link", "Reading link…"));
+                  const linkResult = await ingestStreamsLink({ url, message: trimmed, intent: "analyze", signal: abortRef.current.signal });
+                  const asset = normalizeUploadAsset(linkResult.asset || {});
+                  upsertLibraryFile(asset);
+                  setLibraryFiles(listLibraryFiles());
+                  
+                  setMessages((current) => current.map(item => item.id === assistantId ? { ...item, content: buildLinkAssistantMessage(asset, linkResult.summary), linkAsset: asset, isStreaming: false, status: "complete" } : item));
+                  setActivity(createActivity("complete", "link", "Link ready"));
+                  setIsStreaming(false);
+                  refreshSidebarData();
+                } catch(e) {
+                  setMessages((current) => current.map(item => item.id === assistantId ? { ...item, content: "Failed to read URL: " + e.message, isStreaming: false, status: "error" } : item));
+                  setActivity(createActivity("error", "link", "Link failed"));
+                  setIsStreaming(false);
+                }
+              })();
+            } else if (name === "web_search") {
+              setMessages((current) => current.map(item => item.id === assistantId ? { ...item, content: `**Web Search Requested:** "${args?.query}"\n\n*Note: Web search requires a backend API configuration (like Tavily or Serper) which is not currently integrated in STREAMS.*`, isStreaming: false, status: "complete" } : item));
+              setActivity(createActivity("complete", "tool", "Search aborted"));
+              setIsStreaming(false);
+            }
           }
           if (eventName === "error") throw new Error(payload?.message || payload?.error || "Chat failed");
         }
@@ -511,7 +787,7 @@ export function useStreamsChatRuntime() {
       setIsStreaming(false);
       scrollActiveChatToBottom();
     }
-  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback]);
+  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback, sessionId, composerAttachments]);
 
   const api = useMemo(() => ({
     messages,
@@ -537,13 +813,39 @@ export function useStreamsChatRuntime() {
     saveAsset,
     shareAsset,
     uploadFiles,
+    removeComposerAttachment,
     forceTerminalChatFallback,
+    composerAttachments,
+    selectedMode,
+    selectedProvider,
+    setSelectedMode,
+    setSelectedProvider,
+    isLoadingMessages,
     selectSession: (id) => {
-      const session = getChatSession(id);
-      if (!session) return;
-      setCurrentSessionId(id);
+      window.history.pushState(null, "", `/streams-ai/${id}`);
       setSessionId(id);
-      setMessages(Array.isArray(session.messages) ? session.messages : []);
+      setMessages([]);
+      setIsLoadingMessages(true);
+      setActivity(createActivity("thinking", "chat", "Loading chat history…"));
+      fetch(`/api/streams-ai/messages?sessionId=${encodeURIComponent(id)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const loadedMessages = Array.isArray(data.messages) ? data.messages.map((m) => ({
+            id: m.id || createId("msg"),
+            role: m.role || "assistant",
+            content: m.content || "",
+            status: m.status || "complete",
+            createdAt: m.created_at || m.createdAt || new Date().toISOString(),
+            ...m.metadata,
+          })) : [];
+          setMessages(loadedMessages);
+          setActivity(defaultActivity());
+          setIsLoadingMessages(false);
+        })
+        .catch(() => {
+          setActivity(defaultActivity());
+          setIsLoadingMessages(false);
+        });
     },
     deleteSession: (id) => {
       deleteChatSession(id);
@@ -551,7 +853,7 @@ export function useStreamsChatRuntime() {
       if (sessionId === id) newChat();
     },
     addMediaItem,
-  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, forceTerminalChatFallback, refreshSidebarData, sessionId]);
+  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, forceTerminalChatFallback, refreshSidebarData, selectedMode, selectedProvider, setSelectedMode, setSelectedProvider]);
 
   return api;
 }

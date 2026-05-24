@@ -24,6 +24,7 @@ interface ChatRequest {
   message: string;
   projectId?: string | null;
   userId: string;
+  provider?: string;
   file?: {
     name: string;
     type: string;
@@ -32,7 +33,7 @@ interface ChatRequest {
 }
 
 interface ChatEvent {
-  type: 'activity' | 'response' | 'artifact' | 'complete' | 'error';
+  type: 'activity' | 'response' | 'artifact' | 'complete' | 'error' | 'tool_call';
   data: unknown;
 }
 
@@ -175,6 +176,70 @@ export async function POST(request: Request): Promise<Response> {
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           let responseText = '';
 
+          const systemPrompt = `You are Streams. Answer clearly. For code requests, include complete fenced code blocks when producing code. Do not claim that files were changed unless the system actually changed files. The user has selected the following provider for generation: ${body.provider || 'Auto'}.`;
+
+          const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+            {
+              type: "function",
+              function: {
+                name: "generate_video",
+                description: "Generate a video using the requested AI provider.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    prompt: { type: "string", description: "The prompt to generate the video from." },
+                    provider: { type: "string", description: "The provider to use. Respect the user's choice.", enum: ["Auto", "fal.ai", "Runway", "Kling", "Veo", "ElevenLabs"] },
+                    aspect_ratio: { type: "string", enum: ["16:9", "9:16", "1:1"] }
+                  },
+                  required: ["prompt", "provider"]
+                }
+              }
+            },
+            {
+              type: "function",
+              function: {
+                name: "generate_image",
+                description: "Generate an image based on the user's prompt.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    prompt: { type: "string", description: "The visual prompt to generate the image from." },
+                    size: { type: "string", enum: ["landscape_16_9", "portrait_4_3", "square_hd"] }
+                  },
+                  required: ["prompt"]
+                }
+              }
+            },
+            {
+              type: "function",
+              function: {
+                name: "web_search",
+                description: "Search the web for up-to-date information.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    query: { type: "string", description: "The search query." }
+                  },
+                  required: ["query"]
+                }
+              }
+            },
+            {
+              type: "function",
+              function: {
+                name: "read_url",
+                description: "Read and scrape the contents of a URL.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    url: { type: "string", description: "The URL to read." }
+                  },
+                  required: ["url"]
+                }
+              }
+            }
+          ];
+
           const completion = await openai.chat.completions.create({
             model: route.model,
             max_tokens: 1600,
@@ -182,14 +247,14 @@ export async function POST(request: Request): Promise<Response> {
             messages: [
               {
                 role: 'system',
-                content:
-                  'You are Streams. Answer clearly. For code requests, include complete fenced code blocks when producing code. Do not claim that files were changed unless the system actually changed files.',
+                content: systemPrompt,
               },
               {
                 role: 'user',
                 content: context ? `${context}\nUser request: ${message}` : message,
               },
             ],
+            tools: tools,
             stream: true,
           });
 
@@ -204,11 +269,56 @@ export async function POST(request: Request): Promise<Response> {
             },
           });
 
+          let toolCallName = "";
+          let toolCallArgs = "";
+
           for await (const chunk of completion) {
-            const delta = chunk.choices[0]?.delta?.content;
-            if (delta) {
-              responseText += delta;
-              send({ type: 'response', data: { token: delta } });
+            const delta = chunk.choices[0]?.delta;
+            if (delta?.content) {
+              responseText += delta.content;
+              send({ type: 'response', data: { token: delta.content } });
+            }
+            if (delta?.tool_calls) {
+              const tc = delta.tool_calls[0];
+              if (tc.function?.name) toolCallName = tc.function.name;
+              if (tc.function?.arguments) toolCallArgs += tc.function.arguments;
+            }
+          }
+
+          if (toolCallName) {
+            try {
+              const args = toolCallArgs ? JSON.parse(toolCallArgs) : {};
+              let statusText = "Working...";
+              let mode: ActivityMode = 'tool';
+              
+              if (toolCallName === "generate_video") {
+                statusText = `Triggering video generation with ${args.provider || 'Auto'}...`;
+                mode = 'image';
+              } else if (toolCallName === "generate_image") {
+                statusText = `Triggering image generation...`;
+                mode = 'image';
+              } else if (toolCallName === "web_search") {
+                statusText = `Searching the web for "${args.query}"...`;
+                mode = 'tool';
+              } else if (toolCallName === "read_url") {
+                statusText = `Reading URL...`;
+                mode = 'tool';
+              }
+
+              send({
+                type: 'activity',
+                data: {
+                  phase: mode === 'image' ? 'generating-image' : 'responding',
+                  mode,
+                  statusText,
+                  startedAt,
+                  model: route.model,
+                },
+              });
+              
+              send({ type: 'tool_call', data: { name: toolCallName, args } });
+            } catch (err) {
+              console.error("Failed to parse tool call args:", err);
             }
           }
 

@@ -12,7 +12,7 @@
 
 # testing
 /coverage
-
+.env.local
 # next.js
 /.next/
 /out/
@@ -44,4 +44,5 @@ public/build-report.json
 # Backups and locks
 *.backup
 package-lock.json
+.env.local
 .env.local

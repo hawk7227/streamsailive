@@ -14,10 +14,108 @@ export class StreamsAIAuthError extends Error {
   status = 401;
 }
 
+function tokenFromCookies(request: NextRequest): string | null {
+  try {
+    const cookieHeader = request.headers.get("cookie") || "";
+    const cookies = Object.fromEntries(
+      cookieHeader.split(";").map((c) => {
+        const parts = c.trim().split("=");
+        return [parts[0], parts.slice(1).join("=")];
+      })
+    );
+
+    // 1. Direct access_token cookie
+    if (cookies["access_token"]) return cookies["access_token"];
+
+    // 2. Parse from Supabase client cookie targeting ONLY our active project ref
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const projectRefMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase/);
+    const projectRef = projectRefMatch?.[1] || "";
+
+    if (projectRef) {
+      const baseKey = `sb-${projectRef}-auth-token`;
+
+      // Try single cookie first
+      if (cookies[baseKey]) {
+        const val = cookies[baseKey];
+        if (val.startsWith("base64-")) {
+          const decoded = Buffer.from(val.slice(7), "base64").toString("utf-8");
+          const json = JSON.parse(decoded);
+          if (json?.access_token) return json.access_token;
+        }
+      }
+
+      // Try split cookies (.0, .1, etc.)
+      const splitKeys = Object.keys(cookies).filter(
+        (key) => key.startsWith(baseKey + ".")
+      ).sort();
+
+      if (splitKeys.length > 0) {
+        let combined = "";
+        for (const k of splitKeys) {
+          combined += cookies[k];
+        }
+        if (combined.startsWith("base64-")) {
+          const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
+          const json = JSON.parse(decoded);
+          if (json?.access_token) return json.access_token;
+        }
+      }
+    }
+
+    // Fallback: search for any sb-xxx-auth-token cookies if projectRef couldn't be parsed
+    const supabaseCookieKeys = Object.keys(cookies).filter(
+      (key) => key.startsWith("sb-") && key.endsWith("-auth-token")
+    );
+
+    if (supabaseCookieKeys.length > 0) {
+      const val = cookies[supabaseCookieKeys[0]];
+      if (val.startsWith("base64-")) {
+        const decoded = Buffer.from(val.slice(7), "base64").toString("utf-8");
+        const json = JSON.parse(decoded);
+        if (json?.access_token) return json.access_token;
+      }
+    }
+
+    // Split fallback
+    const splitKeysFallback = Object.keys(cookies).filter(
+      (key) => key.startsWith("sb-") && key.includes("-auth-token.")
+    ).sort();
+
+    if (splitKeysFallback.length > 0) {
+      const baseKeyFallback = splitKeysFallback[0].split(".")[0];
+      const matchingSplitKeys = splitKeysFallback.filter((k) => k.startsWith(baseKeyFallback + "."));
+      let combined = "";
+      for (const k of matchingSplitKeys) {
+        combined += cookies[k];
+      }
+      if (combined.startsWith("base64-")) {
+        const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
+        const json = JSON.parse(decoded);
+        if (json?.access_token) return json.access_token;
+      }
+    }
+  } catch (err) {
+    console.error("[tokenFromCookies] failed to parse cookies:", err);
+  }
+  return null;
+}
+
 function bearerFromRequest(request: NextRequest): string | null {
+  // 1. Authorization Header
   const header = request.headers.get("authorization") || request.headers.get("Authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || null;
+  if (match?.[1]?.trim()) return match[1].trim();
+
+  // 2. Query Parameter Fallback (e.g. for assets/download)
+  const tokenParam = request.nextUrl.searchParams.get("token");
+  if (tokenParam) return tokenParam.trim();
+
+  // 3. Cookies Fallback (e.g. for standard browser direct image links)
+  const tokenCookie = tokenFromCookies(request);
+  if (tokenCookie) return tokenCookie.trim();
+
+  return null;
 }
 
 function isExplicitTestModeEnabled() {
@@ -68,7 +166,7 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   }
 
   const userClient = createStreamsAIUserClient(accessToken);
-  const { data: userData, error: userError } = await userClient.auth.getUser();
+  const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
     if (isTestModeEnabled(request)) {
       return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);

@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import StreamsWorkspaceShell from "./new-face/StreamsWorkspaceShell";
 import StreamsCleanSidebar from "./new-face/sidebar/StreamsCleanSidebar";
 import SnapPicClickCapture from "./new-face/capture/SnapPicClickCapture";
+import { useStreamsChatRuntime } from "./new-face/hooks/useStreamsChatRuntime";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const LIBRARY_KEY = "streams-ai.assets.cache.v1";
+
+const supabase = typeof window !== "undefined" ? createClient() : null;
 
 function encodeSseEvent(type, data) {
   return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -104,6 +109,8 @@ function installComposerUploadBridge() {
   const onChange = (event) => {
     const input = event.target;
     if (!input || input.tagName !== "INPUT" || input.type !== "file") return;
+    // Do NOT intercept the composer's native file selection input
+    if (input.getAttribute("aria-label") === "Add photos and files") return;
     const files = Array.from(input.files || []);
     if (!files.length) return;
     event.preventDefault?.();
@@ -183,34 +190,73 @@ function installAdminBrowserToolFetchBridge() {
   window.fetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input?.url || "";
     const method = String(init?.method || "GET").toUpperCase();
+    
+    const headers = new Headers(init?.headers || {});
+    if (url.startsWith("/api/streams-ai") && supabase) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+      } catch (e) {
+        console.error("[streams-fetch-bridge] Token resolution error:", e);
+      }
+    }
+
+    const options = { ...init, headers };
+    if (url.startsWith("/api/streams-ai")) {
+      options.credentials = "omit";
+    }
+
     if (method === "POST" && url === "/api/streams-ai/tools") {
       const body = parseChatBody(init);
       const nextBody = attachLatestImageToVideoBody(body);
-      return originalFetch(input, { ...init, headers: { ...(init?.headers || {}), "Content-Type": "application/json" }, body: stringifyChatBody(nextBody) });
+      options.headers.set("Content-Type", "application/json");
+      options.body = stringifyChatBody(nextBody);
+      return originalFetch(input, options);
     }
     if (method === "POST" && url === "/api/streams-ai/messages") {
       const body = parseChatBody(init);
       const message = String(body?.message || body?.input || body?.prompt || body?.text || body?.content || "").trim();
       if (isStudioToolListIntent(message)) {
-        try { return makeSseResponse(await getCapabilitiesText(originalFetch), "studio-tools"); } catch (error) { return makeSseResponse(`Studio tools failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
+        try { return makeSseResponse(await getCapabilitiesText((url, opt) => originalFetch(url, { ...opt, credentials: "omit" })), "studio-tools"); } catch (error) { return makeSseResponse(`Studio tools failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
       }
       if (isAdminBrowserToolIntent(message)) {
         try { const result = await runAdminBrowserTool(message); return makeSseResponse(result.responseText || `${result.tool} completed.`, "admin-browser"); } catch (error) { return makeSseResponse(`Admin browser tool failed: ${error?.message || "Unknown error"}`, "admin-browser"); }
       }
       const nextBody = appendFileContextToMessage(body);
-      return originalFetch(input, { ...init, headers: { ...(init?.headers || {}), "Content-Type": "application/json" }, body: stringifyChatBody(nextBody) });
+      options.headers.set("Content-Type", "application/json");
+      options.body = stringifyChatBody(nextBody);
+      return originalFetch(input, options);
     }
-    return originalFetch(input, init);
+    return originalFetch(input, options);
   };
   return () => { window.fetch = originalFetch; window.__streamsAdminBrowserToolFetchBridgeInstalled = false; };
 }
 
 export default function StreamsClientShell() {
+  const { session, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  useEffect(() => setMounted(true), []);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth >= 768;
+  });
+  const chatRuntime = useStreamsChatRuntime();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!session) {
+        window.location.href = "/login";
+      } else {
+        setMounted(true);
+      }
+    }
+  }, [session, loading]);
+
   useEffect(() => installAdminBrowserToolFetchBridge(), []);
   useEffect(() => installComposerUploadBridge(), []);
-  if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#fff" }} />;
-  return <><StreamsWorkspaceShell /><StreamsCleanSidebar open={sidebarOpen} setOpen={setSidebarOpen} /><SnapPicClickCapture /></>;
+
+  if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#fff" }} />;
+  return <><StreamsWorkspaceShell chatRuntime={chatRuntime} onOpenSidebar={() => setSidebarOpen(true)} /><StreamsCleanSidebar chatRuntime={chatRuntime} open={sidebarOpen} setOpen={setSidebarOpen} /><SnapPicClickCapture /></>;
 }
