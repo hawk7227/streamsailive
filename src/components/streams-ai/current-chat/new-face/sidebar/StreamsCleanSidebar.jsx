@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./streams-clean-sidebar.css";
 import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
-import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
 
 const PRIMARY_ITEMS = [
   { id: "search-chats", label: "Search chats", icon: "search" },
