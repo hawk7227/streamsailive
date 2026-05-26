@@ -82,7 +82,7 @@ export async function generateStreamsVideo({
     body.imageUrl = imageUrl;
   }
 
-  const generationRes = await fetch(apiUrl("/api/streams-ai/tools"), {
+  const generationRes = await fetch(apiUrl("/api/streams/video/generate"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
