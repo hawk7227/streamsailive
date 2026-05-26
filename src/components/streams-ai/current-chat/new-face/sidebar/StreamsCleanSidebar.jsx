@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import "./streams-clean-sidebar.css";
+import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
+import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
 
 const PRIMARY_ITEMS = [
   { id: "search-chats", label: "Search chats", icon: "search" },
@@ -81,35 +83,6 @@ function Avatar() {
   return <div className="cleanSidebarAvatar">MH</div>;
 }
 
-function MediaModal({ type, onClose }) {
-  const config = {
-    images: {
-      title: "Images",
-      subtitle: "Generated images and image workflows.",
-      body: "This is the clean image library shell. The next slice connects the real generated-image grid without changing provider routes.",
-    },
-    search: {
-      title: "Search",
-      subtitle: "Search chats, projects, media, and workspace files.",
-      body: "This is the clean search modal shell. Real search results will be wired as a separate slice, not faked here.",
-    },
-  }[type];
-
-  if (!config) return null;
-
-  return (
-    <div className="cleanSidebarModalBackdrop" onClick={onClose} role="presentation">
-      <section className="cleanSidebarModal" role="dialog" aria-modal="true" aria-label={config.title} onClick={(event) => event.stopPropagation()}>
-        <header>
-          <div><strong>{config.title}</strong><span>{config.subtitle}</span></div>
-          <button type="button" aria-label="Close" onClick={onClose}><Icon name="x" size={18}/></button>
-        </header>
-        <div className="cleanSidebarModalBody"><p>{config.body}</p></div>
-      </section>
-    </div>
-  );
-}
-
 export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
@@ -167,7 +140,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
         </section>
       ))}
       <div className="cleanSidebarAccount"><Avatar/><span><strong>MARCUS HAWKINS</strong><em>Pro</em></span></div>
-      <MediaModal type={activeModal} onClose={() => setActiveModal(null)} />
+      <StreamsMediaLibraryModal mode={activeModal} chatRuntime={chatRuntime} onClose={() => setActiveModal(null)} />
     </aside>
     </>
   );
