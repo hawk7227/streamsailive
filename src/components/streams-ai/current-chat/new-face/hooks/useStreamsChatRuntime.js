@@ -422,6 +422,26 @@ export function useStreamsChatRuntime() {
     setComposerAttachments((current) => current.filter((file) => file.id !== fileId));
   }, []);
 
+  const ensureUrlSession = useCallback(async (firstMessage = "") => {
+    if (sessionId) return sessionId;
+
+    const localSession = createChatSession({
+      title: buildSessionTitle([{ role: "user", content: firstMessage }]),
+      messages: [],
+    });
+
+    const nextSessionId = localSession.id;
+    setCurrentSessionId(nextSessionId);
+    setSessionId(nextSessionId);
+
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
+    }
+
+    refreshSidebarData();
+    return nextSessionId;
+  }, [sessionId, refreshSidebarData]);
+
   const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider }) => {
     if (!mounted) return;
     const trimmed = String(message || "").trim();
@@ -442,6 +462,8 @@ export function useStreamsChatRuntime() {
       storageBucket: file.storageBucket || file.storage_bucket,
       storagePath: file.storagePath || file.storage_path,
     }));
+
+    const activeSessionId = await ensureUrlSession(trimmed);
 
     setMessages((current) => [...current, { id: userId, role: "user", content: trimmed, attachments: userAttachments }]);
     setComposerAttachments([]); // Clear composer attachments after sending
@@ -475,7 +497,7 @@ export function useStreamsChatRuntime() {
       setMessages((current) => [...current, { id: assistantId, role: "assistant", content: "", isStreaming: true, generatedImage: { id: imageId, status: "streaming", statusText: "Generating image…", requestSizeLabel, aspectRatio: requestAspectRatio, partialUrl: "", url: "" } }]);
       try {
         const result = await generateStreamsImage({ prompt: trimmed, signal: abortRef.current.signal, onStatus: (statusText) => { updateMessageImage(assistantId, { status: "streaming", statusText: statusText || "Generating image…" }); setActivity(createActivity("rendering", "image", statusText || "Generating image…")); }, onPartial: (partial) => updateMessageImage(assistantId, { status: "streaming", partialUrl: partial?.url || "", statusText: partial?.statusText || "Generating image…" }) });
-        const imageRecord = { id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: result?.mimeType || "image/png", url: result?.artifactUrl || result?.outputUrl, storageUrl: result?.artifactUrl || result?.outputUrl, previewUrl: result?.artifactUrl || result?.outputUrl, width: result?.width || null, height: result?.height || null, requestSizeLabel, createdAt: new Date().toISOString() };
+        const imageRecord = { id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: result?.mimeType || "image/png", url: result?.artifactUrl || result?.outputUrl, storageUrl: result?.artifactUrl || result?.outputUrl, previewUrl: result?.artifactUrl || result?.outputUrl, width: result?.width || null, height: result?.height || null, requestSizeLabel, sessionId: activeSessionId, createdAt: new Date().toISOString() };
         addGeneratedImage(imageRecord);
         upsertLibraryFile({ id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: imageRecord.mimeType, sizeBytes: 0, storageUrl: imageRecord.url, previewUrl: imageRecord.url, createdAt: imageRecord.createdAt });
         setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, generatedImage: { ...item.generatedImage, ...imageRecord, status: "ready", statusText: imageRecord.width && imageRecord.height ? `${imageRecord.width} × ${imageRecord.height}` : requestSizeLabel, url: imageRecord.url, partialUrl: imageRecord.url } } : item));
@@ -502,7 +524,7 @@ export function useStreamsChatRuntime() {
         const referenceImage = wantsImageToVideo(trimmed) ? selectLatestUploadedImage() : null;
         const videoResult = await generateStreamsVideo({ prompt: trimmed, imageUrl: referenceImage?.url || undefined, mode: referenceImage?.url ? "i2v" : "t2v", aspectRatio: referenceImage?.url ? "9:16" : "16:9", signal: abortRef.current.signal, onStatus: (statusText) => { const nextStatusText = statusText || "Rendering video…"; setActivity(createActivity("rendering", "video", nextStatusText)); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: nextStatusText, isStreaming: true } : item)); } });
         const videoId = createId("video");
-        const videoRecord = { id: videoId, kind: "video", source: "generated", name: referenceImage?.url ? "Generated image-to-video" : "Generated video", mimeType: videoResult.mimeType || "video/mp4", url: videoResult.artifactUrl, storageUrl: videoResult.artifactUrl, previewUrl: videoResult.artifactUrl, generationId: videoResult.generationId, prompt: trimmed, sourceImageId: referenceImage?.id || "", createdAt: new Date().toISOString() };
+        const videoRecord = { id: videoId, kind: "video", source: "generated", name: referenceImage?.url ? "Generated image-to-video" : "Generated video", mimeType: videoResult.mimeType || "video/mp4", url: videoResult.artifactUrl, storageUrl: videoResult.artifactUrl, previewUrl: videoResult.artifactUrl, generationId: videoResult.generationId, prompt: trimmed, sessionId: activeSessionId, sourceImageId: referenceImage?.id || "", createdAt: new Date().toISOString() };
         addGeneratedVideo(videoRecord);
         upsertLibraryFile({ id: videoId, kind: "video", source: "generated", name: videoRecord.name, mimeType: videoRecord.mimeType, sizeBytes: 0, storageUrl: videoRecord.url, previewUrl: videoRecord.url, createdAt: videoRecord.createdAt });
         setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: "", isStreaming: false, generatedVideoUrl: videoResult.artifactUrl, generatedVideo: videoRecord, generationId: videoResult.generationId, mimeType: videoResult.mimeType } : item));
@@ -584,8 +606,8 @@ export function useStreamsChatRuntime() {
           };
         })
       };
-      if (sessionId) {
-        requestPayload.sessionId = sessionId;
+      if (activeSessionId) {
+        requestPayload.sessionId = activeSessionId;
       }
       const response = await fetch("/api/streams-ai/messages", {
         method: "POST",
@@ -729,7 +751,7 @@ export function useStreamsChatRuntime() {
                   setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: true, generatedImage: { id: imageId, status: "streaming", statusText: "Generating image…", requestSizeLabel, aspectRatio: requestAspectRatio, partialUrl: "", url: "" } } : item));
                   
                   const result = await generateStreamsImage({ prompt, signal: abortRef.current.signal, onStatus: (statusText) => { updateMessageImage(assistantId, { status: "streaming", statusText: statusText || "Generating image…" }); setActivity(createActivity("rendering", "image", statusText || "Generating image…")); }, onPartial: (partial) => updateMessageImage(assistantId, { status: "streaming", partialUrl: partial?.url || "", statusText: partial?.statusText || "Generating image…" }) });
-                  const imageRecord = { id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: result?.mimeType || "image/png", url: result?.artifactUrl || result?.outputUrl, storageUrl: result?.artifactUrl || result?.outputUrl, previewUrl: result?.artifactUrl || result?.outputUrl, width: result?.width || null, height: result?.height || null, requestSizeLabel, createdAt: new Date().toISOString() };
+                  const imageRecord = { id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: result?.mimeType || "image/png", url: result?.artifactUrl || result?.outputUrl, storageUrl: result?.artifactUrl || result?.outputUrl, previewUrl: result?.artifactUrl || result?.outputUrl, width: result?.width || null, height: result?.height || null, requestSizeLabel, sessionId: activeSessionId, createdAt: new Date().toISOString() };
                   addGeneratedImage(imageRecord);
                   upsertLibraryFile({ id: imageId, kind: "image", source: "generated", name: "Generated image", mimeType: imageRecord.mimeType, sizeBytes: 0, storageUrl: imageRecord.url, previewUrl: imageRecord.url, createdAt: imageRecord.createdAt });
                   
@@ -787,7 +809,7 @@ export function useStreamsChatRuntime() {
       setIsStreaming(false);
       scrollActiveChatToBottom();
     }
-  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback, sessionId, composerAttachments]);
+  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback, sessionId, composerAttachments, ensureUrlSession]);
 
   const api = useMemo(() => ({
     messages,
