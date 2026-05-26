@@ -149,7 +149,7 @@ export default function StreamsMediaLibraryModal({ mode = "images", chatRuntime,
   const refresh = () => setAssets(readAllAssets());
 
   useEffect(() => {
-    refresh();
+    queueMicrotask(() => refresh());
     const onChange = () => refresh();
     const onKey = (event) => {
       if (event.key === "Escape") onClose?.();

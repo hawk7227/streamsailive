@@ -108,7 +108,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
       return;
     }
     if (item.href) {
-      window.location.href = item.href;
+      window.location.assign(item.href);
     }
   }
 

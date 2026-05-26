@@ -214,8 +214,29 @@ export default function GeneratedVideoDock() {
 
   useEffect(() => installMediaFetchTracker(), []);
   useEffect(() => { const openGrid = () => setOpen(true); window.addEventListener("streams:open-generated-videos", openGrid); return () => window.removeEventListener("streams:open-generated-videos", openGrid); }, []);
-  useEffect(() => { refresh(); const onStorage = (event) => { if (!event.key || event.key === "streams.generated.videos.v1" || event.key === "streams.library.files.v1") refresh(); }; const interval = window.setInterval(refresh, 1500); window.addEventListener("storage", onStorage); window.addEventListener("focus", refresh); window.addEventListener("streams:videos-changed", refresh); return () => { window.clearInterval(interval); window.removeEventListener("storage", onStorage); window.removeEventListener("focus", refresh); window.removeEventListener("streams:videos-changed", refresh); }; }, []);
-  useEffect(() => { const readyVideo = videos.find((video) => video?.url && video.status !== "failed" && (video.source !== "generated" || video.finalized || video.finalizeStatus === "failed")); const key = autoOpenKey(readyVideo); if (!readyVideo || !key || autoOpenedVideoIdRef.current === key) return; autoOpenedVideoIdRef.current = key; setViewerVideo(readyVideo); }, [videos]);
+  useEffect(() => {
+    queueMicrotask(() => refresh());
+    const onStorage = (event) => {
+      if (!event.key || event.key === "streams.generated.videos.v1" || event.key === "streams.library.files.v1") refresh();
+    };
+    const interval = window.setInterval(refresh, 1500);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("streams:videos-changed", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("streams:videos-changed", refresh);
+    };
+  }, []);
+  useEffect(() => {
+    const readyVideo = videos.find((video) => video?.url && video.status !== "failed" && (video.source !== "generated" || video.finalized || video.finalizeStatus === "failed"));
+    const key = autoOpenKey(readyVideo);
+    if (!readyVideo || !key || autoOpenedVideoIdRef.current === key) return;
+    autoOpenedVideoIdRef.current = key;
+    queueMicrotask(() => setViewerVideo(readyVideo));
+  }, [videos]);
 
   const workflows = VIDEO_WORKFLOWS.map((workflow) => { const matching = videos.filter((video) => methodForVideo(video) === workflow.method || (workflow.method === "text_to_video" && !methodForVideo(video))); const latest = matching.find((video) => video.url) || matching[0] || null; return { ...workflow, latest, count: matching.length }; });
   const shownVideos = selectedWorkflow ? videos.filter((video) => methodForVideo(video) === selectedWorkflow.method) : [];
