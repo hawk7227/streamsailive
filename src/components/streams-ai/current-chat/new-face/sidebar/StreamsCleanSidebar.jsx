@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import "./streams-clean-sidebar.css";
 import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
 
 const PRIMARY_ITEMS = [
-  { id: "search-chats", label: "Search chats", icon: "search" },
-  { id: "projects", label: "Projects", icon: "file" },
-  { id: "chat", label: "Chat", icon: "chat", active: true },
+  { id: "search-chats", label: "Search chats", icon: "search", action: "search" },
+  { id: "projects", label: "Projects", icon: "file", href: "/dashboard/library" },
+  { id: "chat", label: "Chat", icon: "chat", href: "/streams-ai", active: true },
 ];
 
 const TOOL_ITEMS = [
@@ -78,11 +80,24 @@ function Icon({ name, size = 20 }) {
   return <svg {...props}>{icons[name] || icons.sparkle}</svg>;
 }
 
-function Avatar() {
-  return <div className="cleanSidebarAvatar">MH</div>;
+function getInitials(value) {
+  const text = String(value || "Streams User").trim();
+  if (text.includes("@")) return text.slice(0, 2).toUpperCase();
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "SU";
+}
+
+function Avatar({ label }) {
+  return <div className="cleanSidebarAvatar">{getInitials(label)}</div>;
 }
 
 export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
+  const router = useRouter();
+  const { user, profile, plan, workspace } = useAuth();
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const toolItems = useMemo(() => TOOL_ITEMS.filter((item) => item?.id && item?.label), []);
@@ -90,11 +105,32 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
     return groupSessionsByDate(chatRuntime?.sessions || []);
   }, [chatRuntime?.sessions]);
 
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    "Streams user";
+
+  const planLabel = plan?.name || profile?.plan_id || "Free";
+  const workspaceLabel = workspace?.name || "Workspace";
+
   useEffect(() => {
     const onKey = (event) => { if (event.key === "Escape") setActiveModal(null); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  function openPrimary(item) {
+    if (item.action === "search") {
+      setActiveModal("search");
+      return;
+    }
+
+    if (item.href) {
+      router.push(item.href);
+    }
+  }
 
   function openTool(item) {
     if (item.disabled) return;
@@ -108,7 +144,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
       return;
     }
     if (item.href) {
-      window.location.assign(item.href);
+      router.push(item.href);
     }
   }
 
@@ -126,7 +162,19 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
       />
       <aside className="cleanSidebar" aria-label="Workspace sidebar">
       <div className="cleanSidebarTop"><button type="button" className="cleanSidebarNewChat" onClick={() => chatRuntime?.newChat?.()}><Icon name="plus"/><span>New chat</span><Icon name="down" size={14}/></button><button type="button" className="cleanSidebarIconButton" aria-label="Collapse sidebar" onClick={() => setOpen(false)}><Icon name="panel"/></button></div>
-      <nav className="cleanSidebarPrimary" aria-label="Primary navigation">{PRIMARY_ITEMS.map((item) => <button key={item.id} type="button" className={item.active ? "isActive" : ""}><Icon name={item.icon}/><span>{item.label}</span></button>)}</nav>
+      <nav className="cleanSidebarPrimary" aria-label="Primary navigation">
+        {PRIMARY_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.active ? "isActive" : ""}
+            onClick={() => openPrimary(item)}
+          >
+            <Icon name={item.icon}/>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
       <section className="cleanSidebarTools"><button type="button" className="cleanSidebarToolsToggle" onClick={() => setToolsOpen((value) => !value)}><span><Icon name="dots"/> More</span><Icon name="down" size={14}/></button>{toolsOpen ? <nav aria-label="Tools">{toolItems.map((item) => <button key={item.id} type="button" disabled={item.disabled} onClick={() => openTool(item)}><Icon name={item.icon}/><span>{item.label}</span></button>)}</nav> : null}</section>
       {Object.entries(grouped).map(([title, items]) => (
         <section className="cleanSidebarHistory" key={title} aria-label={title}>
@@ -144,7 +192,18 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
           ))}
         </section>
       ))}
-      <div className="cleanSidebarAccount"><Avatar/><span><strong>MARCUS HAWKINS</strong><em>Pro</em></span></div>
+      <button
+        type="button"
+        className="cleanSidebarAccount cleanSidebarAccountButton"
+        onClick={() => router.push("/account")}
+        aria-label="Open account"
+      >
+        <Avatar label={displayName}/>
+        <span>
+          <strong>{displayName}</strong>
+          <em>{planLabel} · {workspaceLabel}</em>
+        </span>
+      </button>
       {activeModal ? (
         <StreamsMediaLibraryModal
           mode={activeModal}

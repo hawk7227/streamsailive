@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
 import "./streams-composer.css";
 
-const PROVIDERS = ["Auto", "fal.ai", "Runway", "Kling", "Veo", "ElevenLabs"];
-const MODES = ["Instant", "Thinking", "Pro", "Configure..."];
+const MODES = ["Thinking", "Configure..."];
 
 const TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U" },
@@ -24,7 +23,6 @@ export default function StreamsComposer({
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
   const [composerMode, setComposerMode] = useState("chat");
-  const [provider, setProvider] = useState("Auto");
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const fileInputRef = useRef(null);
@@ -79,6 +77,14 @@ export default function StreamsComposer({
     setActiveMenu("");
   }
 
+  useEffect(() => {
+    const streamsComposerEscapeClose = (event) => {
+      if (event.key === "Escape") setModeMenuOpen(false);
+    };
+    window.addEventListener("keydown", streamsComposerEscapeClose);
+    return () => window.removeEventListener("keydown", streamsComposerEscapeClose);
+  }, []);
+
   return (
     <section 
       className="streamsComposer" 
@@ -98,7 +104,15 @@ export default function StreamsComposer({
             const isUploading = file.status === "uploading";
             const isError = file.status === "error";
             if (isImage && previewUrl) {
-              return (
+              useEffect(() => {
+    const streamsComposerEscapeClose = (event) => {
+      if (event.key === "Escape") setModeMenuOpen(false);
+    };
+    window.addEventListener("keydown", streamsComposerEscapeClose);
+    return () => window.removeEventListener("keydown", streamsComposerEscapeClose);
+  }, []);
+
+  return (
                 <div key={file.id} style={{ position: "relative", borderRadius: "10px", overflow: "hidden", width: "64px", height: "64px", flexShrink: 0 }}>
                   <img
                     src={previewUrl}
@@ -133,7 +147,15 @@ export default function StreamsComposer({
                 </div>
               );
             }
-            return (
+            useEffect(() => {
+    const streamsComposerEscapeClose = (event) => {
+      if (event.key === "Escape") setModeMenuOpen(false);
+    };
+    window.addEventListener("keydown", streamsComposerEscapeClose);
+    return () => window.removeEventListener("keydown", streamsComposerEscapeClose);
+  }, []);
+
+  return (
               <div key={file.id} style={{ position: "relative", display: "flex", alignItems: "center", gap: "6px", background: isError ? "rgba(220,50,50,0.1)" : "rgba(0,0,0,0.06)", padding: "5px 10px 5px 8px", borderRadius: "10px", fontSize: "12px", color: "#333", maxWidth: "160px" }}>
                 <span style={{ fontSize: "18px", flexShrink: 0 }}>{isError ? "⚠️" : isUploading ? "⏳" : "📄"}</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name || "File"}</span>
@@ -230,12 +252,7 @@ export default function StreamsComposer({
               <span>{item === mode ? "✓" : ""}</span><strong>{item}</strong><em />
             </button>
           ))}
-          <div className="streamsProviderHint">Providers</div>
-          {PROVIDERS.map((item) => (
-            <button key={item} type="button" onClick={() => { setProvider(item); onProviderChange?.(item); setActiveMenu(""); }}>
-              <span>{item === provider ? "✓" : ""}</span><strong>{item}</strong><em />
-            </button>
-          ))}
+          <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       )}
     </section>
