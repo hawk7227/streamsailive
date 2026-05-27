@@ -31,6 +31,8 @@ function ChatInlineImage({ src, alt }) {
           borderRadius: "16px" 
         }}
       />
+      <StreamsSplitPreview />
+      <StreamsSplitPreviewProofButton />
     </div>
   );
 }
@@ -44,6 +46,8 @@ import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
 import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
+import StreamsSplitPreview from "./preview/StreamsSplitPreview";
+import StreamsSplitPreviewProofButton from "./preview/StreamsSplitPreviewProofButton";
 import StreamsActivityToast from "./activity/StreamsActivityToast";
 import StreamsActivityTimeline from "./activity/StreamsActivityTimeline";
 import { emitChatActionActivity, emitGroupChatActivity } from "./runtime/streamsGlobalActivityBridge";
