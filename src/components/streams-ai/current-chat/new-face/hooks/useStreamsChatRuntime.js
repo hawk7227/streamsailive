@@ -348,7 +348,8 @@ export function useStreamsChatRuntime() {
 
   const copyAsset = useCallback(async (asset) => {
     if (!asset?.url) return;
-    const response = await fetch(asset.url);
+    console.info("[STREAMS_FETCH_START]", "fetch call reached");
+      const response = await fetch(asset.url);
     const blob = await response.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
   }, []);
@@ -493,9 +494,22 @@ export function useStreamsChatRuntime() {
       composerMode = "chat";
     }
 
+    console.info("[STREAMS_AFTER_MODE_NORMALIZE]", {
+      trimmedPreview: typeof message === "string" ? message.slice(0, 80) : "",
+      composerMode,
+      mode,
+      provider,
+      selectedMode,
+      selectedProvider,
+      isStreaming,
+    });
+
     if (!mounted) return;
     const trimmed = String(message || "").trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      console.warn("[STREAMS_RETURN_EMPTY]");
+      return;
+    }
 
     abortRef.current?.abort?.();
     abortRef.current = new AbortController();
