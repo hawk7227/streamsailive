@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { generateStreamsImage, isImageIntent } from "../../runtime/streamsImageClient";
 import { generateStreamsVideo, isVideoIntent } from "../../runtime/streamsVideoClient";
 import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/streamsLinkClient";
@@ -152,6 +153,7 @@ function wantsImageToVideo(message = "") {
 }
 
 export function useStreamsChatRuntime() {
+  const { session } = useAuth();
   const abortRef = useRef(null);
   const sentinelRef = useRef(null);
   const [mounted, setMounted] = useState(false);
@@ -553,7 +555,10 @@ export function useStreamsChatRuntime() {
       try {
         const searchResponse = await fetch("/api/streams-ai/search", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({ query }),
         });
 

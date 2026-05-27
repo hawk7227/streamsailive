@@ -1,11 +1,47 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
 type SearchRequestBody = {
   query?: string;
 };
+
+async function getAuthenticatedUser(request: Request) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) return user;
+
+  const authorization = request.headers.get("authorization") || "";
+  const token = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+
+  if (!token) return null;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  const bearerClient = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+
+  const {
+    data: { user: bearerUser },
+  } = await bearerClient.auth.getUser(token);
+
+  return bearerUser || null;
+}
 
 function extractSearchText(output: unknown): string {
   const data = output as {
@@ -69,14 +105,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser(request);
 
   if (!user) {
     return NextResponse.json(
-      { ok: false, error: "Unauthorized: sign in before using web search." },
+      {
+        ok: false,
+        error:
+          "Unauthorized: sign in before using web search. Server did not receive a Supabase cookie or bearer session.",
+      },
       { status: 401 }
     );
   }
