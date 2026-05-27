@@ -11,7 +11,6 @@ import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streams
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
 import { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
 import { emitStreamsActivity } from "../runtime/streamsGlobalActivityBridge";
-import { openPreviewOnlyArtifact, isPreviewOnlyRequest } from "../runtime/streamsSplitPreviewBridge";
 import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
 import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
@@ -571,31 +570,8 @@ export function useStreamsChatRuntime() {
     }
 
     setMessages((current) => [...current, { id: assistantId, role: "assistant", content: buildChatStatusMessage(CHAT_STATUS_FALLBACK), isStreaming: true, isStatusOnly: true, status: "thinking", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }]);
-    const requestedPreviewOnly = isPreviewOnlyRequest(trimmed);
-
-    if (requestedPreviewOnly) {
-      const previewTitle = trimmed.length > 90 ? "Preview-only result" : trimmed || "Preview-only result";
-      openPreviewOnlyArtifact({
-        message: trimmed,
-        title: previewTitle,
-      });
-
-      setActivity(createActivity("complete", "preview", "Opened in split preview"));
-      setMessages((current) => completeStatusMessage(
-        current,
-        assistantId,
-        "Opened in Split Preview. Source is hidden by default; use Show source inside the preview panel if you need to inspect it.",
-        {
-          previewOnly: true,
-          conversationCodeSuppressed: true,
-          status: "complete",
-        }
-      ));
-
-      refreshSidebarData();
-      return;
-    }
-
+    // Preview-only routing is temporarily disabled until normal chat is verified green.
+    // Split Preview remains available through the preview pane, but normal chat must never be intercepted here.
     const requestedWebSearch =
       webSearchEnabled ||
       /^\s*(search the web|web search|search online|look up|find latest|latest)\b/i.test(trimmed);
