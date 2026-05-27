@@ -1,18 +1,11 @@
-"use client";
+import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
 
-import Link from "next/link";
-import { AccountMobileShell } from "@/components/account/AccountMobileShell";
-
-export default function AccountLearnMorePage() {
+export default function AccountPage() {
   return (
-    <AccountMobileShell title="Learn more" subtitle="STREAMS capabilities, pricing, docs, and policies.">
-      <section className="accountGrid">
-        <Link className="accountButton" href="/features">Features</Link>
-        <Link className="accountButton secondary" href="/pricing">Pricing</Link>
-        <Link className="accountButton secondary" href="/products">Products</Link>
-        <Link className="accountButton secondary" href="/privacy">Privacy</Link>
-        <Link className="accountButton secondary" href="/terms">Terms</Link>
-      </section>
-    </AccountMobileShell>
+    <StreamsAccountActionPanel
+      pageKind="learnMore"
+      title="Learn more"
+      description="Explore STREAMS capabilities and upgrade paths."
+    />
   );
 }
