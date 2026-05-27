@@ -975,6 +975,8 @@ export function useStreamsChatRuntime() {
     sendMessage,
     newChat,
     sessionId,
+    currentSessionId: sessionId,
+    activeSessionId: sessionId,
     sessions,
     imageGallery,
     videoGallery,

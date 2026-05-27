@@ -47,6 +47,7 @@ import StreamsComposer from "./composer/StreamsComposer";
 import StreamsActivityToast from "./activity/StreamsActivityToast";
 import StreamsActivityTimeline from "./activity/StreamsActivityTimeline";
 import { emitChatActionActivity, emitGroupChatActivity } from "./runtime/streamsGlobalActivityBridge";
+import { runStreamsSessionAction } from "./runtime/streamsSessionActionsClient";
 import { STREAMS_ACTIVITY_PHASES } from "./runtime/streamsActivityEvents";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
@@ -498,6 +499,20 @@ function blockedChatAction(actionName) {
   window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
 }
 
+
+async function runRealSessionAction(chatRuntime, actionName, action) {
+  const sessionId = chatRuntime?.sessionId || chatRuntime?.currentSessionId || chatRuntime?.activeSessionId;
+
+  try {
+    await runStreamsSessionAction({ sessionId, action });
+    chatRuntime?.refreshSidebarData?.();
+    if (action === "delete") {
+      chatRuntime?.newChat?.();
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : `Failed to ${actionName}.`);
+  }
+}
 
 function blockedMessageAction(actionName) {
   if (String(actionName).includes("group")) {
