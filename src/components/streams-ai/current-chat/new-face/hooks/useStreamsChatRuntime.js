@@ -10,7 +10,8 @@ import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
 import { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
-import { emitStreamsActivity } from "../runtime/streamsGlobalActivityBridge";\nimport { openPreviewOnlyArtifact, isPreviewOnlyRequest } from "../runtime/streamsSplitPreviewBridge";
+import { emitStreamsActivity } from "../runtime/streamsGlobalActivityBridge";
+import { openPreviewOnlyArtifact, isPreviewOnlyRequest } from "../runtime/streamsSplitPreviewBridge";
 import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
 import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
