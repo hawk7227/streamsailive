@@ -26,11 +26,11 @@ function SignupForm() {
   const supabase = createClient();
   const router = useRouter();
   const { user, updateProfile } = useAuth();
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/").replace(/\/$/, "");
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://streamsailive.vercel.app").replace(/\/$/, "");
 
   useEffect(() => {
     if (user) {
-      router.push("/dashboard");
+      router.push("/streams-ai");
     }
   }, [user, router]);
 
@@ -41,7 +41,7 @@ function SignupForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: `${appUrl}/auth/callback?next=/streams-ai`,
       },
     });
 
@@ -103,7 +103,7 @@ function SignupForm() {
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${appUrl}/auth/callback`,
+          emailRedirectTo: `${appUrl}/auth/callback?next=/streams-ai`,
           data: {
             full_name: formData.fullName,
           },
@@ -181,7 +181,7 @@ function SignupForm() {
           }
 
           // Agency invitation handled, proceed to dashboard
-          router.push("/dashboard");
+          router.push("/streams-ai");
           return;
         } catch (error) {
           setError("Failed to accept agency invitation. Please try again.");
@@ -215,7 +215,7 @@ function SignupForm() {
         }
 
         // Workspace created successfully, proceed to dashboard
-        router.push("/dashboard");
+        router.push("/streams-ai");
       } catch (error) {
         setError("Failed to create workspace. Please try again.");
         setIsLoading(false);
