@@ -124,9 +124,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({
-    ok: true,
-    action,
-    session: updated,
-  });
+  return NextResponse.json({ ok: true, action, session: updated });
 }

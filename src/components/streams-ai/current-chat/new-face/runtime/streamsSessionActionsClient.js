@@ -22,11 +22,13 @@ export async function runStreamsSessionAction({ sessionId, action }) {
 
   if (!response.ok || !data?.ok) {
     const reason = data?.error || data?.details || `${action} chat failed`;
+
     emitChatActionActivity(
       STREAMS_ACTIVITY_PHASES.FAILED,
       reason,
       { tool: action, sessionId }
     );
+
     throw new Error(reason);
   }
 
