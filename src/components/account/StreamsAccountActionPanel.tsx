@@ -7,6 +7,7 @@ import {
   openBillingPortalWithActivity,
   startCheckoutWithActivity,
   fetchProjectsWithActivity,
+  callGroupChatWithActivity,
   emitGitHubBuildBlockedActivity,
 } from "@/components/streams-ai/current-chat/new-face/runtime/streamsAccountActivityClient";
 import styles from "./StreamsAccountActionPanel.module.css";
@@ -46,31 +47,92 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
   const [credits, setCredits] = useState<unknown>(null);
   const [projects, setProjects] = useState<unknown>(null);
   const [error, setError] = useState("");
+  const [lastAction, setLastAction] = useState("");
+  const [groupSessionId, setGroupSessionId] = useState("");
+  const [groupEmail, setGroupEmail] = useState("");
+  const [groupName, setGroupName] = useState("STREAMS Group Chat");
 
   async function loadAccount() {
     setError("");
+    setLastAction("Loading account...");
     try {
       setAccount(await fetchAccountWithActivity());
+      setLastAction("Account loaded.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Account loading failed.");
+      const message = err instanceof Error ? err.message : "Account loading failed.";
+      setError(message);
+      setLastAction(message);
     }
   }
 
   async function loadCredits() {
     setError("");
+    setLastAction("Loading credits...");
     try {
       setCredits(await fetchCreditsWithActivity());
+      setLastAction("Credits loaded.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Credits loading failed.");
+      const message = err instanceof Error ? err.message : "Credits loading failed.";
+      setError(message);
+      setLastAction(message);
     }
   }
 
   async function loadProjects() {
     setError("");
+    setLastAction("Loading projects...");
     try {
       setProjects(await fetchProjectsWithActivity());
+      setLastAction("Projects loaded.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Projects loading failed.");
+      const message = err instanceof Error ? err.message : "Projects loading failed.";
+      setError(message);
+      setLastAction(message);
+    }
+  }
+
+  async function openPortal() {
+    setError("");
+    setLastAction("Opening billing portal...");
+    try {
+      await openBillingPortalWithActivity();
+      setLastAction("Billing portal redirect started.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Billing portal failed.";
+      setError(message);
+      setLastAction(message);
+    }
+  }
+
+  async function startCheckout(source: string, product?: string) {
+    setError("");
+    setLastAction("Starting checkout...");
+    try {
+      await startCheckoutWithActivity({ source, product });
+      setLastAction("Checkout redirect started.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Checkout failed.";
+      setError(message);
+      setLastAction(message);
+    }
+  }
+
+  async function runGroupChatTest(action: "create" | "invite" | "remove" | "leave" | "rename") {
+    setError("");
+    setLastAction(`${action} group chat...`);
+
+    try {
+      await callGroupChatWithActivity({
+        sessionId: groupSessionId,
+        action,
+        email: groupEmail,
+        name: groupName,
+      });
+      setLastAction(`Group chat ${action} complete.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Group chat ${action} failed.`;
+      setError(message);
+      setLastAction(message);
     }
   }
 
@@ -87,15 +149,15 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
   const primaryActions = useMemo(() => {
     if (pageKind === "billing") {
       return [
-        { label: "Open billing portal", action: () => openBillingPortalWithActivity().catch((err) => setError(err.message)) },
-        { label: "Start checkout", action: () => startCheckoutWithActivity({ source: "account_billing" }).catch((err) => setError(err.message)) },
+        { label: "Open billing portal", action: openPortal },
+        { label: "Start checkout", action: () => startCheckout("account_billing") },
       ];
     }
 
     if (pageKind === "credits") {
       return [
         { label: "Refresh credits", action: loadCredits },
-        { label: "Buy credits", action: () => startCheckoutWithActivity({ source: "account_credits", product: "credits" }).catch((err) => setError(err.message)) },
+        { label: "Buy credits", action: () => startCheckout("account_credits", "credits") },
       ];
     }
 
@@ -154,6 +216,57 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
           <strong>{summarize(projects)}</strong>
           <p>Project loading uses emitProjectActivity. GitHub/build emitters are present for real backend slices.</p>
         </article>
+      </section>
+
+      <section className={styles.proofBar}>
+        <strong>Last action</strong>
+        <span>{lastAction || "No account action has run yet."}</span>
+      </section>
+
+      <section className={styles.groupCard}>
+        <div>
+          <p className={styles.kicker}>Group chat backend test</p>
+          <h2>Real session test</h2>
+          <p>
+            This calls /api/streams-ai/group-chat against a real session id and emits group chat activity events.
+          </p>
+        </div>
+
+        <label>
+          Session ID
+          <input
+            value={groupSessionId}
+            onChange={(event) => setGroupSessionId(event.target.value)}
+            placeholder="Paste a real STREAMS chat session id"
+          />
+        </label>
+
+        <label>
+          Invite email
+          <input
+            value={groupEmail}
+            onChange={(event) => setGroupEmail(event.target.value)}
+            placeholder="person@example.com"
+            type="email"
+          />
+        </label>
+
+        <label>
+          Group name
+          <input
+            value={groupName}
+            onChange={(event) => setGroupName(event.target.value)}
+            placeholder="STREAMS Group Chat"
+          />
+        </label>
+
+        <div className={styles.groupActions}>
+          <button type="button" onClick={() => runGroupChatTest("create")}>Create group</button>
+          <button type="button" onClick={() => runGroupChatTest("invite")}>Invite</button>
+          <button type="button" onClick={() => runGroupChatTest("rename")}>Rename</button>
+          <button type="button" onClick={() => runGroupChatTest("remove")}>Remove</button>
+          <button type="button" onClick={() => runGroupChatTest("leave")}>Leave</button>
+        </div>
       </section>
 
       <section className={styles.section}>

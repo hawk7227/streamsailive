@@ -162,3 +162,105 @@
     text-align: left;
   }
 }
+
+.proofBar {
+  max-width: 1120px;
+  margin: 0 auto 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  background: #fff;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.04);
+}
+
+.proofBar strong {
+  white-space: nowrap;
+}
+
+.proofBar span {
+  color: #555;
+  text-align: right;
+}
+
+.groupCard {
+  max-width: 1120px;
+  margin: 14px auto 0;
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 26px;
+  background: #fff;
+  padding: 20px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.05);
+}
+
+.groupCard h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -.03em;
+}
+
+.groupCard p {
+  color: #555;
+  line-height: 1.45;
+}
+
+.groupCard label {
+  display: grid;
+  gap: 6px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.groupCard input {
+  min-height: 44px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 14px;
+  padding: 0 12px;
+  font-size: 14px;
+  text-transform: none;
+}
+
+.groupActions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.groupActions button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  padding: 0 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .proofBar {
+    display: grid;
+  }
+
+  .proofBar span {
+    text-align: left;
+  }
+
+  .groupCard {
+    grid-template-columns: 1fr;
+    border-radius: 22px;
+  }
+
+  .groupActions button {
+    flex: 1;
+  }
+}
