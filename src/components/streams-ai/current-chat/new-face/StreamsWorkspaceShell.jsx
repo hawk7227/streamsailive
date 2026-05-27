@@ -291,8 +291,10 @@ function Avatar({ label }) {
 }
 
 function MarkdownMessage({ content }) {
-  const blocks = String(content || "").split(/\n{2,}/g);
-  return <div className="markdownMessage">{blocks.map((block, index) => block.startsWith("- ") ? <ul key={index}>{block.split("\n").filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, "")}</li>)}</ul> : <p key={index}>{block}</p>)}</div>;
+  const blocks = String(content || "").split(/
+{2,}/g);
+  return <div className="markdownMessage">{blocks.map((block, index) => block.startsWith("- ") ? <ul key={index}>{block.split("
+").filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, "")}</li>)}</ul> : <p key={index}>{block}</p>)}</div>;
 }
 
 function AccountMenu({ compact = false, onClose }) {
@@ -503,7 +505,8 @@ function AssistantMessageActions({ message, chatRuntime }) {
       blockedMessageAction("view-sources: no real sources are attached to this message");
       return;
     }
-    window.alert(sources.map((source, index) => `${index + 1}. ${source.title || source.url || source.id || "Source"}`).join("\n"));
+    window.alert(sources.map((source, index) => `${index + 1}. ${source.title || source.url || source.id || "Source"}`).join("
+"));
   };
 
   const regenerate = () => {
@@ -590,7 +593,8 @@ function GlobalOverflowMenu({ onClose, openCode, openPreview, onCopy, onViewFile
 
 function WorkspaceTopActions({ openCode, openPreview }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);\n  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
 
   const closeAll = () => {
     setMenuOpen(false);
@@ -887,7 +891,8 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
 
 function CodeArtifactPane({ openPreview, openStart, artifactText, setArtifactText }) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);\n  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
   const wrapRef = useCloseOnOutside(workspaceMenuOpen || shareOpen, () => {
     setWorkspaceMenuOpen(false);
     setShareOpen(false);
