@@ -1,13 +1,15 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";\nimport { useStreamsLiveActivity } from "../activity/useStreamsLiveActivity";
+import { usePathname } from "next/navigation";
+import { useStreamsLiveActivity } from "../activity/useStreamsLiveActivity";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateStreamsImage, isImageIntent } from "../../runtime/streamsImageClient";
 import { generateStreamsVideo, isVideoIntent } from "../../runtime/streamsVideoClient";
 import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/streamsLinkClient";
 import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
-import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";\nimport { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
+import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
+import { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
 import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
 import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
