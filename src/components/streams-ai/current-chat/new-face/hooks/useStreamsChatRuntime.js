@@ -505,7 +505,11 @@ export function useStreamsChatRuntime() {
     });
 
     if (composerMode === "chat" && mode === "chat") {
-      console.info("[STREAMS_DIRECT_CHAT_FALLBACK]", { mode, composerMode, trimmedLength: String(message || "").trim().length });
+      console.info("[STREAMS_DIRECT_CHAT_FALLBACK]", {
+        mode,
+        composerMode,
+        trimmedLength: String(message || "").trim().length,
+      });
 
       const directText = String(message || "").trim();
 
@@ -514,12 +518,50 @@ export function useStreamsChatRuntime() {
         return;
       }
 
+      const directUserId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `user_${Date.now()}`;
+
+      const directAssistantId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `assistant_${Date.now()}`;
+
+      const createdAt = new Date().toISOString();
+
+      setMessages((current) => [
+        ...current.filter((item) => !(item.isStatusOnly && item.status === "thinking")),
+        {
+          id: directUserId,
+          role: "user",
+          content: directText,
+          createdAt,
+        },
+        {
+          id: directAssistantId,
+          role: "assistant",
+          content: buildChatStatusMessage(CHAT_STATUS_FALLBACK),
+          isStreaming: true,
+          isStatusOnly: true,
+          status: "thinking",
+          chunks: [],
+          toolCalls: [],
+          artifacts: [],
+          createdAt,
+        },
+      ]);
+
+      setActivity(createActivity("thinking", "chat", "Thinking"));
+      setIsStreaming(true);
+
       try {
         const directResponse = await fetch("/api/streams-ai/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: directText,
+            content: directText,
             sessionId,
             mode: "chat",
             provider: provider || selectedProvider || "Auto",
@@ -542,7 +584,7 @@ export function useStreamsChatRuntime() {
 
         setMessages((current) =>
           current.map((item) =>
-            item.id === assistantId
+            item.id === directAssistantId
               ? {
                   ...item,
                   content: directContent || "Done.",
@@ -560,9 +602,10 @@ export function useStreamsChatRuntime() {
         return;
       } catch (error) {
         console.error("[STREAMS_DIRECT_CHAT_FALLBACK_ERROR]", error);
+
         setMessages((current) =>
           current.map((item) =>
-            item.id === assistantId
+            item.id === directAssistantId
               ? {
                   ...item,
                   content: error instanceof Error ? error.message : "Chat request failed.",
@@ -573,6 +616,7 @@ export function useStreamsChatRuntime() {
               : item
           )
         );
+
         setActivity(createActivity("error", "chat", "Chat failed"));
         setIsStreaming(false);
         return;
