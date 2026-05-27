@@ -120,7 +120,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
     <>
       {/* Backdrop: tap to close on mobile */}
       <div
-        className="cleanSidebarBackdrop"
+        className="cleanSidebarBackdrop isOpen"
         aria-hidden="true"
         onClick={() => setOpen(false)}
       />
@@ -145,7 +145,13 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
         </section>
       ))}
       <div className="cleanSidebarAccount"><Avatar/><span><strong>MARCUS HAWKINS</strong><em>Pro</em></span></div>
-      <StreamsMediaLibraryModal mode={activeModal} chatRuntime={chatRuntime} onClose={() => setActiveModal(null)} />
+      {activeModal ? (
+        <StreamsMediaLibraryModal
+          mode={activeModal}
+          chatRuntime={chatRuntime}
+          onClose={() => setActiveModal(null)}
+        />
+      ) : null}
     </aside>
     </>
   );

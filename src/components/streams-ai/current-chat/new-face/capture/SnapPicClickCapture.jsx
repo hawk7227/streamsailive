@@ -136,7 +136,7 @@ export default function SnapPicClickCapture() {
 
   return (
     <>
-      <button type="button" className="spc-floating" onClick={() => setOpen(true)}>Snap Pic Click</button>
+      {open ? null : null}
       {open ? (
         <section className="spc-panel" aria-label="Snap Pic Click capture">
           <header>
