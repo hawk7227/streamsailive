@@ -22,7 +22,6 @@ export default function StreamsComposer({
 }) {
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
-  const [composerMode, setComposerMode] = useState("chat");
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const [blockedNotice, setBlockedNotice] = useState("");
@@ -44,9 +43,7 @@ export default function StreamsComposer({
         if (cancelled) return;
         setWebSearchStatus({
           configured: Boolean(data?.configured),
-          blockedReason:
-            data?.blockedReason ||
-            "OPENAI_API_KEY is required for real web search.",
+          blockedReason: data?.blockedReason || "OPENAI_API_KEY is required for real web search.",
         });
       })
       .catch(() => {
@@ -85,7 +82,6 @@ export default function StreamsComposer({
 
   const toolItems = BASE_TOOL_ITEMS.map((item) => {
     if (item.id !== "web_search") return item;
-
     return {
       ...item,
       enabled: webSearchStatus.configured,
@@ -144,7 +140,7 @@ export default function StreamsComposer({
         return;
       }
 
-      finalMessage = "Search the web for " + finalMessage;
+      finalMessage = value;
     }
 
     onSubmit?.({
@@ -156,7 +152,6 @@ export default function StreamsComposer({
 
     setMessage("");
     setSelectedTool(null);
-    setComposerMode("chat");
     setActiveMenu("");
     setBlockedNotice("");
   }
@@ -352,6 +347,7 @@ export default function StreamsComposer({
           <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       ) : null}
+
       <RealtimeVoicePanel open={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
     </section>
   );

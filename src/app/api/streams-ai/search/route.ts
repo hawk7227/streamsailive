@@ -64,9 +64,7 @@ export async function GET() {
     configured,
     provider: configured ? "openai_responses_web_search" : null,
     route: "/api/streams-ai/search",
-    blockedReason: configured
-      ? null
-      : "OPENAI_API_KEY is required for real web search.",
+    blockedReason: configured ? null : "OPENAI_API_KEY is required for real web search.",
   });
 }
 
@@ -87,10 +85,7 @@ export async function POST(request: Request) {
 
   if (!apiKey) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "OPENAI_API_KEY is required for real web search.",
-      },
+      { ok: false, error: "OPENAI_API_KEY is required for real web search." },
       { status: 500 }
     );
   }
