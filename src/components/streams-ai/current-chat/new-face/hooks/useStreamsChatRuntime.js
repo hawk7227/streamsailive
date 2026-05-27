@@ -10,6 +10,7 @@ import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
 import { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
+import { emitStreamsActivity } from "../runtime/streamsGlobalActivityBridge";
 import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
 import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
@@ -185,6 +186,38 @@ export function useStreamsChatRuntime() {
   const [selectedProvider, setSelectedProvider] = useState("Auto");
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!activity || activity.phase === "idle") return;
+
+    const mode = String(activity.mode || "turn");
+    const domain =
+      mode === "image" ? STREAMS_ACTIVITY_DOMAINS.IMAGE :
+      mode === "video" ? STREAMS_ACTIVITY_DOMAINS.VIDEO :
+      mode === "voice" ? STREAMS_ACTIVITY_DOMAINS.VOICE :
+      mode === "file" || mode === "upload" ? STREAMS_ACTIVITY_DOMAINS.FILES :
+      mode === "link" ? STREAMS_ACTIVITY_DOMAINS.FILES :
+      mode === "tool" ? STREAMS_ACTIVITY_DOMAINS.TOOL :
+      STREAMS_ACTIVITY_DOMAINS.TURN;
+
+    const phase =
+      activity.phase === "complete" ? STREAMS_ACTIVITY_PHASES.COMPLETE :
+      activity.phase === "error" ? STREAMS_ACTIVITY_PHASES.FAILED :
+      activity.phase === "streaming" ? STREAMS_ACTIVITY_PHASES.STREAMING :
+      activity.phase === "rendering" ? STREAMS_ACTIVITY_PHASES.RUNNING :
+      STREAMS_ACTIVITY_PHASES.RUNNING;
+
+    emitStreamsActivity({
+      domain,
+      phase,
+      severity: phase === STREAMS_ACTIVITY_PHASES.FAILED ? STREAMS_ACTIVITY_SEVERITY.ERROR : STREAMS_ACTIVITY_SEVERITY.INFO,
+      statusText: activity.statusText || "Working…",
+      detail: mode,
+      source: "useStreamsChatRuntime.activity",
+      metadata: { mode, rawPhase: activity.phase },
+    });
+  }, [activity]);
+
 
   useEffect(() => {
     const container = document.querySelector(".splitChatScroll");

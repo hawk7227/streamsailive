@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { emitVoiceActivity } from "../runtime/streamsGlobalActivityBridge";
+import { STREAMS_ACTIVITY_PHASES } from "../runtime/streamsActivityEvents";
 
 const CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 
@@ -59,6 +61,7 @@ export function useRealtimeVoiceSession() {
 
     setState("idle");
     setStatusText("Voice session ended.");
+    emitVoiceActivity(STREAMS_ACTIVITY_PHASES.COMPLETE, "Voice session ended.");
   }, []);
 
   const start = useCallback(async () => {
@@ -67,6 +70,7 @@ export function useRealtimeVoiceSession() {
     setError("");
     setState("requesting_mic");
     setStatusText("Requesting microphone permission...");
+    emitVoiceActivity(STREAMS_ACTIVITY_PHASES.REQUESTED, "Requesting microphone permission…");
 
     if (typeof window === "undefined") {
       setError("Blocked: voice conversation requires a browser.");
@@ -89,11 +93,13 @@ export function useRealtimeVoiceSession() {
       setError(err instanceof Error ? err.message : "Microphone permission was denied.");
       setState("error");
       setStatusText("Microphone permission failed.");
+      emitVoiceActivity(STREAMS_ACTIVITY_PHASES.FAILED, "Microphone permission failed.");
       return;
     }
 
     setState("creating_session");
     setStatusText("Creating secure Realtime voice session...");
+    emitVoiceActivity(STREAMS_ACTIVITY_PHASES.STARTED, "Creating secure voice session…");
 
     let tokenData;
 
@@ -117,11 +123,13 @@ export function useRealtimeVoiceSession() {
       setError(err instanceof Error ? err.message : "Realtime session creation failed.");
       setState("error");
       setStatusText("Realtime session failed.");
+      emitVoiceActivity(STREAMS_ACTIVITY_PHASES.FAILED, "Realtime session failed.");
       return;
     }
 
     setState("connecting");
     setStatusText("Connecting voice stream...");
+    emitVoiceActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Connecting voice stream…");
 
     try {
       const pc = new RTCPeerConnection();
@@ -137,6 +145,7 @@ export function useRealtimeVoiceSession() {
         remoteAudio.srcObject = event.streams[0];
         setState("speaking");
         setStatusText("STREAMS is speaking.");
+        emitVoiceActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "STREAMS is speaking.");
       };
 
       micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
@@ -147,6 +156,7 @@ export function useRealtimeVoiceSession() {
       dataChannel.addEventListener("open", () => {
         setState("listening");
         setStatusText("Listening. Speak naturally.");
+        emitVoiceActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Listening. Speak naturally.");
         pushEvent({ type: "streams.voice.connected" });
       });
 
@@ -175,6 +185,7 @@ export function useRealtimeVoiceSession() {
         if (type.includes("response.done")) {
           setState("listening");
           setStatusText("Listening. Speak naturally.");
+        emitVoiceActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Listening. Speak naturally.");
         }
 
         if (type.includes("error")) {
@@ -215,6 +226,7 @@ export function useRealtimeVoiceSession() {
       setError(err instanceof Error ? err.message : "Realtime WebRTC connection failed.");
       setState("error");
       setStatusText("Realtime voice connection failed.");
+      emitVoiceActivity(STREAMS_ACTIVITY_PHASES.FAILED, "Realtime voice connection failed.");
     }
   }, [pushEvent, state, stop]);
 

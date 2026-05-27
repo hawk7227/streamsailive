@@ -46,6 +46,8 @@ import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
 import StreamsActivityToast from "./activity/StreamsActivityToast";
 import StreamsActivityTimeline from "./activity/StreamsActivityTimeline";
+import { emitChatActionActivity, emitGroupChatActivity } from "./runtime/streamsGlobalActivityBridge";
+import { STREAMS_ACTIVITY_PHASES } from "./runtime/streamsActivityEvents";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
 const today = ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"];
@@ -488,11 +490,29 @@ function useCloseOnOutside(open, close) {
 }
 
 function blockedChatAction(actionName) {
+  emitChatActionActivity(
+    STREAMS_ACTIVITY_PHASES.BLOCKED,
+    `Blocked: real ${actionName} backend/action is not wired yet.`,
+    { tool: actionName }
+  );
   window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
 }
 
 
 function blockedMessageAction(actionName) {
+  if (String(actionName).includes("group")) {
+    emitGroupChatActivity(
+      STREAMS_ACTIVITY_PHASES.BLOCKED,
+      `Blocked: real ${actionName} backend/action is not wired yet.`,
+      { tool: actionName }
+    );
+  } else {
+    emitChatActionActivity(
+      STREAMS_ACTIVITY_PHASES.BLOCKED,
+      `Blocked: real ${actionName} backend/action is not wired yet.`,
+      { tool: actionName }
+    );
+  }
   window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
 }
 
