@@ -65,6 +65,18 @@ const policies = {
       'src/app/api/streams/video/',
       'src/app/api/streams/image/'
     ]
+  },
+  'streams-ai-current-chat-runtime-slice': {
+    allowed: [
+      'src/components/streams-ai/current-chat/',
+      'docs/merge-policies/streams-ai-current-chat-runtime-slice.md',
+      'scripts/scope-guard.mjs'
+    ],
+    forbidden: [
+      'public/build-report.json',
+      'scripts/validate-rule-confirmation.js',
+      'supabase/migrations/'
+    ]
   }
 };
 
@@ -77,6 +89,12 @@ function inferPolicyFromFiles(files) {
   ];
   const hasChatUIFiles = files.some(f => chatUIFiles.includes(f));
   if (hasChatUIFiles) return 'chat-ui-slice';
+
+  const hasStreamsAiCurrentChatFiles = files.some((f) =>
+    f.startsWith('src/components/streams-ai/current-chat/')
+  );
+  if (hasStreamsAiCurrentChatFiles) return 'streams-ai-current-chat-runtime-slice';
+
   return null;
 }
 
