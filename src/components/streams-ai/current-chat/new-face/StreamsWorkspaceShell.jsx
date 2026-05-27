@@ -35,6 +35,9 @@ function ChatInlineImage({ src, alt }) {
   );
 }
 
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMobileAppRuntime } from "@/lib/mobile/useMobileAppRuntime";
 import { useStreamsChatRuntime } from "./hooks/useStreamsChatRuntime";
 import ChatMarkdownMessage from "./markdown/ChatMarkdownMessage";
 import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
@@ -275,23 +278,152 @@ function CollapsibleThinking({ reasoning }) {
   );
 }
 
-function Avatar() { return <div className="avatar">MH</div>; }
+function getInitials(nameOrEmail) {
+  const value = String(nameOrEmail || "Streams User").trim();
+  const parts = value.includes("@") ? [value[0]] : value.split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "SU";
+}
+
+function Avatar({ label }) {
+  return <div className="avatar">{getInitials(label)}</div>;
+}
 
 function MarkdownMessage({ content }) {
   const blocks = String(content || "").split(/\n{2,}/g);
   return <div className="markdownMessage">{blocks.map((block, index) => block.startsWith("- ") ? <ul key={index}>{block.split("\n").filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, "")}</li>)}</ul> : <p key={index}>{block}</p>)}</div>;
 }
 
-function AccountMenu({ compact = false }) {
-  const rows = [["logo", "Upgrade plan"], ["logo", "Personalization"], ["user", "Profile"], ["settings", "Settings"], ["book", "Help"], ["right", "Log out"]];
-  return <div className={compact ? "accountMenu compact" : "accountMenu"}><div className="menuTop"><Avatar/><div><b>MARCUS HAWKINS</b><span>Pro</span></div><Icon name="right"/></div>{rows.map((row, i) => <React.Fragment key={row[1]}>{i === 4 && <hr/>}<button className="menuItem"><Icon name={row[0]}/><span>{row[1]}</span>{row[1] === "Help" && <Icon name="right" size={16}/>}</button></React.Fragment>)}</div>;
+function AccountMenu({ compact = false, onClose }) {
+  const router = useRouter();
+  const runtime = useMobileAppRuntime();
+  const { user, profile, plan, usage, workspace, signOut } = useAuth();
+
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    "Streams user";
+
+  const displayEmail = user?.email || profile?.email || "Email unavailable";
+  const planLabel = plan?.name || profile?.plan_id || "Free";
+  const workspaceLabel = workspace?.name || "Workspace loading";
+  const usageLabel = usage ? `${usage.used}/${usage.limit === "unlimited" ? "∞" : usage.limit} used` : "Usage loading";
+
+  const rows = [
+    ["cube", "My Plan & Modules", "/account/modules"],
+    ["logo", "Upgrade / Add Modules", "/pricing"],
+    ["bolt", "Credits / Usage", "/account/credits"],
+    ["settings", "Personalization", "/account/personalization"],
+    ["user", "Profile", "/account/profile"],
+    ["settings", "Settings", "/account/settings"],
+    ["book", "Language", "/account/language"],
+    ["file", "Apps & Extensions", "/account/apps"],
+    ["up", "Gift / Invite / Credits", "/account/gift"],
+    ["book", "Help & Status", "/account/help"],
+    ["right", "Learn more", "/account/learn-more"],
+  ];
+
+  const navigate = (href) => {
+    onClose?.();
+    router.push(href);
+  };
+
+  const logout = async () => {
+    onClose?.();
+    await signOut();
+    router.push("/login");
+  };
+
+  const menu = (
+    <div
+      className={compact ? "accountMenu compact" : "accountMenu"}
+      role="dialog"
+      aria-label="Account menu"
+      style={runtime.isMobile ? {
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        top: "auto",
+        width: "100%",
+        maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - 24px)",
+        overflowY: "auto",
+        borderRadius: "24px 24px 0 0",
+        padding: "18px 18px calc(18px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 600,
+      } : undefined}
+    >
+      <div className="menuTop">
+        <Avatar label={displayName}/>
+        <div>
+          <b>{displayName}</b>
+          <span>{displayEmail}</span>
+          <span>{workspaceLabel} · {planLabel} · {usageLabel}</span>
+        </div>
+        <button type="button" aria-label="Close account menu" onClick={onClose} style={{ border: 0, background: "transparent", minHeight: 44, minWidth: 44 }}>×</button>
+      </div>
+
+      {rows.map((row, i) => (
+        <React.Fragment key={row[1]}>
+          {(i === 3 || i === 9) && <hr/>}
+          <button className="menuItem" type="button" onClick={() => navigate(row[2])}>
+            <Icon name={row[0]}/>
+            <span>{row[1]}</span>
+            <Icon name="right" size={16}/>
+          </button>
+        </React.Fragment>
+      ))}
+
+      <hr/>
+      <button className="menuItem danger" type="button" onClick={logout}>
+        <Icon name="right"/>
+        <span>Log out</span>
+      </button>
+    </div>
+  );
+
+  if (runtime.isMobile) {
+    return (
+      <div
+        role="presentation"
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,.28)",
+          zIndex: 590,
+          display: "flex",
+          alignItems: "flex-end",
+        }}
+      >
+        <div onClick={(event) => event.stopPropagation()} style={{ width: "100%" }}>
+          {menu}
+        </div>
+      </div>
+    );
+  }
+
+  return menu;
 }
 
 function Sidebar({ open, setOpen }) {
+  const { user, profile, plan } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  if (!open) return <aside className="sidebar collapsed"><button className="railCollapse" onClick={() => setOpen(true)}><Icon name="panel"/></button><div className="railTop">{[["logo","Chat"],["edit","New chat"],["search","Search chats"],["pin","Projects"],["chat","Chat history"]].map(([icon, label]) => <button className="railIcon" key={label} onClick={() => setOpen(true)} aria-label={label}><Icon name={icon} size={label === "Search chats" ? 27 : 25}/></button>)}</div><button className="railAvatar" onClick={() => setAccountOpen(!accountOpen)}><Avatar/></button>{accountOpen && <AccountMenu compact/>}</aside>;
-  return <aside className="sidebar"><div className="newRow"><button><Icon name="plus"/> New chat <Icon name="down" size={15}/></button><button className="collapseBtn" onClick={() => setOpen(false)}><Icon name="panel"/></button></div><div className="chatTools"><button><Icon name="search"/>Search chats</button><button><Icon name="file"/>Projects</button></div><WorkspaceNav moreOpen={moreOpen} setMoreOpen={setMoreOpen}/><Section title="Today" items={today} selected/><Section title="Yesterday" items={yesterday}/><div className="accountDock"><button className="accountButton" onClick={() => setAccountOpen(!accountOpen)}><Avatar/><span><b>MARCUS HAWKINS</b><em>Pro</em></span><Icon name="right"/></button>{accountOpen && <AccountMenu/>}</div></aside>;
+
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    "Streams user";
+
+  const planLabel = plan?.name || profile?.plan_id || "Free";
+  const closeAccount = () => setAccountOpen(false);
+
+  if (!open) return <aside className="sidebar collapsed"><button className="railCollapse" onClick={() => setOpen(true)}><Icon name="panel"/></button><div className="railTop">{[["logo","Chat"],["edit","New chat"],["search","Search chats"],["pin","Projects"],["chat","Chat history"]].map(([icon, label]) => <button className="railIcon" key={label} onClick={() => setOpen(true)} aria-label={label}><Icon name={icon} size={label === "Search chats" ? 27 : 25}/></button>)}</div><button className="railAvatar" onClick={() => setAccountOpen(!accountOpen)}><Avatar label={displayName}/></button>{accountOpen && <AccountMenu compact onClose={closeAccount}/>}</aside>;
+  return <aside className="sidebar"><div className="newRow"><button><Icon name="plus"/> New chat <Icon name="down" size={15}/></button><button className="collapseBtn" onClick={() => setOpen(false)}><Icon name="panel"/></button></div><div className="chatTools"><button><Icon name="search"/>Search chats</button><button><Icon name="file"/>Projects</button></div><WorkspaceNav moreOpen={moreOpen} setMoreOpen={setMoreOpen}/><Section title="Today" items={today} selected/><Section title="Yesterday" items={yesterday}/><div className="accountDock"><button className="accountButton" onClick={() => setAccountOpen(!accountOpen)}><Avatar label={displayName}/><span><b>{displayName}</b><em>{planLabel}</em></span><Icon name="right"/></button>{accountOpen && <AccountMenu onClose={closeAccount}/>}</div></aside>;
 }
 
 function WorkspaceNav({ moreOpen, setMoreOpen }) {
