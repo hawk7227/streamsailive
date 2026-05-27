@@ -735,9 +735,13 @@ function Composer({ chatRuntime }) {
   return (
     <div className="startComposerWrap">
       <StreamsComposer
-        onSubmit={({ message, composerMode, mode, provider }) => {
-          if (!message || chatRuntime?.isStreaming) return;
-          chatRuntime?.sendMessage({ message, composerMode, mode, provider });
+        onSubmit={(payload) => {
+          chatRuntime?.sendMessage({
+            message: payload.message,
+            composerMode: payload.composerMode,
+            mode: payload.mode,
+            webSearchEnabled: payload.webSearchEnabled,
+          });
         }}
         onFilesSelected={(files) => {
           chatRuntime?.uploadFiles?.(files);

@@ -837,9 +837,42 @@ export function useStreamsChatRuntime() {
                 }
               })();
             } else if (name === "web_search") {
-              setMessages((current) => current.map(item => item.id === assistantId ? { ...item, content: `**Web Search Requested:** "${args?.query}"\n\n*Note: Web search requires a backend API configuration (like Tavily or Serper) which is not currently integrated in STREAMS.*`, isStreaming: false, status: "complete" } : item));
-              setActivity(createActivity("complete", "tool", "Search aborted"));
-              setIsStreaming(false);
+              const query = String(args?.query || trimmed || "").trim();
+              setActivity(createActivity("thinking", "tool", "Searching the web…"));
+
+              try {
+                const searchResponse = await fetch("/api/streams-ai/search", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ query }),
+                });
+
+                const searchData = await searchResponse.json();
+
+                if (!searchResponse.ok || !searchData?.ok) {
+                  throw new Error(searchData?.error || "Web search failed");
+                }
+
+                setMessages((current) => current.map(item => item.id === assistantId ? {
+                  ...item,
+                  content: searchData.text || "No search answer returned.",
+                  isStreaming: false,
+                  status: "complete",
+                  sources: searchData.annotations || [],
+                } : item));
+
+                setActivity(createActivity("complete", "tool", "Search complete"));
+                setIsStreaming(false);
+              } catch (error) {
+                setMessages((current) => current.map(item => item.id === assistantId ? {
+                  ...item,
+                  content: `Web search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                  isStreaming: false,
+                  status: "error",
+                } : item));
+                setActivity(createActivity("error", "tool", "Search failed"));
+                setIsStreaming(false);
+              }
             }
           }
           if (eventName === "error") throw new Error(payload?.message || payload?.error || "Chat failed");
