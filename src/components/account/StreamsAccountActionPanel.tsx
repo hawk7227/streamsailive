@@ -276,6 +276,16 @@ function summarize(value: unknown) {
   return "Loaded";
 }
 
+function creditValue(value: unknown, key: string) {
+  if (!value || typeof value !== "object") return "Not loaded";
+  const object = value as Record<string, unknown>;
+  const direct = object[key];
+
+  if (direct === null || typeof direct === "undefined") return "Not returned";
+  if (typeof direct === "number") return direct.toLocaleString();
+  return String(direct);
+}
+
 export default function StreamsAccountActionPanel({ pageKind, title, description }: Props) {
   const config = CONFIG[pageKind] || CONFIG.overview;
   const [account, setAccount] = useState<unknown>(null);
@@ -283,6 +293,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
   const [projects, setProjects] = useState<unknown>(null);
   const [error, setError] = useState("");
   const [lastAction, setLastAction] = useState("");
+  const [lastRedirect, setLastRedirect] = useState("");
   const [groupSessionId, setGroupSessionId] = useState("");
   const [groupEmail, setGroupEmail] = useState("");
   const [groupName, setGroupName] = useState("STREAMS Group Chat");
@@ -330,7 +341,8 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
     setError("");
     setLastAction("Opening billing portal...");
     try {
-      await openBillingPortalWithActivity();
+      const result = await openBillingPortalWithActivity();
+      setLastRedirect(result?.redirectUrl || "Redirect started");
       setLastAction("Billing portal redirect started.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Billing portal failed.";
@@ -343,7 +355,8 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
     setError("");
     setLastAction("Starting checkout...");
     try {
-      await startCheckoutWithActivity({ source, product });
+      const result = await startCheckoutWithActivity({ source, product });
+      setLastRedirect(result?.redirectUrl || "Redirect started");
       setLastAction("Checkout redirect started.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Checkout failed.";
@@ -429,11 +442,19 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
 
       <section className={styles.liveDataGrid}>
         <article><span>Account</span><strong>{summarize(account)}</strong><p>/api/streams-ai/account + emitAccountActivity</p></article>
-        <article><span>Credits</span><strong>{summarize(credits)}</strong><p>/api/streams-ai/credits + emitCreditsActivity</p></article>
+        <article>
+          <span>Credits</span>
+          <strong>{creditValue(credits, "availableCredits")}</strong>
+          <p>
+            Available: {creditValue(credits, "availableCredits")} · Monthly: {creditValue(credits, "monthlyIncludedCredits")} · Reserved: {creditValue(credits, "reservedCredits")} · Used: {creditValue(credits, "usedThisPeriod")}
+          </p>
+        </article>
         <article><span>Projects</span><strong>{summarize(projects)}</strong><p>/api/projects + emitProjectActivity</p></article>
       </section>
 
       <section className={styles.proofBar}><strong>Last action</strong><span>{lastAction || "No account action has run yet."}</span></section>
+
+      <section className={styles.proofBar}><strong>Last redirect</strong><span>{lastRedirect || "No redirect has started yet."}</span></section>
 
       <section className={styles.groupCard}>
         <div>
