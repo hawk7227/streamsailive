@@ -932,9 +932,9 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
     }
   };
 
-  if (isMobile) return <div className="mobilePreviewShell"><div className="previewEmptyState">Preview is paused while chat is being restored.</div></div>;
+  if (isMobile) return <div className="mobilePreviewShell"><PreviewSlide close={closePreview}/></div>;
 
-  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><div className="previewEmptyState">Preview is paused while chat is being restored.</div></div>;
+  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><PreviewSlide close={closePreview}/></div>;
 }
 
 
