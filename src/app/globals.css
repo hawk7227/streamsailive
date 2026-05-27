@@ -171,3 +171,11 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+.account-scroll-root {
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

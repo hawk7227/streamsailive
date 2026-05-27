@@ -236,7 +236,7 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      {children}
+      <div className="account-scroll-root">{children}</div>
     </div>
   );
 }
