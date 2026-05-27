@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import "./streams-clean-sidebar.css";
+import StreamsMediaLibraryModal from "../media/StreamsMediaLibraryModal";
 
 const PRIMARY_ITEMS = [
   { id: "search-chats", label: "Search chats", icon: "search" },
@@ -13,11 +14,11 @@ const TOOL_ITEMS = [
   { id: "images", label: "Images", icon: "sparkle" },
   { id: "videos", label: "Videos", icon: "play" },
   { id: "search", label: "Search", icon: "search" },
-  { id: "deep-research", label: "Deep Research", icon: "cube", disabled: true },
-  { id: "editor", label: "Editor", icon: "edit", disabled: true },
-  { id: "generate", label: "Generate", icon: "bolt", disabled: true },
-  { id: "reference", label: "Reference", icon: "book", disabled: true },
-  { id: "settings", label: "Settings", icon: "settings", disabled: true },
+  { id: "deep-research", label: "Deep Research", icon: "cube", href: "/streams?tab=reference" },
+  { id: "editor", label: "Editor", icon: "edit", href: "/editor" },
+  { id: "generate", label: "Generate", icon: "bolt", href: "/streams" },
+  { id: "reference", label: "Reference", icon: "book", href: "/streams?tab=reference" },
+  { id: "settings", label: "Settings", icon: "settings", href: "/dashboard/settings" },
 ];
 
 function groupSessionsByDate(sessions = []) {
@@ -81,35 +82,6 @@ function Avatar() {
   return <div className="cleanSidebarAvatar">MH</div>;
 }
 
-function MediaModal({ type, onClose }) {
-  const config = {
-    images: {
-      title: "Images",
-      subtitle: "Generated images and image workflows.",
-      body: "This is the clean image library shell. The next slice connects the real generated-image grid without changing provider routes.",
-    },
-    search: {
-      title: "Search",
-      subtitle: "Search chats, projects, media, and workspace files.",
-      body: "This is the clean search modal shell. Real search results will be wired as a separate slice, not faked here.",
-    },
-  }[type];
-
-  if (!config) return null;
-
-  return (
-    <div className="cleanSidebarModalBackdrop" onClick={onClose} role="presentation">
-      <section className="cleanSidebarModal" role="dialog" aria-modal="true" aria-label={config.title} onClick={(event) => event.stopPropagation()}>
-        <header>
-          <div><strong>{config.title}</strong><span>{config.subtitle}</span></div>
-          <button type="button" aria-label="Close" onClick={onClose}><Icon name="x" size={18}/></button>
-        </header>
-        <div className="cleanSidebarModalBody"><p>{config.body}</p></div>
-      </section>
-    </div>
-  );
-}
-
 export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
@@ -131,7 +103,13 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
       window.dispatchEvent(new Event("streams:open-generated-videos"));
       return;
     }
-    if (["images", "search"].includes(item.id)) setActiveModal(item.id);
+    if (["images", "search"].includes(item.id)) {
+      setActiveModal(item.id);
+      return;
+    }
+    if (item.href) {
+      window.location.assign(item.href);
+    }
   }
 
   if (!open) {
@@ -149,7 +127,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
       <aside className="cleanSidebar" aria-label="Workspace sidebar">
       <div className="cleanSidebarTop"><button type="button" className="cleanSidebarNewChat" onClick={() => chatRuntime?.newChat?.()}><Icon name="plus"/><span>New chat</span><Icon name="down" size={14}/></button><button type="button" className="cleanSidebarIconButton" aria-label="Collapse sidebar" onClick={() => setOpen(false)}><Icon name="panel"/></button></div>
       <nav className="cleanSidebarPrimary" aria-label="Primary navigation">{PRIMARY_ITEMS.map((item) => <button key={item.id} type="button" className={item.active ? "isActive" : ""}><Icon name={item.icon}/><span>{item.label}</span></button>)}</nav>
-      <section className="cleanSidebarTools"><button type="button" className="cleanSidebarToolsToggle" onClick={() => setToolsOpen((value) => !value)}><span><Icon name="dots"/> More</span><Icon name="down" size={14}/></button>{toolsOpen ? <nav aria-label="Tools">{toolItems.map((item) => <button key={item.id} type="button" disabled={item.disabled} onClick={() => openTool(item)}><Icon name={item.icon}/><span>{item.label}</span>{item.disabled ? <em>Next</em> : null}</button>)}</nav> : null}</section>
+      <section className="cleanSidebarTools"><button type="button" className="cleanSidebarToolsToggle" onClick={() => setToolsOpen((value) => !value)}><span><Icon name="dots"/> More</span><Icon name="down" size={14}/></button>{toolsOpen ? <nav aria-label="Tools">{toolItems.map((item) => <button key={item.id} type="button" disabled={item.disabled} onClick={() => openTool(item)}><Icon name={item.icon}/><span>{item.label}</span></button>)}</nav> : null}</section>
       {Object.entries(grouped).map(([title, items]) => (
         <section className="cleanSidebarHistory" key={title} aria-label={title}>
           <h3>{title}</h3>
@@ -167,7 +145,7 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
         </section>
       ))}
       <div className="cleanSidebarAccount"><Avatar/><span><strong>MARCUS HAWKINS</strong><em>Pro</em></span></div>
-      <MediaModal type={activeModal} onClose={() => setActiveModal(null)} />
+      <StreamsMediaLibraryModal mode={activeModal} chatRuntime={chatRuntime} onClose={() => setActiveModal(null)} />
     </aside>
     </>
   );
