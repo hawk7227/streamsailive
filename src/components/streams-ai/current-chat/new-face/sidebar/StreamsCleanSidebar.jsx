@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import "./streams-clean-sidebar.css";
@@ -100,6 +100,8 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const { user, profile, plan, workspace } = useAuth();
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
   const toolItems = useMemo(() => TOOL_ITEMS.filter((item) => item?.id && item?.label), []);
   const grouped = useMemo(() => {
     return groupSessionsByDate(chatRuntime?.sessions || []);
@@ -117,10 +119,29 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
 
 
   useEffect(() => {
-    const onKey = (event) => { if (event.key === "Escape") setActiveModal(null); };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setActiveModal(null);
+        setAccountMenuOpen(false);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+
+    const closeAccountMenu = (event) => {
+      if (!accountMenuRef.current) return;
+      if (!accountMenuRef.current.contains(event.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", closeAccountMenu);
+    return () => window.removeEventListener("pointerdown", closeAccountMenu);
+  }, [accountMenuOpen]); // streams-clean-sidebar-account-close
 
   function openPrimary(item) {
     if (item.action === "search") {
@@ -147,6 +168,16 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
     if (item.href) {
       router.push(item.href);
     }
+  }
+
+  function navigateAccountMenu(href) {
+    setAccountMenuOpen(false);
+    router.push(href);
+  }
+
+  function closeAndSignOut() {
+    setAccountMenuOpen(false);
+    router.push("/login");
   }
 
   if (!open) {
@@ -193,18 +224,51 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
           ))}
         </section>
       ))}
-      <button
-        type="button"
-        className="cleanSidebarAccount cleanSidebarAccountButton"
-        onClick={() => router.push("/account")}
-        aria-label="Open account"
-      >
-        <Avatar label={displayName}/>
-        <span>
-          <strong>{displayName}</strong>
-          <em>{planLabel} · {workspaceLabel}</em>
-        </span>
-      </button>
+      <div className="cleanSidebarAccountWrap" ref={accountMenuRef}>
+        <button
+          type="button"
+          className="cleanSidebarAccount cleanSidebarAccountButton"
+          onClick={() => setAccountMenuOpen((value) => !value)}
+          aria-label="Open account menu"
+          aria-expanded={accountMenuOpen}
+        >
+          <Avatar label={displayName}/>
+          <span>
+            <strong>{displayName}</strong>
+            <em>{planLabel} · {workspaceLabel}</em>
+          </span>
+        </button>
+
+        {accountMenuOpen ? (
+          <div className="cleanAccountMenu" role="dialog" aria-label="Account menu">
+            <div className="cleanAccountMenuHeader">
+              <Avatar label={displayName}/>
+              <div>
+                <strong>{displayName}</strong>
+                <span>{user?.email || profile?.email || "Email unavailable"}</span>
+                <em>{planLabel} · {workspaceLabel}</em>
+              </div>
+              <button type="button" aria-label="Close account menu" onClick={() => setAccountMenuOpen(false)}>×</button>
+            </div>
+
+            <button type="button" onClick={() => navigateAccountMenu("/account/modules")}>My Plan & Modules</button>
+            <button type="button" onClick={() => navigateAccountMenu("/pricing")}>Upgrade / Add Modules</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/credits")}>Credits / Usage</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/personalization")}>Personalization</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/profile")}>Profile</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/settings")}>Settings</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/language")}>Language</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/apps")}>Apps & Extensions</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/gift")}>Gift / Invite / Credits</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/help")}>Help & Status</button>
+            <button type="button" onClick={() => navigateAccountMenu("/account/learn-more")}>Learn more</button>
+
+            <hr />
+
+            <button type="button" className="danger" onClick={closeAndSignOut}>Log out</button>
+          </div>
+        ) : null}
+      </div>
       {activeModal ? (
         <StreamsMediaLibraryModal
           mode={activeModal}

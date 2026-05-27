@@ -66,3 +66,115 @@
 .cleanSidebarAccountButton{
   pointer-events:auto;
 }
+
+.cleanSidebarAccountWrap{
+  position:relative;
+  margin-top:auto;
+}
+
+.cleanAccountMenu{
+  position:absolute;
+  left:12px;
+  bottom:72px;
+  width:304px;
+  max-height:min(620px, calc(100dvh - 36px));
+  overflow:auto;
+  z-index:1400;
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:20px;
+  background:#fff;
+  box-shadow:0 24px 70px rgba(0,0,0,.18);
+  padding:10px;
+}
+
+.cleanAccountMenuHeader{
+  display:grid;
+  grid-template-columns:36px 1fr 36px;
+  gap:10px;
+  align-items:center;
+  padding:10px 8px 12px;
+  border-bottom:1px solid rgba(0,0,0,.08);
+  margin-bottom:6px;
+}
+
+.cleanAccountMenuHeader div{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.cleanAccountMenuHeader strong,
+.cleanAccountMenuHeader span,
+.cleanAccountMenuHeader em{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.cleanAccountMenuHeader strong{
+  font-size:13px;
+}
+
+.cleanAccountMenuHeader span,
+.cleanAccountMenuHeader em{
+  font-size:12px;
+  color:#666;
+  font-style:normal;
+}
+
+.cleanAccountMenuHeader button{
+  width:36px;
+  height:36px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  font-size:22px;
+  cursor:pointer;
+}
+
+.cleanAccountMenuHeader button:hover{
+  background:#f2f2f2;
+}
+
+.cleanAccountMenu > button{
+  width:100%;
+  min-height:42px;
+  border:0;
+  border-radius:12px;
+  background:transparent;
+  color:#111;
+  display:flex;
+  align-items:center;
+  text-align:left;
+  padding:0 12px;
+  font-size:14px;
+  font-weight:650;
+  cursor:pointer;
+}
+
+.cleanAccountMenu > button:hover{
+  background:#f3f3f3;
+}
+
+.cleanAccountMenu > button.danger{
+  color:#d11;
+}
+
+.cleanAccountMenu hr{
+  border:0;
+  border-top:1px solid rgba(0,0,0,.08);
+  margin:8px 0;
+}
+
+@media (max-width:760px){
+  .cleanAccountMenu{
+    position:fixed;
+    left:10px;
+    right:10px;
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    width:auto;
+    max-height:min(78dvh, 640px);
+    border-radius:24px;
+  }
+}
