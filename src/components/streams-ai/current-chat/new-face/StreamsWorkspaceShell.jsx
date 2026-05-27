@@ -69,6 +69,13 @@ function openAssistantMessageInPreview(content = "", title = "Assistant Preview"
   } catch {}
 
   window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
+
+  // If the preview pane was closed, React mounts it after this event.
+  // Re-dispatch once after mount so the embedded preview receives the artifact.
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
+  }, 50);
+
   return true;
 }
 
