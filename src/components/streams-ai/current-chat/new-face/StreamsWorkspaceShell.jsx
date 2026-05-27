@@ -682,9 +682,9 @@ function Composer({ chatRuntime }) {
 
 function SplitChatContext() {
   const data = useStreamState();
-  const text = ["Opened a preview canvas.", "", "- The chat stays visible while the preview is open.", "- Streaming chunks will append into the assistant message.", "- Markdown keeps the same readable chat sizing."].join("\n");
+  const text = "";
   const active = data.stream.messages.find((m) => m.role === "assistant");
-  return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitUserBubble">open a preview section</div><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span></div><MessageActionDemo/></div></div></div><div className="splitComposer"><div className="startComposer"><button><Icon name="plus"/></button><input placeholder="Ask anything"/><button className="thinking">Thinking <Icon name="down" size={14}/></button><button><Icon name="mic"/></button><button className="startVoice"><i/><i/><i/><i/></button></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
+  return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span></div></div></div></div><div className="splitComposer"><div className="startComposer"><input placeholder="Ask anything" readOnly /></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
 }
 
 function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode, chatRuntime }) {
