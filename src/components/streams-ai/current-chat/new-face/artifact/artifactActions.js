@@ -1,3 +1,8 @@
+function blockedArtifactAction(actionName) {
+  window.alert(`Blocked: durable artifact ${actionName} route missing. This action needs a real server-side artifact/project API before it can be enabled.`);
+  return `Blocked: durable artifact ${actionName} route missing`;
+}
+
 export function getArtifactPayload(artifactText = "") {
   const text = String(artifactText || "");
   return {
@@ -43,32 +48,18 @@ export function viewArtifactInfo(artifactText = "") {
   return "Viewed artifact info";
 }
 
-export function moveArtifactToProject(artifactText = "") {
-  const project = window.prompt("Move artifact to project:", "Streams");
-  if (!project) return "Move canceled";
-  const payload = { ...getArtifactPayload(artifactText), project };
-  window.localStorage.setItem("streams.localArtifactProject", JSON.stringify(payload));
-  return `Moved artifact to ${project}`;
+export function moveArtifactToProject() {
+  return blockedArtifactAction("move-to-project");
 }
 
-export function pinArtifact(artifactText = "") {
-  const payload = getArtifactPayload(artifactText);
-  window.localStorage.setItem("streams.localPinnedArtifact", JSON.stringify(payload));
-  return "Pinned artifact";
+export function pinArtifact() {
+  return blockedArtifactAction("pin");
 }
 
-export function archiveArtifact(artifactText = "") {
-  const payload = getArtifactPayload(artifactText);
-  window.localStorage.setItem("streams.localArchivedArtifact", JSON.stringify(payload));
-  return "Archived artifact";
+export function archiveArtifact() {
+  return blockedArtifactAction("archive");
 }
 
-export function deleteArtifact(setArtifactText) {
-  if (!window.confirm("Delete the current local artifact from the editor?")) {
-    return "Delete canceled";
-  }
-  if (typeof setArtifactText === "function") {
-    setArtifactText("");
-  }
-  return "Deleted local artifact";
+export function deleteArtifact() {
+  return blockedArtifactAction("delete");
 }

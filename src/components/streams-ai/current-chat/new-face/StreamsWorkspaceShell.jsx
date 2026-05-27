@@ -467,9 +467,18 @@ function useCloseOnOutside(open, close) {
   return ref;
 }
 
+function blockedChatAction(actionName) {
+  window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
+}
+
 function GlobalOverflowMenu({ onClose, openCode, openPreview, onCopy, onViewFiles, onMoveToProject, onPin, onArchive, onDelete } = {}) {
-  const closeThen = (fn) => () => {
-    if (typeof fn === "function") fn();
+  const closeThen = (fn, fallbackName) => () => {
+    if (typeof fn === "function") {
+      fn();
+    } else if (fallbackName) {
+      blockedChatAction(fallbackName);
+    }
+
     if (typeof onClose === "function") onClose();
   };
 
@@ -483,11 +492,11 @@ function GlobalOverflowMenu({ onClose, openCode, openPreview, onCopy, onViewFile
       <button type="button" onClick={closeThen(onCopy)}><Icon name="copy"/>Copy</button>
       <button type="button" onClick={closeThen(openPreview)}><Icon name="panel"/>Open Preview Slide</button>
       <button type="button" onClick={closeThen(openCode)}><Icon name="edit"/>Open Code Editor</button>
-      <button type="button" onClick={closeThen(onViewFiles)}><Icon name="file"/>View files in chat</button>
-      <button type="button" onClick={closeThen(onMoveToProject)}><Icon name="file"/>Move to project <Icon name="right" size={15}/></button>
-      <button type="button" onClick={closeThen(onPin)}><Icon name="pin"/>Pin chat</button>
-      <button type="button" onClick={closeThen(onArchive)}><Icon name="archive"/>Archive</button>
-      <button type="button" className="danger" onClick={closeThen(onDelete)}><Icon name="trash"/>Delete</button>
+      <button type="button" onClick={closeThen(onViewFiles, "view-files-in-chat")}><Icon name="file"/>View files in chat</button>
+      <button type="button" onClick={closeThen(onMoveToProject, "move-to-project")}><Icon name="file"/>Move to project <Icon name="right" size={15}/></button>
+      <button type="button" onClick={closeThen(onPin, "pin-chat")}><Icon name="pin"/>Pin chat</button>
+      <button type="button" onClick={closeThen(onArchive, "archive-chat")}><Icon name="archive"/>Archive</button>
+      <button type="button" className="danger" onClick={closeThen(onDelete, "delete-chat")}><Icon name="trash"/>Delete</button>
     </div>
   );
 }
@@ -675,7 +684,7 @@ function SplitChatContext() {
   const data = useStreamState();
   const text = ["Opened a preview canvas.", "", "- The chat stays visible while the preview is open.", "- Streaming chunks will append into the assistant message.", "- Markdown keeps the same readable chat sizing."].join("\n");
   const active = data.stream.messages.find((m) => m.role === "assistant");
-  return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitUserBubble">open a preview section</div><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span><button onClick={() => data.receive({ type: "text_delta", delta: "\n\nStreaming delta received." })}>Test text delta</button><button onClick={() => data.receive({ type: "done" })}>Complete</button></div><MessageActionDemo/></div></div></div><div className="splitComposer"><div className="startComposer"><button><Icon name="plus"/></button><input placeholder="Ask anything"/><button className="thinking">Thinking <Icon name="down" size={14}/></button><button><Icon name="mic"/></button><button className="startVoice"><i/><i/><i/><i/></button></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
+  return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitUserBubble">open a preview section</div><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span></div><MessageActionDemo/></div></div></div><div className="splitComposer"><div className="startComposer"><button><Icon name="plus"/></button><input placeholder="Ask anything"/><button className="thinking">Thinking <Icon name="down" size={14}/></button><button><Icon name="mic"/></button><button className="startVoice"><i/><i/><i/><i/></button></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
 }
 
 function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode, chatRuntime }) {
