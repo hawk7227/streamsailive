@@ -17,11 +17,11 @@ export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const { user } = useAuth();
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://coral-app-rpgt7.ondigitalocean.app/").replace(/\/$/, "");
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://streamsailive.vercel.app").replace(/\/$/, "");
 
   useEffect(() => {
     if (user) {
-      router.push("/dashboard");
+      router.push("/streams-ai");
     }
   }, [user, router]);
 
@@ -32,7 +32,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: `${appUrl}/auth/callback?next=/streams-ai`,
       },
     });
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
       setError(error.message);
       setIsLoading(false);
     } else if (data.session) {
-      router.push("/dashboard");
+      router.push("/streams-ai");
     } else {
       setError("Failed to sign in. Please try again.");
       setIsLoading(false);
@@ -83,7 +83,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${appUrl}/auth/callback`,
+        emailRedirectTo: `${appUrl}/auth/callback?next=/streams-ai`,
       },
     });
 
@@ -111,7 +111,7 @@ export default function LoginPage() {
       setError(error.message);
       setIsLoading(false);
     } else {
-      router.push("/dashboard");
+      router.push("/streams-ai");
     }
   };
 

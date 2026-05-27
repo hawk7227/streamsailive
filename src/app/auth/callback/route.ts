@@ -8,6 +8,8 @@ export async function GET(request: Request) {
   const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
   const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
   const origin = envAppUrl ?? (forwardedHost ? `${forwardedProto ?? 'https'}://${forwardedHost}` : requestUrl.origin)
+  const requestedNext = requestUrl.searchParams.get('next') || '/streams-ai'
+  const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/streams-ai'
 
   if (code) {
     const supabase = await createClient()
@@ -18,10 +20,10 @@ export async function GET(request: Request) {
     
     if (user) {
       // User is logged in, redirect to dashboard
-      return NextResponse.redirect(`${origin}/dashboard`)
+      return NextResponse.redirect(`${origin}${safeNext}`)
     }
   }
 
   // User is not logged in, redirect to landing page
-  return NextResponse.redirect(`${origin}/`)
+  return NextResponse.redirect(`${origin}/streams-ai`)
 }
