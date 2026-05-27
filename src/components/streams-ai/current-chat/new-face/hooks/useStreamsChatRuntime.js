@@ -422,25 +422,13 @@ export function useStreamsChatRuntime() {
     setComposerAttachments((current) => current.filter((file) => file.id !== fileId));
   }, []);
 
-  const ensureUrlSession = useCallback(async (firstMessage = "") => {
-    if (sessionId) return sessionId;
-
-    const localSession = createChatSession({
-      title: buildSessionTitle([{ role: "user", content: firstMessage }]),
-      messages: [],
-    });
-
-    const nextSessionId = localSession.id;
-    setCurrentSessionId(nextSessionId);
-    setSessionId(nextSessionId);
-
-    if (typeof window !== "undefined") {
-      window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
-    }
-
-    refreshSidebarData();
-    return nextSessionId;
-  }, [sessionId, refreshSidebarData]);
+  const ensureUrlSession = useCallback(async () => {
+    // Do not create or push a local pending_chat_* ID.
+    // The real /api/streams-ai/messages route creates/persists the session
+    // when sessionId is omitted, then the SSE complete/session event updates
+    // the URL to /streams-ai/{realSessionId}.
+    return sessionId || "";
+  }, [sessionId]);
 
   const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider }) => {
     if (!mounted) return;
@@ -606,7 +594,7 @@ export function useStreamsChatRuntime() {
           };
         })
       };
-      if (activeSessionId) {
+      if (activeSessionId && !String(activeSessionId).startsWith("pending_chat_")) {
         requestPayload.sessionId = activeSessionId;
       }
       const response = await fetch("/api/streams-ai/messages", {
