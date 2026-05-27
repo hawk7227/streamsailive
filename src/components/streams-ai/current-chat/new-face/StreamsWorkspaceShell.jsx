@@ -7,9 +7,7 @@ const STREAMS_SPLIT_PREVIEW_EVENT = "streams:split-preview";
 const STREAMS_SPLIT_PREVIEW_LAST_KEY = "streams:split-preview:last";
 
 function hasPreviewableContent(content = "") {
-  const value = String(content || "");
-  return /```(?:html|tsx|jsx|react|javascript|js|typescript|ts)?[\s\S]*?```/i.test(value)
-    || /<!doctype html|<html[\s>]|<body[\s>]|<main[\s>]|<section[\s>]|<div[\s>]|<svg[\s>]/i.test(value);
+  return Boolean(extractPreviewSource(content));
 }
 
 function extractPreviewSource(content = "") {
@@ -613,7 +611,7 @@ function AssistantMessageActions({ message, chatRuntime }) {
           aria-label="Open in Preview"
           onClick={() => {
             const opened = openAssistantMessageInPreview(text, "Assistant Preview");
-            if (!opened) setStatus("No previewable content found.");
+            if (!opened) setStatus("No HTML/code block found to preview.");
           }}
         >
           <Icon name="panel"/>
