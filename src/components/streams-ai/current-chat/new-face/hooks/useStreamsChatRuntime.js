@@ -504,6 +504,82 @@ export function useStreamsChatRuntime() {
       isStreaming,
     });
 
+    if (composerMode === "chat" && mode === "chat") {
+      console.info("[STREAMS_DIRECT_CHAT_FALLBACK]", { mode, composerMode, trimmedLength: String(message || "").trim().length });
+
+      const directText = String(message || "").trim();
+
+      if (!directText) {
+        setIsStreaming(false);
+        return;
+      }
+
+      try {
+        const directResponse = await fetch("/api/streams-ai/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: directText,
+            sessionId,
+            mode: "chat",
+            provider: provider || selectedProvider || "Auto",
+          }),
+        });
+
+        const directData = await directResponse.json().catch(() => ({}));
+
+        if (!directResponse.ok || directData?.ok === false) {
+          throw new Error(directData?.error || directData?.details || "Chat request failed.");
+        }
+
+        const directContent =
+          directData?.message?.content ||
+          directData?.content ||
+          directData?.reply ||
+          directData?.text ||
+          directData?.answer ||
+          "";
+
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantId
+              ? {
+                  ...item,
+                  content: directContent || "Done.",
+                  isStreaming: false,
+                  isStatusOnly: false,
+                  status: "complete",
+                }
+              : item
+          )
+        );
+
+        setActivity(createActivity("complete", "chat", "Complete"));
+        setIsStreaming(false);
+        refreshSidebarData();
+        return;
+      } catch (error) {
+        console.error("[STREAMS_DIRECT_CHAT_FALLBACK_ERROR]", error);
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantId
+              ? {
+                  ...item,
+                  content: error instanceof Error ? error.message : "Chat request failed.",
+                  isStreaming: false,
+                  isStatusOnly: false,
+                  status: "error",
+                }
+              : item
+          )
+        );
+        setActivity(createActivity("error", "chat", "Chat failed"));
+        setIsStreaming(false);
+        return;
+      }
+    }
+
+
     if (!mounted) return;
     const trimmed = String(message || "").trim();
     if (!trimmed) {
