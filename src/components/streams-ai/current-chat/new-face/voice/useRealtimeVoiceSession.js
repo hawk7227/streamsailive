@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 
@@ -9,6 +10,7 @@ function safeEventName(event) {
 }
 
 export function useRealtimeVoiceSession() {
+  const { session } = useAuth();
   const peerRef = useRef(null);
   const dataChannelRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -98,7 +100,10 @@ export function useRealtimeVoiceSession() {
     try {
       const tokenResponse = await fetch("/api/streams-ai/realtime/session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({}),
       });
 

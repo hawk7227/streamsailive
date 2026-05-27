@@ -430,7 +430,7 @@ export function useStreamsChatRuntime() {
     return sessionId || "";
   }, [sessionId]);
 
-  const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider }) => {
+  const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider, webSearchEnabled = false }) => {
     if (!mounted) return;
     const trimmed = String(message || "").trim();
     if (!trimmed) return;
@@ -531,6 +531,68 @@ export function useStreamsChatRuntime() {
     }
 
     setMessages((current) => [...current, { id: assistantId, role: "assistant", content: buildChatStatusMessage(CHAT_STATUS_FALLBACK), isStreaming: true, isStatusOnly: true, status: "thinking", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }]);
+    const requestedWebSearch =
+      webSearchEnabled ||
+      /^\s*(search the web|web search|search online|look up|find latest|latest)\b/i.test(trimmed);
+
+    if (requestedWebSearch) {
+      const query = trimmed
+        .replace(/^\s*(search the web for|search the web|web search for|web search|search online for|search online|look up|find latest|latest)\s*/i, "")
+        .trim() || trimmed;
+
+      setActivity(createActivity("thinking", "tool", "Searching the web…"));
+      setMessages((current) => [...current, {
+        id: assistantId,
+        role: "assistant",
+        content: "Searching the web…",
+        isStreaming: true,
+        status: "thinking",
+        createdAt: new Date().toISOString()
+      }]);
+
+      try {
+        const searchResponse = await fetch("/api/streams-ai/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+
+        const searchData = await searchResponse.json();
+
+        if (!searchResponse.ok || !searchData?.ok) {
+          throw new Error(searchData?.error || "Web search failed");
+        }
+
+        const sourceLines = Array.isArray(searchData.annotations) && searchData.annotations.length
+          ? "\n\nSources:\n" + searchData.annotations.map((annotation, index) => {
+              const title = annotation.title || annotation.url || `Source ${index + 1}`;
+              const url = annotation.url ? ` — ${annotation.url}` : "";
+              return `${index + 1}. ${title}${url}`;
+            }).join("\n")
+          : "";
+
+        setMessages((current) => current.map((item) => item.id === assistantId ? {
+          ...item,
+          content: `${searchData.text || "No search answer returned."}${sourceLines}`,
+          isStreaming: false,
+          status: "complete",
+          sources: searchData.annotations || [],
+        } : item));
+
+        setActivity(createActivity("complete", "tool", "Search complete"));
+      } catch (error) {
+        setMessages((current) => current.map((item) => item.id === assistantId ? {
+          ...item,
+          content: `Web search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          isStreaming: false,
+          status: "error",
+        } : item));
+        setActivity(createActivity("error", "tool", "Search failed"));
+      }
+
+      return;
+    }
+
     setActivity(createActivity("thinking", "chat", CHAT_STATUS_FALLBACK));
     setIsStreaming(true);
     scrollActiveChatToBottom();
