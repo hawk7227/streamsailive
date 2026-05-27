@@ -97,7 +97,7 @@ function Avatar({ label }) {
 
 export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const router = useRouter();
-  const { user, profile, plan, workspace } = useAuth();
+  const { user, profile, plan, workspace, signOut } = useAuth();
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -175,8 +175,9 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
     router.push(href);
   }
 
-  function closeAndSignOut() {
+  async function closeAndSignOut() {
     setAccountMenuOpen(false);
+    await signOut?.();
     router.push("/login");
   }
 

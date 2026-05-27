@@ -12,7 +12,6 @@ function extractSearchText(output: unknown): string {
     output_text?: string;
     output?: Array<{
       content?: Array<{
-        type?: string;
         text?: string;
       }>;
     }>;
@@ -58,13 +57,16 @@ function extractAnnotations(output: unknown) {
 }
 
 export async function GET() {
+  const configured = Boolean(process.env.OPENAI_API_KEY);
+
   return NextResponse.json({
     ok: true,
-    configured: Boolean(process.env.OPENAI_API_KEY),
-    provider: process.env.OPENAI_API_KEY ? "openai_responses_web_search" : null,
-    blockedReason: process.env.OPENAI_API_KEY
+    configured,
+    provider: configured ? "openai_responses_web_search" : null,
+    route: "/api/streams-ai/search",
+    blockedReason: configured
       ? null
-      : "Blocked: OPENAI_API_KEY is required for real web search.",
+      : "OPENAI_API_KEY is required for real web search.",
   });
 }
 
@@ -87,7 +89,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Blocked: OPENAI_API_KEY is required for real web search.",
+        error: "OPENAI_API_KEY is required for real web search.",
       },
       { status: 500 }
     );
@@ -143,15 +145,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const text = extractSearchText(data);
-  const annotations = extractAnnotations(data);
-
   return NextResponse.json({
     ok: true,
     source: "openai_responses_web_search",
     query,
-    text,
-    annotations,
+    text: extractSearchText(data),
+    annotations: extractAnnotations(data),
     rawResponseId: data?.id || null,
   });
 }

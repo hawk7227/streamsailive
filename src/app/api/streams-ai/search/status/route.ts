@@ -12,6 +12,6 @@ export async function GET() {
     route: "/api/streams-ai/search",
     blockedReason: configured
       ? null
-      : "Blocked: OPENAI_API_KEY is required for real web search.",
+      : "OPENAI_API_KEY is required for real web search.",
   });
 }

@@ -1,20 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import "./streams-composer.css";
-import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 
 const MODES = ["Thinking", "Configure..."];
 
-const TOOL_ITEMS = [
+const BASE_TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U", enabled: true },
   { id: "url", icon: "▣", label: "Add link", enabled: true },
   { id: "create_image", icon: "✦", label: "Create image", enabled: true },
-  {
-    id: "web_search",
-    icon: "◎",
-    label: "Web search",
-    enabled: false,
-    blockedReason: "Blocked: real web search provider is not configured yet.",
-  },
+  { id: "web_search", icon: "◎", label: "Web search", enabled: true, shortcut: "Live" },
 ];
 
 export default function StreamsComposer({
@@ -32,20 +25,40 @@ export default function StreamsComposer({
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const [blockedNotice, setBlockedNotice] = useState("");
-  const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+  const [webSearchStatus, setWebSearchStatus] = useState({
+    configured: false,
+    blockedReason: "Checking real web search configuration...",
+  });
+
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const placeholder = selectedTool
-    ? selectedTool.id === "url"
-      ? "Paste a link..."
-      : selectedTool.id === "create_image"
-        ? "Describe the image..."
-        : "Ask anything"
-    : "Ask anything";
+  useEffect(() => {
+    let cancelled = false;
 
-  const hasUploadingFiles = libraryFiles?.some((file) => file.status === "uploading");
-  const isDisabled = isStreaming || hasUploadingFiles;
+    fetch("/api/streams-ai/search/status", { method: "GET" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled) return;
+        setWebSearchStatus({
+          configured: Boolean(data?.configured),
+          blockedReason:
+            data?.blockedReason ||
+            "OPENAI_API_KEY is required for real web search.",
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWebSearchStatus({
+          configured: false,
+          blockedReason: "Unable to verify real web search backend configuration.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeMenu) return undefined;
@@ -67,6 +80,30 @@ export default function StreamsComposer({
       window.removeEventListener("pointerdown", closeOnOutside);
     };
   }, [activeMenu]);
+
+  const toolItems = BASE_TOOL_ITEMS.map((item) => {
+    if (item.id !== "web_search") return item;
+
+    return {
+      ...item,
+      enabled: webSearchStatus.configured,
+      shortcut: webSearchStatus.configured ? "Live" : "Not configured",
+      blockedReason: webSearchStatus.blockedReason,
+    };
+  });
+
+  const placeholder = selectedTool
+    ? selectedTool.id === "url"
+      ? "Paste a link..."
+      : selectedTool.id === "create_image"
+        ? "Describe the image..."
+        : selectedTool.id === "web_search"
+          ? "Search the web..."
+          : "Ask anything"
+    : "Ask anything";
+
+  const hasUploadingFiles = libraryFiles?.some((file) => file.status === "uploading");
+  const isDisabled = isStreaming || hasUploadingFiles;
 
   function handleModeSelection(nextMode) {
     setActiveMenu("");
@@ -98,16 +135,21 @@ export default function StreamsComposer({
     }
 
     if (selectedTool?.id === "web_search") {
-      setBlockedNotice("Blocked: real web search provider is not configured yet.");
-      setSelectedTool(null);
-      setActiveMenu("");
-      return;
+      if (!webSearchStatus.configured) {
+        setBlockedNotice(webSearchStatus.blockedReason);
+        setSelectedTool(null);
+        setActiveMenu("");
+        return;
+      }
+
+      finalMessage = "Search the web for " + finalMessage;
     }
 
     onSubmit?.({
       message: finalMessage,
       composerMode: selectedTool?.id === "url" ? "url" : "chat",
       mode,
+      webSearchEnabled: selectedTool?.id === "web_search" && webSearchStatus.configured,
     });
 
     setMessage("");
@@ -126,7 +168,7 @@ export default function StreamsComposer({
 
   function handleTool(item) {
     if (!item.enabled) {
-      setBlockedNotice(item.blockedReason || `${item.label} is not available yet.`);
+      setBlockedNotice(item.blockedReason || `${item.label} is not configured.`);
       setActiveMenu("");
       return;
     }
@@ -137,7 +179,7 @@ export default function StreamsComposer({
       return;
     }
 
-    if (item.id === "url" || item.id === "create_image") {
+    if (item.id === "url" || item.id === "create_image" || item.id === "web_search") {
       setSelectedTool((current) => (current?.id === item.id ? null : item));
       setBlockedNotice("");
       setActiveMenu("");
@@ -156,51 +198,15 @@ export default function StreamsComposer({
 
     if (isImage && previewUrl) {
       return (
-        <div key={file.id} style={{ position: "relative", borderRadius: "10px", overflow: "hidden", width: "64px", height: "64px", flexShrink: 0 }}>
-          <img
-            src={previewUrl}
-            alt={file.name || "Image"}
-            style={{
-              width: "64px",
-              height: "64px",
-              objectFit: "cover",
-              display: "block",
-              borderRadius: "10px",
-              opacity: isUploading ? 0.6 : 1,
-              filter: isError ? "brightness(0.5) saturate(0)" : "none",
-            }}
-          />
-          {isUploading ? (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}>
-              <span style={{ color: "#fff", fontSize: 12 }}>Uploading</span>
-            </div>
-          ) : null}
-          {isError ? (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>⚠️</div>
-          ) : null}
+        <div key={file.id} className="streamsComposerAttachmentImage">
+          <img src={previewUrl} alt={file.name || "Image"} />
+          {isUploading ? <span className="streamsComposerAttachmentOverlay">Uploading</span> : null}
+          {isError ? <span className="streamsComposerAttachmentOverlay">⚠️</span> : null}
           {!isUploading ? (
             <button
               type="button"
               aria-label={`Remove ${file.name || "attachment"}`}
               onClick={() => onRemoveFile?.(file.id)}
-              style={{
-                position: "absolute",
-                top: "2px",
-                right: "2px",
-                background: "rgba(0,0,0,0.55)",
-                border: "none",
-                cursor: "pointer",
-                borderRadius: "50%",
-                width: "18px",
-                height: "18px",
-                color: "#fff",
-                fontSize: "11px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                lineHeight: 1,
-                padding: 0,
-              }}
             >
               ×
             </button>
@@ -210,15 +216,14 @@ export default function StreamsComposer({
     }
 
     return (
-      <div key={file.id} style={{ position: "relative", display: "flex", alignItems: "center", gap: "6px", background: isError ? "rgba(220,50,50,0.1)" : "rgba(0,0,0,0.06)", padding: "5px 10px 5px 8px", borderRadius: "10px", fontSize: "12px", color: "#333", maxWidth: "160px" }}>
-        <span style={{ fontSize: "18px", flexShrink: 0 }}>{isError ? "⚠️" : isUploading ? "⏳" : "📄"}</span>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name || "File"}</span>
+      <div key={file.id} className={isError ? "streamsComposerAttachmentFile isError" : "streamsComposerAttachmentFile"}>
+        <span>{isError ? "⚠️" : isUploading ? "⏳" : "📄"}</span>
+        <strong>{file.name || "File"}</strong>
         {!isUploading ? (
           <button
             type="button"
             aria-label={`Remove ${file.name || "attachment"}`}
             onClick={() => onRemoveFile?.(file.id)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#888", padding: "0 0 0 4px", lineHeight: 1, flexShrink: 0 }}
           >
             ×
           </button>
@@ -228,19 +233,9 @@ export default function StreamsComposer({
   }
 
   return (
-    <section
-      ref={composerRef}
-      className="streamsComposer"
-      aria-label="Streams composer"
-      style={libraryFiles && libraryFiles.length > 0 ? {
-        flexDirection: "column",
-        alignItems: "stretch",
-        borderRadius: "24px",
-        padding: "12px 14px 6px 14px",
-      } : {}}
-    >
+    <section ref={composerRef} className="streamsComposer" aria-label="Streams composer">
       {libraryFiles && libraryFiles.length > 0 ? (
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid rgba(0,0,0,0.07)", paddingBottom: "10px", marginBottom: "8px", alignItems: "flex-end" }}>
+        <div className="streamsComposerAttachments">
           {libraryFiles.map(renderFileAttachment)}
         </div>
       ) : null}
@@ -263,8 +258,8 @@ export default function StreamsComposer({
 
         {selectedTool ? (
           <div className="streamsComposerToolPill">
-            <span style={{ fontSize: "14px", marginRight: "4px" }}>{selectedTool.icon}</span>
-            <span>{selectedTool.label}</span>
+            <span>{selectedTool.icon}</span>
+            <strong>{selectedTool.label}</strong>
             <button
               type="button"
               className="streamsComposerToolPillClose"
@@ -298,18 +293,6 @@ export default function StreamsComposer({
           {mode}⌄
         </button>
 
-        <button
-          type="button"
-          className="streamsComposerMicButton"
-          aria-label="Start realtime voice conversation"
-          onClick={() => {
-            setActiveMenu("");
-            setVoicePanelOpen(true);
-          }}
-        >
-          🎙
-        </button>
-
         <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>
           ↑
         </button>
@@ -320,14 +303,14 @@ export default function StreamsComposer({
         type="file"
         multiple
         accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md"
-        style={{ display: "none", position: "absolute", pointerEvents: "none" }}
+        hidden
         ref={fileInputRef}
         onChange={handleFileChange}
       />
 
       {activeMenu === "tools" ? (
         <div className="streamsComposerMenu toolsMenu" role="menu">
-          {TOOL_ITEMS.map((item) => (
+          {toolItems.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -355,7 +338,6 @@ export default function StreamsComposer({
           <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       ) : null}
-      <RealtimeVoicePanel open={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
     </section>
   );
 }
