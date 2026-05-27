@@ -78,6 +78,26 @@ function openAssistantMessageInPreview(content = "", title = "Assistant Preview"
 }
 
 
+
+function openLatestAssistantCodeInPreview(messages = []) {
+  const list = Array.isArray(messages) ? messages : [];
+
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+
+    if (!message || message.role !== "assistant") continue;
+
+    const content = String(message.content || message.text || "");
+
+    if (!hasPreviewableContent(content)) continue;
+
+    return openAssistantMessageInPreview(content, "Latest Assistant Code");
+  }
+
+  return false;
+}
+
+
 function ChatInlineImage({ src, alt }) {
   const [loading, setLoading] = useState(true);
 
@@ -967,9 +987,29 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
     }
   };
 
-  if (isMobile) return <div className="mobilePreviewShell"><StreamsSplitPreview embedded initialOpen onClose={closePreview} /></div>;
+  if (isMobile) return <div className="mobilePreviewShell"><StreamsSplitPreview
+    embedded
+    initialOpen
+    onClose={closePreview}
+    onOpenLatestPreview={() => {
+      const opened = openLatestAssistantCodeInPreview(chatRuntime?.messages);
+      if (!opened) {
+        window.alert("No previewable assistant code found yet.");
+      }
+    }}
+  /></div>;
 
-  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><StreamsSplitPreview embedded initialOpen onClose={closePreview} /></div>;
+  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><StreamsSplitPreview
+    embedded
+    initialOpen
+    onClose={closePreview}
+    onOpenLatestPreview={() => {
+      const opened = openLatestAssistantCodeInPreview(chatRuntime?.messages);
+      if (!opened) {
+        window.alert("No previewable assistant code found yet.");
+      }
+    }}
+  /></div>;
 }
 
 

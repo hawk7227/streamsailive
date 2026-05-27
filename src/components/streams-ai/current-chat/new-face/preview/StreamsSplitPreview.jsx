@@ -49,7 +49,7 @@ function buildSrcDoc(previewHtml, sourceCode, kind) {
   return EMPTY_PREVIEW;
 }
 
-export default function StreamsSplitPreview({ embedded = false, initialOpen = false, onClose } = {}) {
+export default function StreamsSplitPreview({ embedded = false, initialOpen = false, onClose, onOpenLatestPreview } = {}) {
   const [state, setState] = useState({
     open: false,
     id: "",
@@ -112,6 +112,15 @@ export default function StreamsSplitPreview({ embedded = false, initialOpen = fa
         </div>
 
         <div className="streamsSplitPreviewActions">
+          {typeof onOpenLatestPreview === "function" ? (
+            <button
+              type="button"
+              onClick={onOpenLatestPreview}
+            >
+              Open latest code
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={() => setState((current) => ({ ...current, sourceVisible: !current.sourceVisible }))}
