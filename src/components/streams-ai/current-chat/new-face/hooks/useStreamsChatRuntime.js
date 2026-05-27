@@ -570,8 +570,6 @@ export function useStreamsChatRuntime() {
     }
 
     setMessages((current) => [...current, { id: assistantId, role: "assistant", content: buildChatStatusMessage(CHAT_STATUS_FALLBACK), isStreaming: true, isStatusOnly: true, status: "thinking", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }]);
-    // Preview-only routing is temporarily disabled until normal chat is verified green.
-    // Split Preview remains available through the preview pane, but normal chat must never be intercepted here.
     const requestedWebSearch =
       webSearchEnabled ||
       /^\s*(search the web|web search|search online|look up|find latest|latest)\b/i.test(trimmed);
