@@ -481,6 +481,18 @@ export function useStreamsChatRuntime() {
       selectedMode,
       selectedProvider,
     });
+
+    const rawRuntimeMode = String(mode || "").trim();
+    const allowedRuntimeModes = new Set(["chat", "image", "video", "image_to_video", "image_to_image", "url", "build"]);
+    if (!allowedRuntimeModes.has(rawRuntimeMode)) {
+      console.warn("[STREAMS_MODE_NORMALIZED]", { from: rawRuntimeMode, to: "chat" });
+      mode = "chat";
+    }
+
+    if (!composerMode) {
+      composerMode = "chat";
+    }
+
     if (!mounted) return;
     const trimmed = String(message || "").trim();
     if (!trimmed) return;

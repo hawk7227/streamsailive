@@ -807,11 +807,17 @@ function Composer({ chatRuntime }) {
           }
 
           try {
+            const rawMode = String(payload?.mode || "").trim();
+            const normalizedMode = ["chat", "image", "video", "image_to_video", "image_to_image", "url", "build"].includes(rawMode)
+              ? rawMode
+              : "chat";
+
             chatRuntime.sendMessage({
               message: payload.message,
-              composerMode: payload.composerMode,
-              mode: payload.mode,
-              webSearchEnabled: payload.webSearchEnabled,
+              composerMode: payload.composerMode || "chat",
+              mode: normalizedMode,
+              provider: payload.provider || "Auto",
+              webSearchEnabled: Boolean(payload.webSearchEnabled),
             });
           } catch (error) {
             console.error("[STREAMS_CHAT_SUBMIT_ERROR]", error);
