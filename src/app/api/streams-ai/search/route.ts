@@ -80,16 +80,26 @@ function extractAnnotations(output: unknown) {
   };
 
   const annotations: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
 
   for (const item of data.output || []) {
     for (const content of item.content || []) {
-      if (Array.isArray(content.annotations)) {
-        annotations.push(...content.annotations);
+      if (!Array.isArray(content.annotations)) continue;
+
+      for (const annotation of content.annotations) {
+        const url = String(annotation.url || annotation.href || "");
+        const title = String(annotation.title || "");
+        const key = url || title;
+
+        if (!key || seen.has(key)) continue;
+
+        seen.add(key);
+        annotations.push(annotation);
       }
     }
   }
 
-  return annotations;
+  return annotations.slice(0, 6);
 }
 
 export async function GET() {
