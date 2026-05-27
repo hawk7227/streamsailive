@@ -247,7 +247,7 @@ export default function StreamsClientShell() {
   useEffect(() => {
     if (!loading) {
       if (!session) {
-        window.location.href = "/login";
+        setAuthError("Please sign in to continue to STREAMS AI.");
       } else {
         setMounted(true);
       }
