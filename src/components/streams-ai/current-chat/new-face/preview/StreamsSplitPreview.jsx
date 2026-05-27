@@ -96,14 +96,14 @@ export default function StreamsSplitPreview() {
     [state.previewHtml, state.sourceCode, state.kind]
   );
 
-  if (!state.open) return null;
+  if (!state.open && !embedded) return null;
 
   return (
     <aside className="streamsSplitPreview" aria-label="Split preview panel">
       <header className="streamsSplitPreviewHeader">
         <div>
           <p>STREAMS Preview</p>
-          <h2>{state.title || "Preview"}</h2>
+          <h2>{state.title || (embedded ? "Split Preview" : "Preview")}</h2>
           <span>
             {state.repoFullName ? `${state.repoFullName} · ` : ""}
             {state.branch ? `${state.branch} · ` : ""}
