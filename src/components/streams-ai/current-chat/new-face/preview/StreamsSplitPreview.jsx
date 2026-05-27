@@ -49,7 +49,7 @@ function buildSrcDoc(previewHtml, sourceCode, kind) {
   return EMPTY_PREVIEW;
 }
 
-export default function StreamsSplitPreview() {
+export default function StreamsSplitPreview({ embedded = false, initialOpen = false, onClose } = {}) {
   const [state, setState] = useState({
     open: false,
     id: "",
@@ -99,7 +99,7 @@ export default function StreamsSplitPreview() {
   if (!state.open && !embedded) return null;
 
   return (
-    <aside className="streamsSplitPreview" aria-label="Split preview panel">
+    <aside className={embedded ? "streamsSplitPreview embedded" : "streamsSplitPreview"} aria-label="Split preview panel">
       <header className="streamsSplitPreviewHeader">
         <div>
           <p>STREAMS Preview</p>
