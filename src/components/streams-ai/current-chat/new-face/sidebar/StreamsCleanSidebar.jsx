@@ -115,15 +115,6 @@ export default function StreamsCleanSidebar({ chatRuntime, open, setOpen }) {
   const planLabel = plan?.name || profile?.plan_id || "Free";
   const workspaceLabel = workspace?.name || "Workspace";
 
-  const displayName =
-    profile?.full_name ||
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email ||
-    "Streams user";
-
-  const planLabel = plan?.name || profile?.plan_id || "Free";
-  const workspaceLabel = workspace?.name || "Workspace";
 
   useEffect(() => {
     const onKey = (event) => { if (event.key === "Escape") setActiveModal(null); };
