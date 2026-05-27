@@ -470,6 +470,17 @@ export function useStreamsChatRuntime() {
   }, [sessionId]);
 
   const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider, webSearchEnabled = false }) => {
+    console.info("[STREAMS_SEND_ENTER]", {
+      messageType: typeof message,
+      messageLength: typeof message === "string" ? message.length : 0,
+      composerMode,
+      mode,
+      provider,
+      webSearchEnabled,
+      isStreaming,
+      selectedMode,
+      selectedProvider,
+    });
     if (!mounted) return;
     const trimmed = String(message || "").trim();
     if (!trimmed) return;
