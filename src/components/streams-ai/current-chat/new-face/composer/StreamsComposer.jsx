@@ -14,7 +14,6 @@ export default function StreamsComposer({
   onSubmit,
   onFilesSelected,
   onToolSelect,
-  onProviderChange,
   onModeChange,
   libraryFiles = [],
   onRemoveFile,
@@ -24,6 +23,18 @@ export default function StreamsComposer({
   const [activeMenu, setActiveMenu] = useState("");
   const [composerMode, setComposerMode] = useState("chat");
   const [mode, setMode] = useState("Thinking");
+
+  function handleModeSelection(nextMode) {
+    setActiveMenu("");
+
+    if (nextMode === "Configure...") {
+      window.location.assign("/account/personalization");
+      return;
+    }
+
+    setMode(nextMode);
+    onModeChange?.(nextMode);
+  }
   const [selectedTool, setSelectedTool] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -248,7 +259,7 @@ export default function StreamsComposer({
       {activeMenu === "model" && (
         <div className="streamsComposerMenu modelMenu" role="menu">
           {MODES.map((item) => (
-            <button key={item} type="button" onClick={() => { setMode(item); onModeChange?.(item); setActiveMenu(""); }}>
+            <button key={item} type="button" onClick={() => handleModeSelection(item)}>
               <span>{item === mode ? "✓" : ""}</span><strong>{item}</strong><em />
             </button>
           ))}
