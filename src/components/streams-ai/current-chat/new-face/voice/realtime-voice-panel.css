@@ -1,0 +1,176 @@
+.realtimeVoiceBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, .28);
+  padding: 18px;
+}
+
+.realtimeVoicePanel {
+  width: min(440px, calc(100vw - 24px));
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 28px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 28px 90px rgba(0,0,0,.22);
+  padding: 16px;
+  color: #111;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.realtimeVoiceHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.realtimeVoiceHeader div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.realtimeVoiceHeader strong {
+  font-size: 18px;
+  letter-spacing: -.02em;
+}
+
+.realtimeVoiceHeader span {
+  color: #666;
+  font-size: 12px;
+}
+
+.realtimeVoiceHeader button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #111;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.realtimeVoiceOrb {
+  width: 116px;
+  height: 116px;
+  border-radius: 999px;
+  margin: 26px auto 16px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #d9d4ff 36%, #7c3aed 72%, #111827);
+  box-shadow: 0 24px 70px rgba(124, 58, 237, .32);
+}
+
+.realtimeVoiceOrb span {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.76);
+}
+
+.realtimeVoiceOrb[data-state="listening"],
+.realtimeVoiceOrb[data-state="speaking"],
+.realtimeVoiceOrb[data-state="connecting"],
+.realtimeVoiceOrb[data-state="creating_session"],
+.realtimeVoiceOrb[data-state="requesting_mic"] {
+  animation: realtimeVoicePulse 1.35s ease-in-out infinite;
+}
+
+.realtimeVoiceStatus {
+  text-align: center;
+  margin: 0;
+  color: #333;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.realtimeVoiceError,
+.realtimeVoiceTruth {
+  margin-top: 14px;
+  border-radius: 16px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.realtimeVoiceError {
+  border: 1px solid rgba(220, 38, 38, .22);
+  background: #fff1f1;
+  color: #8a1212;
+}
+
+.realtimeVoiceTruth {
+  border: 1px solid rgba(0,0,0,.08);
+  background: #f7f7f8;
+  color: #555;
+}
+
+.realtimeVoiceActions {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.realtimeVoiceActions button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.realtimeVoiceActions .primary {
+  background: #111;
+  color: #fff;
+}
+
+.realtimeVoiceActions .danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.realtimeVoiceEvents {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #555;
+}
+
+.realtimeVoiceEvents ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.realtimeVoiceEvents li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid rgba(0,0,0,.06);
+  padding-top: 6px;
+}
+
+@keyframes realtimeVoicePulse {
+  0%, 100% { transform: scale(1); filter: saturate(1); }
+  50% { transform: scale(1.045); filter: saturate(1.25); }
+}
+
+@media (max-width: 760px) {
+  .realtimeVoiceBackdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .realtimeVoicePanel {
+    width: 100vw;
+    max-height: 88dvh;
+    overflow: auto;
+    border-radius: 28px 28px 0 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+}

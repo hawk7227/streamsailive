@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./streams-composer.css";
+import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 
 const MODES = ["Thinking", "Configure..."];
 
@@ -31,6 +32,7 @@ export default function StreamsComposer({
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const [blockedNotice, setBlockedNotice] = useState("");
+  const [voicePanelOpen, setVoicePanelOpen] = useState(false);
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -296,6 +298,18 @@ export default function StreamsComposer({
           {mode}⌄
         </button>
 
+        <button
+          type="button"
+          className="streamsComposerMicButton"
+          aria-label="Start realtime voice conversation"
+          onClick={() => {
+            setActiveMenu("");
+            setVoicePanelOpen(true);
+          }}
+        >
+          🎙
+        </button>
+
         <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>
           ↑
         </button>
@@ -341,6 +355,7 @@ export default function StreamsComposer({
           <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       ) : null}
+      <RealtimeVoicePanel open={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
     </section>
   );
 }
