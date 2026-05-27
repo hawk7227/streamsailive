@@ -2,6 +2,77 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+
+const STREAMS_SPLIT_PREVIEW_EVENT = "streams:split-preview";
+const STREAMS_SPLIT_PREVIEW_LAST_KEY = "streams:split-preview:last";
+
+function hasPreviewableContent(content = "") {
+  const value = String(content || "");
+  return /```(?:html|tsx|jsx|react|javascript|js|typescript|ts)?[\s\S]*?```/i.test(value)
+    || /<!doctype html|<html[\s>]|<body[\s>]|<main[\s>]|<section[\s>]|<div[\s>]|<svg[\s>]/i.test(value);
+}
+
+function extractPreviewSource(content = "") {
+  const value = String(content || "");
+  const fenced = value.match(/```(?:html|tsx|jsx|react|javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
+
+  if (fenced?.[1]?.trim()) return fenced[1].trim();
+
+  const htmlStart = value.search(/<!doctype html|<html[\s>]|<body[\s>]|<main[\s>]|<section[\s>]|<div[\s>]|<svg[\s>]/i);
+  return htmlStart >= 0 ? value.slice(htmlStart).trim() : "";
+}
+
+function escapePreviewText(value = "") {
+  return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildPreviewHtmlFromSource(source = "") {
+  const value = String(source || "").trim();
+
+  if (/<!doctype html|<html[\s>]/i.test(value)) return value;
+
+  if (/<svg[\s>]/i.test(value)) {
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0b10;color:white}</style></head><body>${value}</body></html>`;
+  }
+
+  if (/<[a-z][\s\S]*>/i.test(value) && !/export\s+default|className=/.test(value)) {
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;font-family:Inter,system-ui;background:#f7f7f8;color:#111}</style></head><body>${value}</body></html>`;
+  }
+
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui;background:#0b0b10;color:white}main{width:min(760px,calc(100vw - 36px));border:1px solid rgba(255,255,255,.14);border-radius:30px;background:rgba(255,255,255,.08);padding:30px}pre{white-space:pre-wrap;overflow:auto;color:rgba(255,255,255,.82)}</style></head><body><main><pre>${escapePreviewText(value || "No previewable source was found.")}</pre></main></body></html>`;
+}
+
+function openAssistantMessageInPreview(content = "", title = "Assistant Preview") {
+  if (typeof window === "undefined") return false;
+
+  const sourceCode = extractPreviewSource(content);
+  if (!sourceCode) return false;
+
+  const detail = {
+    action: "open",
+    id: `assistant_preview_${Date.now()}`,
+    title,
+    kind: /export\s+default|className=/.test(sourceCode) ? "tsx" : "html",
+    sourceVisible: false,
+    conversationCodeSuppressed: true,
+    previewPanelOpen: true,
+    sourceCode,
+    previewHtml: buildPreviewHtmlFromSource(sourceCode),
+    repoFullName: "",
+    branch: "",
+    filePath: "assistant-message",
+    fileSha: "",
+  };
+
+  try {
+    window.sessionStorage.setItem(STREAMS_SPLIT_PREVIEW_LAST_KEY, JSON.stringify(detail));
+  } catch {}
+
+  window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
+  return true;
+}
+
+
 function ChatInlineImage({ src, alt }) {
   const [loading, setLoading] = useState(true);
 
@@ -529,6 +600,20 @@ function AssistantMessageActions({ message, chatRuntime }) {
       <button type="button" aria-label="Share or export response" onClick={() => blocked("share-export-message")}>
         <Icon name="upload" size={16}/>
       </button>
+      {hasPreviewableContent(text) ? (
+        <button
+          type="button"
+          aria-label="Open in Preview"
+          onClick={() => {
+            const opened = openAssistantMessageInPreview(text, "Assistant Preview");
+            if (!opened) setStatus("No previewable content found.");
+          }}
+        >
+          <Icon name="panel"/>
+          <span>Preview</span>
+        </button>
+      ) : null}
+
       <button type="button" aria-label="Regenerate response" onClick={regenerate}>
         <Icon name="refresh" size={16}/>
         <span>Regenerate</span>
@@ -1079,6 +1164,18 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
   const chatRuntime = propChatRuntime || internalChatRuntime;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event?.detail?.action === "open") {
+        console.info("[STREAMS_PREVIEW_EVENT_OPEN_PANE]", event.detail?.title || "Preview");
+        setPreviewOpen(true);
+      }
+    };
+
+    window.addEventListener(STREAMS_SPLIT_PREVIEW_EVENT, handler);
+    return () => window.removeEventListener(STREAMS_SPLIT_PREVIEW_EVENT, handler);
+  }, []);
   const [mode, setMode] = useState("start");
   const [lastAction, setLastAction] = useState("Ready");
   const [artifactText, setArtifactText] = useState(DEFAULT_ARTIFACT_TEXT);
