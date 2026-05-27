@@ -8,6 +8,8 @@ import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/
 import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
+import { resolveStreamsStatus } from "../../runtime/streamsStatusCatalog";
+import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../../runtime/streamsStatusBehavior";
 import {
   addMediaItem,
   buildSessionTitle,
@@ -542,15 +544,15 @@ export function useStreamsChatRuntime() {
         .replace(/^\s*(search the web for|search the web|web search for|web search|search online for|search online|look up|find latest|latest)\s*/i, "")
         .trim() || trimmed;
 
-      setActivity(createActivity("thinking", "tool", "Searching the web…"));
-      setMessages((current) => current.map((item) => item.id === assistantId ? {
-        ...item,
-        content: "Searching the web…",
+      const searchingStatus = resolveStreamsStatus("webSearch", "requested");
+      setActivity(createActivity("thinking", "tool", searchingStatus));
+      setMessages((current) => updateStatusMessage(current, assistantId, {
+        content: searchingStatus,
         isStreaming: true,
         isStatusOnly: false,
         status: "thinking",
-        createdAt: item.createdAt || new Date().toISOString()
-      } : item));
+        createdAt: current.find((item) => item.id === assistantId)?.createdAt || new Date().toISOString(),
+      }));
 
       try {
         const searchResponse = await fetch("/api/streams-ai/search", {
@@ -584,15 +586,15 @@ export function useStreamsChatRuntime() {
           sources: searchData.annotations || [],
         } : item));
 
-        setActivity(createActivity("complete", "tool", "Search complete"));
+        setActivity(createActivity("complete", "tool", resolveStreamsStatus("webSearch", "complete")));
       } catch (error) {
-        setMessages((current) => current.map((item) => item.id === assistantId ? {
-          ...item,
-          content: `Web search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-          isStreaming: false,
-          status: "error",
-        } : item));
-        setActivity(createActivity("error", "tool", "Search failed"));
+        const errorText = error instanceof Error ? error.message : "Unknown error";
+        setMessages((current) => failStatusMessage(
+          current,
+          assistantId,
+          resolveStreamsStatus("webSearch", "failed", errorText)
+        ));
+        setActivity(createActivity("error", "tool", resolveStreamsStatus("webSearch", "failed", errorText)));
       }
 
       return;
@@ -843,7 +845,7 @@ export function useStreamsChatRuntime() {
               })();
             } else if (name === "web_search") {
               const query = String(args?.query || trimmed || "").trim();
-              setActivity(createActivity("thinking", "tool", "Searching the web…"));
+              setActivity(createActivity("thinking", "tool", resolveStreamsStatus("webSearch", "requested")));
 
               try {
                 const searchResponse = await fetch("/api/streams-ai/search", {
@@ -866,7 +868,7 @@ export function useStreamsChatRuntime() {
                   sources: searchData.annotations || [],
                 } : item));
 
-                setActivity(createActivity("complete", "tool", "Search complete"));
+                setActivity(createActivity("complete", "tool", resolveStreamsStatus("webSearch", "complete")));
                 setIsStreaming(false);
               } catch (error) {
                 setMessages((current) => current.map(item => item.id === assistantId ? {
@@ -875,7 +877,7 @@ export function useStreamsChatRuntime() {
                   isStreaming: false,
                   status: "error",
                 } : item));
-                setActivity(createActivity("error", "tool", "Search failed"));
+                setActivity(createActivity("error", "tool", resolveStreamsStatus("webSearch", "failed", error instanceof Error ? error.message : "Unknown error")));
                 setIsStreaming(false);
               }
             }
