@@ -1,18 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { useStreamsLiveActivity } from "../activity/useStreamsLiveActivity";
-import { useAuth } from "@/contexts/AuthContext";
 import { generateStreamsImage, isImageIntent } from "../../runtime/streamsImageClient";
 import { generateStreamsVideo, isVideoIntent } from "../../runtime/streamsVideoClient";
 import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/streamsLinkClient";
 import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
-import { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
-import { emitStreamsActivity } from "../runtime/streamsGlobalActivityBridge";
-import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
-import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
   addMediaItem,
   buildSessionTitle,
@@ -128,11 +122,11 @@ function buildUploadAssistantMessage(assets = []) {
       uploadStatusLine(asset),
       asset.extractionError ? `Extractor note: ${asset.extractionError}` : "",
       asset.videoFrameAnalysisError ? `Video analyzer note: ${asset.videoFrameAnalysisError}` : "",
-    ].filter(Boolean).join("\\n")),
+    ].filter(Boolean).join("\n")),
     "",
     "Ready for questions, analysis, summaries, debugging, transcription, or media routing.",
   ];
-  return lines.join("\\n\\n");
+  return lines.join("\n\n");
 }
 
 function buildLinkAssistantMessage(asset, summary = "") {
@@ -143,7 +137,7 @@ function buildLinkAssistantMessage(asset, summary = "") {
     asset.videoId ? `Video ID: ${asset.videoId}` : "",
     asset.requiresCapture ? "This link may require user-approved browser/extension capture for logged-in or private content." : "",
     asset.nextSteps?.length ? `Next: ${asset.nextSteps[0]}` : "Ready for analysis.",
-  ].filter(Boolean).join("\\n");
+  ].filter(Boolean).join("\n");
 }
 
 function selectLatestUploadedImage() {
@@ -158,7 +152,6 @@ function wantsImageToVideo(message = "") {
 }
 
 export function useStreamsChatRuntime() {
-  const { session } = useAuth();
   const abortRef = useRef(null);
   const sentinelRef = useRef(null);
   const [mounted, setMounted] = useState(false);
@@ -186,38 +179,6 @@ export function useStreamsChatRuntime() {
   const [selectedProvider, setSelectedProvider] = useState("Auto");
 
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    if (!activity || activity.phase === "idle") return;
-
-    const mode = String(activity.mode || "turn");
-    const domain =
-      mode === "image" ? STREAMS_ACTIVITY_DOMAINS.IMAGE :
-      mode === "video" ? STREAMS_ACTIVITY_DOMAINS.VIDEO :
-      mode === "voice" ? STREAMS_ACTIVITY_DOMAINS.VOICE :
-      mode === "file" || mode === "upload" ? STREAMS_ACTIVITY_DOMAINS.FILES :
-      mode === "link" ? STREAMS_ACTIVITY_DOMAINS.FILES :
-      mode === "tool" ? STREAMS_ACTIVITY_DOMAINS.TOOL :
-      STREAMS_ACTIVITY_DOMAINS.TURN;
-
-    const phase =
-      activity.phase === "complete" ? STREAMS_ACTIVITY_PHASES.COMPLETE :
-      activity.phase === "error" ? STREAMS_ACTIVITY_PHASES.FAILED :
-      activity.phase === "streaming" ? STREAMS_ACTIVITY_PHASES.STREAMING :
-      activity.phase === "rendering" ? STREAMS_ACTIVITY_PHASES.RUNNING :
-      STREAMS_ACTIVITY_PHASES.RUNNING;
-
-    emitStreamsActivity({
-      domain,
-      phase,
-      severity: phase === STREAMS_ACTIVITY_PHASES.FAILED ? STREAMS_ACTIVITY_SEVERITY.ERROR : STREAMS_ACTIVITY_SEVERITY.INFO,
-      statusText: activity.statusText || "Working…",
-      detail: mode,
-      source: "useStreamsChatRuntime.activity",
-      metadata: { mode, rawPhase: activity.phase },
-    });
-  }, [activity]);
-
 
   useEffect(() => {
     const container = document.querySelector(".splitChatScroll");
@@ -348,8 +309,7 @@ export function useStreamsChatRuntime() {
 
   const copyAsset = useCallback(async (asset) => {
     if (!asset?.url) return;
-    console.info("[STREAMS_FETCH_START]", "fetch call reached");
-      const response = await fetch(asset.url);
+    const response = await fetch(asset.url);
     const blob = await response.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
   }, []);
@@ -471,165 +431,9 @@ export function useStreamsChatRuntime() {
   }, [sessionId]);
 
   const sendMessage = useCallback(async ({ message, composerMode = "chat", mode = selectedMode, provider = selectedProvider, webSearchEnabled = false }) => {
-    console.info("[STREAMS_SEND_ENTER]", {
-      messageType: typeof message,
-      messageLength: typeof message === "string" ? message.length : 0,
-      composerMode,
-      mode,
-      provider,
-      webSearchEnabled,
-      isStreaming,
-      selectedMode,
-      selectedProvider,
-    });
-
-    const rawRuntimeMode = String(mode || "").trim();
-    const allowedRuntimeModes = new Set(["chat", "image", "video", "image_to_video", "image_to_image", "url", "build"]);
-    if (!allowedRuntimeModes.has(rawRuntimeMode)) {
-      console.warn("[STREAMS_MODE_NORMALIZED]", { from: rawRuntimeMode, to: "chat" });
-      mode = "chat";
-    }
-
-    if (!composerMode) {
-      composerMode = "chat";
-    }
-
-    console.info("[STREAMS_AFTER_MODE_NORMALIZE]", {
-      trimmedPreview: typeof message === "string" ? message.slice(0, 80) : "",
-      composerMode,
-      mode,
-      provider,
-      selectedMode,
-      selectedProvider,
-      isStreaming,
-    });
-
-    if (composerMode === "chat" && mode === "chat") {
-      console.info("[STREAMS_DIRECT_CHAT_FALLBACK]", {
-        mode,
-        composerMode,
-        trimmedLength: String(message || "").trim().length,
-      });
-
-      const directText = String(message || "").trim();
-
-      if (!directText) {
-        setIsStreaming(false);
-        return;
-      }
-
-      const directUserId =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `user_${Date.now()}`;
-
-      const directAssistantId =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `assistant_${Date.now()}`;
-
-      const createdAt = new Date().toISOString();
-
-      setMessages((current) => [
-        ...current.filter((item) => !(item.isStatusOnly && item.status === "thinking")),
-        {
-          id: directUserId,
-          role: "user",
-          content: directText,
-          createdAt,
-        },
-        {
-          id: directAssistantId,
-          role: "assistant",
-          content: buildChatStatusMessage(CHAT_STATUS_FALLBACK),
-          isStreaming: true,
-          isStatusOnly: true,
-          status: "thinking",
-          chunks: [],
-          toolCalls: [],
-          artifacts: [],
-          createdAt,
-        },
-      ]);
-
-      setActivity(createActivity("thinking", "chat", "Thinking"));
-      setIsStreaming(true);
-
-      try {
-        const directResponse = await fetch("/api/streams-ai/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: directText,
-            content: directText,
-            sessionId,
-            mode: "chat",
-            provider: provider || selectedProvider || "Auto",
-          }),
-        });
-
-        const directData = await directResponse.json().catch(() => ({}));
-
-        if (!directResponse.ok || directData?.ok === false) {
-          throw new Error(directData?.error || directData?.details || "Chat request failed.");
-        }
-
-        const directContent =
-          directData?.message?.content ||
-          directData?.content ||
-          directData?.reply ||
-          directData?.text ||
-          directData?.answer ||
-          "";
-
-        setMessages((current) =>
-          current.map((item) =>
-            item.id === directAssistantId
-              ? {
-                  ...item,
-                  content: directContent || "Done.",
-                  isStreaming: false,
-                  isStatusOnly: false,
-                  status: "complete",
-                }
-              : item
-          )
-        );
-
-        setActivity(createActivity("complete", "chat", "Complete"));
-        setIsStreaming(false);
-        refreshSidebarData();
-        return;
-      } catch (error) {
-        console.error("[STREAMS_DIRECT_CHAT_FALLBACK_ERROR]", error);
-
-        setMessages((current) =>
-          current.map((item) =>
-            item.id === directAssistantId
-              ? {
-                  ...item,
-                  content: error instanceof Error ? error.message : "Chat request failed.",
-                  isStreaming: false,
-                  isStatusOnly: false,
-                  status: "error",
-                }
-              : item
-          )
-        );
-
-        setActivity(createActivity("error", "chat", "Chat failed"));
-        setIsStreaming(false);
-        return;
-      }
-    }
-
-
     if (!mounted) return;
     const trimmed = String(message || "").trim();
-    if (!trimmed) {
-      console.warn("[STREAMS_RETURN_EMPTY]");
-      return;
-    }
+    if (!trimmed) return;
 
     abortRef.current?.abort?.();
     abortRef.current = new AbortController();
@@ -736,33 +540,20 @@ export function useStreamsChatRuntime() {
         .replace(/^\s*(search the web for|search the web|web search for|web search|search online for|search online|look up|find latest|latest)\s*/i, "")
         .trim() || trimmed;
 
-      const searchingStatus = resolveStreamsStatus("webSearch", "requested");
-      activityActions.push({
-        domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
-        phase: STREAMS_ACTIVITY_PHASES.RUNNING,
-        severity: STREAMS_ACTIVITY_SEVERITY.INFO,
-        tool: "web_search",
-        messageId: assistantId,
-        statusText: searchingStatus,
-        detail: query,
-        source: "useStreamsChatRuntime",
-      });
-      setActivity(createActivity("thinking", "tool", searchingStatus));
-      setMessages((current) => updateStatusMessage(current, assistantId, {
-        content: searchingStatus,
+      setActivity(createActivity("thinking", "tool", "Searching the web…"));
+      setMessages((current) => [...current, {
+        id: assistantId,
+        role: "assistant",
+        content: "Searching the web…",
         isStreaming: true,
-        isStatusOnly: false,
         status: "thinking",
-        createdAt: current.find((item) => item.id === assistantId)?.createdAt || new Date().toISOString(),
-      }));
+        createdAt: new Date().toISOString()
+      }]);
 
       try {
         const searchResponse = await fetch("/api/streams-ai/search", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
 
@@ -773,11 +564,11 @@ export function useStreamsChatRuntime() {
         }
 
         const sourceLines = Array.isArray(searchData.annotations) && searchData.annotations.length
-          ? "\\n\\nSources:\\n" + searchData.annotations.map((annotation, index) => {
+          ? "\n\nSources:\n" + searchData.annotations.map((annotation, index) => {
               const title = annotation.title || annotation.url || `Source ${index + 1}`;
               const url = annotation.url ? ` — ${annotation.url}` : "";
               return `${index + 1}. ${title}${url}`;
-            }).join("\\n")
+            }).join("\n")
           : "";
 
         setMessages((current) => current.map((item) => item.id === assistantId ? {
@@ -788,35 +579,15 @@ export function useStreamsChatRuntime() {
           sources: searchData.annotations || [],
         } : item));
 
-        activityActions.complete({
-          domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
-          phase: STREAMS_ACTIVITY_PHASES.COMPLETE,
-          severity: STREAMS_ACTIVITY_SEVERITY.SUCCESS,
-          tool: "web_search",
-          messageId: assistantId,
-          statusText: resolveStreamsStatus("webSearch", "complete"),
-          detail: query,
-          source: "useStreamsChatRuntime",
-        });
-        setActivity(createActivity("complete", "tool", resolveStreamsStatus("webSearch", "complete")));
+        setActivity(createActivity("complete", "tool", "Search complete"));
       } catch (error) {
-        const errorText = error instanceof Error ? error.message : "Unknown error";
-        setMessages((current) => failStatusMessage(
-          current,
-          assistantId,
-          resolveStreamsStatus("webSearch", "failed", errorText)
-        ));
-        activityActions.fail({
-          domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
-          phase: STREAMS_ACTIVITY_PHASES.FAILED,
-          severity: STREAMS_ACTIVITY_SEVERITY.ERROR,
-          tool: "web_search",
-          messageId: assistantId,
-          statusText: resolveStreamsStatus("webSearch", "failed", errorText),
-          detail: query,
-          source: "useStreamsChatRuntime",
-        });
-        setActivity(createActivity("error", "tool", resolveStreamsStatus("webSearch", "failed", errorText)));
+        setMessages((current) => current.map((item) => item.id === assistantId ? {
+          ...item,
+          content: `Web search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          isStreaming: false,
+          status: "error",
+        } : item));
+        setActivity(createActivity("error", "tool", "Search failed"));
       }
 
       return;
@@ -904,10 +675,10 @@ export function useStreamsChatRuntime() {
       let buffer = "";
       const parseSSEChunk = (chunkBuffer) => {
         const events = [];
-        const parts = chunkBuffer.split("\\n\\n");
+        const parts = chunkBuffer.split("\n\n");
         const rest = parts.pop() || "";
         for (const part of parts) {
-          const lines = part.split("\\n");
+          const lines = part.split("\n");
           let eventName = "message";
           const dataLines = [];
           for (const rawLine of lines) {
@@ -915,7 +686,7 @@ export function useStreamsChatRuntime() {
             if (line.startsWith("event:")) eventName = line.slice(6).trim();
             if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
           }
-          const dataRaw = dataLines.join("\\n");
+          const dataRaw = dataLines.join("\n");
           if (!dataRaw) continue;
           try { events.push({ eventName, payload: JSON.parse(dataRaw) }); } catch { events.push({ eventName, payload: { message: dataRaw } }); }
         }
@@ -1067,7 +838,7 @@ export function useStreamsChatRuntime() {
               })();
             } else if (name === "web_search") {
               const query = String(args?.query || trimmed || "").trim();
-              setActivity(createActivity("thinking", "tool", resolveStreamsStatus("webSearch", "requested")));
+              setActivity(createActivity("thinking", "tool", "Searching the web…"));
 
               try {
                 const searchResponse = await fetch("/api/streams-ai/search", {
@@ -1090,7 +861,7 @@ export function useStreamsChatRuntime() {
                   sources: searchData.annotations || [],
                 } : item));
 
-                setActivity(createActivity("complete", "tool", resolveStreamsStatus("webSearch", "complete")));
+                setActivity(createActivity("complete", "tool", "Search complete"));
                 setIsStreaming(false);
               } catch (error) {
                 setMessages((current) => current.map(item => item.id === assistantId ? {
@@ -1099,7 +870,7 @@ export function useStreamsChatRuntime() {
                   isStreaming: false,
                   status: "error",
                 } : item));
-                setActivity(createActivity("error", "tool", resolveStreamsStatus("webSearch", "failed", error instanceof Error ? error.message : "Unknown error")));
+                setActivity(createActivity("error", "tool", "Search failed"));
                 setIsStreaming(false);
               }
             }
@@ -1132,8 +903,6 @@ export function useStreamsChatRuntime() {
     sendMessage,
     newChat,
     sessionId,
-    currentSessionId: sessionId,
-    activeSessionId: sessionId,
     sessions,
     imageGallery,
     videoGallery,

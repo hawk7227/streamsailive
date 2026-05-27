@@ -44,11 +44,6 @@ import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
 import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
-import StreamsActivityToast from "./activity/StreamsActivityToast";
-import StreamsActivityTimeline from "./activity/StreamsActivityTimeline";
-import { emitChatActionActivity, emitGroupChatActivity } from "./runtime/streamsGlobalActivityBridge";
-import { runStreamsSessionAction } from "./runtime/streamsSessionActionsClient";
-import { STREAMS_ACTIVITY_PHASES } from "./runtime/streamsActivityEvents";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
 const today = ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"];
@@ -286,7 +281,7 @@ function CollapsibleThinking({ reasoning }) {
 function getInitials(nameOrEmail) {
   const value = String(nameOrEmail || "Streams User").trim();
   const parts = value.includes("@") ? [value[0]] : value.split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("\n") || "SU";
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "SU";
 }
 
 function Avatar({ label }) {
@@ -294,26 +289,8 @@ function Avatar({ label }) {
 }
 
 function MarkdownMessage({ content }) {
-  const blocks = String(content || "").split(/\\n{2,}/g);
-
-  return (
-    <div className="markdownMessage">
-      {blocks.map((block, index) =>
-        block.startsWith("- ") ? (
-          <ul key={index}>
-            {block
-              .split("\\n")
-              .filter(Boolean)
-              .map((line, i) => (
-                <li key={i}>{line.replace(/^-\\s*/, "")}</li>
-              ))}
-          </ul>
-        ) : (
-          <p key={index}>{block}</p>
-        )
-      )}
-    </div>
-  );
+  const blocks = String(content || "").split(/\n{2,}/g);
+  return <div className="markdownMessage">{blocks.map((block, index) => block.startsWith("- ") ? <ul key={index}>{block.split("\n").filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, "")}</li>)}</ul> : <p key={index}>{block}</p>)}</div>;
 }
 
 function AccountMenu({ compact = false, onClose }) {
@@ -491,43 +468,11 @@ function useCloseOnOutside(open, close) {
 }
 
 function blockedChatAction(actionName) {
-  emitChatActionActivity(
-    STREAMS_ACTIVITY_PHASES.BLOCKED,
-    `Blocked: real ${actionName} backend/action is not wired yet.`,
-    { tool: actionName }
-  );
   window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
 }
 
 
-async function runRealSessionAction(chatRuntime, actionName, action) {
-  const sessionId = chatRuntime?.sessionId || chatRuntime?.currentSessionId || chatRuntime?.activeSessionId;
-
-  try {
-    await runStreamsSessionAction({ sessionId, action });
-    chatRuntime?.refreshSidebarData?.();
-    if (action === "delete") {
-      chatRuntime?.newChat?.();
-    }
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : `Failed to ${actionName}.`);
-  }
-}
-
 function blockedMessageAction(actionName) {
-  if (String(actionName).includes("group")) {
-    emitGroupChatActivity(
-      STREAMS_ACTIVITY_PHASES.BLOCKED,
-      `Blocked: real ${actionName} backend/action is not wired yet.`,
-      { tool: actionName }
-    );
-  } else {
-    emitChatActionActivity(
-      STREAMS_ACTIVITY_PHASES.BLOCKED,
-      `Blocked: real ${actionName} backend/action is not wired yet.`,
-      { tool: actionName }
-    );
-  }
   window.alert(`Blocked: real ${actionName} backend/action is not wired yet.`);
 }
 
@@ -644,7 +589,6 @@ function GlobalOverflowMenu({ onClose, openCode, openPreview, onCopy, onViewFile
 function WorkspaceTopActions({ openCode, openPreview }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
 
   const closeAll = () => {
     setMenuOpen(false);
@@ -792,37 +736,12 @@ function Composer({ chatRuntime }) {
     <div className="startComposerWrap">
       <StreamsComposer
         onSubmit={(payload) => {
-          console.info("[STREAMS_CHAT_SUBMIT]", {
-            hasRuntime: Boolean(chatRuntime),
-            hasSendMessage: Boolean(chatRuntime?.sendMessage),
-            messageLength: payload?.message?.length || 0,
-            composerMode: payload?.composerMode,
-            mode: payload?.mode,
-            webSearchEnabled: payload?.webSearchEnabled,
+          chatRuntime?.sendMessage({
+            message: payload.message,
+            composerMode: payload.composerMode,
+            mode: payload.mode,
+            webSearchEnabled: payload.webSearchEnabled,
           });
-
-          if (!chatRuntime?.sendMessage) {
-            window.alert("Chat runtime is not ready. sendMessage is missing.");
-            return;
-          }
-
-          try {
-            const rawMode = String(payload?.mode || "").trim();
-            const normalizedMode = ["chat", "image", "video", "image_to_video", "image_to_image", "url", "build"].includes(rawMode)
-              ? rawMode
-              : "chat";
-
-            chatRuntime.sendMessage({
-              message: payload.message,
-              composerMode: payload.composerMode || "chat",
-              mode: normalizedMode,
-              provider: payload.provider || "Auto",
-              webSearchEnabled: Boolean(payload.webSearchEnabled),
-            });
-          } catch (error) {
-            console.error("[STREAMS_CHAT_SUBMIT_ERROR]", error);
-            window.alert(error instanceof Error ? error.message : "Chat submit failed before the request was sent.");
-          }
         }}
         onFilesSelected={(files) => {
           chatRuntime?.uploadFiles?.(files);
@@ -967,7 +886,6 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
 function CodeArtifactPane({ openPreview, openStart, artifactText, setArtifactText }) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
   const wrapRef = useCloseOnOutside(workspaceMenuOpen || shareOpen, () => {
     setWorkspaceMenuOpen(false);
     setShareOpen(false);
@@ -1412,5 +1330,5 @@ const css = [
     ".startAssistantBody{font-size:14px!important;}" +
     ".workspaceActions>button>span:not([aria-hidden]){display:none!important;}" +
   "}"
-].join("\n");
+].join("");
 
