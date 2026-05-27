@@ -98,32 +98,6 @@ function openLatestAssistantCodeInPreview(messages = []) {
 }
 
 
-
-function shouldAutoOpenPreviewForAssistantMessage(message) {
-  if (!message || message.role !== "assistant") return false;
-  if (message.isStreaming) return false;
-  if (message.isStatusOnly) return false;
-  if (message.status && message.status !== "complete") return false;
-
-  const content = String(message.content || message.text || "");
-
-  if (!content.trim()) return false;
-
-  const source = extractPreviewSource(content);
-  if (!source) return false;
-
-  // Auto-open only for visual/source artifacts.
-  if (/<!doctype html|<html[\s>]|<body[\s>]|<main[\s>]|<section[\s>]|<div[\s>]|<svg[\s>]/i.test(source)) {
-    return true;
-  }
-
-  if (/export\s+default|className=|function\s+[A-Z]|const\s+[A-Z][A-Za-z0-9_]*\s*=/.test(source)) {
-    return true;
-  }
-
-  return false;
-}
-
 function ChatInlineImage({ src, alt }) {
   const [loading, setLoading] = useState(true);
 
@@ -1235,7 +1209,6 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
   const chatRuntime = propChatRuntime || internalChatRuntime;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [lastAutoPreviewMessageId, setLastAutoPreviewMessageId] = useState("");
 
   useEffect(() => {
     const handler = (event) => {
@@ -1249,30 +1222,6 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
     return () => window.removeEventListener(STREAMS_SPLIT_PREVIEW_EVENT, handler);
   }, []);
   const [mode, setMode] = useState("start");
-
-  useEffect(() => {
-    const messages = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
-
-    if (!messages.length) return;
-
-    const latestAssistant = [...messages]
-      .reverse()
-      .find((message) => shouldAutoOpenPreviewForAssistantMessage(message));
-
-    if (!latestAssistant) return;
-    if (latestAssistant.id === lastAutoPreviewMessageId) return;
-
-    const opened = openAssistantMessageInPreview(
-      latestAssistant.content || latestAssistant.text || "",
-      "Assistant Preview"
-    );
-
-    if (opened) {
-      setPreviewOpen(true);
-      setLastAutoPreviewMessageId(latestAssistant.id);
-    }
-  }, [chatRuntime?.messages, lastAutoPreviewMessageId]);
-
   const [lastAction, setLastAction] = useState("Ready");
   const [artifactText, setArtifactText] = useState(DEFAULT_ARTIFACT_TEXT);
   const actionLabel = chatRuntime.statusLabel || lastAction;
