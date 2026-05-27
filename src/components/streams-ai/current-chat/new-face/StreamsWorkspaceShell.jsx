@@ -43,7 +43,7 @@ import ChatMarkdownMessage from "./markdown/ChatMarkdownMessage";
 import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
 import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
-import StreamsComposer from "./composer/StreamsComposer";
+import StreamsComposer from "./composer/StreamsComposer";\nimport StreamsActivityToast from "./activity/StreamsActivityToast";\nimport StreamsActivityTimeline from "./activity/StreamsActivityTimeline";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
 const today = ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"];
@@ -588,7 +588,7 @@ function GlobalOverflowMenu({ onClose, openCode, openPreview, onCopy, onViewFile
 
 function WorkspaceTopActions({ openCode, openPreview }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);\n  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
 
   const closeAll = () => {
     setMenuOpen(false);
@@ -885,7 +885,7 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
 
 function CodeArtifactPane({ openPreview, openStart, artifactText, setArtifactText }) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);\n  const [activityTimelineOpen, setActivityTimelineOpen] = useState(false);
   const wrapRef = useCloseOnOutside(workspaceMenuOpen || shareOpen, () => {
     setWorkspaceMenuOpen(false);
     setShareOpen(false);

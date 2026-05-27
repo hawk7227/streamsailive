@@ -1,13 +1,13 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";\nimport { useStreamsLiveActivity } from "../activity/useStreamsLiveActivity";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateStreamsImage, isImageIntent } from "../../runtime/streamsImageClient";
 import { generateStreamsVideo, isVideoIntent } from "../../runtime/streamsVideoClient";
 import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/streamsLinkClient";
 import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
-import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
+import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";\nimport { STREAMS_ACTIVITY_DOMAINS, STREAMS_ACTIVITY_PHASES, STREAMS_ACTIVITY_SEVERITY } from "../runtime/streamsActivityEvents";
 import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
 import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
@@ -545,6 +545,16 @@ export function useStreamsChatRuntime() {
         .trim() || trimmed;
 
       const searchingStatus = resolveStreamsStatus("webSearch", "requested");
+      activityActions.push({
+        domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
+        phase: STREAMS_ACTIVITY_PHASES.RUNNING,
+        severity: STREAMS_ACTIVITY_SEVERITY.INFO,
+        tool: "web_search",
+        messageId: assistantId,
+        statusText: searchingStatus,
+        detail: query,
+        source: "useStreamsChatRuntime",
+      });
       setActivity(createActivity("thinking", "tool", searchingStatus));
       setMessages((current) => updateStatusMessage(current, assistantId, {
         content: searchingStatus,
@@ -586,6 +596,16 @@ export function useStreamsChatRuntime() {
           sources: searchData.annotations || [],
         } : item));
 
+        activityActions.complete({
+          domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
+          phase: STREAMS_ACTIVITY_PHASES.COMPLETE,
+          severity: STREAMS_ACTIVITY_SEVERITY.SUCCESS,
+          tool: "web_search",
+          messageId: assistantId,
+          statusText: resolveStreamsStatus("webSearch", "complete"),
+          detail: query,
+          source: "useStreamsChatRuntime",
+        });
         setActivity(createActivity("complete", "tool", resolveStreamsStatus("webSearch", "complete")));
       } catch (error) {
         const errorText = error instanceof Error ? error.message : "Unknown error";
@@ -594,6 +614,16 @@ export function useStreamsChatRuntime() {
           assistantId,
           resolveStreamsStatus("webSearch", "failed", errorText)
         ));
+        activityActions.fail({
+          domain: STREAMS_ACTIVITY_DOMAINS.WEB_SEARCH,
+          phase: STREAMS_ACTIVITY_PHASES.FAILED,
+          severity: STREAMS_ACTIVITY_SEVERITY.ERROR,
+          tool: "web_search",
+          messageId: assistantId,
+          statusText: resolveStreamsStatus("webSearch", "failed", errorText),
+          detail: query,
+          source: "useStreamsChatRuntime",
+        });
         setActivity(createActivity("error", "tool", resolveStreamsStatus("webSearch", "failed", errorText)));
       }
 
