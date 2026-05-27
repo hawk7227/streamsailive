@@ -792,12 +792,31 @@ function Composer({ chatRuntime }) {
     <div className="startComposerWrap">
       <StreamsComposer
         onSubmit={(payload) => {
-          chatRuntime?.sendMessage({
-            message: payload.message,
-            composerMode: payload.composerMode,
-            mode: payload.mode,
-            webSearchEnabled: payload.webSearchEnabled,
+          console.info("[STREAMS_CHAT_SUBMIT]", {
+            hasRuntime: Boolean(chatRuntime),
+            hasSendMessage: Boolean(chatRuntime?.sendMessage),
+            messageLength: payload?.message?.length || 0,
+            composerMode: payload?.composerMode,
+            mode: payload?.mode,
+            webSearchEnabled: payload?.webSearchEnabled,
           });
+
+          if (!chatRuntime?.sendMessage) {
+            window.alert("Chat runtime is not ready. sendMessage is missing.");
+            return;
+          }
+
+          try {
+            chatRuntime.sendMessage({
+              message: payload.message,
+              composerMode: payload.composerMode,
+              mode: payload.mode,
+              webSearchEnabled: payload.webSearchEnabled,
+            });
+          } catch (error) {
+            console.error("[STREAMS_CHAT_SUBMIT_ERROR]", error);
+            window.alert(error instanceof Error ? error.message : "Chat submit failed before the request was sent.");
+          }
         }}
         onFilesSelected={(files) => {
           chatRuntime?.uploadFiles?.(files);
