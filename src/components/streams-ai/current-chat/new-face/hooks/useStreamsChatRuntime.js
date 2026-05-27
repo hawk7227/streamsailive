@@ -543,14 +543,14 @@ export function useStreamsChatRuntime() {
         .trim() || trimmed;
 
       setActivity(createActivity("thinking", "tool", "Searching the web…"));
-      setMessages((current) => [...current, {
-        id: assistantId,
-        role: "assistant",
+      setMessages((current) => current.map((item) => item.id === assistantId ? {
+        ...item,
         content: "Searching the web…",
         isStreaming: true,
+        isStatusOnly: false,
         status: "thinking",
-        createdAt: new Date().toISOString()
-      }]);
+        createdAt: item.createdAt || new Date().toISOString()
+      } : item));
 
       try {
         const searchResponse = await fetch("/api/streams-ai/search", {
