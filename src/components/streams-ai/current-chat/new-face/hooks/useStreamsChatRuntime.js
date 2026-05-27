@@ -127,14 +127,11 @@ function buildUploadAssistantMessage(assets = []) {
       uploadStatusLine(asset),
       asset.extractionError ? `Extractor note: ${asset.extractionError}` : "",
       asset.videoFrameAnalysisError ? `Video analyzer note: ${asset.videoFrameAnalysisError}` : "",
-    ].filter(Boolean).join("
-")),
+    ].filter(Boolean).join("\\n")),
     "",
     "Ready for questions, analysis, summaries, debugging, transcription, or media routing.",
   ];
-  return lines.join("
-
-");
+  return lines.join("\\n\\n");
 }
 
 function buildLinkAssistantMessage(asset, summary = "") {
@@ -145,8 +142,7 @@ function buildLinkAssistantMessage(asset, summary = "") {
     asset.videoId ? `Video ID: ${asset.videoId}` : "",
     asset.requiresCapture ? "This link may require user-approved browser/extension capture for logged-in or private content." : "",
     asset.nextSteps?.length ? `Next: ${asset.nextSteps[0]}` : "Ready for analysis.",
-  ].filter(Boolean).join("
-");
+  ].filter(Boolean).join("\\n");
 }
 
 function selectLatestUploadedImage() {
@@ -587,15 +583,11 @@ export function useStreamsChatRuntime() {
         }
 
         const sourceLines = Array.isArray(searchData.annotations) && searchData.annotations.length
-          ? "
-
-Sources:
-" + searchData.annotations.map((annotation, index) => {
+          ? "\\n\\nSources:\\n" + searchData.annotations.map((annotation, index) => {
               const title = annotation.title || annotation.url || `Source ${index + 1}`;
               const url = annotation.url ? ` — ${annotation.url}` : "";
               return `${index + 1}. ${title}${url}`;
-            }).join("
-")
+            }).join("\\n")
           : "";
 
         setMessages((current) => current.map((item) => item.id === assistantId ? {
@@ -722,13 +714,10 @@ Sources:
       let buffer = "";
       const parseSSEChunk = (chunkBuffer) => {
         const events = [];
-        const parts = chunkBuffer.split("
-
-");
+        const parts = chunkBuffer.split("\\n\\n");
         const rest = parts.pop() || "";
         for (const part of parts) {
-          const lines = part.split("
-");
+          const lines = part.split("\\n");
           let eventName = "message";
           const dataLines = [];
           for (const rawLine of lines) {
@@ -736,8 +725,7 @@ Sources:
             if (line.startsWith("event:")) eventName = line.slice(6).trim();
             if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
           }
-          const dataRaw = dataLines.join("
-");
+          const dataRaw = dataLines.join("\\n");
           if (!dataRaw) continue;
           try { events.push({ eventName, payload: JSON.parse(dataRaw) }); } catch { events.push({ eventName, payload: { message: dataRaw } }); }
         }

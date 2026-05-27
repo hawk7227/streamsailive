@@ -283,7 +283,7 @@ function CollapsibleThinking({ reasoning }) {
 function getInitials(nameOrEmail) {
   const value = String(nameOrEmail || "Streams User").trim();
   const parts = value.includes("@") ? [value[0]] : value.split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "SU";
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("\n") || "SU";
 }
 
 function Avatar({ label }) {
@@ -291,10 +291,26 @@ function Avatar({ label }) {
 }
 
 function MarkdownMessage({ content }) {
-  const blocks = String(content || "").split(/
-{2,}/g);
-  return <div className="markdownMessage">{blocks.map((block, index) => block.startsWith("- ") ? <ul key={index}>{block.split("
-").filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, "")}</li>)}</ul> : <p key={index}>{block}</p>)}</div>;
+  const blocks = String(content || "").split(/\\n{2,}/g);
+
+  return (
+    <div className="markdownMessage">
+      {blocks.map((block, index) =>
+        block.startsWith("- ") ? (
+          <ul key={index}>
+            {block
+              .split("\\n")
+              .filter(Boolean)
+              .map((line, i) => (
+                <li key={i}>{line.replace(/^-\\s*/, "")}</li>
+              ))}
+          </ul>
+        ) : (
+          <p key={index}>{block}</p>
+        )
+      )}
+    </div>
+  );
 }
 
 function AccountMenu({ compact = false, onClose }) {
@@ -505,8 +521,7 @@ function AssistantMessageActions({ message, chatRuntime }) {
       blockedMessageAction("view-sources: no real sources are attached to this message");
       return;
     }
-    window.alert(sources.map((source, index) => `${index + 1}. ${source.title || source.url || source.id || "Source"}`).join("
-"));
+    window.alert(sources.map((source, index) => `${index + 1}. ${source.title || source.url || source.id || "Source"}`).join("\n"));
   };
 
   const regenerate = () => {
@@ -1337,5 +1352,5 @@ const css = [
     ".startAssistantBody{font-size:14px!important;}" +
     ".workspaceActions>button>span:not([aria-hidden]){display:none!important;}" +
   "}"
-].join("");
+].join("\n");
 
