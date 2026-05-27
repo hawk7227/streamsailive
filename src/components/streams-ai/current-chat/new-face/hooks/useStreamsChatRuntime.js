@@ -8,8 +8,8 @@ import { ingestStreamsLink, isLinkIntent, extractFirstUrl } from "../../runtime/
 import { createActivity } from "../../runtime/streamsActivityManager";
 import { normalizeStreamsError, formatErrorForChat } from "../../runtime/streamsErrorManager";
 import { detectPreCallRoute } from "../../runtime/streamsPreCallRouter";
-import { resolveStreamsStatus } from "../../runtime/streamsStatusCatalog";
-import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../../runtime/streamsStatusBehavior";
+import { resolveStreamsStatus } from "../runtime/streamsStatusCatalog";
+import { updateStatusMessage, completeStatusMessage, failStatusMessage } from "../runtime/streamsStatusBehavior";
 import {
   addMediaItem,
   buildSessionTitle,
