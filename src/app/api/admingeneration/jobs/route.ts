@@ -120,7 +120,7 @@ async function persistJobStart(input: CreateGenerationRequest, provider: Provide
     .from("jobs")
     .insert({
       project_id: input.projectId || null,
-      type: input.kind,
+      type: "generate",
       status: "submitted",
       provider,
       prompt: input.prompt,
