@@ -27,24 +27,17 @@ check_grep() {
   pass "$label"
 }
 
-check_not_grep() {
-  local pattern="$1"
-  local file="$2"
-  local label="$3"
-  if grep -q "$pattern" "$file"; then
-    fail "$label forbidden pattern found in $file: $pattern"
-  fi
-  pass "$label"
-}
-
 APP_FILE="components/streams/opus-frame/OpusLockedFrame.jsx"
 CSS_FILE="components/streams/opus-frame/opus-locked-frame.css"
+GUARD_FILE="components/streams/opus-frame/AdminGenerationRuntimeGuard.jsx"
+PAGE_FILE="src/app/admingeneration/page.jsx"
 
 echo ""
 echo "1. Source files"
 check_file "$APP_FILE"
 check_file "$CSS_FILE"
-check_file "src/app/admingeneration/page.jsx"
+check_file "$GUARD_FILE"
+check_file "$PAGE_FILE"
 check_file "src/app/api/admingeneration/jobs/route.ts"
 check_file "src/app/api/admingeneration/helper/route.ts"
 check_file "src/app/api/admingeneration/intake/route.ts"
@@ -58,6 +51,11 @@ fi
 
 echo ""
 echo "2. Frontend feature wiring"
+check_grep "AdminGenerationRuntimeGuard" "$PAGE_FILE" "page renders secure runtime guard"
+check_grep "OpusLockedFrame" "$GUARD_FILE" "guard renders Opus frame"
+check_grep "/api/admingeneration/jobs" "$GUARD_FILE" "guard intercepts protected jobs route"
+check_grep "/api/admingeneration/submit" "$GUARD_FILE" "guard rewrites generation to secure submit wrapper"
+
 check_grep "Advanced Prompt Builder" "$APP_FILE" "right-side advanced prompt builder"
 check_grep "right-advanced-builder" "$APP_FILE" "right advanced builder container"
 check_grep "Main Prompt" "$APP_FILE" "main prompt field"
@@ -98,8 +96,6 @@ check_grep "activeStudio.guide" "$APP_FILE" "per-card user guide wiring"
 check_grep "setHelperOpen(false)" "$APP_FILE" "helper close wiring"
 check_grep "stopPropagation" "$APP_FILE" "drawer click-out protection"
 check_grep "Escape" "$APP_FILE" "Escape close wiring"
-check_grep "/api/admingeneration/submit" "$APP_FILE" "frontend generate uses secure submit wrapper"
-check_not_grep "fetch(\"/api/admingeneration/jobs\"" "$APP_FILE" "frontend must not call protected jobs route directly"
 
 echo ""
 echo "3. CSS/layout wiring"
