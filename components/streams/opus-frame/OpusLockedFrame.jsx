@@ -873,78 +873,125 @@ export default function OpusLockedFrame() {
               </section>
             </div>
 
-            {helperOpen ? (
-              <aside className="ai-helper-console">
-                <div className="helper-header">
+            <aside className="right-advanced-builder">
+              <div className="right-builder-header">
+                <div>
+                  <h3>✨ Advanced Prompt Builder</h3>
+                  <p>Fine-tune every aspect of your production before generation.</p>
+                </div>
+                <div className="right-builder-actions">
+                  <button onClick={proofPrompt} type="button">Proof</button>
+                  <button onClick={applyFieldsToPrompt} type="button">Apply</button>
+                </div>
+              </div>
+
+              <div className="right-builder-scroll">
+                <section className="right-field-card wide">
+                  <div className="right-field-title">1. Main Prompt</div>
+                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+                  <span className="count">{prompt.length} / 2000</span>
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">2. Scene Description</div>
+                  <textarea value={fields.scene} onChange={(event) => setField("scene", event.target.value)} />
+                </section>
+
+                <div className="right-field-row">
+                  <section className="right-field-card">
+                    <div className="right-field-title">3. Subject</div>
+                    <textarea value={fields.subject} onChange={(event) => setField("subject", event.target.value)} />
+                  </section>
+
+                  <section className="right-field-card">
+                    <div className="right-field-title">4. Environment</div>
+                    <textarea value={fields.environment} onChange={(event) => setField("environment", event.target.value)} />
+                  </section>
+                </div>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">5. Emotional Intent</div>
+                  <textarea value={fields.emotionalIntent} onChange={(event) => setField("emotionalIntent", event.target.value)} />
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">6. Camera</div>
+                  <div className="right-mini-grid">
+                    <label><span>Shot Type</span><input value={fields.shotType} onChange={(event) => setField("shotType", event.target.value)} /></label>
+                    <label><span>Camera Position</span><input value={fields.cameraPosition} onChange={(event) => setField("cameraPosition", event.target.value)} /></label>
+                    <label><span>Camera Movement</span><input value={fields.cameraMovement} onChange={(event) => setField("cameraMovement", event.target.value)} /></label>
+                    <label><span>Lens</span><input value={fields.lens} onChange={(event) => setField("lens", event.target.value)} /></label>
+                    <label><span>Depth of Field</span><input value={fields.depthOfField} onChange={(event) => setField("depthOfField", event.target.value)} /></label>
+                    <label><span>Composition</span><input value={fields.composition} onChange={(event) => setField("composition", event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">7. Lighting</div>
+                  <div className="right-mini-grid">
+                    <label><span>Primary</span><input value={fields.primaryLighting} onChange={(event) => setField("primaryLighting", event.target.value)} /></label>
+                    <label><span>Accent</span><input value={fields.accentLighting} onChange={(event) => setField("accentLighting", event.target.value)} /></label>
+                    <label><span>Rim Light</span><input value={fields.rimLight} onChange={(event) => setField("rimLight", event.target.value)} /></label>
+                    <label><span>Atmosphere</span><input value={fields.atmosphere} onChange={(event) => setField("atmosphere", event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">8. Motion</div>
+                  <div className="right-mini-grid">
+                    <label><span>Character</span><input value={fields.characterMotion} onChange={(event) => setField("characterMotion", event.target.value)} /></label>
+                    <label><span>Environment</span><input value={fields.environmentMotion} onChange={(event) => setField("environmentMotion", event.target.value)} /></label>
+                    <label><span>Motion Quality</span><input value={fields.motionQuality} onChange={(event) => setField("motionQuality", event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">9. Style</div>
+                  <div className="right-mini-grid">
+                    <label><span>Visual Style</span><input value={fields.visualStyle} onChange={(event) => setField("visualStyle", event.target.value)} /></label>
+                    <label><span>Production Design</span><input value={fields.productionDesign} onChange={(event) => setField("productionDesign", event.target.value)} /></label>
+                    <label><span>Human Realism</span><input value={fields.humanRealism} onChange={(event) => setField("humanRealism", event.target.value)} /></label>
+                    <label><span>Style Preset</span><input value={styleName} onChange={(event) => setStyleName(event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-field-card wide danger">
+                  <div className="right-field-title">10. Negative Prompt / Restrictions</div>
+                  <textarea value={fields.negativePrompt} onChange={(event) => setField("negativePrompt", event.target.value)} />
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">11. Audio / Voice</div>
+                  <div className="right-mini-grid">
+                    <label><span>Voice Script</span><input value={fields.voiceScript} onChange={(event) => setField("voiceScript", event.target.value)} /></label>
+                    <label><span>Voice Tone</span><input value={fields.voiceTone} onChange={(event) => setField("voiceTone", event.target.value)} /></label>
+                    <label><span>Captions</span><input value={fields.captions} onChange={(event) => setField("captions", event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-field-card wide">
+                  <div className="right-field-title">12. Output Settings</div>
+                  <div className="right-mini-grid">
+                    <label><span>Provider</span><input value={provider} onChange={(event) => setProvider(event.target.value)} /></label>
+                    <label><span>Duration</span><input value={duration} onChange={(event) => setDuration(event.target.value)} /></label>
+                    <label><span>Aspect Ratio</span><input value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)} /></label>
+                    <label><span>Quality Goal</span><input value={fields.qualityGoal} onChange={(event) => setField("qualityGoal", event.target.value)} /></label>
+                    <label><span>Project ID</span><input value={projectId} onChange={(event) => setProjectId(event.target.value)} /></label>
+                    <label><span>Seed</span><input value={fields.seed} onChange={(event) => setField("seed", event.target.value)} /></label>
+                  </div>
+                </section>
+
+                <section className="right-workflow-card">
                   <div>
-                    <h3>AI Helper / Analyzer</h3>
-                    <p>Real helper route, voice input, speak-back, URL/file analysis, prompt proofing, and guides.</p>
+                    <strong>Workflow Overview</strong>
+                    <span>1 Build Prompt → 2 Proof Settings → 3 Generate → 4 Review & Refine</span>
                   </div>
-                  <button aria-label="Close helper" onClick={() => setHelperOpen(false)} type="button">×</button>
-                </div>
-
-                <div className="helper-guide-strip">
-                  <button onClick={proofPrompt} type="button">Proof Prompt</button>
-                  <button onClick={openCameraGuide} type="button">Camera + Mic Guide</button>
-                  <button onClick={openActiveStudioGuide} type="button">Card Guide</button>
-                  <button onClick={webResearch} type="button">Web Research</button>
-                </div>
-
-                <div className="helper-url-row">
-                  <input value={helperUrl} onChange={(event) => setHelperUrl(event.target.value)} placeholder="Paste YouTube / website / reference URL" />
-                  <button disabled={helperBusy} onClick={analyzeUrl} type="button">Analyze</button>
-                </div>
-
-                <div className="helper-search-row">
-                  <input value={helperSearch} onChange={(event) => setHelperSearch(event.target.value)} placeholder="Ask helper to research references, providers, styles, or production ideas" />
-                  <button disabled={helperBusy} onClick={webResearch} type="button">Search</button>
-                </div>
-
-                <label className="helper-drop-zone">
-                  <input multiple type="file" accept="video/*,image/*,audio/*,.pdf,.txt,.md,.doc,.docx" onChange={(event) => uploadFiles(event.target.files)} />
-                  <strong>Drop / upload references</strong>
-                  <span>Video, images, audio, scripts, PDFs, style assets</span>
-                </label>
-
-                <div className="helper-thread">
-                  {helperMessages.map((message, index) => (
-                    <div className={`helper-message ${message.role}`} key={`${message.role}-${index}`}>
-                      <strong>{message.role === "user" ? "You" : message.role === "system" ? "System" : "AI Helper"}</strong>
-                      <p>{message.text}</p>
-                    </div>
-                  ))}
-                  {helperBusy ? (
-                    <div className="helper-message system">
-                      <strong>System</strong>
-                      <p>Working...</p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="helper-composer">
-                  <textarea
-                    value={helperInput}
-                    onChange={(event) => setHelperInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        askHelper();
-                      }
-                    }}
-                    placeholder="Talk to the helper about your movie, prompt, upload, provider, output, or guide..."
-                  />
-                  <div className="helper-actions">
-                    <button className={recording ? "recording" : ""} onClick={recording ? stopVoice : startVoice} type="button">
-                      {recording ? "Stop" : "Mic"}
-                    </button>
-                    <button className={speakBack ? "active" : ""} onClick={() => setSpeakBack((value) => !value)} type="button">Speak</button>
-                    <button disabled={helperBusy} onClick={() => askHelper()} type="button">Send</button>
-                  </div>
-                </div>
-              </aside>
-            ) : (
-              <button className="open-helper-button" onClick={() => setHelperOpen(true)} type="button">Open AI Helper</button>
-            )}
+                  <button onClick={generateNow} disabled={isGenerating} type="button">
+                    {isGenerating ? "Submitting..." : "Generate Video ✨"}
+                  </button>
+                </section>
+              </div>
+            </aside>
           </section>
         </section>
 
