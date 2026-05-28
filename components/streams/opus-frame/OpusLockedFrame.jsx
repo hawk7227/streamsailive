@@ -420,6 +420,31 @@ export default function OpusLockedFrame() {
             ))}
           </nav>
 
+          <div className="left-studio-switcher">
+            <div className="left-studio-title">Studio Systems</div>
+            <div className="studio-tab-row">
+              {studios.map((studio) => (
+                <button
+                  className={`studio-tab-card ${studio.tone} ${studio.id === activeStudioId ? "active" : ""}`}
+                  key={studio.id}
+                  type="button"
+                  onClick={() => setActiveStudioId(studio.id)}
+                >
+                  <div className="studio-tab-icon">{studio.icon}</div>
+                  <strong>{studio.title}</strong>
+                  <span>{studio.desc}</span>
+                </button>
+              ))}
+            </div>
+
+
+            <div className="studio-reset-note">
+              ⓘ Each studio tab reloads the builder with settings and tools optimized for that workflow.
+            </div>
+
+
+          </div>
+
           <div className="opus-plan-card">
             <div className="muted">PLAN</div>
             <div className="plan-top">
@@ -455,25 +480,6 @@ export default function OpusLockedFrame() {
             <button className="mode" type="button">⚡ Smart Mode</button>
             <button className="mode active" type="button">⚡ Advanced Mode</button>
             <button className="mode" type="button">✨ AI Assistant</button>
-          </div>
-
-          <div className="studio-tab-row">
-            {studios.map((studio) => (
-              <button
-                className={`studio-tab-card ${studio.tone} ${studio.id === activeStudioId ? "active" : ""}`}
-                key={studio.id}
-                type="button"
-                onClick={() => setActiveStudioId(studio.id)}
-              >
-                <div className="studio-tab-icon">{studio.icon}</div>
-                <strong>{studio.title}</strong>
-                <span>{studio.desc}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="studio-reset-note">
-            ⓘ Each studio tab reloads the builder with settings and tools optimized for that workflow.
           </div>
 
           <section className="production-intake-panel">

@@ -882,3 +882,215 @@ button {
 .summary-card p { font-size: 9px; line-height: 1.35; }
 .summary-card button { height: 24px; margin-top: 5px; font-size: 9px; }
 .two-col div { margin: 4px 0; font-size: 9px; }
+
+/* Admin Generation layout correction: studio tabs left, preview-first center */
+.left-studio-switcher {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.left-studio-title {
+  margin: 0 0 8px 4px;
+  color: #9dadc4;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.left-studio-switcher .studio-tab-row {
+  height: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  margin-top: 0;
+}
+
+.left-studio-switcher .studio-tab-card {
+  height: 42px;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  grid-template-rows: 18px 14px;
+  column-gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.left-studio-switcher .studio-tab-icon {
+  grid-row: 1 / span 2;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  font-size: 13px;
+  border-radius: 7px;
+}
+
+.left-studio-switcher .studio-tab-card strong {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.left-studio-switcher .studio-tab-card span {
+  margin-top: 0;
+  font-size: 8px;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.left-studio-switcher .studio-reset-note {
+  height: auto;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 15, 27, 0.72);
+  color: #9dadc4;
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+/* center no longer carries studio cards */
+.generation-main > .studio-tab-row,
+.generation-main > .studio-reset-note {
+  display: none !important;
+}
+
+/* compact top/side production drawer */
+.production-intake-panel {
+  height: 76px;
+  grid-template-columns: 250px minmax(0, 1fr) 300px;
+  margin-top: 8px;
+  padding: 8px;
+}
+
+.intake-drop-zone {
+  padding: 9px 12px;
+}
+
+.intake-drop-zone strong {
+  font-size: 11px;
+}
+
+.intake-drop-zone span {
+  font-size: 9px;
+}
+
+.intake-url-box input {
+  height: 34px;
+}
+
+.intake-url-box button {
+  height: 34px;
+}
+
+.intake-results-box {
+  grid-template-rows: 15px 24px 20px;
+}
+
+.apply-analysis {
+  height: 20px;
+  font-size: 8px;
+}
+
+/* reduce header/controls, give preview the hero space */
+.opus-main {
+  padding-top: 14px;
+}
+
+.opus-top {
+  height: 46px;
+}
+
+.opus-top h1 {
+  font-size: 23px;
+}
+
+.opus-top p {
+  font-size: 12px;
+}
+
+.mode-row {
+  margin-top: 8px;
+}
+
+.builder-strip {
+  height: 60px;
+  margin-top: 7px;
+  padding: 8px;
+}
+
+.builder-field textarea,
+.builder-field input,
+.builder-field select {
+  height: 32px;
+}
+
+.primary-generate {
+  height: 34px;
+}
+
+/* bigger preview */
+.preview-layout {
+  height: 430px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.preview-column {
+  grid-template-rows: 270px 66px 56px 30px;
+  gap: 7px;
+}
+
+.video-shell {
+  min-height: 270px;
+}
+
+.builder-side {
+  grid-template-rows: 58px 84px 84px 92px 1fr;
+}
+
+.summary-card {
+  padding: 9px;
+}
+
+.summary-card h3 {
+  font-size: 10px;
+}
+
+.summary-card p {
+  font-size: 8.5px;
+}
+
+/* left rail vertical fit */
+.opus-left {
+  padding-top: 20px;
+}
+
+.opus-logo-row {
+  margin-bottom: 18px;
+}
+
+.opus-nav {
+  gap: 7px;
+}
+
+.opus-nav-item {
+  height: 34px;
+}
+
+.opus-nav-item.active {
+  height: 44px;
+}
+
+.opus-plan-card {
+  margin-top: 14px;
+  padding: 10px;
+}
+
+.opus-community {
+  bottom: 12px;
+}
