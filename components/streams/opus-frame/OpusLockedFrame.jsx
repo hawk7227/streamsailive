@@ -200,6 +200,12 @@ export default function OpusLockedFrame() {
   const [style, setStyle] = useState(activeStudio.style);
   const [activeTab, setActiveTab] = useState("Prompt");
   const [status, setStatus] = useState("Preview Ready");
+  const [intakeUrl, setIntakeUrl] = useState("");
+  const [intakeStatus, setIntakeStatus] = useState("Ready for production references");
+  const [intakeResult, setIntakeResult] = useState(null);
+  const [uploadedAssets, setUploadedAssets] = useState([]);
+  const [isIntaking, setIsIntaking] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     setPrompt(activeStudio.prompt);
@@ -218,6 +224,165 @@ export default function OpusLockedFrame() {
     }),
     [fit]
   );
+
+  function getReadableIntakeResult(data) {
+    if (!data) return "No analysis yet.";
+    if (typeof data === "string") return data;
+
+    const candidates = [
+      data.summary,
+      data.analysis?.summary,
+      data.result?.summary,
+      data.result?.analysis?.summary,
+      data.result?.transcript,
+      data.result?.title,
+      data.result?.description,
+      data.data?.summary,
+      data.title,
+      data.transcript,
+      data.text,
+      data.description,
+      data.error,
+      data.result?.error,
+    ].filter(Boolean);
+
+    if (candidates.length > 0) {
+      return String(candidates[0]).slice(0, 420);
+    }
+
+    try {
+      return JSON.stringify(data).slice(0, 420);
+    } catch {
+      return "Analysis returned, but could not be displayed.";
+    }
+  }
+
+  function applyIntakeToBuilder() {
+    const text = getReadableIntakeResult(intakeResult);
+    if (!text || text === "No analysis yet.") return;
+
+    setPrompt((current) =>
+      `${current}\n\nReference analysis:\n${text}`.slice(0, 2000),
+    );
+    setStatus("Reference Applied");
+  }
+
+  async function analyzeUrl() {
+    const url = intakeUrl.trim();
+
+    if (!url) {
+      setIntakeStatus("Paste a YouTube, website, or reference URL first.");
+      return;
+    }
+
+    setIsIntaking(true);
+    setIntakeStatus("Analyzing link through intake wrapper...");
+    setIntakeResult(null);
+
+    try {
+      const response = await fetch("/api/admingeneration/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "auto", url, source: "admingeneration" }),
+      });
+
+      const data = await response.json().catch(() => null);
+      setIntakeResult(data);
+      setIntakeStatus(response.ok ? "Link analyzed" : "Analyzer returned a blocked/error state");
+    } catch (error) {
+      setIntakeResult({ error: error instanceof Error ? error.message : "Link analysis failed" });
+      setIntakeStatus("Link analysis failed");
+    } finally {
+      setIsIntaking(false);
+    }
+  }
+
+  async function uploadFiles(files) {
+    const selectedFiles = Array.from(files || []);
+
+    if (selectedFiles.length === 0) return;
+
+    setIsIntaking(true);
+    setIntakeStatus(`Uploading ${selectedFiles.length} asset${selectedFiles.length === 1 ? "" : "s"}...`);
+
+    const uploaded = [];
+
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", file.type?.startsWith("video/") ? "video-ingest" : "upload");
+      formData.append("source", "admingeneration");
+
+      try {
+        const response = await fetch("/api/admingeneration/intake", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json().catch(() => ({}));
+        uploaded.push({
+          name: file.name,
+          type: file.type || "unknown",
+          size: file.size,
+          ok: response.ok,
+          data,
+        });
+      } catch (error) {
+        uploaded.push({
+          name: file.name,
+          type: file.type || "unknown",
+          size: file.size,
+          ok: false,
+          data: { error: error instanceof Error ? error.message : "Upload failed" },
+        });
+      }
+    }
+
+    setUploadedAssets((current) => [...uploaded, ...current].slice(0, 8));
+    setIntakeResult(uploaded[0]?.data || null);
+    setIntakeStatus("Upload complete. Select an asset chip to analyze as reference.");
+    setIsIntaking(false);
+  }
+
+  async function analyzeUploadedReference(asset) {
+    if (!asset) return;
+
+    setIsIntaking(true);
+    setIntakeStatus("Analyzing uploaded reference...");
+
+    const possibleUrl =
+      asset.data?.result?.url ||
+      asset.data?.result?.asset?.url ||
+      asset.data?.result?.publicUrl ||
+      asset.data?.result?.fileUrl ||
+      asset.data?.url ||
+      asset.data?.assetUrl ||
+      asset.data?.path ||
+      "";
+
+    try {
+      const response = await fetch("/api/admingeneration/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "reference",
+          assetUrl: possibleUrl,
+          fileName: asset.name,
+          mimeType: asset.type,
+          source: "admingeneration",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      setIntakeResult(data);
+      setIntakeStatus(response.ok ? "Reference analyzed" : "Reference analyzer returned a blocked/error state");
+    } catch (error) {
+      setIntakeResult({ error: error instanceof Error ? error.message : "Reference analysis failed" });
+      setIntakeStatus("Reference analysis failed");
+    } finally {
+      setIsIntaking(false);
+    }
+  }
 
   function handleGenerate() {
     setStatus("Protected API Ready");
@@ -310,6 +475,60 @@ export default function OpusLockedFrame() {
           <div className="studio-reset-note">
             ⓘ Each studio tab reloads the builder with settings and tools optimized for that workflow.
           </div>
+
+          <section className="production-intake-panel">
+            <div
+              className={`intake-drop-zone ${isDragging ? "dragging" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+                uploadFiles(event.dataTransfer.files);
+              }}
+            >
+              <strong>Production Intake + Analyzer</strong>
+              <span>Drop video, image refs, audio, PDFs, scripts, style assets</span>
+              <input
+                multiple
+                type="file"
+                accept="video/*,image/*,audio/*,.pdf,.txt,.md,.doc,.docx"
+                onChange={(event) => uploadFiles(event.target.files)}
+              />
+            </div>
+
+            <div className="intake-url-box">
+              <label>
+                <span>YouTube / Website / Reference URL</span>
+                <input
+                  value={intakeUrl}
+                  onChange={(event) => setIntakeUrl(event.target.value)}
+                  placeholder="Paste YouTube, website, product page, script page, or reference URL"
+                />
+              </label>
+              <button disabled={isIntaking} onClick={analyzeUrl} type="button">
+                {isIntaking ? "Analyzing..." : "Analyze URL"}
+              </button>
+            </div>
+
+            <div className="intake-results-box">
+              <div className="intake-status">{intakeStatus}</div>
+              <p>{getReadableIntakeResult(intakeResult)}</p>
+              <div className="asset-chip-row">
+                {uploadedAssets.slice(0, 3).map((asset) => (
+                  <button key={`${asset.name}-${asset.size}`} onClick={() => analyzeUploadedReference(asset)} type="button">
+                    {asset.ok ? "✓" : "!"} {asset.name}
+                  </button>
+                ))}
+              </div>
+              <button className="apply-analysis" onClick={applyIntakeToBuilder} type="button">
+                Feed Analysis Into Movie Builder
+              </button>
+            </div>
+          </section>
 
           <section className="builder-strip">
             <label className="builder-field prompt-field">
