@@ -145,8 +145,12 @@ async function persistProviderRun(jobId: string | undefined, result: ProviderRes
     job_id: jobId,
     provider: result.provider,
     status: result.status,
-    provider_run_id: result.providerRunId || null,
-    raw_response: result.response || null,
+    request_ref: result.providerRunId || null,
+    response_ref:
+      typeof result.response === "object" && result.response && "response_url" in result.response
+        ? String((result.response as { response_url?: string }).response_url || "")
+        : null,
+    output_asset_id: null,
   });
 
   if (result.outputUrl || result.outputBase64) {
