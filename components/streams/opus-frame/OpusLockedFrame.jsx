@@ -200,6 +200,20 @@ export default function OpusLockedFrame() {
   const [style, setStyle] = useState(activeStudio.style);
   const [activeTab, setActiveTab] = useState("Prompt");
   const [status, setStatus] = useState("Preview Ready");
+  const [helperMessages, setHelperMessages] = useState([
+    {
+      role: "assistant",
+      text: "I am your AI Helper. I can analyze files, review your prompt before you generate, help choose the best provider, search references, and talk with you by voice.",
+    },
+  ]);
+  const [helperInput, setHelperInput] = useState("");
+  const [helperBusy, setHelperBusy] = useState(false);
+  const [speakBack, setSpeakBack] = useState(true);
+  const [recording, setRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [helperUrl, setHelperUrl] = useState("");
+  const [helperDrawerOpen, setHelperDrawerOpen] = useState(true);
   const [intakeUrl, setIntakeUrl] = useState("");
   const [intakeStatus, setIntakeStatus] = useState("Ready for production references");
   const [intakeResult, setIntakeResult] = useState(null);
@@ -383,6 +397,317 @@ export default function OpusLockedFrame() {
       setIsIntaking(false);
     }
   }
+
+  function appendHelperMessage(role, text) {
+    setHelperMessages((current) => [...current, { role, text }].slice(-18));
+  }
+
+  function extractTextFromResponse(data) {
+    if (!data) return "";
+    if (typeof data === "string") return data;
+
+    const candidates = [
+      data.message,
+      data.reply,
+      data.response,
+      data.content,
+      data.text,
+      data.output,
+      data.answer,
+      data.assistant?.message,
+      data.assistant?.content,
+      data.result?.message,
+      data.result?.reply,
+      data.result?.response,
+      data.result?.content,
+      data.result?.text,
+      data.result?.summary,
+      data.result?.analysis?.summary,
+      data.summary,
+      data.analysis?.summary,
+      data.error,
+      data.result?.error,
+    ].filter(Boolean);
+
+    if (candidates.length > 0) return String(candidates[0]);
+
+    try {
+      return JSON.stringify(data).slice(0, 900);
+    } catch {
+      return "The helper received a response, but it could not display it.";
+    }
+  }
+
+  async function speakHelperText(text) {
+    if (!speakBack || !text) return;
+
+    try {
+      const response = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, source: "admingeneration-helper" }),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("audio")) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play().catch(() => {});
+        return;
+      }
+
+      const data = await response.json().catch(() => null);
+      const audioUrl =
+        data?.audioUrl ||
+        data?.url ||
+        data?.result?.audioUrl ||
+        data?.result?.url ||
+        data?.outputUrl;
+
+      const audioBase64 =
+        data?.audioBase64 ||
+        data?.result?.audioBase64 ||
+        data?.audio ||
+        data?.result?.audio;
+
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.play().catch(() => {});
+      } else if (audioBase64) {
+        const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+        audio.play().catch(() => {});
+      }
+    } catch {
+      appendHelperMessage("system", "Voice speak-back is unavailable right now.");
+    }
+  }
+
+  async function callHelperBrain(userText) {
+    const endpoints = [
+      "/api/streams/chat",
+      "/api/ai-assistant",
+      "/api/streams-ai/messages",
+    ];
+
+    let lastError = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userText,
+            prompt: userText,
+            source: "admingeneration-helper",
+            mode: "admingeneration",
+            context: {
+              activeStudioId,
+              activeStudioTitle: activeStudio.title,
+              provider,
+              duration,
+              aspectRatio,
+              style,
+              currentPrompt: prompt,
+            },
+            messages: helperMessages,
+          }),
+        });
+
+        const data = await response.json().catch(() => null);
+        const text = extractTextFromResponse(data);
+
+        if (response.ok && text) return text;
+
+        lastError = text || `${endpoint} returned ${response.status}`;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    return `I could not reach the helper brain yet. Last error: ${lastError || "unknown error"}`;
+  }
+
+  async function sendHelperMessage(messageOverride) {
+    const text = (messageOverride || helperInput).trim();
+    if (!text || helperBusy) return;
+
+    setHelperInput("");
+    appendHelperMessage("user", text);
+    setHelperBusy(true);
+
+    try {
+      const reply = await callHelperBrain(text);
+      appendHelperMessage("assistant", reply);
+      await speakHelperText(reply);
+    } finally {
+      setHelperBusy(false);
+    }
+  }
+
+  async function proofPromptBeforeGenerate() {
+    const proofRequest = `Proof this generation prompt before I spend credits. Check provider fit, missing details, token waste, cheaper routing, and rewrite it for the selected provider if needed.\n\nProvider: ${provider}\nDuration: ${duration}\nAspect: ${aspectRatio}\nStyle: ${style}\nPrompt:\n${prompt}`;
+    await sendHelperMessage(proofRequest);
+  }
+
+  async function analyzeHelperUrl() {
+    const url = helperUrl.trim();
+    if (!url) {
+      appendHelperMessage("system", "Paste a YouTube, website, or reference URL first.");
+      return;
+    }
+
+    appendHelperMessage("user", `Analyze this reference URL: ${url}`);
+    setHelperBusy(true);
+
+    try {
+      const response = await fetch("/api/admingeneration/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "auto", url, source: "admingeneration-helper" }),
+      });
+
+      const data = await response.json().catch(() => null);
+      const summary = extractTextFromResponse(data) || "Analysis returned without readable summary.";
+      const message = response.ok
+        ? `Reference analyzed:\n${summary}`
+        : `Reference analyzer returned a blocked/error state:\n${summary}`;
+
+      appendHelperMessage("assistant", message);
+      await speakHelperText(message);
+    } catch (error) {
+      appendHelperMessage("assistant", `URL analysis failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setHelperBusy(false);
+    }
+  }
+
+  async function uploadHelperFiles(files) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+
+    appendHelperMessage("user", `Uploading ${selectedFiles.length} file(s) for analysis.`);
+    setHelperBusy(true);
+
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", file.type?.startsWith("video/") ? "video-ingest" : "upload");
+      formData.append("source", "admingeneration-helper");
+
+      try {
+        const response = await fetch("/api/admingeneration/intake", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json().catch(() => null);
+        const summary = extractTextFromResponse(data) || "Upload completed, but no readable summary returned.";
+        appendHelperMessage(
+          response.ok ? "assistant" : "system",
+          `${file.name}: ${response.ok ? "uploaded" : "blocked/error"}\n${summary}`,
+        );
+      } catch (error) {
+        appendHelperMessage("system", `${file.name}: upload failed — ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    setHelperBusy(false);
+  }
+
+  async function startVoiceRecording() {
+    if (recording) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        setRecording(false);
+
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const formData = new FormData();
+        formData.append("file", blob, "helper-voice.webm");
+        formData.append("source", "admingeneration-helper");
+
+        appendHelperMessage("system", "Transcribing your voice...");
+        setHelperBusy(true);
+
+        try {
+          const response = await fetch("/api/voice/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await response.json().catch(() => null);
+          const transcript =
+            data?.text ||
+            data?.transcript ||
+            data?.result?.text ||
+            data?.result?.transcript ||
+            extractTextFromResponse(data);
+
+          if (!response.ok || !transcript) {
+            appendHelperMessage("system", `Voice transcription failed: ${extractTextFromResponse(data) || response.status}`);
+            return;
+          }
+
+          await sendHelperMessage(transcript);
+        } catch (error) {
+          appendHelperMessage("system", `Voice transcription failed: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          setHelperBusy(false);
+        }
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setRecording(true);
+      appendHelperMessage("system", "Listening. Tap Stop when finished.");
+    } catch (error) {
+      appendHelperMessage("system", `Microphone blocked or unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (mediaRecorder && recording) {
+      mediaRecorder.stop();
+    }
+  }
+
+  async function openCameraGuide() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setCameraStream(stream);
+      appendHelperMessage(
+        "assistant",
+        "Camera and mic are ready. Guide: center your face, use soft front lighting, keep the room quiet, record 30–90 seconds of natural speech, then review before saving.",
+      );
+    } catch (error) {
+      appendHelperMessage("system", `Camera/microphone blocked or unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  function closeHelperDrawer() {
+    setHelperDrawerOpen(false);
+  }
+
+  useEffect(() => {
+    function onEscape(event) {
+      if (event.key === "Escape") closeHelperDrawer();
+    }
+
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, []);
 
   function handleGenerate() {
     setStatus("Protected API Ready");
@@ -650,44 +975,80 @@ export default function OpusLockedFrame() {
               </section>
             </div>
 
-            <aside className="builder-side">
-              <section className="summary-card">
-                <h3>✨ Generation Summary</h3>
-                <p>{activeStudio.summary}</p>
-              </section>
+            <aside className={`builder-side ai-helper-console ${helperDrawerOpen ? "open" : "closed"}`}>
+              <div className="helper-header">
+                <div>
+                  <h3>AI Helper / Analyzer</h3>
+                  <p>Talk, analyze, proof prompts, search references, and guide each workflow.</p>
+                </div>
+                <button aria-label="Close helper" onClick={closeHelperDrawer} type="button">×</button>
+              </div>
 
-              <section className="summary-card">
-                <h3>▣ Prompt Snapshot</h3>
-                <p>{prompt}</p>
-                <button type="button">View Full Prompt</button>
-              </section>
+              <div className="helper-guide-strip">
+                <button onClick={proofPromptBeforeGenerate} type="button">Proof Prompt</button>
+                <button onClick={openCameraGuide} type="button">Camera + Mic Guide</button>
+                <button onClick={() => appendHelperMessage("assistant", "First-time guide: pick a studio card, add references, talk to me about what you want, proof the prompt, then generate only after the provider route is ready.")} type="button">User Guide</button>
+              </div>
 
-              <section className="summary-card two-col">
-                <h3>📷 Camera Settings Summary</h3>
-                <div><span>Camera Movement</span><b>Slow Push In</b></div>
-                <div><span>Shot Type</span><b>Wide Shot</b></div>
-                <div><span>Lens</span><b>18mm Wide</b></div>
-                <div><span>Angle</span><b>High Angle</b></div>
-                <button type="button">View All Settings</button>
-              </section>
+              <div className="helper-url-row">
+                <input
+                  value={helperUrl}
+                  onChange={(event) => setHelperUrl(event.target.value)}
+                  placeholder="Paste YouTube / website / reference URL"
+                />
+                <button disabled={helperBusy} onClick={analyzeHelperUrl} type="button">Analyze</button>
+              </div>
 
-              <section className="summary-card two-col">
-                <h3>ⓘ Generation Details</h3>
-                <div><span>Kind</span><b>{activeStudio.kind}</b></div>
-                <div><span>Provider</span><b>{provider}</b></div>
-                <div><span>Duration</span><b>{duration}</b></div>
-                <div><span>Aspect</span><b>{aspectRatio}</b></div>
-                <div><span>Status</span><b>{status}</b></div>
-                <button type="button">View Technical Details</button>
-              </section>
+              <label className="helper-drop-zone">
+                <input
+                  multiple
+                  type="file"
+                  accept="video/*,image/*,audio/*,.pdf,.txt,.md,.doc,.docx"
+                  onChange={(event) => uploadHelperFiles(event.target.files)}
+                />
+                <strong>Drop / upload references</strong>
+                <span>Video, images, audio, scripts, PDFs, style assets</span>
+              </label>
 
-              <section className="summary-card backend-card">
-                <h3>☁ System / Backend Status</h3>
-                <div className="status-good">Protected API Connected <span>●</span></div>
-                <div className="status-line"><strong>OpenAI</strong><p>Runtime proven</p></div>
-                <div className="status-line"><strong>fal.ai</strong><p>Runtime + jobs persistence proven</p></div>
-                <div className="status-line"><strong>Runway / Kling / Veo</strong><p>Endpoint contracts required</p></div>
-              </section>
+              <div className="helper-thread">
+                {helperMessages.map((message, index) => (
+                  <div className={`helper-message ${message.role}`} key={`${message.role}-${index}`}>
+                    <strong>{message.role === "user" ? "You" : message.role === "system" ? "System" : "AI Helper"}</strong>
+                    <p>{message.text}</p>
+                  </div>
+                ))}
+                {helperBusy ? (
+                  <div className="helper-message system">
+                    <strong>System</strong>
+                    <p>Working...</p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="helper-composer">
+                <textarea
+                  value={helperInput}
+                  onChange={(event) => setHelperInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendHelperMessage();
+                    }
+                  }}
+                  placeholder="Talk to the helper about your movie, prompt, upload, provider, or output..."
+                />
+                <div className="helper-actions">
+                  <button className={recording ? "recording" : ""} onClick={recording ? stopVoiceRecording : startVoiceRecording} type="button">
+                    {recording ? "Stop" : "Mic"}
+                  </button>
+                  <button className={speakBack ? "active" : ""} onClick={() => setSpeakBack((value) => !value)} type="button">
+                    Speak
+                  </button>
+                  <button disabled={helperBusy} onClick={() => sendHelperMessage()} type="button">
+                    Send
+                  </button>
+                </div>
+              </div>
             </aside>
           </section>
         </section>
