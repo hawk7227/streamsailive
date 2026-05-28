@@ -27,6 +27,16 @@ check_grep() {
   pass "$label"
 }
 
+check_not_grep() {
+  local pattern="$1"
+  local file="$2"
+  local label="$3"
+  if grep -q "$pattern" "$file"; then
+    fail "$label forbidden pattern found in $file: $pattern"
+  fi
+  pass "$label"
+}
+
 APP_FILE="components/streams/opus-frame/OpusLockedFrame.jsx"
 CSS_FILE="components/streams/opus-frame/opus-locked-frame.css"
 
@@ -38,6 +48,7 @@ check_file "src/app/admingeneration/page.jsx"
 check_file "src/app/api/admingeneration/jobs/route.ts"
 check_file "src/app/api/admingeneration/helper/route.ts"
 check_file "src/app/api/admingeneration/intake/route.ts"
+check_file "src/app/api/admingeneration/submit/route.ts"
 
 if [ -f "src/app/api/admingeneration/research/route.ts" ]; then
   pass "research wrapper exists"
@@ -87,6 +98,8 @@ check_grep "activeStudio.guide" "$APP_FILE" "per-card user guide wiring"
 check_grep "setHelperOpen(false)" "$APP_FILE" "helper close wiring"
 check_grep "stopPropagation" "$APP_FILE" "drawer click-out protection"
 check_grep "Escape" "$APP_FILE" "Escape close wiring"
+check_grep "/api/admingeneration/submit" "$APP_FILE" "frontend generate uses secure submit wrapper"
+check_not_grep "fetch(\"/api/admingeneration/jobs\"" "$APP_FILE" "frontend must not call protected jobs route directly"
 
 echo ""
 echo "3. CSS/layout wiring"
@@ -109,6 +122,11 @@ check_grep "/api/intake/website" "src/app/api/admingeneration/intake/route.ts" "
 check_grep "/api/streams/reference/analyze" "src/app/api/admingeneration/intake/route.ts" "intake routes reference analyzer"
 check_grep "/api/streams/upload" "src/app/api/admingeneration/intake/route.ts" "intake routes upload"
 check_grep "/api/streams/video/ingest" "src/app/api/admingeneration/intake/route.ts" "intake routes video ingest"
+check_grep "ADMIN_GENERATION_KEY" "src/app/api/admingeneration/jobs/route.ts" "jobs route enforces admin key"
+check_grep "x-admin-generation-key" "src/app/api/admingeneration/jobs/route.ts" "jobs route accepts admin key header"
+check_grep "ADMIN_GENERATION_KEY" "src/app/api/admingeneration/submit/route.ts" "submit wrapper reads admin key server-side"
+check_grep "x-admin-generation-key" "src/app/api/admingeneration/submit/route.ts" "submit wrapper injects admin key header"
+check_grep "/api/admingeneration/jobs" "src/app/api/admingeneration/submit/route.ts" "submit wrapper forwards to jobs route"
 
 echo ""
 echo "5. Build verification"
