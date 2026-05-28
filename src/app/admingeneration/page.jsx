@@ -1,5 +1,5 @@
-import OpusLockedFrame from "../../../components/streams/opus-frame/OpusLockedFrame";
+import AdminGenerationRuntimeGuard from "../../../components/streams/opus-frame/AdminGenerationRuntimeGuard";
 
 export default function OpusFramePage() {
-  return <OpusLockedFrame />;
+  return <AdminGenerationRuntimeGuard />;
 }
