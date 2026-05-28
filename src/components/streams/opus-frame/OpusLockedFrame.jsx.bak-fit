@@ -1,0 +1,143 @@
+"use client";
+
+import Link from "next/link";
+import "./opus-locked-frame.css";
+
+const nav = ["Home","My Projects","Templates","AI Avatars","Brand Kit","Assets","Team","Analytics","Integrations","Settings"];
+
+const modes = [
+  ["Text to Image","Generate stunning images from text","🖼️","blue"],
+  ["Image to Video","Turn images into dynamic videos","🎞️","purple"],
+  ["Text to Video","Create videos from text descriptions","🎬","pink"],
+  ["Voice & Captions","Generate voiceovers & captions","🎙️","cyan"],
+  ["Snap Pick Click","Snap, pick an action, click create","📸","orange"],
+  ["Motion Graphics","Create stunning motion graphics","🧊","blue"],
+  ["AI Writers","Article, Script, News, X Post to Video","📄","violet"],
+  ["Idea to Launch","Turn ideas into full campaigns","🚀","gold"],
+  ["Collect Assets","Find & organize perfect assets","🗂️","green"],
+  ["Create Hook","Generate viral video hooks","⚡","red"],
+];
+
+const progress = [
+  ["Motivation Video","Text to Video • 9:16","76%","https://images.unsplash.com/photo-1535223289827-42f1e9919769?auto=format&fit=crop&w=240&q=80"],
+  ["Cinematic Scene","Image to Video • 16:9","45%","https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=240&q=80"],
+  ["Fitness Promo","Motion Graphics • 9:16","90%","https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=240&q=80"],
+  ["Podcast Clip","Voice & Captions • 1:1","60%","https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=80"],
+  ["Product Launch","Idea to Launch • 16:9","30%","https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=240&q=80"],
+];
+
+const projects = [
+  ["Cyberpunk Short Film","Edited 2 hours ago","00:45","https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=420&q=85"],
+  ["Product Launch Video","Edited yesterday","01:12","https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=420&q=85"],
+  ["Travel Vlog Intro","Edited 2 days ago","00:59","https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=420&q=85"],
+  ["Fitness Motivation","Edited 3 days ago","00:30","https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&w=420&q=85"],
+  ["Tech Product Promo","Edited 5 days ago","00:15","https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=420&q=85"],
+  ["Brand Rebuild 2024","Edited 1 week ago","01:05","https://images.unsplash.com/photo-1480714378408-67cf0d13bc1f?auto=format&fit=crop&w=420&q=85"],
+];
+
+export default function OpusLockedFrame() {
+  return (
+    <main className="opusFrame">
+      <aside className="leftRail">
+        <div className="logoRow">
+          <div className="logoMark">◉</div>
+          <div><b>Opus</b><span>by Agent Opus</span></div>
+        </div>
+
+        <nav className="leftNav">
+          {nav.map((item, i) => (
+            <button key={item} className={i === 0 ? "active" : ""}>
+              <span>{i === 0 ? "⌂" : "□"}</span>{item}
+            </button>
+          ))}
+        </nav>
+
+        <section className="planBox">
+          <small>PLAN</small><b>Pro Plan</b><button>Upgrade</button>
+          <p>Credits</p><strong>2,450 / 5,000</strong>
+          <i><em /></i>
+          <span>Reset on Aug 12, 2025</span>
+        </section>
+
+        <button className="community">💬 Join Community</button>
+      </aside>
+
+      <section className="center">
+        <header className="top">
+          <div>
+            <h1>Good evening, Creator 👋</h1>
+            <p>What would you like to create today?</p>
+          </div>
+          <div className="topActions">
+            <button>🪙 Credits: 2,450</button>
+            <button>Upgrade</button>
+            <button>🔔</button>
+            <button>Creator⌄</button>
+          </div>
+        </header>
+
+        <section className="modeTabs">
+          <button className="active">⚡ Smart Mode</button>
+          <button>🎬 Advanced Mode</button>
+          <Link href="/studio/image-to-video">✨ AI Assistant</Link>
+        </section>
+
+        <section className="promptPanel">
+          <b>Describe what you want to create...</b>
+          <p>Example: Create a cinematic motivational video about pushing your limits</p>
+          <span>0 / 5000</span>
+          <div className="promptTools">
+            <button>📎 Add Media</button><button>📱 9:16</button><button>🎙️ Voice</button><button>👤 AI Avatar</button><button>🎨 Style</button>
+            <Link href="/studio/image-to-video">Generate ✨</Link>
+          </div>
+        </section>
+
+        <div className="sectionLine"><b>Choose what you want to create</b><a>View all studios →</a></div>
+
+        <section className="modeGrid">
+          {modes.map(([title, desc, icon, color]) => (
+            <Link href={title === "Image to Video" ? "/studio/image-to-video" : "/studio"} className={`modeCard ${color}`} key={title}>
+              <div>{icon}</div><b>{title}</b><p>{desc}</p><span>Start →</span>
+            </Link>
+          ))}
+        </section>
+
+        <section className="progressBox">
+          <div className="sectionLine"><b>Your Creations in Progress</b><a>View all →</a></div>
+          <div className="progressGrid">
+            {progress.map(([title, meta, pct, img]) => (
+              <article key={title}>
+                <div className="miniThumb" style={{ backgroundImage: `url(${img})` }} />
+                <b>{title}</b><p>{meta}</p>
+                <i><em style={{width:pct}} /></i><span>{pct}</span>
+              </article>
+            ))}
+            <article className="newProject">＋<b>New Project</b><p>Start Something Amazing</p></article>
+          </div>
+        </section>
+
+        <section>
+          <div className="sectionLine"><b>My Projects</b><a>View all projects →</a></div>
+          <div className="projectGrid">
+            {projects.map(([title, meta, time, img], i) => (
+              <article className={`project p${i}`} key={title}>
+                <div style={{ backgroundImage: `url(${img})` }}><span>{time}</span></div><b>{title}</b><p>{meta}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="workflow">
+          {["Research","Script","Visualize","Edit","Voices","Brand","Export"].map((x) => <div key={x}>● <b>{x}</b><span>Workflow step</span></div>)}
+        </section>
+      </section>
+
+      <aside className="rightRail">
+        <section><h3>Quick Actions</h3>{["New Project","Use a Template","AI Assistant","Upload Assets","Record Voice"].map(x=><button key={x}>＋ {x}<span>Start action</span></button>)}</section>
+        <section><h3>System Status</h3><b className="ok">All Systems Operational ✓</b><p>Render Queue<br/>2 Rendering • 4 Queued</p><p>Storage<br/>2.4 TB / 8 TB</p><p>Today’s Usage<br/>78%</p></section>
+        <section><h3>Recent Projects</h3>{["Summer Sale Campaign","Product Launch Video","TikTok Ad Series","Brand Rebuild 2024"].map(x=><p key={x}>{x}<br/><span>Edited recently</span></p>)}</section>
+        <section className="help">💬 <b>Need help?</b><span>Ask AI Assistant</span></section>
+      </aside>
+    </main>
+  );
+}
