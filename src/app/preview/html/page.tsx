@@ -1,0 +1,4 @@
+export default function PreviewHtmlPage() {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#111827;color:white;font-family:system-ui,sans-serif}.card{width:420px;padding:24px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}</style></head><body><div class="card"><div style="font-size:12px;opacity:.7;margin-bottom:8px">HTML Preview</div><h1 style="margin:0 0 10px">Rendered HTML</h1><p style="margin:0;opacity:.85">This preview comes from an app-controlled HTML route.</p></div></body></html>`;
+  return <iframe title="HTML Preview" sandbox="allow-scripts" srcDoc={html} style={{ width: '100%', height: '100vh', border: 'none', display: 'block' }} />;
+}
