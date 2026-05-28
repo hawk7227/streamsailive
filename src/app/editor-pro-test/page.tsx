@@ -1,9 +1,5 @@
-import dynamic from "next/dynamic";
-
-const EditorProShell = dynamic(() => import("@/components/editor-pro/EditorProShell"), {
-  ssr: false,
-});
+﻿import EditorProTestClient from "./EditorProTestClient";
 
 export default function EditorProTestPage() {
-  return <EditorProShell />;
+  return <EditorProTestClient />;
 }
