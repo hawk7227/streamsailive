@@ -41,6 +41,44 @@ function jsonError(message: string, status = 400, details?: unknown) {
   return NextResponse.json({ ok: false, error: message, details }, { status });
 }
 
+function timingSafeEqualText(left: string, right: string) {
+  if (!left || !right || left.length !== right.length) return false;
+
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+
+  return mismatch === 0;
+}
+
+function requireAdminGenerationAccess(request: Request) {
+  const expected = process.env.ADMIN_GENERATION_KEY?.trim();
+
+  if (!expected) {
+    return jsonError(
+      "ADMIN_GENERATION_KEY is not configured. Refusing to run provider generation.",
+      500
+    );
+  }
+
+  const headerKey = request.headers.get("x-admin-generation-key")?.trim() || "";
+  const authorization = request.headers.get("authorization")?.trim() || "";
+  const bearerKey = authorization.toLowerCase().startsWith("bearer ")
+    ? authorization.slice(7).trim()
+    : "";
+
+  const allowed =
+    timingSafeEqualText(headerKey, expected) ||
+    timingSafeEqualText(bearerKey, expected);
+
+  if (!allowed) {
+    return jsonError("Unauthorized admin generation request.", 401);
+  }
+
+  return null;
+}
+
 function hasEnv(name: string) {
   return Boolean(process.env[name] && String(process.env[name]).trim().length > 0);
 }
@@ -306,6 +344,9 @@ async function runProvider(provider: Provider, input: CreateGenerationRequest): 
 }
 
 export async function POST(request: Request) {
+  const authError = requireAdminGenerationAccess(request);
+  if (authError) return authError;
+
   try {
     const input = (await request.json()) as CreateGenerationRequest;
     if (!input.prompt?.trim()) return jsonError("prompt is required");
