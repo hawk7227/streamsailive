@@ -750,3 +750,105 @@ button { cursor: pointer; }
   color: #fff;
   font-size: 20px;
 }
+
+/* Next slice: web research + universal user guides */
+.ai-helper-console {
+  grid-template-rows: 68px 36px 40px 40px 78px minmax(0, 1fr) 120px !important;
+}
+
+.helper-guide-strip {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+
+.helper-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 7px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(7, 14, 24, 0.9);
+}
+
+.helper-search-row input {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 7px;
+  background: rgba(8, 15, 27, 0.92);
+  color: #eef4ff;
+  padding: 0 9px;
+  font-size: 12px;
+  outline: none;
+}
+
+.helper-search-row button {
+  border: 1px solid rgba(178, 137, 255, 0.34);
+  border-radius: 7px;
+  background: rgba(68, 33, 134, 0.34);
+  color: #f4edff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.guide-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 410;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.guide-modal {
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.22), transparent 45%),
+    #07101c;
+  padding: 22px;
+  position: relative;
+  box-shadow: 0 40px 110px rgba(0, 0, 0, 0.56);
+}
+
+.guide-modal h3 {
+  margin: 0 44px 10px 0;
+  font-size: 24px;
+  line-height: 1.08;
+}
+
+.guide-modal p {
+  margin: 0;
+  color: #d8e3f6;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.guide-steps {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.guide-steps span {
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(10, 18, 30, 0.82);
+  color: #eaf1ff;
+  font-size: 13px;
+}
+
+.guide-close {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 20px;
+}

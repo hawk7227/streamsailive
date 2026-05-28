@@ -223,6 +223,10 @@ export default function OpusLockedFrame() {
   ]);
   const [helperInput, setHelperInput] = useState("");
   const [helperUrl, setHelperUrl] = useState("");
+  const [helperSearch, setHelperSearch] = useState("");
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideTitle, setGuideTitle] = useState("");
+  const [guideText, setGuideText] = useState("");
   const [helperBusy, setHelperBusy] = useState(false);
   const [speakBack, setSpeakBack] = useState(true);
   const [recording, setRecording] = useState(false);
@@ -254,6 +258,7 @@ export default function OpusLockedFrame() {
       if (event.key === "Escape") {
         setHelperOpen(false);
         setCameraOpen(false);
+        setGuideOpen(false);
       }
     }
 
@@ -364,6 +369,69 @@ export default function OpusLockedFrame() {
       if (response.ok) await speakText(reply);
     } catch (error) {
       appendHelperMessage("system", `Helper failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setHelperBusy(false);
+    }
+  }
+
+  function openGuide(title, text) {
+    setGuideTitle(title);
+    setGuideText(text);
+    setGuideOpen(true);
+  }
+
+  function closeGuide() {
+    setGuideOpen(false);
+    setGuideTitle("");
+    setGuideText("");
+  }
+
+  function openActiveStudioGuide() {
+    openGuide(activeStudio.title, activeStudio.guide);
+    appendHelperMessage("assistant", activeStudio.guide);
+  }
+
+  async function webResearch() {
+    const query = helperSearch.trim();
+    const url = helperUrl.trim();
+
+    if (!query && !url) {
+      appendHelperMessage("system", "Enter a web search query or paste a URL first.");
+      return;
+    }
+
+    appendHelperMessage("user", query ? `Research this for my generation: ${query}` : `Research this reference URL: ${url}`);
+    setHelperBusy(true);
+
+    try {
+      const response = await fetch("/api/admingeneration/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          url,
+          source: "admingeneration-helper",
+          context: {
+            activeStudioId,
+            activeStudioTitle: activeStudio.title,
+            provider,
+            styleName,
+            prompt,
+          },
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      const summary = data?.summary || readable(data) || "Research returned no readable result.";
+
+      appendHelperMessage(
+        response.ok ? "assistant" : "system",
+        `${response.ok ? "Research result" : "Research blocked/error"}:\n${summary}`,
+      );
+
+      if (response.ok) await speakText(`Research complete. ${summary}`);
+    } catch (error) {
+      appendHelperMessage("system", `Research failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setHelperBusy(false);
     }
@@ -818,12 +886,18 @@ export default function OpusLockedFrame() {
                 <div className="helper-guide-strip">
                   <button onClick={proofPrompt} type="button">Proof Prompt</button>
                   <button onClick={openCameraGuide} type="button">Camera + Mic Guide</button>
-                  <button onClick={() => appendHelperMessage("assistant", activeStudio.guide)} type="button">Card Guide</button>
+                  <button onClick={openActiveStudioGuide} type="button">Card Guide</button>
+                  <button onClick={webResearch} type="button">Web Research</button>
                 </div>
 
                 <div className="helper-url-row">
                   <input value={helperUrl} onChange={(event) => setHelperUrl(event.target.value)} placeholder="Paste YouTube / website / reference URL" />
                   <button disabled={helperBusy} onClick={analyzeUrl} type="button">Analyze</button>
+                </div>
+
+                <div className="helper-search-row">
+                  <input value={helperSearch} onChange={(event) => setHelperSearch(event.target.value)} placeholder="Ask helper to research references, providers, styles, or production ideas" />
+                  <button disabled={helperBusy} onClick={webResearch} type="button">Search</button>
                 </div>
 
                 <label className="helper-drop-zone">
@@ -873,6 +947,22 @@ export default function OpusLockedFrame() {
             )}
           </section>
         </section>
+
+        {guideOpen ? (
+          <div className="guide-modal-backdrop" onClick={closeGuide}>
+            <div className="guide-modal" onClick={(event) => event.stopPropagation()}>
+              <button className="guide-close" onClick={closeGuide} type="button">×</button>
+              <h3>{guideTitle || "Workflow Guide"}</h3>
+              <p>{guideText}</p>
+              <div className="guide-steps">
+                <span>1. Add references or describe the goal.</span>
+                <span>2. Ask AI Helper to proof the prompt.</span>
+                <span>3. Confirm provider, duration, aspect ratio, and style.</span>
+                <span>4. Generate only after blocked states are clear.</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {cameraOpen ? (
           <div className="camera-modal-backdrop" onClick={closeCameraGuide}>
