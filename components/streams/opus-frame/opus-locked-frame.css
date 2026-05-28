@@ -1033,3 +1033,184 @@ button { cursor: pointer; }
 .video-shell {
   min-height: 360px;
 }
+
+/* Right-side Advanced Production Prompt Builder */
+.preview-layout,
+.preview-layout.full-helper {
+  grid-template-columns: minmax(0, 1fr) 620px !important;
+}
+
+.right-advanced-builder {
+  min-width: 0;
+  height: 700px;
+  display: grid;
+  grid-template-rows: 72px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.right-builder-header {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.18), transparent 45%),
+    rgba(7, 14, 24, 0.92);
+}
+
+.right-builder-header h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.right-builder-header p {
+  margin: 6px 0 0;
+  color: #b8c5d8;
+  font-size: 12px;
+}
+
+.right-builder-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.right-builder-actions button {
+  height: 34px;
+  border: 1px solid rgba(178, 137, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(68, 33, 134, 0.38);
+  color: #f4edff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.right-builder-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.right-field-card,
+.right-workflow-card {
+  position: relative;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(11, 20, 34, 0.96), rgba(7, 14, 24, 0.94));
+  padding: 12px;
+}
+
+.right-field-card.danger {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.right-field-title {
+  margin-bottom: 8px;
+  color: #f8fbff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.right-field-card textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 9px;
+  background: rgba(8, 15, 27, 0.95);
+  color: #eef4ff;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.42;
+  outline: none;
+}
+
+.right-field-card .count {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  color: #8f9bb0;
+  font-size: 10px;
+}
+
+.right-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.right-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.right-mini-grid label {
+  display: grid;
+  gap: 5px;
+  color: #a8b6cc;
+  font-size: 11px;
+}
+
+.right-mini-grid input,
+.right-mini-grid select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 15, 27, 0.95);
+  color: #eef4ff;
+  padding: 0 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.right-workflow-card {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  background:
+    radial-gradient(circle at 90% 30%, rgba(124, 58, 237, 0.2), transparent 45%),
+    rgba(7, 14, 24, 0.94);
+}
+
+.right-workflow-card strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.right-workflow-card span {
+  color: #a8b6cc;
+  font-size: 12px;
+}
+
+.right-workflow-card button {
+  height: 44px;
+  border: 1px solid rgba(178, 137, 255, 0.52);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #8f45ff, #5729d2);
+  color: white;
+  font-weight: 950;
+  font-size: 14px;
+}
+
+/* keep preview hero readable next to advanced right rail */
+.preview-column {
+  grid-template-rows: 360px 86px 1fr !important;
+}
+
+.video-shell {
+  min-height: 360px;
+}
