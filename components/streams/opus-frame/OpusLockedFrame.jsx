@@ -830,6 +830,11 @@ export default function OpusLockedFrame() {
           </section>
 
           <section className="preview-layout full-helper">
+            {!helperOpen ? (
+              <button className="floating-open-helper" onClick={() => setHelperOpen(true)} type="button">
+                Open AI Helper
+              </button>
+            ) : null}
             <div className="preview-column">
               <div className="video-shell">
                 <img src={previewSrc} alt="Generated preview" />
@@ -1008,6 +1013,94 @@ export default function OpusLockedFrame() {
                 <span>4. Generate only after blocked states are clear.</span>
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {helperOpen ? (
+          <div className="helper-drawer-backdrop" onClick={() => setHelperOpen(false)}>
+            <aside className="helper-drawer" onClick={(event) => event.stopPropagation()}>
+              <div className="helper-drawer-header">
+                <div>
+                  <h3>AI Helper / Analyzer Console</h3>
+                  <p>Conversation, voice, web research, file analysis, guides, and prompt proofing.</p>
+                </div>
+                <button aria-label="Close AI Helper" onClick={() => setHelperOpen(false)} type="button">×</button>
+              </div>
+
+              <div className="helper-drawer-actions">
+                <button onClick={proofPrompt} type="button">Proof Prompt</button>
+                <button onClick={openCameraGuide} type="button">Camera + Mic Guide</button>
+                <button onClick={openActiveStudioGuide} type="button">Card Guide</button>
+                <button onClick={webResearch} type="button">Web Research</button>
+              </div>
+
+              <div className="helper-drawer-row">
+                <input
+                  value={helperUrl}
+                  onChange={(event) => setHelperUrl(event.target.value)}
+                  placeholder="Paste YouTube / website / reference URL"
+                />
+                <button disabled={helperBusy} onClick={analyzeUrl} type="button">Analyze</button>
+              </div>
+
+              <div className="helper-drawer-row">
+                <input
+                  value={helperSearch}
+                  onChange={(event) => setHelperSearch(event.target.value)}
+                  placeholder="Search references, styles, providers, film techniques..."
+                />
+                <button disabled={helperBusy} onClick={webResearch} type="button">Search</button>
+              </div>
+
+              <label className="helper-drawer-upload">
+                <input
+                  multiple
+                  type="file"
+                  accept="video/*,image/*,audio/*,.pdf,.txt,.md,.doc,.docx"
+                  onChange={(event) => uploadFiles(event.target.files)}
+                />
+                <strong>Drop / upload references</strong>
+                <span>Video, images, audio, scripts, PDFs, style assets</span>
+              </label>
+
+              <div className="helper-drawer-thread">
+                {helperMessages.map((message, index) => (
+                  <div className={`helper-drawer-message ${message.role}`} key={`${message.role}-${index}`}>
+                    <strong>{message.role === "user" ? "You" : message.role === "system" ? "System" : "AI Helper"}</strong>
+                    <p>{message.text}</p>
+                  </div>
+                ))}
+                {helperBusy ? (
+                  <div className="helper-drawer-message system">
+                    <strong>System</strong>
+                    <p>Working...</p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="helper-drawer-composer">
+                <textarea
+                  value={helperInput}
+                  onChange={(event) => setHelperInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      askHelper();
+                    }
+                  }}
+                  placeholder="Talk to the helper about your movie, prompt, provider, uploaded files, or output..."
+                />
+                <div className="helper-drawer-composer-actions">
+                  <button className={recording ? "recording" : ""} onClick={recording ? stopVoice : startVoice} type="button">
+                    {recording ? "Stop Recording" : "Mic / Talk"}
+                  </button>
+                  <button className={speakBack ? "active" : ""} onClick={() => setSpeakBack((value) => !value)} type="button">
+                    Speak Back {speakBack ? "On" : "Off"}
+                  </button>
+                  <button disabled={helperBusy} onClick={() => askHelper()} type="button">Send</button>
+                </div>
+              </div>
+            </aside>
           </div>
         ) : null}
 
