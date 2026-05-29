@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 const STREAMS_SPLIT_PREVIEW_EVENT = "streams:split-preview";
 const STREAMS_SPLIT_PREVIEW_LAST_KEY = "streams:split-preview:last";
 
-function hasPreview EditorableContent(content = "") {
+function hasPreviewableContent(content = "") {
   return Boolean(extractPreviewSource(content));
 }
 
@@ -1008,7 +1008,7 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
   const internalChatRuntime = useStreamsChatRuntime();
   const chatRuntime = propChatRuntime || internalChatRuntime;
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const handler = (event) => {
