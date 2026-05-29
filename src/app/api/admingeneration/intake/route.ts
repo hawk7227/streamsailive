@@ -22,12 +22,6 @@ function internalUrl(request: Request, pathname: string) {
   return new URL(pathname, new URL(request.url).origin).toString();
 }
 
-function inferKind(url: string): IntakeKind {
-  if (/youtube\.com|youtu\.be/i.test(url)) return "youtube";
-  if (/^https?:\/\//i.test(url)) return "website";
-  return "url";
-}
-
 async function readResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
 
@@ -39,110 +33,90 @@ async function readResponse(response: Response) {
   return text ? { text } : null;
 }
 
-async function forwardJson(request: Request, pathname: string, payload: unknown) {
-  const response = await fetch(internalUrl(request, pathname), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-
-  const result = await readResponse(response);
-
-  return NextResponse.json(
-    {
-      ok: response.ok,
-      route: "admingeneration-intake",
-      target: pathname,
-      status: response.status,
-      result,
-    },
-    { status: response.ok ? 200 : response.status },
-  );
+function isYouTubeUrl(url: string) {
+  return /youtube\.com|youtu\.be/i.test(url);
 }
 
-async function forwardMultipart(request: Request, pathname: string, formData: FormData) {
-  const response = await fetch(internalUrl(request, pathname), {
-    method: "POST",
-    body: formData,
-    cache: "no-store",
-  });
+function routeFor(kind: IntakeKind, url: string) {
+  if (kind === "youtube") return "/api/intake/youtube";
+  if (kind === "website") return "/api/intake/website";
+  if (kind === "reference") return "/api/streams/reference/analyze";
+  if (kind === "upload") return "/api/streams/upload";
+  if (kind === "video-ingest") return "/api/streams/video/ingest";
+  if (kind === "video-accessibility") return "/api/streams/check-video-accessibility";
+  if (kind === "analyze") return "/api/intake/analyze";
 
-  const result = await readResponse(response);
+  if (kind === "auto") {
+    if (url && isYouTubeUrl(url)) return "/api/intake/youtube";
+    if (url) return "/api/intake/website";
+  }
 
-  return NextResponse.json(
-    {
-      ok: response.ok,
-      route: "admingeneration-intake",
-      target: pathname,
-      status: response.status,
-      result,
-    },
-    { status: response.ok ? 200 : response.status },
-  );
+  return "/api/intake/url";
 }
 
 export async function POST(request: Request) {
-  const contentType = request.headers.get("content-type") || "";
+  const body = await request.json().catch(() => null);
+
+  if (!body || typeof body !== "object") {
+    return jsonError("Invalid admin generation intake request body.", 400);
+  }
+
+  const payload = body as Record<string, unknown>;
+  const kind = String(payload.kind || "auto") as IntakeKind;
+  const url =
+    typeof payload.url === "string"
+      ? payload.url
+      : typeof payload.youtubeUrl === "string"
+        ? payload.youtubeUrl
+        : typeof payload.websiteUrl === "string"
+          ? payload.websiteUrl
+          : "";
+
+  const target = routeFor(kind, url);
+
+  const adminKey = process.env.ADMIN_GENERATION_KEY || "";
+  const intakeKey = process.env.STREAMS_INTAKE_KEY || process.env.INTAKE_API_KEY || "";
+  const cookie = request.headers.get("cookie") || "";
+
+  const forwardHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(cookie ? { cookie } : {}),
+    ...(adminKey ? { "x-admin-generation-key": adminKey } : {}),
+    ...(intakeKey ? { "x-streams-intake-key": intakeKey, "x-intake-api-key": intakeKey } : {}),
+  };
+
+  const forwardBody = {
+    ...payload,
+    url,
+    youtubeUrl: isYouTubeUrl(url) ? url : payload.youtubeUrl,
+    websiteUrl: !isYouTubeUrl(url) ? url : payload.websiteUrl,
+    source: "admingeneration",
+    route: "admingeneration-intake",
+  };
 
   try {
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
-      const kind = String(formData.get("kind") || "upload") as IntakeKind;
+    const response = await fetch(internalUrl(request, target), {
+      method: "POST",
+      headers: forwardHeaders,
+      body: JSON.stringify(forwardBody),
+      cache: "no-store",
+    });
 
-      if (kind === "video-ingest") {
-        return forwardMultipart(request, "/api/streams/video/ingest", formData);
-      }
+    const result = await readResponse(response);
 
-      return forwardMultipart(request, "/api/streams/upload", formData);
-    }
-
-    const payload = await request.json().catch(() => null);
-
-    if (!payload || typeof payload !== "object") {
-      return jsonError("Invalid intake request body.", 400);
-    }
-
-    const body = payload as Record<string, unknown>;
-    const url = typeof body.url === "string" ? body.url.trim() : "";
-    const requestedKind = String(body.kind || "auto") as IntakeKind;
-    const kind = requestedKind === "auto" && url ? inferKind(url) : requestedKind;
-
-    if ((kind === "youtube" || kind === "website" || kind === "url") && !url) {
-      return jsonError("A URL is required for URL, website, or YouTube intake.", 400);
-    }
-
-    if (kind === "youtube") {
-      return forwardJson(request, "/api/intake/youtube", { ...body, url });
-    }
-
-    if (kind === "website") {
-      return forwardJson(request, "/api/intake/website", { ...body, url });
-    }
-
-    if (kind === "url") {
-      return forwardJson(request, "/api/intake/url", { ...body, url });
-    }
-
-    if (kind === "reference") {
-      return forwardJson(request, "/api/streams/reference/analyze", body);
-    }
-
-    if (kind === "video-ingest") {
-      return forwardJson(request, "/api/streams/video/ingest", body);
-    }
-
-    if (kind === "video-accessibility") {
-      return forwardJson(request, "/api/streams/check-video-accessibility", body);
-    }
-
-    if (kind === "analyze") {
-      return forwardJson(request, "/api/intake/analyze", body);
-    }
-
-    return jsonError(`Unsupported admingeneration intake kind: ${kind}`, 400);
+    return NextResponse.json(
+      {
+        ok: response.ok,
+        route: "admingeneration-intake",
+        target,
+        status: response.status,
+        result,
+      },
+      { status: response.ok ? 200 : response.status },
+    );
   } catch (error) {
-    return jsonError("Admin generation intake failed.", 500, {
+    return jsonError("Admin generation intake forward failed.", 500, {
+      target,
       message: error instanceof Error ? error.message : String(error),
     });
   }
