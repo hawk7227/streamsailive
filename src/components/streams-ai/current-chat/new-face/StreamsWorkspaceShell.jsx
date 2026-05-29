@@ -142,11 +142,7 @@ import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
-import ChatControlledPreviewEditor from "./editor-core/ChatControlledPreviewEditor";
 
-const StudioEditorShell = dynamic(() => import("@/components/editor-pro/StudioEditorShell"), {
-  ssr: false,
-});
 
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
 const today = ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"];
@@ -893,7 +889,7 @@ function SplitChatContext() {
 }
 
 function PreviewWorkspace({ chatRuntime }) {
-  return <ChatControlledPreviewEditor chatRuntime={chatRuntime} />;
+  return <StreamsSplitPreview embedded state={chatRuntime?.previewState} />;
 }
 
 
