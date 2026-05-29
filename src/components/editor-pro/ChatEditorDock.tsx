@@ -20,55 +20,29 @@ export function ChatEditorDock() {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-[9999] rounded-full border border-black/10 bg-black px-5 py-3 text-sm font-semibold text-white shadow-2xl"
-      >
+      <button onClick={() => setOpen(true)} className="fixed bottom-6 right-6 z-[9999] rounded-full bg-black px-5 py-3 text-sm font-bold text-white shadow-2xl">
         Open Preview / Editor
       </button>
     );
   }
 
   return (
-    <aside className="fixed bottom-6 right-6 top-24 z-[9999] flex w-[min(760px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border border-black/10 bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b border-black/10 bg-white px-4 py-3">
+    <aside className="fixed bottom-6 right-6 top-24 z-[9999] flex w-[760px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-3xl border border-black/10 bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
         <div>
           <div className="text-sm font-bold text-black">Live Preview + Editor</div>
           <div className="text-xs text-black/55">Mounted into Streams AI chat</div>
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           {(Object.keys(TABS) as DockTab[]).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={[
-                "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                tab === key ? "bg-black text-white" : "bg-black/5 text-black hover:bg-black/10",
-              ].join(" ")}
-            >
+            <button key={key} onClick={() => setTab(key)} className={tab === key ? "rounded-full bg-black px-3 py-1.5 text-xs font-bold text-white" : "rounded-full bg-black/5 px-3 py-1.5 text-xs font-bold text-black"}>
               {TABS[key].label}
             </button>
           ))}
-
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="rounded-full bg-black/5 px-3 py-1.5 text-xs font-semibold text-black hover:bg-black/10"
-          >
-            Hide
-          </button>
+          <button onClick={() => setOpen(false)} className="rounded-full bg-black/5 px-3 py-1.5 text-xs font-bold text-black">Hide</button>
         </div>
       </div>
-
-      <iframe
-        key={tab}
-        title={`Streams AI ${TABS[tab].label}`}
-        src={TABS[tab].src}
-        className="h-full w-full flex-1 bg-white"
-      />
+      <iframe key={tab} title={`Streams AI ${TABS[tab].label}`} src={TABS[tab].src} className="h-full w-full flex-1 bg-white" />
     </aside>
   );
 }
