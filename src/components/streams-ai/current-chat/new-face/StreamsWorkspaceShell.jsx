@@ -142,6 +142,7 @@ import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
+import ChatControlledPreviewEditor from "./editor-core/ChatControlledPreviewEditor";
 
 const StudioEditorShell = dynamic(() => import("@/components/editor-pro/StudioEditorShell"), {
   ssr: false,
@@ -891,7 +892,10 @@ function SplitChatContext() {
   return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span></div></div></div></div><div className="splitComposer"><div className="startComposer"><input placeholder="Ask anything" readOnly /></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
 }
 
-function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode, chatRuntime }) {
+function PreviewWorkspace({ chatRuntime }) {
+  return <ChatControlledPreviewEditor chatRuntime={chatRuntime} />;
+}
+) {
   const splitRef = useRef(null);
   const drag = useRef({ x: 0, w: 680 });
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
