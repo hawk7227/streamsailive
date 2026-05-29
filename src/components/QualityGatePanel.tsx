@@ -121,7 +121,7 @@ export default function QualityGatePanel() {
         if (data.report) {
           setChat((prev) => {
             const next = [...prev]
-            next.push({ role: 'assistant', text: buildHonestFeedback(data.report) })
+            next.push({ role: 'assistant', text: data.report ? buildHonestFeedback(data.report) : 'Quality gate completed, but no detailed report was returned.' })
             return next
           })
         }
