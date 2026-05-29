@@ -1,5 +1,5 @@
-import dynamic from "next/dynamic";
 "use client";
+import dynamic from "next/dynamic";
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
