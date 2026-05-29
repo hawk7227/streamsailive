@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -140,8 +141,12 @@ import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
 import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
 import StreamsComposer from "./composer/StreamsComposer";
-import StreamsSplitPreview from "./preview/StreamsSplitPreview";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
+
+const StudioEditorShell = dynamic(() => import("@/components/editor-pro/StudioEditorShell"), {
+  ssr: false,
+});
+
 const navItems = ["Chat", "Editor", "Generate", "Reference", "Person", "Build", "Settings"];
 const today = ["Urban morning vibe", "Brand campaign ideas", "Recipe suggestions"];
 const yesterday = ["Quarterly report summary", "Website hero concepts"];
@@ -987,29 +992,9 @@ function PreviewWorkspace({ mode, setMode, closePreview, openPreview, layoutMode
     }
   };
 
-  if (isMobile) return <div className="mobilePreviewShell"><StreamsSplitPreview
-    embedded
-    initialOpen
-    onClose={closePreview}
-    onOpenLatestPreview={() => {
-      const opened = openLatestAssistantCodeInPreview(chatRuntime?.messages);
-      if (!opened) {
-        window.alert("No previewable assistant code found yet.");
-      }
-    }}
-  /></div>;
+  if (isMobile) return <div className="mobilePreviewShell"><StudioEditorShell /></div>;
 
-  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><StreamsSplitPreview
-    embedded
-    initialOpen
-    onClose={closePreview}
-    onOpenLatestPreview={() => {
-      const opened = openLatestAssistantCodeInPreview(chatRuntime?.messages);
-      if (!opened) {
-        window.alert("No previewable assistant code found yet.");
-      }
-    }}
-  /></div>;
+  return <div ref={splitRef} className={dragging ? "previewWorkspace dragging" : "previewWorkspace"}><section className="previewLeftPane" style={{ width: clamp(leftWidth) }}>{mode === "code" ? <CodeEditorScreen openPreview={openPreview} openStart={() => setMode("start")}/> : <StartWorkspace openPreview={openPreview} openCode={() => setMode("code")} chatRuntime={chatRuntime}/>}</section><div className="splitHandle" role="separator" aria-orientation="vertical" aria-valuenow={clamp(leftWidth)} aria-valuemin={chatMin} aria-valuemax={maxLeft()} tabIndex={0} onMouseDown={(event) => startDrag(event.clientX)} onTouchStart={(event) => startDrag(event.touches[0].clientX)} onKeyDown={keyResize}><span/></div><div className="previewRightPane"><StudioEditorShell /></div></div>;
 }
 
 
