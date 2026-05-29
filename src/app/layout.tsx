@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
+import { ChatEditorDock } from "@/components/editor-pro/ChatEditorDock";
 
 const inter = { variable: "--font-inter", className: "font-inter" };
 
@@ -32,6 +33,7 @@ export default function RootLayout({
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>
         </QueryProvider>
+              <ChatEditorDock />
       </body>
     </html>
   );
