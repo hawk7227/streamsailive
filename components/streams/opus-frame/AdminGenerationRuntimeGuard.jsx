@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import OpusLockedFrame from "./OpusLockedFrame";
+import VoiceConversationLayer from "./VoiceConversationLayer";
 
 const PROTECTED_JOBS_ROUTE = "/api/admingeneration/jobs";
 const SAFE_SUBMIT_ROUTE = "/api/admingeneration/submit";
@@ -40,5 +41,10 @@ export default function AdminGenerationRuntimeGuard() {
     };
   }, []);
 
-  return <OpusLockedFrame />;
+  return (
+    <>
+      <OpusLockedFrame />
+      <VoiceConversationLayer />
+    </>
+  );
 }
