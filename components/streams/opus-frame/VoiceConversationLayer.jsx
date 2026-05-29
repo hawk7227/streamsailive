@@ -62,7 +62,8 @@ export default function VoiceConversationLayer() {
   const [transcripts, setTranscripts] = useState([]);
   const [memoryMode, setMemoryMode] = useState("session");
   const [responseStyle, setResponseStyle] = useState("natural");
-  const [minimized, setMinimized] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [minimized, setMinimized] = useState(true);
   const vapiRef = useRef(null);
   const callIdRef = useRef(null);
 
@@ -253,10 +254,22 @@ export default function VoiceConversationLayer() {
   const memoryOptions = useMemo(() => config?.memoryModes || ["none", "session", "project", "long-term", "full"], [config]);
   const styleOptions = useMemo(() => config?.responseStyles || ["natural", "friendly", "professional"], [config]);
 
-  if (minimized) {
+  if (!panelOpen || minimized) {
     return (
-      <button className="voice-layer-minimized" onClick={() => setMinimized(false)} type="button">
-        🎙️ Voice
+      <button
+        className="voice-left-rail-tab"
+        onClick={() => {
+          setPanelOpen(true);
+          setMinimized(false);
+        }}
+        type="button"
+        title="Open Live Voice"
+      >
+        <span className="voice-left-rail-icon">🎙️</span>
+        <span>
+          <strong>Live Voice</strong>
+          <em>{callActive ? "Listening now" : "Wake / push-to-talk"}</em>
+        </span>
       </button>
     );
   }
@@ -268,7 +281,25 @@ export default function VoiceConversationLayer() {
           <strong>Live Voice Conversation</strong>
           <span>{status}</span>
         </div>
-        <button onClick={() => setMinimized(true)} type="button">×</button>
+        <div className="voice-layer-header-actions">
+          <button
+            aria-label="Minimize Live Voice"
+            onClick={() => setMinimized(true)}
+            type="button"
+          >
+            —
+          </button>
+          <button
+            aria-label="Close Live Voice"
+            onClick={() => {
+              setPanelOpen(false);
+              setMinimized(true);
+            }}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       <div className="voice-layer-controls">
