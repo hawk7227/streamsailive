@@ -21,6 +21,7 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
   const [editMode, setEditMode] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [url, setUrl] = useState("");
+  const [loadAnalysisId, setLoadAnalysisId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Ready");
   const [error, setError] = useState("");
@@ -140,6 +141,40 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
     setJob(worker.job);
 
     await refreshState(nextAnalysisId, ed.editorProject?.id, worker.job?.id);
+  }
+
+  
+  async function loadExistingAnalysis() {
+    if (!loadAnalysisId.trim()) return;
+    setBusy(true);
+    setError("");
+    setMessage("Loading existing analysis…");
+
+    try {
+      const existingId = loadAnalysisId.trim();
+      const intel = await readJson(
+        await fetch(`/api/admingeneration/reference/analyze/${existingId}/intelligence`, { cache: "no-store" }),
+        "load analysis",
+      );
+
+      setIntelligence(intel);
+      if (intel.analysis) setAnalysis(intel.analysis);
+
+      const ed = await postJson("/api/admingeneration/editor/from-analysis", {
+        analysisId: existingId,
+        projectId,
+      });
+      setEditor(ed.editorProject);
+
+      await refreshState(existingId, ed.editorProject?.id, jobId);
+      setMessage("Existing analysis loaded.");
+      setEditMode(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setMessage("Load analysis failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function analyzeUrl() {
@@ -343,6 +378,19 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
           <button style={styles.secondaryButton} disabled={busy} onClick={() => fileRef.current?.click()}>
             Upload + Analyze
           </button>
+
+          <label style={styles.label}>Load Existing Analysis ID</label>
+          <div style={styles.row}>
+            <input
+              style={styles.input}
+              value={loadAnalysisId}
+              onChange={(event) => setLoadAnalysisId(event.target.value)}
+              placeholder="Paste analysisId"
+            />
+            <button style={styles.secondaryButton} disabled={busy || !loadAnalysisId.trim()} onClick={loadExistingAnalysis}>
+              Load
+            </button>
+          </div>
 
           {analysisId ? (
             <div style={styles.summaryBox}>
