@@ -1,5 +1,7 @@
-import AdminGenerationRuntimeGuard from "../../../components/streams/opus-frame/AdminGenerationRuntimeGuard";
+"use client";
 
-export default function OpusFramePage() {
-  return <AdminGenerationRuntimeGuard />;
+import FinalVideoEditorWorkbench from "@/components/admingeneration/FinalVideoEditorWorkbench";
+
+export default function AdminGenerationPage() {
+  return <FinalVideoEditorWorkbench />;
 }
