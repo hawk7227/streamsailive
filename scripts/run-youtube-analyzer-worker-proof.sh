@@ -5,12 +5,12 @@ ANALYSIS_ID="${1:?Usage: bash scripts/run-youtube-analyzer-worker-proof.sh <anal
 BASE_URL="${BASE_URL:-https://streamsailive.vercel.app}"
 
 echo "=============================================="
-echo "YOUTUBE DOWNLOADER WORKER PROOF"
+echo "YOUTUBE VIA UNIFIED VIDEO ANALYZER WORKER"
 echo "ANALYSIS_ID=$ANALYSIS_ID"
 echo "BASE_URL=$BASE_URL"
 echo "=============================================="
 
-python scripts/youtube-analyzer-worker.py "$ANALYSIS_ID"
+python scripts/video-analyzer-worker.py "$ANALYSIS_ID"
 
 INTEL_JSON="$(curl -fsS "$BASE_URL/api/admingeneration/reference/analyze/$ANALYSIS_ID/intelligence")"
 echo "$INTEL_JSON" | grep -q '"ok":true'
@@ -30,6 +30,6 @@ print(f"✅ intelligence populated: assets={len(assets)} video={len(video)} fram
 PY
 
 echo "=============================================="
-echo "✅ YOUTUBE DOWNLOADER WORKER PROOF COMPLETE"
+echo "✅ YOUTUBE UNIFIED WORKER PROOF COMPLETE"
 echo "ANALYSIS_ID=$ANALYSIS_ID"
 echo "=============================================="
