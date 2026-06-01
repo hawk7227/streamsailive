@@ -1,7 +1,13 @@
 "use client";
 
-import FinalVideoEditorWorkbench from "@/components/admingeneration/FinalVideoEditorWorkbench";
+import OriginalAdmingenerationPage from "./OriginalAdmingenerationPage";
+import CompactAnalyzerVideoMode from "@/components/admingeneration/CompactAnalyzerVideoMode";
 
 export default function AdminGenerationPage() {
-  return <FinalVideoEditorWorkbench />;
+  return (
+    <>
+      <OriginalAdmingenerationPage />
+      <CompactAnalyzerVideoMode />
+    </>
+  );
 }
