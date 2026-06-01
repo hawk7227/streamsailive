@@ -1,0 +1,182 @@
+.voice-layer-shell {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 520;
+  width: 390px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.24), transparent 45%),
+    rgba(6, 13, 24, 0.96);
+  color: #eef4ff;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.voice-layer-header {
+  display: grid;
+  grid-template-columns: 1fr 30px;
+  gap: 8px;
+  align-items: start;
+}
+
+.voice-layer-header strong {
+  display: block;
+  font-size: 15px;
+}
+
+.voice-layer-header span {
+  display: block;
+  margin-top: 4px;
+  color: #b8c5d8;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.voice-layer-header button,
+.voice-layer-controls button,
+.voice-wake-card button {
+  border: 1px solid rgba(178, 137, 255, 0.34);
+  border-radius: 9px;
+  background: rgba(68, 33, 134, 0.42);
+  color: #f4edff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.voice-layer-header button {
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.voice-layer-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.voice-layer-controls button {
+  height: 40px;
+}
+
+.voice-layer-controls button.active {
+  background: rgba(185, 28, 28, 0.75);
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.voice-layer-controls .push-talk {
+  background: rgba(21, 128, 61, 0.62);
+  border-color: rgba(74, 222, 128, 0.42);
+}
+
+.voice-wake-card {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(7, 14, 24, 0.82);
+}
+
+.voice-wake-card strong,
+.voice-wake-card span,
+.voice-wake-card em {
+  display: block;
+}
+
+.voice-wake-card strong {
+  font-size: 13px;
+}
+
+.voice-wake-card span {
+  margin-top: 3px;
+  color: #b8c5d8;
+  font-size: 11px;
+}
+
+.voice-wake-card em {
+  margin-top: 5px;
+  color: #fca5a5;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.25;
+}
+
+.voice-layer-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.voice-layer-settings label {
+  display: grid;
+  gap: 4px;
+  color: #a8b6cc;
+  font-size: 11px;
+}
+
+.voice-layer-settings select {
+  height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 15, 27, 0.95);
+  color: #eef4ff;
+  padding: 0 8px;
+}
+
+.voice-transcript-list {
+  max-height: 180px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.voice-transcript-list p {
+  margin: 0;
+  color: #b8c5d8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.voice-transcript-list article {
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.voice-transcript-list article.assistant {
+  background: rgba(68, 33, 134, 0.28);
+}
+
+.voice-transcript-list article strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.voice-transcript-list article span {
+  color: #dbe7fb;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.voice-layer-minimized {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 520;
+  height: 42px;
+  padding: 0 15px;
+  border: 1px solid rgba(178, 137, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(68, 33, 134, 0.74);
+  color: #fff;
+  font-weight: 900;
+}

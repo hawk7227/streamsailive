@@ -17,10 +17,36 @@ function extractVideoId(url: string): string | null {
   return null;
 }
 
+function hasTrustedIntakeAuth(request: Request) {
+  const expected =
+    process.env.STREAMS_INTAKE_KEY ||
+    process.env.INTAKE_API_KEY ||
+    process.env.ADMIN_GENERATION_KEY ||
+    "";
+
+  if (!expected) return false;
+
+  const authorization = request.headers.get("authorization") || "";
+  const bearer = authorization.match(/^Bearer\\s+(.+)$/i)?.[1] || "";
+
+  const provided =
+    request.headers.get("x-streams-intake-key") ||
+    request.headers.get("x-intake-api-key") ||
+    request.headers.get("x-admin-generation-key") ||
+    bearer ||
+    "";
+
+  return provided.length > 0 && provided === expected;
+}
+
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trustedIntakeAuth = hasTrustedIntakeAuth(request);
+
+  if (!trustedIntakeAuth) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   let body: { url?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
