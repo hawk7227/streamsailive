@@ -1,31 +1,90 @@
 import { NextResponse } from "next/server";
-import { createQcReport, listQcReports } from "@/lib/admingeneration/video-editor-control-plane";
+import {
+  createQcBlockedReport,
+  getEditorProjectBundle,
+} from "@/lib/admingeneration/db/editor-repository";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-type Params = { params: Promise<{ id: string }> };
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> | { id: string } },
+) {
+  try {
+    const params = await context.params;
+    const bundle = await getEditorProjectBundle(params.id);
 
-export async function GET(_request: Request, context: Params) {
-  const { id } = await context.params;
-  const result = await listQcReports(id);
-  if (!result.ok) return NextResponse.json({ ok: false, route: "admingeneration-editor-qc", error: result.error }, { status: 500 });
-  return NextResponse.json({ ok: true, route: "admingeneration-editor-qc", editorProjectId: id, qcReports: result.qcReports });
+    const latestReport = bundle.qcReports[0] || null;
+    const hasPassingReport = bundle.qcReports.some(
+      (report: any) => report.status === "pass",
+    );
+
+    return NextResponse.json({
+      ok: true,
+      status: "loaded",
+      projectId: params.id,
+      qcReports: bundle.qcReports,
+      gate: {
+        okToActivate: hasPassingReport,
+        status: hasPassingReport ? "pass" : "blocked",
+        latestReport,
+        reason: hasPassingReport
+          ? "A passing QC report exists."
+          : "Activation requires a passing QC report attached to a real provider output.",
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
+  }
 }
 
-export async function POST(request: Request, context: Params) {
-  const { id } = await context.params;
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const result = await createQcReport({
-    editorProjectId: id,
-    versionId: typeof body.versionId === "string" ? body.versionId : null,
-    providerRunId: typeof body.providerRunId === "string" ? body.providerRunId : null,
-    status: typeof body.status === "string" ? body.status : "pending_model_qc",
-    passed: typeof body.passed === "boolean" ? body.passed : null,
-    checks: typeof body.checks === "object" && body.checks ? (body.checks as Record<string, unknown>) : {},
-    issues: Array.isArray(body.issues) ? body.issues : [],
-    metadata: { source: "admingeneration-editor-qc", request: body },
-  });
-  if (!result.ok) return NextResponse.json({ ok: false, route: "admingeneration-editor-qc", error: result.error }, { status: 500 });
-  return NextResponse.json({ ok: true, route: "admingeneration-editor-qc", qcReport: result.qcReport });
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> | { id: string } },
+) {
+  try {
+    const params = await context.params;
+    const body = await request.json().catch(() => ({}));
+
+    const report = await createQcBlockedReport({
+      projectId: params.id,
+      versionId: body.versionId || null,
+      providerRunId: body.providerRunId || null,
+      reason:
+        body.reason ||
+        "Activation blocked until real provider output passes QC.",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      status: "blocked",
+      projectId: params.id,
+      report,
+      gate: {
+        okToActivate: false,
+        status: "blocked",
+        reason:
+          report.checks?.reason ||
+          body.reason ||
+          "QC blocked activation.",
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
+  }
 }
