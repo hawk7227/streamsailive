@@ -271,9 +271,13 @@ export default function AnalyzerPreviewIntelligenceDock() {
             <div style={styles.segmentGrid}>
               {segments.length ? segments.map((segment) => (
                 <button key={segment.id} style={styles.segmentButton} onClick={() => seekTo(segment.startSec, segment)}>
-                  <b>{segment.label}</b>
+                  <b>{segment.metadata?.sceneTitle || segment.metadata?.shotTitle || segment.label}</b>
                   <span>{formatTime(segment.startSec)} – {formatTime(segment.endSec)}</span>
-                  <small>{segment.metadata?.detectionMode || segment.type}</small>
+                  <small>{segment.metadata?.sceneDescription || segment.metadata?.detectionMode || segment.type}</small>
+                  <small>Camera: {segment.metadata?.cameraMovement || "pending"}</small>
+                  <small>Lighting: {segment.metadata?.lighting || "pending"}</small>
+                  <small>Motion: {segment.metadata?.motion || "pending"}</small>
+                  <small>Edit: {segment.metadata?.editIntent || "pending"}</small>
                 </button>
               )) : <span style={styles.emptyInline}>No segments extracted yet</span>}
             </div>
@@ -313,10 +317,19 @@ export default function AnalyzerPreviewIntelligenceDock() {
             <div style={styles.infoGrid}>
               <div><b>Visual</b><span>{analysis?.blueprint?.visualLanguage?.style || "pending model analysis"}</span></div>
               <div><b>Lighting</b><span>{analysis?.blueprint?.visualLanguage?.lightingStyle || "pending model analysis"}</span></div>
-              <div><b>Camera</b><span>{analysis?.blueprint?.visualLanguage?.compositionStyle || "pending model analysis"}</span></div>
+              <div><b>Camera</b><span>{analysis?.blueprint?.visualLanguage?.cameraLanguage || analysis?.blueprint?.visualLanguage?.compositionStyle || "pending model analysis"}</span></div>
+              <div><b>Environment</b><span>{analysis?.blueprint?.visualLanguage?.environment || "pending model analysis"}</span></div>
+              <div><b>Motion</b><span>{analysis?.blueprint?.visualLanguage?.pacing || "pending model analysis"}</span></div>
               <div><b>Sound</b><span>{analysis?.blueprint?.audioLanguage?.soundDesign || "pending audio model analysis"}</span></div>
+              <div><b>Voice</b><span>{analysis?.blueprint?.audioLanguage?.voiceStyle || "pending transcription"}</span></div>
+              <div><b>Music</b><span>{analysis?.blueprint?.audioLanguage?.musicStyle || "pending audio model analysis"}</span></div>
             </div>
           </details>
+
+          <div style={styles.lane}>
+            <div style={styles.laneHeader}><b>Provider Blueprint</b><span>{analysis?.blueprint?.generation?.providerReadyPrompt ? "ready" : "pending"}</span></div>
+            <div style={styles.transcript}>{analysis?.blueprint?.generation?.providerReadyPrompt || "Provider-ready prompt pending enrichment worker."}</div>
+          </div>
 
           <details style={styles.details}>
             <summary>Technical Details</summary>
