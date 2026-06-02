@@ -31,14 +31,13 @@ const referenceFrames = [
 ];
 
 const navItems = ["Home", "Projects", "Generate", "Assets", "Analytics", "Settings"];
-const advancedTabs = ["Prompt", "Scene", "Camera", "Lighting", "Motion", "Style", "Audio", "Output"];
 
 function initialFields() {
   return {
     mainPrompt:
       "A vast futuristic city at night, neon lights reflecting on wet streets, flying vehicles crossing between towering skyscrapers, light rain, cinematic establishing shot, ultra realistic, dramatic atmosphere.",
     scene:
-      "Establishing shot of a sprawling cyberpunk metropolis in the rain. Deep perspective, layered skyline, volumetric haze.",
+      "Sprawling cyberpunk metropolis in the rain. Deep perspective, layered skyline, volumetric haze, wet reflective streets.",
     subject: "Lone engineer looking across the city toward a glowing AI tower.",
     environment: "Urban · night · rainy · wet streets · neon signs · distant flying traffic.",
     emotionalIntent: "Awe, mystery, isolation, controlled cinematic tension.",
@@ -159,7 +158,6 @@ export default function OpusLockedFrame() {
   const [stage, setStage] = useState("generate");
   const [fields, setFields] = useState(initialFields);
   const [provider, setProvider] = useState(activeType.provider);
-  const [activeAdvancedTab, setActiveAdvancedTab] = useState("Prompt");
   const [status, setStatus] = useState("Ready to generate");
   const [isGenerating, setIsGenerating] = useState(false);
   const [jobResult, setJobResult] = useState(null);
@@ -222,7 +220,7 @@ export default function OpusLockedFrame() {
           aspectRatio: fields.aspectRatio === "N/A" ? undefined : fields.aspectRatio,
           duration: fields.duration === "N/A" ? undefined : `${fields.duration}s`,
           metadata: {
-            source: "compact-generation-workspace",
+            source: "compact-movie-production-workspace",
             createType: activeType.id,
             mode,
             fields,
@@ -262,11 +260,7 @@ export default function OpusLockedFrame() {
       const response = await fetch("/api/admingeneration/helper", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          messages: helperMessages,
-          context: { activeType, provider, fields, stage, status, jobResult },
-        }),
+        body: JSON.stringify({ message, messages: helperMessages, context: { activeType, provider, fields, stage, status, jobResult } }),
       });
       const data = await response.json().catch(() => null);
       addHelper(response.ok ? "assistant" : "system", readable(data) || `Helper returned ${response.status}`);
@@ -316,50 +310,6 @@ export default function OpusLockedFrame() {
     return "No Output Yet";
   }
 
-  function renderAdvancedFields() {
-    if (activeAdvancedTab === "Prompt") {
-      return (
-        <div className="advanced-builder-grid two">
-          <label className="field-card large"><span>1. Main Prompt</span><textarea value={fields.mainPrompt} onChange={(event) => setField("mainPrompt", event.target.value)} /></label>
-          <label className="field-card large danger"><span>11. Negative Prompt / Restrictions</span><textarea value={fields.negativePrompt} onChange={(event) => setField("negativePrompt", event.target.value)} /></label>
-        </div>
-      );
-    }
-
-    if (activeAdvancedTab === "Scene") {
-      return (
-        <div className="advanced-builder-grid two">
-          <label className="field-card"><span>2. Scene Description</span><textarea value={fields.scene} onChange={(event) => setField("scene", event.target.value)} /></label>
-          <label className="field-card"><span>3. Subject</span><textarea value={fields.subject} onChange={(event) => setField("subject", event.target.value)} /></label>
-          <label className="field-card"><span>4. Environment</span><textarea value={fields.environment} onChange={(event) => setField("environment", event.target.value)} /></label>
-          <label className="field-card"><span>5. Emotional Intent</span><textarea value={fields.emotionalIntent} onChange={(event) => setField("emotionalIntent", event.target.value)} /></label>
-        </div>
-      );
-    }
-
-    if (activeAdvancedTab === "Camera") {
-      return <MiniFieldGrid keys={["shotType", "cameraPosition", "cameraMovement", "lens", "depthOfField", "composition"]} fields={fields} setField={setField} />;
-    }
-
-    if (activeAdvancedTab === "Lighting") {
-      return <MiniFieldGrid keys={["primaryLighting", "accentLighting", "rimLight", "atmosphere"]} fields={fields} setField={setField} />;
-    }
-
-    if (activeAdvancedTab === "Motion") {
-      return <MiniFieldGrid keys={["characterMotion", "environmentMotion", "motionQuality"]} fields={fields} setField={setField} textarea />;
-    }
-
-    if (activeAdvancedTab === "Style") {
-      return <MiniFieldGrid keys={["visualStyle", "filmReference", "productionDesign", "humanRealism", "mood"]} fields={fields} setField={setField} />;
-    }
-
-    if (activeAdvancedTab === "Audio") {
-      return <MiniFieldGrid keys={["voiceScript", "voiceTone", "captions"]} fields={fields} setField={setField} textarea />;
-    }
-
-    return <MiniFieldGrid keys={["duration", "aspectRatio", "frameRate", "qualityGoal", "projectId", "seed"]} fields={fields} setField={setField} />;
-  }
-
   return (
     <main className="opus-fit-shell">
       <div className="opus-board" style={boardStyle}>
@@ -404,7 +354,7 @@ export default function OpusLockedFrame() {
           <header className="workspace-topbar">
             <div>
               <h1>{stage === "generate" ? "Good evening, Creator 👋" : resultStatusLabel()}</h1>
-              <p>{stage === "generate" ? "Generate with a prompt-first builder, compact advanced controls, and real backend job submission." : "Review the real output state, iterate, or open the semantic editor when analysis is available."}</p>
+              <p>{stage === "generate" ? "Advanced movie production controls wrapped around the large center preview." : "Review the real output state, iterate, or open the semantic editor when analysis is available."}</p>
             </div>
             <div className="account-cluster">
               <span className="status-dot">● SYSTEM ONLINE</span>
@@ -426,9 +376,6 @@ export default function OpusLockedFrame() {
               provider={provider}
               setProvider={setProvider}
               status={status}
-              activeAdvancedTab={activeAdvancedTab}
-              setActiveAdvancedTab={setActiveAdvancedTab}
-              renderAdvancedFields={renderAdvancedFields}
               generateNow={generateNow}
               isGenerating={isGenerating}
               askHelper={askHelper}
@@ -495,7 +442,7 @@ export default function OpusLockedFrame() {
               </div>
               <textarea value={helperInput} onChange={(event) => setHelperInput(event.target.value)} placeholder="Ask for prompt proofing, provider routing, or output edit guidance…" />
               <div className="helper-actions">
-                <button onClick={() => askHelper("Proof my current prompt and advanced settings before generation.")} type="button">Proof Prompt</button>
+                <button onClick={() => askHelper("Proof my current prompt and advanced movie production settings before generation.")} type="button">Proof Prompt</button>
                 <button disabled={helperBusy} onClick={() => askHelper()} type="button">Send</button>
               </div>
             </aside>
@@ -506,25 +453,25 @@ export default function OpusLockedFrame() {
   );
 }
 
-function GenerateWorkspace({ activeType, activeTypeId, setActiveTypeId, mode, setMode, fields, setField, provider, setProvider, status, activeAdvancedTab, setActiveAdvancedTab, renderAdvancedFields, generateNow, isGenerating, askHelper }) {
+function GenerateWorkspace({ activeType, activeTypeId, setActiveTypeId, mode, setMode, fields, setField, provider, setProvider, status, generateNow, isGenerating, askHelper }) {
   return (
-    <div className="generation-state-grid">
-      <section className="prompt-builder-card">
+    <div className="movie-generate-state">
+      <section className="compact-prompt-top">
         <div className="mode-row generation-modes">
           {["smart", "advanced", "assistant"].map((item) => (
-            <button className={`mode ${mode === item ? "active" : ""}`} key={item} onClick={() => (item === "assistant" ? askHelper("Help me improve this generation setup.") : setMode(item))} type="button">
+            <button className={`mode ${mode === item ? "active" : ""}`} key={item} onClick={() => (item === "assistant" ? askHelper("Help me improve this movie generation setup.") : setMode(item))} type="button">
               {item === "smart" ? "⚡ Smart Mode" : item === "advanced" ? "✦ Advanced Mode" : "✨ AI Assistant"}
             </button>
           ))}
         </div>
 
-        <div className="main-prompt-box">
-          <label>
+        <div className="prompt-and-cards">
+          <label className="wide-prompt-field">
             <span>Describe what you want to create…</span>
             <textarea value={fields.mainPrompt} onChange={(event) => setField("mainPrompt", event.target.value)} />
             <b>{fields.mainPrompt.length} / 2000</b>
           </label>
-          <div className="prompt-actions">
+          <div className="prompt-chip-row">
             <button type="button">Add Media</button>
             <button type="button">16:9</button>
             <button type="button">Voice</button>
@@ -534,56 +481,106 @@ function GenerateWorkspace({ activeType, activeTypeId, setActiveTypeId, mode, se
           </div>
         </div>
 
-        <div className="create-strip-head"><strong>Choose what you want to create</strong><span>{status}</span></div>
-        <div className="create-type-strip">
+        <div className="create-type-strip compact">
           {createTypes.map((item) => (
             <button className={`create-type-card ${item.accent} ${item.id === activeTypeId ? "active" : ""}`} key={item.id} onClick={() => setActiveTypeId(item.id)} type="button">
               <span>{item.icon}</span>
               <strong>{item.title}</strong>
               <small>{item.kind}</small>
-              <em>Start →</em>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="advanced-composer-card">
-        <div className="advanced-header">
-          <div><h3>✦ Advanced Prompt Builder</h3><p>Fine-tune scene, camera, lighting, motion, style, restrictions, and output.</p></div>
-          <div><button type="button">Load Preset</button><button type="button">Save Preset</button></div>
+      <section className="movie-production-stage">
+        <aside className="production-column left-prod">
+          <ProductionCard title="1. Scene" value={fields.scene} onChange={(value) => setField("scene", value)} textarea />
+          <ProductionCard title="2. Subject" value={fields.subject} onChange={(value) => setField("subject", value)} textarea />
+          <ProductionCard title="3. Environment" value={fields.environment} onChange={(value) => setField("environment", value)} textarea />
+          <ProductionCard title="4. Emotional Intent" value={fields.emotionalIntent} onChange={(value) => setField("emotionalIntent", value)} textarea />
+          <ProductionCard title="5. Mood" value={fields.mood} onChange={(value) => setField("mood", value)} />
+        </aside>
+
+        <div className="center-preview-stack">
+          <div className="preview-toolbar">
+            <div><strong>{activeType.title}</strong><span>{status}</span></div>
+            <div><button type="button">Raw</button><button className="active" type="button">Preview</button><button type="button">Fit</button><button type="button">Grid</button></div>
+          </div>
+          <div className="large-center-preview">
+            <img src={referencePreview} alt="Movie generation concept preview" />
+            <div className="analysis-float-card">
+              <strong>AI Production Setup</strong>
+              <p>Scene, camera, lighting, motion, and output are editable around this preview before generation.</p>
+              <button onClick={() => askHelper("Review the current production setup around the preview.")} type="button">Review Setup</button>
+            </div>
+            <div className="preview-controls"><b>▶</b><span>0:00 / 0:{String(fields.duration || 8).padStart(2, "0")}</span><i /><em>CC</em><em>1x</em><em>⛶</em></div>
+          </div>
+          <div className="mini-keyframes-row">
+            {referenceFrames.map((image, index) => (
+              <button className={index === 0 ? "active" : ""} key={image} type="button"><img src={image} alt="" /><span>{index}s</span></button>
+            ))}
+          </div>
         </div>
-        <div className="advanced-tab-row">
-          {advancedTabs.map((tab) => <button className={activeAdvancedTab === tab ? "active" : ""} key={tab} onClick={() => setActiveAdvancedTab(tab)} type="button">{tab}</button>)}
-        </div>
-        {renderAdvancedFields()}
-        <div className="advanced-output-row">
-          <label><span>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="openai">OpenAI</option><option value="fal">fal.ai</option><option value="runway">Runway</option><option value="kling">Kling</option><option value="veo">Veo</option><option value="elevenlabs">ElevenLabs</option></select></label>
-          <label><span>Duration</span><input value={fields.duration} onChange={(event) => setField("duration", event.target.value)} /></label>
-          <label><span>Aspect</span><input value={fields.aspectRatio} onChange={(event) => setField("aspectRatio", event.target.value)} /></label>
-          <label><span>Quality</span><input value={fields.qualityGoal} onChange={(event) => setField("qualityGoal", event.target.value)} /></label>
-          <button className="wide-generate" disabled={isGenerating} onClick={generateNow} type="button">{isGenerating ? "Submitting…" : `Generate ${activeType.title} ✨`}</button>
-        </div>
+
+        <aside className="production-column right-prod">
+          <ProductionGroup title="6. Camera" fields={fields} setField={setField} keys={["shotType", "cameraPosition", "cameraMovement", "lens", "depthOfField", "composition"]} />
+          <ProductionGroup title="7. Lighting" fields={fields} setField={setField} keys={["primaryLighting", "accentLighting", "rimLight", "atmosphere"]} />
+          <ProductionGroup title="8. Motion" fields={fields} setField={setField} keys={["characterMotion", "environmentMotion", "motionQuality"]} />
+          <ProductionGroup title="9. Style" fields={fields} setField={setField} keys={["visualStyle", "filmReference", "productionDesign", "humanRealism"]} />
+        </aside>
       </section>
 
-      <section className="bottom-generation-row">
-        <div className="suggested-presets">
-          <div><strong>Suggested Presets</strong><button type="button">View all</button></div>
-          {["Cinematic Establishing", "Character Close-Up", "Product Showcase", "Dynamic Action"].map((item, index) => <button className={index === 0 ? "active" : ""} key={item} type="button"><strong>{item}</strong><span>{["Wide city or landscape", "Dialogue & emotion", "Clean & professional", "Fast-paced & energetic"][index]}</span></button>)}
+      <section className="movie-output-band">
+        <div className="negative-card">
+          <strong>10. Negative Prompt / Restrictions</strong>
+          <textarea value={fields.negativePrompt} onChange={(event) => setField("negativePrompt", event.target.value)} />
         </div>
-        <div className="workflow-overview">
-          <strong>Workflow Overview</strong>
-          <div><span>1 Build Prompt</span><i /><span>2 Review Settings</span><i /><span>3 Generate</span><i /><span>4 Review & Refine</span></div>
+        <div className="output-card">
+          <strong>11. Output Settings</strong>
+          <div className="output-inline-fields">
+            <label><span>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="openai">OpenAI</option><option value="fal">fal.ai</option><option value="runway">Runway</option><option value="kling">Kling</option><option value="veo">Veo</option><option value="elevenlabs">ElevenLabs</option></select></label>
+            <label><span>Duration</span><input value={fields.duration} onChange={(event) => setField("duration", event.target.value)} /></label>
+            <label><span>Aspect</span><input value={fields.aspectRatio} onChange={(event) => setField("aspectRatio", event.target.value)} /></label>
+            <label><span>Frame Rate</span><input value={fields.frameRate} onChange={(event) => setField("frameRate", event.target.value)} /></label>
+            <label><span>Quality</span><input value={fields.qualityGoal} onChange={(event) => setField("qualityGoal", event.target.value)} /></label>
+            <button disabled={isGenerating} onClick={generateNow} type="button">{isGenerating ? "Submitting…" : "Generate Video ✨"}</button>
+          </div>
         </div>
       </section>
     </div>
   );
 }
 
+function ProductionCard({ title, value, onChange, textarea = false }) {
+  return (
+    <label className="production-card">
+      <span>{title}</span>
+      {textarea ? <textarea value={value} onChange={(event) => onChange(event.target.value)} /> : <input value={value} onChange={(event) => onChange(event.target.value)} />}
+    </label>
+  );
+}
+
+function ProductionGroup({ title, fields, setField, keys }) {
+  return (
+    <section className="production-group-card">
+      <strong>{title}</strong>
+      <div>
+        {keys.map((key) => (
+          <label key={key}>
+            <span>{key.replace(/([A-Z])/g, " $1")}</span>
+            <input value={fields[key]} onChange={(event) => setField(key, event.target.value)} />
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ResultWorkspace({ activeType, fields, status, outputUrl, jobResult, setStage, generateNow, isGenerating, openOutputEditor, analysisId }) {
   const hasRealOutput = Boolean(outputUrl);
   return (
-    <div className="result-state-grid">
-      <section className="result-main-card">
+    <div className="result-state-grid tighter">
+      <section className="result-main-card tighter">
         <div className="result-action-bar">
           <div><strong>{hasRealOutput ? "✅ Generated Video Ready" : "🟡 Generation Request Saved"}</strong><span>{fields.duration}s · {fields.aspectRatio} · {fields.frameRate} · {status}</span></div>
           <div>
@@ -600,9 +597,9 @@ function ResultWorkspace({ activeType, fields, status, outputUrl, jobResult, set
           {hasRealOutput ? (
             outputUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? <video src={outputUrl} controls playsInline /> : <img src={outputUrl} alt="Generated output" />
           ) : (
-            <div className="no-output-state">
+            <div className="no-output-state compact">
               <strong>No real output file returned yet</strong>
-              <p>The job request is saved, but this screen will not show a fake generated video. When the provider returns a real asset URL, it appears here.</p>
+              <p>The job request is saved. This screen will not show a fake generated video.</p>
               <code>{readable(jobResult) || "Awaiting provider output"}</code>
             </div>
           )}
@@ -621,31 +618,24 @@ function ResultWorkspace({ activeType, fields, status, outputUrl, jobResult, set
           </div>
         </div>
 
-        <div className="result-lower-grid">
+        <div className="result-lower-grid tighter">
           <div className="output-specs"><strong>Output Specs</strong><p>Duration <span>{fields.duration}s</span></p><p>Format <span>{hasRealOutput ? "Provider output" : "Pending"}</span></p><p>Resolution <span>{fields.aspectRatio}</span></p><p>Quality <span>{fields.qualityGoal}</span></p></div>
           <div className="iteration-tools"><strong>Iteration Tools</strong><div><button type="button">Create Variation</button><button type="button">Extend Video</button><button type="button">Reframe Shot</button><button type="button" onClick={() => setStage("generate")}>Edit with Prompt</button></div></div>
         </div>
+
+        <div className="related-output-row">
+          {referenceFrames.slice(0, 5).map((image, index) => (
+            <button key={image} type="button"><img src={image} alt="" /><span>{index === 0 ? "Version 2 (Current)" : index === 4 ? "+2 More Versions" : `Variation ${index}`}</span><small>{fields.duration}s · {fields.aspectRatio}</small></button>
+          ))}
+        </div>
       </section>
 
-      <aside className="result-summary-rail">
+      <aside className="result-summary-rail tighter">
         <SummaryCard title="Generation Summary" text={hasRealOutput ? "A generated output is available. Review, export, or open the semantic output editor." : "Request saved. Real provider output has not returned yet."} />
         <SummaryCard title="Prompt Snapshot" text={fields.mainPrompt} />
         <SummaryCard title="Camera Settings Summary" text={`${fields.cameraMovement} · ${fields.shotType} · ${fields.lens} · ${fields.depthOfField}`} />
         <SummaryCard title="Generation Details" text={`Provider route: ${activeType.provider}. Analysis ID: ${analysisId || "not available"}. Version: pending real output/analyzer.`} />
       </aside>
-    </div>
-  );
-}
-
-function MiniFieldGrid({ keys, fields, setField, textarea = false }) {
-  return (
-    <div className="advanced-builder-grid mini">
-      {keys.map((key) => (
-        <label className="field-card" key={key}>
-          <span>{key.replace(/([A-Z])/g, " $1")}</span>
-          {textarea ? <textarea value={fields[key]} onChange={(event) => setField(key, event.target.value)} /> : <input value={fields[key]} onChange={(event) => setField(key, event.target.value)} />}
-        </label>
-      ))}
     </div>
   );
 }
