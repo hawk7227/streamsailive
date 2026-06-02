@@ -828,3 +828,74 @@
   opacity: .45;
   cursor: not-allowed;
 }
+
+/* ============================================================
+   Completion pass: selected bar, inline editing, guide, QA,
+   provider status, versions, compare, waveforms, inspector
+   ============================================================ */
+
+.guideButton{height:26px;padding:0 12px;border:1px solid rgba(168,85,247,.55);border-radius:6px;background:rgba(72,30,129,.62);color:#f5f3ff;font-size:11px}
+
+.compareBadge{position:absolute;right:16px;top:14px;z-index:4;padding:6px 10px;border:1px solid rgba(168,85,247,.45);border-radius:999px;background:rgba(3,10,16,.72);color:#f5d0fe;font-size:11px;letter-spacing:.08em}
+
+.selectedActionBar{min-height:62px;display:grid;grid-template-columns:220px minmax(260px,1fr) 390px;gap:8px;align-items:stretch;border:1px solid rgba(120,143,164,.16);border-radius:7px;background:rgba(5,12,18,.88);padding:8px}
+.selectedActionBar>div:first-child{display:grid;align-content:center;gap:4px;min-width:0}
+.selectedActionBar span{color:#8ea2b8;font-size:10px;letter-spacing:.08em}
+.selectedActionBar strong{color:#f8fafc;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selectedActionBar textarea{width:100%;min-height:44px;resize:none;border:1px solid rgba(120,143,164,.18);border-radius:6px;background:#040b14;color:#f8fafc;padding:8px 10px;outline:none}
+.selectedActionBar>div:last-child{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.selectedActionBar button{border:1px solid rgba(148,163,184,.17);border-radius:6px;background:rgba(15,23,42,.78);color:#d8b4fe;font-size:10px}
+.selectedActionBar button:disabled{opacity:.45;cursor:not-allowed}
+
+.activeBlock{outline:2px solid rgba(255,255,255,.55)!important;box-shadow:0 0 0 2px rgba(139,60,255,.45),0 0 18px rgba(139,60,255,.28)!important}
+
+.blockEditor{min-height:32px;display:grid;grid-template-columns:minmax(120px,1fr) 48px 54px;gap:4px;align-items:center;border:1px solid rgba(255,255,255,.22);border-radius:4px;padding:3px;overflow:hidden}
+.blockEditor input{width:100%;height:26px;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(2,6,12,.82);color:#fff;padding:0 7px;outline:none;font-size:10px}
+.blockEditor button{height:26px;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(15,23,42,.74);color:#fff;font-size:9px}
+.blockEditor button:disabled{opacity:.45;cursor:not-allowed}
+
+.waveBlock{position:relative;display:grid!important;grid-template-columns:1fr!important;align-items:center!important}
+.waveBlock i{position:absolute;inset:5px 8px;display:flex;align-items:center;gap:2px;opacity:.55;pointer-events:none}
+.waveBlock em{display:block;width:3px;min-height:8px;border-radius:999px;background:rgba(255,255,255,.72)}
+.waveBlock span{position:relative;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+.versionCard{display:grid;grid-template-columns:1fr;gap:5px}
+.versionCard>button{width:100%}
+.versionCard>div{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.versionCard>div button{min-height:24px;font-size:9px;color:#d8b4fe}
+
+.transcriptPanel{display:grid;gap:7px;padding:8px;border:1px solid rgba(120,143,164,.13);border-radius:7px;background:rgba(3,10,16,.55)}
+.transcriptPanel strong{font-size:11px}
+.transcriptPanel p{margin:0;color:#cbd5e1;font-size:10px}
+.transcriptPanel div{display:flex;gap:5px;flex-wrap:wrap}
+.transcriptPanel button{min-height:30px;display:grid;gap:1px;padding:3px 7px;border:1px solid rgba(148,163,184,.17);border-radius:6px;background:rgba(15,23,42,.78);color:#f8fafc;font-size:10px}
+.transcriptPanel small{color:#93c5fd;font-size:8px}
+
+.providerStatus,.qaChecklist{display:grid;gap:7px;padding:11px;border:1px solid rgba(120,143,164,.13);border-radius:7px;background:rgba(5,12,18,.86)}
+.providerStatus strong,.qaChecklist strong{font-size:11px}
+.providerStatus p,.qaChecklist p{display:grid;grid-template-columns:95px 1fr;gap:8px;align-items:center;margin:0;color:#cbd5e1;font-size:10px}
+.providerStatus p span,.qaChecklist p span{color:#8ea2b8}
+.providerStatus p b,.qaChecklist p b{color:#86efac;font-weight:600;text-align:right}
+.qaChecklist button{min-height:31px;border:1px solid rgba(168,85,247,.28);border-radius:6px;background:rgba(67,29,126,.58);color:#e9d5ff}
+
+.guideOverlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+.guideCard{width:min(520px,calc(100vw - 32px));display:grid;gap:14px;padding:18px;border:1px solid rgba(168,85,247,.42);border-radius:14px;background:linear-gradient(180deg,rgba(9,18,30,.98),rgba(3,8,16,.98));box-shadow:0 24px 80px rgba(0,0,0,.45),0 0 40px rgba(139,60,255,.20)}
+.guideHeader{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.guideHeader span{display:block;color:#93c5fd;font-size:11px;letter-spacing:.12em}
+.guideHeader strong{display:block;margin-top:4px;color:#fff;font-size:20px}
+.guideHeader button{width:32px;height:32px;border:1px solid rgba(148,163,184,.18);border-radius:8px;background:rgba(15,23,42,.78);color:#f8fafc}
+.guideCard p{margin:0;color:#cbd5e1;line-height:1.55;font-size:14px}
+.guideTarget{min-height:38px;display:flex;align-items:center;gap:6px;padding:0 12px;border:1px solid rgba(120,143,164,.16);border-radius:8px;background:rgba(15,23,42,.50);color:#9fb3c8;font-size:13px}
+.guideTarget b{color:#f8fafc}
+.guideProgress{display:flex;gap:7px}
+.guideProgress button{width:30px;height:30px;border:1px solid rgba(148,163,184,.18);border-radius:999px;background:rgba(15,23,42,.78);color:#cbd5e1}
+.guideProgress .activeGuideDot{border-color:rgba(168,85,247,.75);background:rgba(88,28,135,.78);color:#fff}
+.guideActions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.guideActions button{min-height:40px;border:1px solid rgba(168,85,247,.32);border-radius:8px;background:rgba(67,29,126,.62);color:#f5f3ff}
+.guideActions button:disabled{opacity:.45;cursor:not-allowed}
+
+@media (min-width:1200px){
+  .centerStage{grid-template-rows:34px minmax(270px,32vh) 44px 70px minmax(215px,1fr) 54px!important}
+  .selectedActionBar{grid-template-columns:200px minmax(240px,1fr) 360px;min-height:64px}
+  .rightRail{grid-template-rows:36px minmax(225px,auto) 104px 118px 128px 78px 116px 132px minmax(70px,1fr)!important}
+}
