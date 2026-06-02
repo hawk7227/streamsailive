@@ -387,16 +387,3 @@ function ResultWorkspace({ fields, status, outputUrl, jobResult, setStage, gener
 function SummaryCard({ title, text }) {
   return <section className="summary-card"><h3>{title}</h3><p>{text}</p></section>;
 }
-
-
-  useEffect(() => {
-    const hasImage =
-      Boolean(typeof imageUrl === "string" && imageUrl.trim()) ||
-      Boolean(typeof sourceImageUrl === "string" && sourceImageUrl.trim());
-
-    if (!hasImage && (selectedMode === "image-to-video" || activeMode === "image-to-video")) {
-      setSelectedMode("generate-from-scratch");
-      if (typeof setActiveMode === "function") setActiveMode("generate-from-scratch");
-    }
-  }, [selectedMode, activeMode, imageUrl, sourceImageUrl]);
-
