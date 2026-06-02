@@ -202,8 +202,8 @@ export default function StreamsPanel() {
           }} className="streams-desktop-nav">
             {/* Brand */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginRight: 24 }}>
-              <span style={{ fontSize: 20, fontWeight: 600 }}>+</span>
-              <span style={{ fontSize: 16, fontWeight: 600, color: C.t1 }}>Streams</span>
+              <span style={{ fontSize: 20, fontWeight: 500 }}>+</span>
+              <span style={{ fontSize: 16, fontWeight: 500, color: C.t1 }}>Streams</span>
             </div>
 
             {TABS.map((tab) => (
@@ -279,10 +279,10 @@ export default function StreamsPanel() {
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                backgroundColor: '#9333ea',
+                backgroundColor: "var(--streams-accent)",
                 color: '#fff',
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: 500,
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -301,11 +301,11 @@ export default function StreamsPanel() {
                 border: `1px solid ${C.bdr}`,
                 borderRadius: 12,
                 padding: 12,
-                zIndex: 1000,
+                zIndex: 400,
                 boxShadow: '0 10px 32px rgba(0,0,0,0.15)',
               }}>
                 <div style={{ paddingBottom: 12, borderBottom: `1px solid ${C.bdr}`, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>MARCUS HAWKINS</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.t1 }}>MARCUS HAWKINS</div>
                   <div style={{ fontSize: 12, color: C.t3 }}>Pro</div>
                 </div>
                 <button onClick={() => setShowUserMenu(false)} style={{ width: '100%', textAlign: 'left', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 13, marginBottom: 8 }}>⬆ Upgrade plan</button>

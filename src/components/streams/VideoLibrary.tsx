@@ -36,8 +36,8 @@ export function VideoLibrary({
         }}>
           <video src={video.url} style={{ width: '100%', height: 'auto', display: 'block' }} />
           <div style={{ padding: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 4 }}>{video.title}</div>
-            <div style={{ fontSize: 11, color: C.t3 }}>{video.createdAt}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.t1, marginBottom: 4 }}>{video.title}</div>
+            <div style={{ fontSize: 12, color: C.t3 }}>{video.createdAt}</div>
           </div>
         </div>
       ))}
