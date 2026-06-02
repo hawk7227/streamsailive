@@ -61,3 +61,5 @@ export function buildCompiledGenerationPrompt(body: Record<string, any>) {
 
   return lines.join("\n");
 }
+export const buildCompiledPrompt = buildCompiledGenerationPrompt;
+export const normalizeGenerationMode = resolveGenerationMode;
