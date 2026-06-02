@@ -1020,3 +1020,22 @@
     grid-template-rows: 36px minmax(225px,auto) 104px 118px 128px 110px 78px 116px 132px minmax(70px,1fr) !important;
   }
 }
+
+/* ============================================================
+   Real analyzer-backed timeline states
+   ============================================================ */
+
+.timelineEmpty {
+  grid-column: 1 / -1;
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  border: 1px dashed rgba(147,197,253,.28);
+  border-radius: 8px;
+  background: rgba(15,23,42,.38);
+  color: #bfdbfe;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}

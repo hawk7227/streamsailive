@@ -62,15 +62,15 @@ const GUIDE_STEPS = [
 ];
 
 
-const LAYERS = [
-  { id: "motion", label: "MOTION / ACTION LAYER", sub: "Movement & Actions", color: "green", samples: ["Walking forward", "Looks around", "Turns left", "Walks forward", "People pass by", "Crosses street"] },
-  { id: "dialogue", label: "TRANSCRIPT / DIALOGUE LAYER", sub: "Spoken Words / Dialogue", color: "blue", samples: ["Reed walks down the street.", "He looks around.", "Reed turns left.", "People are walking.", "Cars passing by."] },
-  { id: "translation", label: "TRANSLATION LAYER", sub: "Translation", color: "purple", samples: ["Reed camina por la calle.", "Él mira alrededor.", "Reed gira a la izquierda.", "La gente está caminando.", "Autos pasando."] },
-  { id: "lipsync", label: "LIP-SYNC LAYER", sub: "Mouth & Lip Movements", color: "pink", samples: ["Neutral", "Slight open", "Speaking", "Speaking", "Closed", "Speaking"] },
-  { id: "voice", label: "AUDIO / DIALOGUE LAYER", sub: "Dialogue & Voice", color: "teal", samples: ["Footsteps", "Breathing", "Reed: This place is amazing.", "Ambient city noise", "Car passing"] },
-  { id: "music", label: "AUDIO / MUSIC LAYER", sub: "Music & Background Score", color: "greenWave", samples: ["Background music - City Vibes", "Music builds up", "Soft transition"] },
-  { id: "effects", label: "AUDIO / EFFECTS LAYER", sub: "SFX & Ambient Sounds", color: "orange", samples: ["Street ambience", "Car horn", "Footsteps", "Wind ambience", "City atmosphere"] },
-  { id: "subtitle", label: "SUBTITLE LAYER", sub: "On-Screen Subtitles", color: "gold", samples: ["Reed walks down the street", "He looks around", "Reed turns left", "People are walking", "Cars passing by"] },
+const LAYER_DEFINITIONS = [
+  { id: "motion", label: "MOTION / ACTION LAYER", sub: "Movement & Actions", color: "green" },
+  { id: "dialogue", label: "TRANSCRIPT / DIALOGUE LAYER", sub: "Spoken Words / Dialogue", color: "blue" },
+  { id: "translation", label: "TRANSLATION LAYER", sub: "Translation", color: "purple" },
+  { id: "lipsync", label: "LIP-SYNC LAYER", sub: "Mouth & Lip Movements", color: "pink" },
+  { id: "voice", label: "AUDIO / DIALOGUE LAYER", sub: "Dialogue & Voice", color: "teal" },
+  { id: "music", label: "AUDIO / MUSIC LAYER", sub: "Music & Background Score", color: "greenWave" },
+  { id: "effects", label: "AUDIO / EFFECTS LAYER", sub: "SFX & Ambient Sounds", color: "orange" },
+  { id: "subtitle", label: "SUBTITLE LAYER", sub: "On-Screen Subtitles", color: "gold" },
 ];
 
 function sec(value) {
@@ -101,6 +101,171 @@ function normalizeAsset(asset, index) {
     metadata: asset.metadata || {},
   };
 }
+
+
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function textValue(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function numberValue(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function pickRoot(intelligence) {
+  return intelligence?.intelligence || intelligence || {};
+}
+
+function getTranscriptSegments(root) {
+  const transcript = root.transcript || {};
+  return arrayValue(
+    transcript.segments ||
+    transcript.items ||
+    root.transcript_segments ||
+    root.transcriptSegments ||
+    root.speakingSegments ||
+    root.speaking_segments
+  );
+}
+
+function getWordTimestamps(root) {
+  const transcript = root.transcript || {};
+  return arrayValue(
+    transcript.words ||
+    transcript.word_timestamps ||
+    root.word_timestamps ||
+    root.wordTimestamps
+  );
+}
+
+function getAudioSegments(root, kind) {
+  const audio = root.audio || {};
+  const candidates =
+    kind === "voice"
+      ? [audio.voice, audio.dialogue, root.voice_segments, root.dialogue_segments, root.audio_dialogue_segments]
+      : kind === "music"
+        ? [audio.music, root.music_segments, root.audio_music_segments]
+        : [audio.effects, audio.ambient, root.effects_segments, root.ambient_segments, root.audio_effects_segments];
+
+  return candidates.flatMap(arrayValue);
+}
+
+function getMotionSegments(root) {
+  return arrayValue(
+    root.motion_segments ||
+    root.motionSegments ||
+    root.motion_profile?.segments ||
+    root.motionProfile?.segments ||
+    root.gesture_segments ||
+    root.gestureSegments
+  );
+}
+
+function getCaptionSegments(root) {
+  return arrayValue(
+    root.caption_segments ||
+    root.captionSegments ||
+    root.subtitles ||
+    root.subtitle_segments ||
+    root.transcript?.captions
+  );
+}
+
+function makeLayerBlock({ layerId, color, item, index, fallbackStart = 0, fallbackEnd = 0 }) {
+  const startSec = numberValue(item.startSec ?? item.start ?? item.start_time ?? item.start_sec, fallbackStart);
+  const endSec = numberValue(item.endSec ?? item.end ?? item.end_time ?? item.end_sec, fallbackEnd || startSec + 1);
+
+  return {
+    id: `${layerId}-${item.id || item.segmentId || item.wordId || index}`,
+    layer: layerId,
+    targetType: layerId,
+    color,
+    label:
+      textValue(item.label) ||
+      textValue(item.text) ||
+      textValue(item.word) ||
+      textValue(item.transcript) ||
+      textValue(item.description) ||
+      `${layerId} ${index + 1}`,
+    originalLabel:
+      textValue(item.label) ||
+      textValue(item.text) ||
+      textValue(item.word) ||
+      textValue(item.transcript) ||
+      textValue(item.description) ||
+      "",
+    startSec,
+    endSec,
+    segmentId: item.segmentId || item.segment_id || item.id || null,
+    speakerId: item.speakerId || item.speaker_id || null,
+    metadata: item.metadata || item,
+  };
+}
+
+function buildRealLayerBlocks({ layer, segments, root, assets, localBlockLabels }) {
+  let raw = [];
+
+  if (layer.id === "dialogue") raw = getTranscriptSegments(root);
+  if (layer.id === "translation") raw = arrayValue(root.translations || root.translation_segments || root.translationSegments);
+  if (layer.id === "lipsync") raw = arrayValue(root.lip_sync_segments || root.lipsync_segments || root.lipSyncSegments);
+  if (layer.id === "motion") raw = getMotionSegments(root);
+  if (layer.id === "voice") raw = getAudioSegments(root, "voice");
+  if (layer.id === "music") raw = getAudioSegments(root, "music");
+  if (layer.id === "effects") raw = getAudioSegments(root, "effects");
+  if (layer.id === "subtitle") raw = getCaptionSegments(root);
+
+  // If transcript has only word timestamps, group them into one dialogue row per segment-ish chunk.
+  if (layer.id === "dialogue" && raw.length === 0) {
+    const words = getWordTimestamps(root);
+    if (words.length) {
+      raw = words.map((word, index) => ({
+        ...word,
+        id: word.id || `word-${index}`,
+        text: word.word || word.text,
+      }));
+    }
+  }
+
+  // If audio assets exist but no audio intelligence segments exist, show real assets, not fake text.
+  if (["voice", "music", "effects"].includes(layer.id) && raw.length === 0) {
+    raw = arrayValue(assets)
+      .filter((asset) => {
+        const kind = String(asset.kind || asset.assetKind || "").toLowerCase();
+        if (layer.id === "voice") return kind.includes("voice") || kind.includes("dialogue") || kind.includes("audio");
+        if (layer.id === "music") return kind.includes("music");
+        return kind.includes("effect") || kind.includes("ambient") || kind.includes("sfx");
+      })
+      .map((asset, index) => ({
+        id: asset.id || `audio-asset-${index}`,
+        label: asset.label || asset.metadata?.label || asset.kind || "Audio asset",
+        startSec: asset.metadata?.startSec || 0,
+        endSec: asset.metadata?.endSec || null,
+        metadata: asset.metadata || {},
+      }));
+  }
+
+  return raw.map((item, index) => {
+    const fallbackSegment = segments[index] || {};
+    const block = makeLayerBlock({
+      layerId: layer.id,
+      color: layer.color,
+      item,
+      index,
+      fallbackStart: fallbackSegment.startSec || index * 5,
+      fallbackEnd: fallbackSegment.endSec || (index + 1) * 5,
+    });
+
+    return {
+      ...block,
+      label: localBlockLabels[block.id] || block.label,
+    };
+  });
+}
+
 
 function normalizeSegment(segment, index) {
   const startSec = Number(segment.startSec ?? segment.start_sec ?? index * 5);
@@ -183,24 +348,19 @@ export default function FullOutputEditorClient() {
   }, [segments, localBlockLabels]);
 
   const layers = useMemo(() => {
-    return LAYERS.map((layer) => ({
+    const root = pickRoot(intelligence);
+
+    return LAYER_DEFINITIONS.map((layer) => ({
       ...layer,
-      blocks: layer.samples.map((sample, index) => {
-        const segment = segments[index] || normalizeSegment({ label: sample, startSec: index * 5, endSec: (index + 1) * 5 }, index);
-        return {
-          id: `${layer.id}-${segment.id}-${index}`,
-          layer: layer.id,
-          targetType: layer.id,
-          color: layer.color,
-          label: localBlockLabels[`${layer.id}-${segment.id}-${index}`] || sample,
-          originalLabel: sample,
-          startSec: segment.startSec,
-          endSec: segment.endSec,
-          segmentId: segment.id,
-        };
+      blocks: buildRealLayerBlocks({
+        layer,
+        segments,
+        root,
+        assets,
+        localBlockLabels,
       }),
     }));
-  }, [segments, localBlockLabels]);
+  }, [segments, intelligence, assets, localBlockLabels]);
 
   useEffect(() => {
     const id = getInitialAnalysisId();
@@ -611,7 +771,7 @@ export default function FullOutputEditorClient() {
             </div>
           </div>
 
-          <div className={styles.timeline}>{layers.map((layer, layerIndex) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block, blockIndex) => editingBlockId === block.id ? (
+          <div className={styles.timeline}>{layers.every((layer) => layer.blocks.length === 0) ? <div className={styles.timelineEmpty}>No analyzer timeline data loaded for this video yet. Run full analyzer/transcription/audio separation to populate editable lanes.</div> : null}{layers.map((layer, layerIndex) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block, blockIndex) => editingBlockId === block.id ? (
             <div key={block.id} className={`${styles.blockEditor} ${styles[block.color]}`}>
               <input
                 value={inlineEditValue}
