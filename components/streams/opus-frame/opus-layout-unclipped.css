@@ -299,3 +299,87 @@ body {
   min-height: 1780px !important;
   overflow: visible !important;
 }
+
+/* ============================================================
+   FIX: stop page freeze/overlap, make analyzer embedded
+   ============================================================ */
+
+.right-utility-rail {
+  width: 312px !important;
+  min-width: 312px !important;
+  max-width: 312px !important;
+  height: auto !important;
+  min-height: 1700px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  overflow: visible !important;
+}
+
+.utility-card {
+  width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.utility-card.quick {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.utility-card.quick button {
+  width: 100% !important;
+  min-height: 62px !important;
+  height: auto !important;
+  display: block !important;
+  padding: 12px 14px !important;
+  white-space: normal !important;
+  text-align: left !important;
+  line-height: 1.25 !important;
+}
+
+.utility-card.quick button span {
+  display: block !important;
+  margin-top: 4px !important;
+  white-space: normal !important;
+  line-height: 1.25 !important;
+  font-size: 11px !important;
+}
+
+[data-standalone-analyzer="true"] {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 132px !important;
+  margin: 16px 0 0 0 !important;
+  z-index: 1 !important;
+  transform: none !important;
+  display: grid !important;
+  grid-template-columns: 190px minmax(320px, 1fr) 220px 170px !important;
+  gap: 12px !important;
+  align-items: end !important;
+  overflow: visible !important;
+}
+
+[data-streams-analyzer-edit-rail],
+[data-streams-analyzer-edit-rail] > section {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 16px 0 0 0 !important;
+  z-index: 1 !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.center-preview-stack {
+  height: auto !important;
+  min-height: 1160px !important;
+  grid-template-rows: 38px 560px auto auto 82px !important;
+  gap: 14px !important;
+  overflow: visible !important;
+}

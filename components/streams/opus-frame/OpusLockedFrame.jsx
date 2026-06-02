@@ -80,7 +80,11 @@ export default function OpusLockedFrame() {
   const [sourceUrl, setSourceUrl] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     function normalizeAnalyzerPlacement() {
+      if (cancelled) return;
+
       const previewStack = document.querySelector(".center-preview-stack");
       if (!previewStack) return;
 
@@ -106,9 +110,10 @@ export default function OpusLockedFrame() {
           width: "100%",
           maxWidth: "none",
           margin: "16px 0 0 0",
-          zIndex: "auto",
+          zIndex: "1",
           transform: "none",
         });
+
         if (standalonePanel.parentElement !== previewStack) {
           if (keyframes) previewStack.insertBefore(standalonePanel, keyframes);
           else previewStack.appendChild(standalonePanel);
@@ -127,7 +132,7 @@ export default function OpusLockedFrame() {
           width: "100%",
           maxWidth: "none",
           margin: "16px 0 0 0",
-          zIndex: "auto",
+          zIndex: "1",
           transform: "none",
           overflow: "visible",
         });
@@ -145,7 +150,7 @@ export default function OpusLockedFrame() {
             maxWidth: "none",
             maxHeight: "none",
             margin: "0",
-            zIndex: "auto",
+            zIndex: "1",
             transform: "none",
             overflow: "visible",
           });
@@ -158,11 +163,16 @@ export default function OpusLockedFrame() {
       }
     }
 
-    normalizeAnalyzerPlacement();
-    const observer = new MutationObserver(normalizeAnalyzerPlacement);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const timers = [0, 150, 500, 1000, 2000].map((delay) =>
+      window.setTimeout(normalizeAnalyzerPlacement, delay)
+    );
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
   }, [stage]);
+
 
   const [analysisId, setAnalysisId] = useState("");
   const [jobResult, setJobResult] = useState(null);
