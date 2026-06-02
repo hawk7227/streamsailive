@@ -34,6 +34,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
 
     const bundle = await getEditorProjectBundle(projectId);
+
     const sourceAsset =
       bundle.assets.find((asset: any) => String(asset.asset_kind || "").includes("source_video")) ||
       bundle.assets.find((asset: any) => String(asset.mime_type || "").startsWith("video/")) ||

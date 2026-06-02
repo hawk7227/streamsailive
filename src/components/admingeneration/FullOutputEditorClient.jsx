@@ -324,6 +324,7 @@ export default function FullOutputEditorClient() {
   const [status, setStatus] = useState("Load an analysis to open the full output editor.");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [autoTranscribeAttempted, setAutoTranscribeAttempted] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideStep, setGuideStep] = useState(0);
 
@@ -490,9 +491,17 @@ export default function FullOutputEditorClient() {
         setTimeline(tl);
 
         const mt = await readJson(`/api/admingeneration/editor/projects/${nextEditorId}/materialized-timeline`).catch(() => null);
-        setMaterializedTimeline(mt?.materializedTimeline || null);
+        const nextMaterializedTimeline = mt?.materializedTimeline || null;
+        setMaterializedTimeline(nextMaterializedTimeline);
 
         await loadVersions(nextEditorId);
+
+        if (!timelineHasTranscriptData(nextMaterializedTimeline) && !autoTranscribeAttempted) {
+          setAutoTranscribeAttempted(true);
+          setTimeout(() => {
+            runTranscriptionForCurrentVideo({ automatic: true });
+          }, 0);
+        }
       }
 
       setStatus("Output editor loaded. Click any scene, subject, object, audio, transcript, or timeline block.");
