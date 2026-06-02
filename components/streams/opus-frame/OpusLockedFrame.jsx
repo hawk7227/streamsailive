@@ -8,8 +8,9 @@ import "./opus-layout-unclipped.css";
 const DEFAULT_PROJECT_ID = "fb7bf446-78c9-4905-80bc-32a19d0f9803";
 
 const createTypes = [
+  { id: "generate-from-scratch", title: "Generate From Scratch", icon: "✨", kind: "text-to-video", provider: "fal", ratio: "16:9" },
   { id: "text-to-image", title: "Text to Image", icon: "🖼️", kind: "image", provider: "openai", ratio: "1:1" },
-  { id: "image-to-video", title: "{(selectedMode === "generate-from-scratch" || activeMode === "generate-from-scratch") ? "Generate From Scratch" : "Image to Video"}", icon: "🎞️", kind: "image-to-video", provider: "fal", ratio: "16:9" },
+  { id: "image-to-video", title: "Image to Video", icon: "🎞️", kind: "image-to-video", provider: "fal", ratio: "16:9" },
   { id: "text-to-video", title: "Text to Video", icon: "🎬", kind: "text-to-video", provider: "fal", ratio: "16:9" },
   { id: "voice-captions", title: "Voice & Captions", icon: "🎙️", kind: "voice", provider: "elevenlabs", ratio: "N/A" },
   { id: "snap-pick-click", title: "Snap Pic Click", icon: "📸", kind: "snap-pick-click", provider: "fal", ratio: "9:16" },
