@@ -627,6 +627,48 @@ export default function FullOutputEditorClient() {
   }
 
 
+
+  async function runTranscriptionForCurrentVideo() {
+    if (!editorId) {
+      setError("Load an analysis/editor project first.");
+      return;
+    }
+
+    const currentSourceUrl = sourceUrl || videoAsset?.url || "";
+
+    if (!currentSourceUrl) {
+      setError("No current source video is available to transcribe.");
+      setStatus("Transcription needs the loaded source video first.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setStatus("Transcribing the currently loaded source video…");
+
+    try {
+      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/transcribe-source`, {
+        analysisId,
+        sourceUrl: currentSourceUrl,
+        sourceAssetId: videoAsset?.id || null,
+      });
+
+      const mt = await readJson(`/api/admingeneration/editor/projects/${editorId}/materialized-timeline`).catch(() => null);
+      setMaterializedTimeline(mt?.materializedTimeline || null);
+
+      await loadVersions(editorId).catch(() => null);
+
+      setStatus(`Transcription saved: ${result.insertedWords || 0} word timestamps added.`);
+      setProviderStatus(result?.providerRun?.status || result?.status || "transcribed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("Transcription failed or did not return word timestamps for this video.");
+      setProviderStatus("failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runSemanticAction(action, extra = {}) {
     if (!editorId) {
       setError("Load an analysis/editor project first.");
@@ -815,7 +857,7 @@ export default function FullOutputEditorClient() {
             </button>
           ))}</div></div>)}</div>
 
-          <div className={styles.toolStrip}>{TOOL_ACTIONS.map((tool) => <button type="button" key={tool.action} className={activeTool === tool.tool ? styles.activeToolAction : ""} onClick={() => { setActiveTool(tool.tool); runAction(tool.action); }} disabled={busy}>{tool.label}<small>{tool.sub}</small></button>)}</div>
+          <div className={styles.toolStrip}>{TOOL_ACTIONS.map((tool) => <button type="button" key={tool.action} className={activeTool === tool.tool ? styles.activeToolAction : ""} onClick={() => { setActiveTool(tool.tool); tool.action === "transcription" ? runTranscriptionForCurrentVideo() : runAction(tool.action); }} disabled={busy}>{tool.label}<small>{tool.sub}</small></button>)}</div>
         </section>
 
         <aside className={styles.rightRail}>

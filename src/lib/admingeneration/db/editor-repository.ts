@@ -487,3 +487,57 @@ export async function createLongVideoPlanWithShots(input: {
 
   return { plan, shots: shots || [] };
 }
+
+
+export async function persistTranscriptWordsFromAnalyzer(input: {
+  projectId: string;
+  words: Array<{
+    word?: string;
+    text?: string;
+    start?: number;
+    end?: number;
+    startSec?: number;
+    endSec?: number;
+    speakerId?: string | null;
+    speaker?: string | null;
+  }>;
+  segmentId?: string | null;
+}) {
+  const supabase = getSupabaseServiceClient();
+
+  const cleanWords = input.words
+    .map((item, index) => {
+      const word = String(item.word || item.text || "").trim();
+      const startSec = Number(item.startSec ?? item.start ?? index * 0.35);
+      const endSec = Number(item.endSec ?? item.end ?? startSec + 0.35);
+
+      return {
+        project_id: input.projectId,
+        segment_id: uuidOrNull(input.segmentId),
+        speaker_id: uuidOrNull(item.speakerId),
+        word,
+        start_sec: startSec,
+        end_sec: endSec,
+        frame_start: Math.round(startSec * 24),
+        frame_end: Math.round(endSec * 24),
+        metadata: {
+          source: "transcribe-source",
+          speaker: item.speaker || null,
+        },
+      };
+    })
+    .filter((item) => item.word);
+
+  if (!cleanWords.length) {
+    return { insertedWords: 0 };
+  }
+
+  const { error } = await supabase
+    .from("admingeneration_transcript_words")
+    .insert(cleanWords);
+
+  throwIf(error);
+
+  return { insertedWords: cleanWords.length };
+}
+
