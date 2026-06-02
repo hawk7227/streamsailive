@@ -13,7 +13,7 @@ body {
   inset: auto !important;
   width: 100% !important;
   min-width: 1920px !important;
-  min-height: 1500px !important;
+  min-height: 1700px !important;
   height: auto !important;
   overflow: visible !important;
 }
@@ -24,7 +24,7 @@ body {
   top: auto !important;
   transform: none !important;
   width: 1920px !important;
-  min-height: 1500px !important;
+  min-height: 1700px !important;
   height: auto !important;
   align-items: start !important;
 }
@@ -33,7 +33,7 @@ body {
 .opus-main.compact-shell,
 .right-utility-rail {
   height: auto !important;
-  min-height: 1500px !important;
+  min-height: 1700px !important;
   overflow: visible !important;
 }
 
@@ -43,9 +43,10 @@ body {
 
 .movie-generate-state {
   height: auto !important;
-  min-height: 1260px !important;
+  min-height: 1380px !important;
   grid-template-rows: auto auto auto !important;
   align-content: start !important;
+  overflow: visible !important;
 }
 
 .compact-prompt-top {
@@ -74,8 +75,11 @@ body {
 }
 
 .center-preview-stack {
-  min-height: 700px !important;
-  grid-template-rows: 38px 560px 82px !important;
+  height: auto !important;
+  min-height: 1050px !important;
+  grid-template-rows: 38px 560px auto auto 82px !important;
+  align-content: start !important;
+  overflow: visible !important;
 }
 
 .large-center-preview,
@@ -88,40 +92,86 @@ body {
   height: auto !important;
 }
 
-.result-state-grid {
-  height: auto !important;
-  min-height: 1200px !important;
-}
-
-.result-main-card {
-  height: auto !important;
-  min-height: 1180px !important;
-  grid-template-rows: auto 520px auto auto auto !important;
-}
-
-/* Keep the compact analyzer controls visible without hiding the page behind a large fixed overlay. */
-[data-streams-analyzer-edit-rail] > section {
+/* Put the standalone analyzer and semantic rail under the preview in the main flow. */
+[data-standalone-analyzer="true"] {
   position: relative !important;
+  inset: auto !important;
   left: auto !important;
   right: auto !important;
+  top: auto !important;
   bottom: auto !important;
-  z-index: 40 !important;
-  width: calc(100% - 24px) !important;
-  max-height: none !important;
-  min-height: 320px !important;
-  margin: 24px 12px 48px !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 132px !important;
+  margin: 16px 0 0 0 !important;
+  z-index: auto !important;
+  transform: none !important;
+  display: grid !important;
+  grid-template-columns: 180px minmax(260px, 1fr) 210px 180px !important;
+  gap: 12px !important;
+  align-items: end !important;
   overflow: visible !important;
 }
 
-/* Move the standalone analyzer out of the right-side overlap area during organization. */
-[class*="standalone"],
-[data-streams-standalone-analyzer],
-[data-standalone-analyzer] {
-  z-index: 45 !important;
+[data-streams-analyzer-edit-rail] {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 16px 0 0 0 !important;
+  z-index: auto !important;
+  transform: none !important;
+  overflow: visible !important;
 }
 
-.voice-left-rail-tab,
-.voice-layer-shell,
-[style*="Live Voice"] {
-  z-index: 140 !important;
+[data-streams-analyzer-edit-rail] > section {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  z-index: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.right-utility-rail {
+  height: auto !important;
+  min-height: 1500px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  overflow: visible !important;
+}
+
+.utility-card {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.utility-card.quick button {
+  min-height: 56px !important;
+  display: grid !important;
+  grid-template-columns: 24px 1fr !important;
+  grid-template-rows: auto auto !important;
+  align-items: start !important;
+  gap: 2px 10px !important;
+  white-space: normal !important;
+  line-height: 1.25 !important;
+  padding: 10px 12px !important;
+}
+
+.utility-card.quick button span {
+  white-space: normal !important;
+  line-height: 1.25 !important;
 }

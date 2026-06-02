@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./opus-locked-frame.css";
 import "./opus-layout-unclipped.css";
 
@@ -78,6 +78,92 @@ export default function OpusLockedFrame() {
   const [mode, setMode] = useState("advanced");
   const [stage, setStage] = useState("generate");
   const [sourceUrl, setSourceUrl] = useState("");
+
+  useEffect(() => {
+    function normalizeAnalyzerPlacement() {
+      const previewStack = document.querySelector(".center-preview-stack");
+      if (!previewStack) return;
+
+      const keyframes = previewStack.querySelector(".mini-keyframes-row");
+      const allNodes = Array.from(document.querySelectorAll("section, aside, div"));
+
+      const standalonePanel = allNodes.find((node) => {
+        if (node.closest(".center-preview-stack")) return false;
+        if (node.closest("[data-streams-analyzer-edit-rail]")) return false;
+        const text = node.textContent || "";
+        return text.includes("STANDALONE ANALYZER") && text.includes("Reference + Video Mode");
+      });
+
+      if (standalonePanel) {
+        standalonePanel.setAttribute("data-standalone-analyzer", "true");
+        Object.assign(standalonePanel.style, {
+          position: "relative",
+          inset: "auto",
+          left: "auto",
+          right: "auto",
+          top: "auto",
+          bottom: "auto",
+          width: "100%",
+          maxWidth: "none",
+          margin: "16px 0 0 0",
+          zIndex: "auto",
+          transform: "none",
+        });
+        if (standalonePanel.parentElement !== previewStack) {
+          if (keyframes) previewStack.insertBefore(standalonePanel, keyframes);
+          else previewStack.appendChild(standalonePanel);
+        }
+      }
+
+      const railHost = document.querySelector("[data-streams-analyzer-edit-rail]");
+      if (railHost) {
+        Object.assign(railHost.style, {
+          position: "relative",
+          inset: "auto",
+          left: "auto",
+          right: "auto",
+          top: "auto",
+          bottom: "auto",
+          width: "100%",
+          maxWidth: "none",
+          margin: "16px 0 0 0",
+          zIndex: "auto",
+          transform: "none",
+          overflow: "visible",
+        });
+
+        const railPanel = railHost.firstElementChild;
+        if (railPanel) {
+          Object.assign(railPanel.style, {
+            position: "relative",
+            inset: "auto",
+            left: "auto",
+            right: "auto",
+            top: "auto",
+            bottom: "auto",
+            width: "100%",
+            maxWidth: "none",
+            maxHeight: "none",
+            margin: "0",
+            zIndex: "auto",
+            transform: "none",
+            overflow: "visible",
+          });
+        }
+
+        if (railHost.parentElement !== previewStack) {
+          if (keyframes) previewStack.insertBefore(railHost, keyframes);
+          else previewStack.appendChild(railHost);
+        }
+      }
+    }
+
+    normalizeAnalyzerPlacement();
+    const observer = new MutationObserver(normalizeAnalyzerPlacement);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [stage]);
+
   const [analysisId, setAnalysisId] = useState("");
   const [jobResult, setJobResult] = useState(null);
   const [outputUrl, setOutputUrl] = useState("");

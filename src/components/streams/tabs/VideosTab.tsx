@@ -28,7 +28,7 @@ export default function VideosTab() {
     }}>
       <div style={{
         fontSize: 18,
-        fontWeight: 600,
+        fontWeight: 500,
         color: C.t1,
         marginBottom: 16,
       }}>

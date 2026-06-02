@@ -42,7 +42,7 @@ export function PreviewPanel({
         padding: 12,
         borderBottom: `1px solid ${C.bdr}`,
         fontSize: 12,
-        fontWeight: 600,
+        fontWeight: 500,
         color: C.t2,
       }}>
         Preview

@@ -5,7 +5,7 @@ import OpusLockedFrame from "./OpusLockedFrame";
 import VoiceConversationLayer from "./VoiceConversationLayer";
 
 const PROTECTED_JOBS_ROUTE = "/api/admingeneration/jobs";
-const SAFE_SUBMIT_ROUTE = "/api/admingeneration/submit";
+const SAFE_SUBMIT_ROUTE = "/api/admingeneration/routed-submit-v2";
 
 function rewriteAdminGenerationUrl(input) {
   if (typeof input === "string") {
