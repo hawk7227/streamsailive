@@ -5,6 +5,34 @@ import styles from "./FullOutputEditorClient.module.css";
 
 const DEFAULT_PROJECT_ID = "fb7bf446-78c9-4905-80bc-32a19d0f9803";
 
+const QA_ITEMS = [
+  "Identity",
+  "Hands",
+  "Mouth Sync",
+  "Audio Sync",
+  "Flicker",
+  "Continuity",
+  "Camera Motion",
+  "Provider Run",
+  "Version Safe",
+  "Export Ready",
+];
+
+const TOOL_ACTIONS = [
+  { label: "VIDEO GENERATION", action: "regenerate_segment", sub: "Selected segment", tool: "AI Tools" },
+  { label: "FRAME → VIDEO", action: "frame_to_video", sub: "Rebuild from frame", tool: "AI Tools" },
+  { label: "UPSCALE / RESTORE", action: "restore_upscale_stabilize", sub: "Restore segment", tool: "Filters" },
+  { label: "AUDIO SEPARATION", action: "audio_separation", sub: "Voice / music / ambient", tool: "Audio" },
+  { label: "TRANSCRIPTION", action: "transcription", sub: "Word timestamps", tool: "Text" },
+  { label: "LIP SYNC", action: "mouth_sync", sub: "Mouth alignment", tool: "People" },
+  { label: "COLOR GRADE", action: "color_grade", sub: "LUT / HDR", tool: "Filters" },
+];
+
+function waveformBars(seed = 1) {
+  return Array.from({ length: 22 }, (_, index) => ((index * 17 + seed * 13) % 31) + 18);
+}
+
+
 const GUIDE_STEPS = [
   {
     title: "1. Load or analyze a video",
@@ -122,6 +150,8 @@ export default function FullOutputEditorClient() {
   const [editingBlockId, setEditingBlockId] = useState("");
   const [inlineEditValue, setInlineEditValue] = useState("");
   const [localBlockLabels, setLocalBlockLabels] = useState({});
+  const [compareMode, setCompareMode] = useState("after");
+  const [providerStatus, setProviderStatus] = useState("No provider run yet");
   const [editInstruction, setEditInstruction] = useState("");
   const [activeTopTab, setActiveTopTab] = useState("SUBJECTS");
   const [activeTool, setActiveTool] = useState("Select");
@@ -170,7 +200,7 @@ export default function FullOutputEditorClient() {
         };
       }),
     }));
-  }, [segments]);
+  }, [segments, localBlockLabels]);
 
   useEffect(() => {
     const id = getInitialAnalysisId();
@@ -201,6 +231,49 @@ export default function FullOutputEditorClient() {
   const selectedTargetLabel = selectedTarget
     ? `${selectedTarget.targetType || selectedTarget.layer || "target"} · ${selectedTarget.label || selectedTarget.id || "selected"} · ${sec(selectedTarget.startSec || 0)}-${sec(selectedTarget.endSec || selectedTarget.startSec || 0)}`
     : "No target selected yet";
+
+  const selectedKind = String(selectedTarget?.targetType || selectedTarget?.layer || activeTool || "none").toLowerCase();
+  const isTranscriptTarget = ["dialogue", "translation", "subtitle", "text"].some((key) => selectedKind.includes(key));
+  const isAudioTarget = ["voice", "music", "effects", "audio", "ambience"].some((key) => selectedKind.includes(key));
+  const isMotionTarget = ["motion", "body", "lipsync"].some((key) => selectedKind.includes(key));
+  const isObjectTarget = ["object", "background"].some((key) => selectedKind.includes(key));
+  const selectedWords = String(selectedTarget?.label || "Select a transcript block to show word timestamps").split(/\s+/).filter(Boolean).slice(0, 14);
+
+  async function versionAction(action, version) {
+    if (!editorId && action !== "compare") {
+      setError("Load an editor project first.");
+      return;
+    }
+
+    if (action === "compare") {
+      setCompareMode((current) => current === "before" ? "after" : "before");
+      setStatus("Compare mode toggled. Original remains preserved.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setStatus(`Running version action: ${action}…`);
+
+    try {
+      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/version-actions`, {
+        action,
+        versionId: version?.id || null,
+        selectedTarget,
+        source: "full-output-editor",
+      });
+      await loadVersions(editorId).catch(() => null);
+      setProviderStatus(result?.status || `version_${action}`);
+      setStatus(result?.status ? String(result.status) : `Version action saved: ${action}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus(`Version action failed: ${action}. Original media was not overwritten.`);
+      setProviderStatus("blocked/error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
 
   function selectTarget(target) {
     setSelectedTarget(target);
@@ -322,6 +395,7 @@ export default function FullOutputEditorClient() {
 
       await loadVersions(editorId).catch(() => null);
       const resultStatus = result?.status || result?.providerRun?.status || result?.edit?.status || "saved";
+      setProviderStatus(result?.providerRun?.status || result?.status || "saved");
       setStatus(String(resultStatus).includes("blocked") ? `Blocked: ${String(resultStatus).replaceAll("_", " ")}` : `Saved: ${String(resultStatus).replaceAll("_", " ")}`);
       setEditingBlockId("");
       setInlineEditValue("");
@@ -384,6 +458,7 @@ export default function FullOutputEditorClient() {
 
       await loadVersions(editorId).catch(() => null);
       const resultStatus = result?.status || result?.providerRun?.status || result?.edit?.status || "saved";
+      setProviderStatus(result?.providerRun?.status || result?.status || result?.export?.status || "saved");
       setStatus(String(resultStatus).includes("blocked") ? `Blocked: ${String(resultStatus).replaceAll("_", " ")}` : `Saved: ${String(resultStatus).replaceAll("_", " ")}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -407,7 +482,7 @@ export default function FullOutputEditorClient() {
           <input className={styles.search} placeholder="Search scenes…" />
           <div className={styles.sceneList}>{scenes.map((scene, index) => <button key={scene.id} type="button" onClick={() => selectTarget({ ...scene, targetType: "scene" })} className={selectedTarget?.id === scene.id ? styles.selectedScene : ""}><div className={styles.thumb}>{frames[index]?.url ? <img src={frames[index].url} alt="" /> : null}</div><span>{String(index + 1).padStart(2, "0")}</span><strong>{scene.label}</strong><small>{sec(scene.startSec)} - {sec(scene.endSec)}</small></button>)}</div>
 
-          <div className={styles.versions}><div><strong>VERSIONS</strong><button type="button" onClick={() => runAction("load_versions")}>Compare</button></div>{(versions.length ? versions : [{ id: "v-current", status: "Current", change_summary: "Original loaded" }]).slice(0, 5).map((version, index) => <button key={version.id || index} type="button"><span>V{versions.length - index || 1}</span><strong>{version.status || "Version"}</strong><small>{version.change_summary || version.summary || "Saved state"}</small></button>)}</div>
+          <div className={styles.versions}><div><strong>VERSIONS</strong><button type="button" onClick={() => runAction("load_versions")}>Refresh</button></div>{(versions.length ? versions : [{ id: "v-current", status: "source", change_summary: "Immutable source version created from reference analysis." }]).slice(0, 5).map((version, index) => <article key={version.id || index} className={styles.versionCard}><button type="button" onClick={() => versionAction("compare", version)}><span>V{versions.length - index || 1}</span><strong>{version.status || "Version"}</strong><small>{version.change_summary || version.summary || "Saved state"}</small></button><div><button type="button" onClick={() => versionAction("compare", version)}>Compare</button><button type="button" onClick={() => versionAction("approve", version)}>Approve</button><button type="button" onClick={() => versionAction("revert", version)}>Revert</button><button type="button" onClick={() => versionAction("branch", version)}>Branch</button></div></article>)}</div>
 
           <div className={styles.sourceBox}><strong>SOURCE / REFERENCE</strong><input value={loadValue} onChange={(e) => setLoadValue(e.target.value)} placeholder="Paste analysisId" /><button type="button" onClick={() => loadAnalysis(loadValue)} disabled={busy}>{busy ? "Loading…" : "Load Analysis"}</button><small>{analysisId ? `Analysis ${shortId(analysisId)}` : "No analysis loaded"}</small></div>
         </aside>
@@ -417,6 +492,7 @@ export default function FullOutputEditorClient() {
 
           <div className={styles.viewerWrap}>
             {sourceUrl ? <video ref={videoRef} src={sourceUrl} controls playsInline className={styles.viewerVideo} /> : <div className={styles.viewerEmpty}>Load analysis to preview source video</div>}
+            <div className={styles.compareBadge}>{compareMode === "before" ? "BEFORE / ORIGINAL" : "AFTER / CURRENT VERSION"}</div>
             <div className={styles.analysisCard}><strong>AI ANALYSIS</strong>{[["Faces Detected", "2 OK"], ["Body Tracking", "OK"], ["Motion Vectors", "OK"], ["Depth Map", "OK"], ["Scene Segmentation", segments.length ? "OK" : "pending"], ["Audio Quality", audios.length ? "OK" : "pending"], ["Stability", "93%"]].map(([a, b]) => <p key={a}><span>{a}</span><b>{b}</b></p>)}<button type="button" onClick={() => runAction("qa_status")}>View Full Analysis</button></div>
             <button type="button" className={styles.subjectBox} onClick={() => selectTarget({ id: "subject-1", targetType: "subject_person", label: "Subject 1 (Man)", startSec: 0, endSec: duration })}>Subject 1 (Man)</button>
             <button type="button" className={styles.carBox} onClick={() => selectTarget({ id: "object-car-1", targetType: "object_background", label: "Car 01", startSec: 0, endSec: duration })}>Car 01</button>
@@ -438,7 +514,7 @@ export default function FullOutputEditorClient() {
             </div>
           </div>
 
-          <div className={styles.timeline}>{layers.map((layer) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block) => editingBlockId === block.id ? (
+          <div className={styles.timeline}>{layers.map((layer, layerIndex) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block, blockIndex) => editingBlockId === block.id ? (
             <div key={block.id} className={`${styles.blockEditor} ${styles[block.color]}`}>
               <input
                 value={inlineEditValue}
@@ -456,30 +532,31 @@ export default function FullOutputEditorClient() {
             <button
               type="button"
               key={block.id}
-              className={`${styles.block} ${styles[block.color]} ${selectedTarget?.id === block.id ? styles.activeBlock : ""}`}
+              className={`${styles.block} ${styles[block.color]} ${selectedTarget?.id === block.id ? styles.activeBlock : ""} ${["music", "effects", "voice"].includes(layer.id) ? styles.waveBlock : ""}`}
               onClick={() => selectTarget(block)}
               onDoubleClick={() => startInlineEdit(block)}
               title="Click to select. Double-click to edit this block."
             >
-              {block.label}
+              {["music", "effects", "voice"].includes(layer.id) ? <i>{waveformBars(layerIndex + blockIndex).map((height, i) => <em key={i} style={{ height: `${height}%` }} />)}</i> : null}
+              <span>{block.label}</span>
             </button>
           ))}</div></div>)}</div>
 
-          <div className={styles.toolStrip}>{[
-            ["VIDEO GENERATION", "regenerate_segment", "Selected segment"],
-            ["FRAME INTERPOLATION", "frame_interpolation", "Motion smoothing"],
-            ["UPSCALE / RESTORE", "restore_upscale_stabilize", "Restore segment"],
-            ["AUDIO SEPARATION", "audio_separation", "Voice / music / ambient"],
-            ["TRANSCRIPTION", "transcription", "Word timestamps"],
-            ["LIP SYNC", "mouth_sync", "Mouth alignment"],
-            ["COLOR GRADE", "color_grade", "LUT / HDR"],
-          ].map(([label, action, sub]) => <button type="button" key={action} onClick={() => runAction(action)} disabled={busy}>{label}<small>{sub}</small></button>)}</div>
+          <div className={styles.toolStrip}>{TOOL_ACTIONS.map((tool) => <button type="button" key={tool.action} className={activeTool === tool.tool ? styles.activeToolAction : ""} onClick={() => { setActiveTool(tool.tool); runAction(tool.action); }} disabled={busy}>{tool.label}<small>{tool.sub}</small></button>)}</div>
         </section>
 
         <aside className={styles.rightRail}>
           <div className={styles.rightTabs}>{["SUBJECTS", "SCENE", "AUDIO", "MOTION", "OUTPUT"].map((tab) => <button type="button" key={tab} className={activeTopTab === tab ? styles.activeTab : ""} onClick={() => setActiveTopTab(tab)}>{tab}</button>)}</div>
 
-          <div className={styles.inspectorCard}><select><option>{selectedTarget?.label || "Subject 1 (Man)"}</option></select><div className={styles.miniTabs}>{["IDENTITY", "FACE", "BODY", "CLOTHING", "TRACKING"].map((tab) => <button type="button" key={tab}>{tab}</button>)}</div><div className={styles.formGrid}><label>Gender<select><option>Male</option></select></label><label>Top<select><option>Jacket</option></select></label><label>Age<input value="30" readOnly /></label><label>Bottom<select><option>Jeans</option></select></label><label>Race<select><option>Caucasian</option></select></label><label>Shoes<select><option>Sneakers</option></select></label></div><div className={styles.actionBox}><strong>ACTIONS / MOTION</strong><label>Current Action<select><option>Walking</option></select></label><label>Direction<select><option>Turning Left</option></select></label><button type="button" onClick={() => runAction("motion_edit")}>Edit Motion / Action</button></div><div className={styles.actionBox}><strong>EXPRESSION</strong><label>Emotion<select><option>Neutral</option></select></label><button type="button" onClick={() => runAction("emotion_body_edit")}>Edit Facial Expression</button></div></div>
+          <div className={styles.inspectorCard}><select><option>{selectedTarget?.label || "Subject 1 (Man)"}</option></select><div className={styles.miniTabs}>{["IDENTITY", "FACE", "BODY", "CLOTHING", "TRACKING"].map((tab) => <button type="button" key={tab}>{tab}</button>)}</div>{isTranscriptTarget ? (
+            <div className={styles.transcriptPanel}><strong>TRANSCRIPT / WORD TIMESTAMPS</strong><p>Selected text: {selectedTarget?.label || "Select a dialogue, subtitle, or timeline block."}</p><label>Speaker<select><option>Speaker 1</option><option>Speaker 2</option></select></label><div>{selectedWords.map((word, index) => <button type="button" key={`${word}-${index}`} onClick={() => setEditInstruction(word)}>{word}<small>{sec((selectedTarget?.startSec || 0) + index * 0.35)}</small></button>)}</div><button type="button" onClick={() => runAction("transcript_edit")}>Save Transcript Line</button></div>
+          ) : isAudioTarget ? (
+            <div className={styles.transcriptPanel}><strong>AUDIO TARGET</strong><p>Layer: {selectedTarget?.layer || activeTool}</p><label>Track Type<select><option>Voice</option><option>Music</option><option>Ambient</option><option>SFX</option></select></label><button type="button" onClick={() => runAction("audio_separation")}>Separate Voice / Music / Ambient</button><button type="button" onClick={() => runAction("voice_edit")}>Edit Voice</button><button type="button" onClick={() => runAction("mouth_sync")}>Lip Sync</button></div>
+          ) : isObjectTarget ? (
+            <div className={styles.transcriptPanel}><strong>OBJECT / BACKGROUND TARGET</strong><p>{selectedTarget?.label || "Object/background selection"}</p><button type="button" onClick={() => runAction("object_background_cleanup")}>Clean Object / Background</button><button type="button" onClick={() => runAction("restore_upscale_stabilize")}>Restore Segment</button></div>
+          ) : (
+            <div className={styles.formGrid}><label>Gender<select><option>Male</option></select></label><label>Top<select><option>Jacket</option></select></label><label>Age<input value="30" readOnly /></label><label>Bottom<select><option>Jeans</option></select></label><label>Race<select><option>Caucasian</option></select></label><label>Shoes<select><option>Sneakers</option></select></label></div>
+          )}<div className={styles.actionBox}><strong>{isMotionTarget ? "MOTION / BODY ACTIONS" : "ACTIONS / MOTION"}</strong><label>Current Action<select><option>{selectedTarget?.layer || "Walking"}</option></select></label><label>Direction<select><option>Turning Left</option></select></label><button type="button" onClick={() => runAction(isTranscriptTarget ? "transcript_edit" : "motion_edit")}>{isTranscriptTarget ? "Edit Transcript Line" : "Edit Motion / Action"}</button></div><div className={styles.actionBox}><strong>EXPRESSION / BODY</strong><label>Emotion<select><option>Neutral</option></select></label><button type="button" onClick={() => runAction("emotion_body_edit")}>Edit Facial Expression</button></div></div>
 
           <div className={styles.mixer}><strong>AUDIO MIXER</strong>{["Dialogue", "Music", "SFX", "Ambience"].map((item) => <p key={item}><span>{item}</span><i /><b>0.0 dB</b></p>)}</div>
 
@@ -491,23 +568,14 @@ export default function FullOutputEditorClient() {
 
           <div className={styles.qaChecklist}>
             <strong>QA / STATUS CHECKLIST</strong>
-            {[
-              ["Identity", selectedTarget ? "ready" : "select target"],
-              ["Hands", "blocked if provider missing"],
-              ["Mouth Sync", audios.length ? "ready" : "needs audio"],
-              ["Audio Sync", audios.length ? "ready" : "needs audio"],
-              ["Flicker", "check after edit"],
-              ["Continuity", segments.length ? "ready" : "needs segments"],
-              ["Provider Run", editorId ? "tracked" : "load editor"],
-              ["Version Safe", "non-destructive"],
-            ].map(([label, value]) => <p key={label}><span>{label}</span><b>{value}</b></p>)}
+            {QA_ITEMS.map((item) => <p key={item}><span>{item}</span><b>{item === "Provider Run" ? providerStatus : item === "Mouth Sync" && !audios.length ? "needs audio" : item === "Continuity" && !segments.length ? "needs segments" : item === "Export Ready" ? "check render" : item === "Version Safe" ? "non-destructive" : "ready"}</b></p>)}
             <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>Run QA / Status</button>
           </div>
 
           <div className={styles.statusBox}>{error ? <b>{error}</b> : <span>{status}</span>}<div className={styles.statusActions}><button type="button" onClick={() => runAction("qa_status")}>QA / Status</button><button type="button" onClick={() => runAction("load_versions")}>Versions</button><button type="button" onClick={() => runAction("export_final")}>Export</button></div></div>
         </aside>
 
-        <aside className={styles.toolRail}>{["Select", "People", "Objects", "Background", "Text", "Audio", "Effects", "Transitions", "Filters", "AI Tools"].map((tool) => <button type="button" key={tool} className={activeTool === tool ? styles.activeTool : ""} onClick={() => setActiveTool(tool)}>{tool}</button>)}</aside>
+        <aside className={styles.toolRail}>{["Select", "People", "Objects", "Background", "Text", "Audio", "Effects", "Transitions", "Filters", "AI Tools"].map((tool) => <button type="button" key={tool} className={activeTool === tool ? styles.activeTool : ""} onClick={() => { setActiveTool(tool); if (tool !== "Select") setSelectedTarget((current) => current || { id: `tool-${tool}`, targetType: tool.toLowerCase(), label: `${tool} tool target`, startSec: 0, endSec: duration }); }}>{tool}</button>)}</aside>
       </section>
 
       {guideOpen ? (

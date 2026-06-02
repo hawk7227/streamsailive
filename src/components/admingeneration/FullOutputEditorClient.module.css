@@ -899,3 +899,21 @@
   .selectedActionBar{grid-template-columns:200px minmax(240px,1fr) 360px;min-height:64px}
   .rightRail{grid-template-rows:36px minmax(225px,auto) 104px 118px 128px 78px 116px 132px minmax(70px,1fr)!important}
 }
+
+/* ============================================================
+   Full editor missing interaction surfaces
+   ============================================================ */
+
+.compareBadge{position:absolute;right:16px;top:14px;z-index:4;padding:6px 10px;border:1px solid rgba(168,85,247,.45);border-radius:999px;background:rgba(3,10,16,.72);color:#f5d0fe;font-size:11px;letter-spacing:.08em}
+
+.versionCard{display:grid;grid-template-columns:1fr;gap:5px}.versionCard>button{width:100%}.versionCard>div{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.versionCard>div button{min-height:24px;font-size:9px;color:#d8b4fe}
+
+.waveBlock{position:relative;display:grid!important;grid-template-columns:1fr!important;align-items:center!important}.waveBlock i{position:absolute;inset:5px 8px;display:flex;align-items:center;gap:2px;opacity:.55;pointer-events:none}.waveBlock em{display:block;width:3px;min-height:8px;border-radius:999px;background:rgba(255,255,255,.72)}.waveBlock span{position:relative;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+.transcriptPanel{display:grid;gap:7px;padding:8px;border:1px solid rgba(120,143,164,.13);border-radius:7px;background:rgba(3,10,16,.55)}.transcriptPanel strong{font-size:11px}.transcriptPanel p{margin:0;color:#cbd5e1;font-size:10px}.transcriptPanel label{display:grid;gap:4px;color:#9fb3c8;font-size:10px}.transcriptPanel div{display:flex;gap:5px;flex-wrap:wrap}.transcriptPanel button{min-height:30px;display:grid;gap:1px;padding:3px 7px;border:1px solid rgba(148,163,184,.17);border-radius:6px;background:rgba(15,23,42,.78);color:#f8fafc;font-size:10px}.transcriptPanel small{color:#93c5fd;font-size:8px}
+
+.providerStatus{display:grid;gap:7px;padding:11px;border:1px solid rgba(120,143,164,.13);border-radius:7px;background:rgba(5,12,18,.86)}.providerStatus strong{font-size:11px}.providerStatus p{display:grid;grid-template-columns:95px 1fr;gap:8px;align-items:center;margin:0;color:#cbd5e1;font-size:10px}.providerStatus p span{color:#8ea2b8}.providerStatus p b{color:#86efac;font-weight:600;text-align:right}
+
+.activeToolAction{border-color:rgba(168,85,247,.72)!important;background:rgba(88,28,135,.52)!important;color:#fff!important}
+
+@media (min-width:1200px){.rightRail{grid-template-rows:36px minmax(225px,auto) 104px 118px 128px 78px 116px 132px minmax(70px,1fr)!important}}
