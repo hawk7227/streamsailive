@@ -407,6 +407,49 @@ export default function FullOutputEditorClient() {
     }
   }
 
+
+  async function regenerateEntireVideo() {
+    if (!editorId || !analysisId) {
+      setError("Load an analyzed editor project first.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setStatus("Creating full-video regeneration job. Original video will remain unchanged.");
+
+    try {
+      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/execute-edit`, {
+        instruction:
+          editInstruction ||
+          "Regenerate the entire video as a new full version using the saved analysis, timeline, subject profiles, transcript, audio, motion, and reference frames.",
+        action: "regenerate_entire_video",
+        targetType: "full_video",
+        targetId: analysisId,
+        selected: null,
+        analysisId,
+        fullVideoRegeneration: true,
+        preserveOriginal: true,
+        semanticFullEditor: true,
+        source: "full-output-editor-explicit-full-regenerate",
+      });
+
+      await loadVersions(editorId).catch(() => null);
+
+      const resultStatus = result?.status || result?.providerRun?.status || result?.edit?.status || "saved";
+      setStatus(
+        String(resultStatus).includes("blocked")
+          ? `Blocked: ${String(resultStatus).replaceAll("_", " ")}`
+          : `Full video regeneration saved as a new version request: ${String(resultStatus).replaceAll("_", " ")}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("Full video regeneration failed. Original media was not overwritten.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runAction(action) {
     if (!editorId) {
       setError("Load an analysis/editor project first.");
@@ -505,11 +548,17 @@ export default function FullOutputEditorClient() {
               <span>SELECTED TARGET</span>
               <strong>{selectedTargetLabel}</strong>
             </div>
-            <textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type the exact change for the selected scene, shot, frame, subject, transcript, audio, or motion block…" />
+            <textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Selected Target Edit only. Example: make this hand movement smoother, replace this line, change this voice, clean this background…" />
             <div>
               <button type="button" onClick={() => runAction("segment_edit")} disabled={busy || !selectedTarget}>Save Edit</button>
-              <button type="button" onClick={() => runAction("regenerate_segment")} disabled={busy || !selectedTarget}>Regenerate Segment</button>
-              <button type="button" onClick={() => runAction("transcript_edit")} disabled={busy || !selectedTarget}>Transcript Edit</button>
+              <button type="button" onClick={() => runAction("regenerate_segment")} disabled={busy || !selectedTarget}>Regenerate Selected Segment</button>
+              <button type="button" onClick={() => runAction("replace_clip")} disabled={busy || !selectedTarget}>Replace Clip</button>
+              <button type="button" onClick={() => runAction("voice_edit")} disabled={busy || !selectedTarget}>Edit Voice</button>
+              <button type="button" onClick={() => runAction("motion_edit")} disabled={busy || !selectedTarget}>Edit Motion</button>
+              <button type="button" onClick={() => runAction("transcript_edit")} disabled={busy || !selectedTarget}>Edit Transcript</button>
+              <button type="button" onClick={() => runAction("mouth_sync")} disabled={busy || !selectedTarget}>Fix Lip Sync</button>
+              <button type="button" onClick={() => runAction("restore_upscale_stabilize")} disabled={busy || !selectedTarget}>Restore / Upscale Segment</button>
+              <button type="button" onClick={() => runAction("object_background_cleanup")} disabled={busy || !selectedTarget}>Clean Object / Background</button>
               <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>QA / Status</button>
             </div>
           </div>
@@ -562,9 +611,15 @@ export default function FullOutputEditorClient() {
 
           <div className={styles.sourcePreview}><strong>SOURCE / REFERENCE</strong>{frames[0]?.url ? <img src={frames[0].url} alt="source frame" /> : null}<p>Title: City Walk - Cinematic Reference</p><p>Resolution: 3840×2160</p><button type="button" onClick={() => loadAnalysis(analysisId)}>Re-analyze Source</button></div>
 
+          <div className={styles.fullRegenerateCard}>
+            <strong>FULL VIDEO REGENERATION</strong>
+            <p>Regenerate Entire Video creates a new full version using the saved analysis, transcript, frames, subjects, motion, and audio intelligence. Original stays unchanged.</p>
+            <button type="button" onClick={regenerateEntireVideo} disabled={busy || !editorId || !analysisId}>Regenerate Entire Video</button>
+          </div>
+
           <div className={styles.exportCard}><strong>EXPORT</strong><select><option>4K (3840x2160)</option></select><button type="button" onClick={() => runAction("export_final")}>RENDER FINAL VIDEO</button></div>
 
-          <div className={styles.editInstruction}><strong>Selected Edit</strong><textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type targeted edit instruction…" /><div><button type="button" onClick={() => runAction("segment_edit")}>Save Edit</button><button type="button" onClick={() => runAction("regenerate_segment")}>Regenerate</button><button type="button" onClick={() => runAction("transcript_edit")}>Transcript</button></div></div>
+          <div className={styles.editInstruction}><strong>Selected Edit</strong><textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type targeted edit instruction…" /><div><button type="button" onClick={() => runAction("segment_edit")}>Save Edit</button><button type="button" onClick={() => runAction("regenerate_segment")}>Regenerate Selected Segment</button><button type="button" onClick={() => runAction("transcript_edit")}>Transcript</button></div></div>
 
           <div className={styles.qaChecklist}>
             <strong>QA / STATUS CHECKLIST</strong>
