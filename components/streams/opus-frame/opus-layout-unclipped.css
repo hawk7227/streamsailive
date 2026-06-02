@@ -175,3 +175,127 @@ body {
   white-space: normal !important;
   line-height: 1.25 !important;
 }
+
+/* ============================================================
+   FIX: right rail overlap + standalone analyzer floating
+   ============================================================ */
+
+/* Right rail must be a normal vertical stack, not compressed */
+.right-utility-rail {
+  width: 312px !important;
+  min-width: 312px !important;
+  height: auto !important;
+  min-height: 1700px !important;
+  padding: 84px 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  overflow: visible !important;
+  align-content: start !important;
+}
+
+.utility-card {
+  width: 100% !important;
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  display: block !important;
+}
+
+.utility-card.quick {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  align-content: start !important;
+}
+
+.utility-card.quick button {
+  width: 100% !important;
+  min-height: 58px !important;
+  height: auto !important;
+  display: grid !important;
+  grid-template-columns: 24px minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  align-items: start !important;
+  gap: 2px 10px !important;
+  padding: 10px 12px !important;
+  text-align: left !important;
+  white-space: normal !important;
+  line-height: 1.25 !important;
+}
+
+.utility-card.quick button > span:first-child {
+  grid-row: 1 / span 2 !important;
+}
+
+.utility-card.quick button strong,
+.utility-card.quick button span,
+.utility-card.quick button div {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.25 !important;
+}
+
+/* Force standalone analyzer out of floating/right overlay mode */
+[data-standalone-analyzer="true"] {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 130px !important;
+  margin: 18px 0 0 0 !important;
+  z-index: 1 !important;
+  transform: none !important;
+  display: grid !important;
+  grid-template-columns: 180px minmax(320px, 1fr) 220px 170px !important;
+  gap: 12px !important;
+  align-items: end !important;
+  overflow: visible !important;
+}
+
+/* Hide floating close behavior visually when analyzer is embedded */
+[data-standalone-analyzer="true"] button[aria-label="Close"],
+[data-standalone-analyzer="true"] [aria-label="Close"] {
+  display: none !important;
+}
+
+/* The semantic rail must also sit under the preview, not cover the page */
+[data-streams-analyzer-edit-rail],
+[data-streams-analyzer-edit-rail] > section {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 18px 0 0 0 !important;
+  z-index: 1 !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+/* Give the center stack enough room to hold preview + analyzer + edit rail */
+.center-preview-stack {
+  height: auto !important;
+  min-height: 1160px !important;
+  grid-template-rows: 38px 560px auto auto 82px !important;
+  gap: 14px !important;
+  overflow: visible !important;
+}
+
+.opus-fit-shell,
+.opus-board,
+.opus-main.compact-shell,
+.movie-generate-state {
+  height: auto !important;
+  min-height: 1780px !important;
+  overflow: visible !important;
+}
