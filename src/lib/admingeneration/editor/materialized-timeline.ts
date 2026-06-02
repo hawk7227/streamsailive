@@ -255,7 +255,7 @@ export function buildMaterializedTimeline(input: {
   const assets = arr(input.assets || root.assets);
   const segments = getSegments(input.timeline, root);
 
-  const layers = LAYERS.map((layer) => {
+  const layers: MaterializedTimelineLayer[] = LAYERS.map((layer) => {
     const blocks = blocksForLayer({
       layerId: layer.id,
       segments,
@@ -263,9 +263,13 @@ export function buildMaterializedTimeline(input: {
       assets,
     });
 
+    const status: MaterializedTimelineLayer["status"] = blocks.length
+      ? "ready"
+      : "needs_analyzer_data";
+
     return {
       ...layer,
-      status: blocks.length ? "ready" : "needs_analyzer_data",
+      status,
       blocks,
     };
   });
