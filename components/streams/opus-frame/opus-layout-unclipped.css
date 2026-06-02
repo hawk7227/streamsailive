@@ -1,4 +1,4 @@
-/* Temporary organization pass: make the generation page taller and unclipped so panels do not overlap or hide behind each other. */
+/* Organization pass: keep all admingeneration panels visible, non-floating, and unclipped. */
 
 html,
 body {
@@ -13,7 +13,7 @@ body {
   inset: auto !important;
   width: 100% !important;
   min-width: 1920px !important;
-  min-height: 1700px !important;
+  min-height: 1800px !important;
   height: auto !important;
   overflow: visible !important;
 }
@@ -24,7 +24,7 @@ body {
   top: auto !important;
   transform: none !important;
   width: 1920px !important;
-  min-height: 1700px !important;
+  min-height: 1800px !important;
   height: auto !important;
   align-items: start !important;
 }
@@ -33,17 +33,17 @@ body {
 .opus-main.compact-shell,
 .right-utility-rail {
   height: auto !important;
-  min-height: 1700px !important;
+  min-height: 1800px !important;
   overflow: visible !important;
 }
 
 .opus-main.compact-shell {
-  padding-bottom: 420px !important;
+  padding-bottom: 480px !important;
 }
 
 .movie-generate-state {
   height: auto !important;
-  min-height: 1380px !important;
+  min-height: 1450px !important;
   grid-template-rows: auto auto auto !important;
   align-content: start !important;
   overflow: visible !important;
@@ -57,10 +57,10 @@ body {
 }
 
 .movie-production-stage {
-  min-height: 720px !important;
+  min-height: 980px !important;
   height: auto !important;
   overflow: visible !important;
-  align-items: stretch !important;
+  align-items: start !important;
 }
 
 .production-column,
@@ -76,8 +76,10 @@ body {
 
 .center-preview-stack {
   height: auto !important;
-  min-height: 1050px !important;
-  grid-template-rows: 38px 560px auto auto 82px !important;
+  min-height: 980px !important;
+  display: grid !important;
+  grid-template-rows: 38px 560px auto 82px !important;
+  gap: 14px !important;
   align-content: start !important;
   overflow: visible !important;
 }
@@ -87,13 +89,18 @@ body {
   min-height: 560px !important;
 }
 
-.movie-output-band {
-  min-height: 145px !important;
-  height: auto !important;
+.preview-analyzer-slot {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
 }
 
-/* Put the standalone analyzer and semantic rail under the preview in the main flow. */
-[data-standalone-analyzer="true"] {
+/* Standalone Analyzer embedded under preview */
+#streams-preview-analyzer-slot [data-standalone-analyzer="true"] {
   position: relative !important;
   inset: auto !important;
   left: auto !important;
@@ -102,33 +109,26 @@ body {
   bottom: auto !important;
   width: 100% !important;
   max-width: none !important;
-  min-height: 132px !important;
-  margin: 16px 0 0 0 !important;
-  z-index: auto !important;
+  min-height: 122px !important;
+  margin: 0 !important;
+  z-index: 1 !important;
   transform: none !important;
+  overflow: visible !important;
   display: grid !important;
-  grid-template-columns: 180px minmax(260px, 1fr) 210px 180px !important;
+  grid-template-columns: 180px minmax(360px, 1fr) 220px 170px !important;
   gap: 12px !important;
   align-items: end !important;
-  overflow: visible !important;
 }
 
-[data-streams-analyzer-edit-rail] {
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  width: 100% !important;
-  max-width: none !important;
-  margin: 16px 0 0 0 !important;
-  z-index: auto !important;
-  transform: none !important;
-  overflow: visible !important;
+/* Hide floating close control once embedded */
+#streams-preview-analyzer-slot [data-standalone-analyzer="true"] button[aria-label="Close"],
+#streams-preview-analyzer-slot [data-standalone-analyzer="true"] [aria-label="Close"] {
+  display: none !important;
 }
 
-[data-streams-analyzer-edit-rail] > section {
+/* Semantic Edit Rail embedded under analyzer */
+#streams-preview-analyzer-slot [data-streams-analyzer-edit-rail],
+#streams-preview-analyzer-slot [data-streams-analyzer-edit-rail] > section {
   position: relative !important;
   inset: auto !important;
   left: auto !important;
@@ -139,59 +139,30 @@ body {
   max-width: none !important;
   max-height: none !important;
   margin: 0 !important;
-  z-index: auto !important;
+  z-index: 1 !important;
   transform: none !important;
   overflow: visible !important;
 }
 
-.right-utility-rail {
-  height: auto !important;
-  min-height: 1500px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 16px !important;
-  overflow: visible !important;
+/* If the analyzer has not moved yet, prevent it from blocking the page. */
+[data-standalone-analyzer="true"],
+[data-streams-analyzer-edit-rail],
+[data-streams-analyzer-edit-rail] > section {
+  max-width: none !important;
 }
 
-.utility-card {
-  height: auto !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-}
-
-.utility-card.quick button {
-  min-height: 56px !important;
-  display: grid !important;
-  grid-template-columns: 24px 1fr !important;
-  grid-template-rows: auto auto !important;
-  align-items: start !important;
-  gap: 2px 10px !important;
-  white-space: normal !important;
-  line-height: 1.25 !important;
-  padding: 10px 12px !important;
-}
-
-.utility-card.quick button span {
-  white-space: normal !important;
-  line-height: 1.25 !important;
-}
-
-/* ============================================================
-   FIX: right rail overlap + standalone analyzer floating
-   ============================================================ */
-
-/* Right rail must be a normal vertical stack, not compressed */
+/* Right rail must be a readable vertical stack */
 .right-utility-rail {
   width: 312px !important;
   min-width: 312px !important;
+  max-width: 312px !important;
   height: auto !important;
-  min-height: 1700px !important;
+  min-height: 1800px !important;
   padding: 84px 16px 18px !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 16px !important;
   overflow: visible !important;
-  align-content: start !important;
 }
 
 .utility-card {
@@ -200,126 +171,6 @@ body {
   min-height: auto !important;
   overflow: visible !important;
   display: block !important;
-}
-
-.utility-card.quick {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  align-content: start !important;
-}
-
-.utility-card.quick button {
-  width: 100% !important;
-  min-height: 58px !important;
-  height: auto !important;
-  display: grid !important;
-  grid-template-columns: 24px minmax(0, 1fr) !important;
-  grid-template-rows: auto auto !important;
-  align-items: start !important;
-  gap: 2px 10px !important;
-  padding: 10px 12px !important;
-  text-align: left !important;
-  white-space: normal !important;
-  line-height: 1.25 !important;
-}
-
-.utility-card.quick button > span:first-child {
-  grid-row: 1 / span 2 !important;
-}
-
-.utility-card.quick button strong,
-.utility-card.quick button span,
-.utility-card.quick button div {
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  line-height: 1.25 !important;
-}
-
-/* Force standalone analyzer out of floating/right overlay mode */
-[data-standalone-analyzer="true"] {
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  width: 100% !important;
-  max-width: none !important;
-  min-height: 130px !important;
-  margin: 18px 0 0 0 !important;
-  z-index: 1 !important;
-  transform: none !important;
-  display: grid !important;
-  grid-template-columns: 180px minmax(320px, 1fr) 220px 170px !important;
-  gap: 12px !important;
-  align-items: end !important;
-  overflow: visible !important;
-}
-
-/* Hide floating close behavior visually when analyzer is embedded */
-[data-standalone-analyzer="true"] button[aria-label="Close"],
-[data-standalone-analyzer="true"] [aria-label="Close"] {
-  display: none !important;
-}
-
-/* The semantic rail must also sit under the preview, not cover the page */
-[data-streams-analyzer-edit-rail],
-[data-streams-analyzer-edit-rail] > section {
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  width: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  margin: 18px 0 0 0 !important;
-  z-index: 1 !important;
-  transform: none !important;
-  overflow: visible !important;
-}
-
-/* Give the center stack enough room to hold preview + analyzer + edit rail */
-.center-preview-stack {
-  height: auto !important;
-  min-height: 1160px !important;
-  grid-template-rows: 38px 560px auto auto 82px !important;
-  gap: 14px !important;
-  overflow: visible !important;
-}
-
-.opus-fit-shell,
-.opus-board,
-.opus-main.compact-shell,
-.movie-generate-state {
-  height: auto !important;
-  min-height: 1780px !important;
-  overflow: visible !important;
-}
-
-/* ============================================================
-   FIX: stop page freeze/overlap, make analyzer embedded
-   ============================================================ */
-
-.right-utility-rail {
-  width: 312px !important;
-  min-width: 312px !important;
-  max-width: 312px !important;
-  height: auto !important;
-  min-height: 1700px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 16px !important;
-  overflow: visible !important;
-}
-
-.utility-card {
-  width: 100% !important;
-  height: auto !important;
-  overflow: visible !important;
 }
 
 .utility-card.quick {
@@ -347,39 +198,7 @@ body {
   font-size: 11px !important;
 }
 
-[data-standalone-analyzer="true"] {
-  position: relative !important;
-  inset: auto !important;
-  width: 100% !important;
-  max-width: none !important;
-  min-height: 132px !important;
-  margin: 16px 0 0 0 !important;
-  z-index: 1 !important;
-  transform: none !important;
-  display: grid !important;
-  grid-template-columns: 190px minmax(320px, 1fr) 220px 170px !important;
-  gap: 12px !important;
-  align-items: end !important;
-  overflow: visible !important;
-}
-
-[data-streams-analyzer-edit-rail],
-[data-streams-analyzer-edit-rail] > section {
-  position: relative !important;
-  inset: auto !important;
-  width: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  margin: 16px 0 0 0 !important;
-  z-index: 1 !important;
-  transform: none !important;
-  overflow: visible !important;
-}
-
-.center-preview-stack {
+.movie-output-band {
+  min-height: 145px !important;
   height: auto !important;
-  min-height: 1160px !important;
-  grid-template-rows: 38px 560px auto auto 82px !important;
-  gap: 14px !important;
-  overflow: visible !important;
 }

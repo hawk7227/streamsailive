@@ -82,6 +82,68 @@ export default function OpusLockedFrame() {
   useEffect(() => {
     let cancelled = false;
 
+    function applyBoxReset(node) {
+      Object.assign(node.style, {
+        position: "relative",
+        inset: "auto",
+        left: "auto",
+        right: "auto",
+        top: "auto",
+        bottom: "auto",
+        width: "100%",
+        maxWidth: "none",
+        maxHeight: "none",
+        margin: "0",
+        zIndex: "1",
+        transform: "none",
+        overflow: "visible",
+      });
+    }
+
+    function moveAnalyzerPanelsIntoPreviewSlot() {
+      if (cancelled) return;
+
+      const slot = document.getElementById("streams-preview-analyzer-slot");
+      if (!slot) return;
+
+      const nodes = Array.from(document.querySelectorAll("section, aside, div"));
+
+      const standalonePanel = nodes.find((node) => {
+        if (node.closest("#streams-preview-analyzer-slot")) return false;
+        if (node.closest("[data-streams-analyzer-edit-rail]")) return false;
+        const text = node.textContent || "";
+        return text.includes("STANDALONE ANALYZER") && text.includes("Reference + Video Mode");
+      });
+
+      if (standalonePanel) {
+        standalonePanel.setAttribute("data-standalone-analyzer", "true");
+        applyBoxReset(standalonePanel);
+        if (standalonePanel.parentElement !== slot) slot.appendChild(standalonePanel);
+      }
+
+      const railHost = document.querySelector("[data-streams-analyzer-edit-rail]");
+      if (railHost) {
+        applyBoxReset(railHost);
+        const railPanel = railHost.firstElementChild;
+        if (railPanel) applyBoxReset(railPanel);
+        if (railHost.parentElement !== slot) slot.appendChild(railHost);
+      }
+    }
+
+    const timers = [0, 100, 300, 700, 1200, 2000, 3500].map((delay) =>
+      window.setTimeout(moveAnalyzerPanelsIntoPreviewSlot, delay)
+    );
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [stage]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
     function normalizeAnalyzerPlacement() {
       if (cancelled) return;
 
@@ -288,7 +350,9 @@ export default function OpusLockedFrame() {
             <div className="movie-generate-state">
               <section className="compact-prompt-top"><div className="mode-row generation-modes">{["smart", "advanced", "assistant"].map((item) => <button className={`mode ${mode === item ? "active" : ""}`} key={item} onClick={() => item === "assistant" ? setHelperOpen(true) : setMode(item)} type="button">{item === "smart" ? "⚡ Smart Mode" : item === "advanced" ? "✦ Advanced Mode" : "✨ AI Assistant"}</button>)}</div><div className="prompt-and-cards"><label className="wide-prompt-field"><span>Describe what you want to create…</span><textarea value={fields.mainPrompt} onChange={(event) => setField("mainPrompt", event.target.value)} /><b>{fields.mainPrompt.length} / 2000</b></label><div className="prompt-chip-row"><button type="button">Add Media</button><button type="button" onClick={() => setField("aspectRatio", "16:9")}>16:9</button><button type="button">Voice</button><button onClick={() => setHelperOpen(true)} type="button">AI Analyze</button><button type="button">Style</button><button className="generate-cta" disabled={isGenerating} onClick={generateNow} type="button">{isGenerating ? "Submitting…" : "Generate ✨"}</button></div></div><div className="create-type-strip compact">{createTypes.map((item) => <button className={`create-type-card ${item.id === activeTypeId ? "active" : ""}`} key={item.id} onClick={() => { setActiveTypeId(item.id); setProvider(item.provider); setField("aspectRatio", item.ratio); }} type="button"><span>{item.icon}</span><strong>{item.title}</strong><small>{item.kind}</small></button>)}</div></section>
 
-              <section className="movie-production-stage"><aside className="production-column left-prod"><ProductionCard title="1. Scene" value={fields.scene} onChange={(value) => setField("scene", value)} textarea /><ProductionCard title="2. Subject" value={fields.subject} onChange={(value) => setField("subject", value)} textarea /><ProductionCard title="3. Environment" value={fields.environment} onChange={(value) => setField("environment", value)} textarea /><ProductionCard title="4. Emotional Intent" value={fields.emotionalIntent} onChange={(value) => setField("emotionalIntent", value)} textarea /><ProductionCard title="5. Mood" value={fields.mood} onChange={(value) => setField("mood", value)} /></aside><div className="center-preview-stack"><div className="preview-toolbar"><div><strong>{activeType.title}</strong><span>{status}</span></div><div><button type="button">Raw</button><button className="active" type="button">Preview</button><button type="button">Fit</button><button type="button">Grid</button></div></div><div className="large-center-preview"><div className="analysis-float-card"><strong>AI Production Setup</strong><p>Scene, camera, lighting, motion, and output are editable around this preview before generation.</p><button onClick={() => setHelperOpen(true)} type="button">Review Setup</button></div><div className="preview-controls"><b>▶</b><span>0:00 / 0:{String(fields.duration || 8).padStart(2, "0")}</span><i /><em>CC</em><em>1x</em><em>⛶</em></div></div><div className="mini-keyframes-row">{Array.from({ length: 6 }).map((_, index) => <button className={index === 0 ? "active" : ""} key={index} type="button"><span>{index}s</span></button>)}</div></div><aside className="production-column right-prod"><ProductionGroup title="6. Camera" fields={fields} setField={setField} keys={["shotType", "cameraPosition", "cameraMovement", "lens", "depthOfField", "composition"]} /><ProductionGroup title="7. Lighting" fields={fields} setField={setField} keys={["primaryLighting", "accentLighting", "rimLight", "atmosphere"]} /><ProductionGroup title="8. Motion" fields={fields} setField={setField} keys={["characterMotion", "environmentMotion", "motionQuality"]} /><ProductionGroup title="9. Style" fields={fields} setField={setField} keys={["visualStyle", "filmReference", "productionDesign", "humanRealism"]} /></aside></section>
+              <section className="movie-production-stage"><aside className="production-column left-prod"><ProductionCard title="1. Scene" value={fields.scene} onChange={(value) => setField("scene", value)} textarea /><ProductionCard title="2. Subject" value={fields.subject} onChange={(value) => setField("subject", value)} textarea /><ProductionCard title="3. Environment" value={fields.environment} onChange={(value) => setField("environment", value)} textarea /><ProductionCard title="4. Emotional Intent" value={fields.emotionalIntent} onChange={(value) => setField("emotionalIntent", value)} textarea /><ProductionCard title="5. Mood" value={fields.mood} onChange={(value) => setField("mood", value)} /></aside><div className="center-preview-stack"><div className="preview-toolbar"><div><strong>{activeType.title}</strong><span>{status}</span></div><div><button type="button">Raw</button><button className="active" type="button">Preview</button><button type="button">Fit</button><button type="button">Grid</button></div></div><div className="large-center-preview"><div className="analysis-float-card"><strong>AI Production Setup</strong><p>Scene, camera, lighting, motion, and output are editable around this preview before generation.</p><button onClick={() => setHelperOpen(true)} type="button">Review Setup</button></div><div className="preview-controls"><b>▶</b><span>0:00 / 0:{String(fields.duration || 8).padStart(2, "0")}</span><i /><em>CC</em><em>1x</em><em>⛶</em></div></div>
+              <div id="streams-preview-analyzer-slot" className="preview-analyzer-slot" />
+<div className="mini-keyframes-row">{Array.from({ length: 6 }).map((_, index) => <button className={index === 0 ? "active" : ""} key={index} type="button"><span>{index}s</span></button>)}</div></div><aside className="production-column right-prod"><ProductionGroup title="6. Camera" fields={fields} setField={setField} keys={["shotType", "cameraPosition", "cameraMovement", "lens", "depthOfField", "composition"]} /><ProductionGroup title="7. Lighting" fields={fields} setField={setField} keys={["primaryLighting", "accentLighting", "rimLight", "atmosphere"]} /><ProductionGroup title="8. Motion" fields={fields} setField={setField} keys={["characterMotion", "environmentMotion", "motionQuality"]} /><ProductionGroup title="9. Style" fields={fields} setField={setField} keys={["visualStyle", "filmReference", "productionDesign", "humanRealism"]} /></aside></section>
 
               <section className="movie-output-band"><div className="negative-card"><strong>10. Negative Prompt / Restrictions</strong><textarea value={fields.negativePrompt} onChange={(event) => setField("negativePrompt", event.target.value)} /></div><div className="output-card"><strong>11. Output Settings</strong><div className="output-inline-fields"><label><span>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="openai">OpenAI</option><option value="fal">fal.ai</option><option value="runway">Runway</option><option value="kling">Kling</option><option value="veo">Veo</option><option value="elevenlabs">ElevenLabs</option></select></label><label><span>Duration</span><input value={fields.duration} onChange={(event) => setField("duration", event.target.value)} /></label><label><span>Aspect</span><input value={fields.aspectRatio} onChange={(event) => setField("aspectRatio", event.target.value)} /></label><label><span>Frame Rate</span><input value={fields.frameRate} onChange={(event) => setField("frameRate", event.target.value)} /></label><label><span>Quality</span><input value={fields.qualityGoal} onChange={(event) => setField("qualityGoal", event.target.value)} /></label><button disabled={isGenerating} onClick={generateNow} type="button">{isGenerating ? "Submitting…" : "Generate Video ✨"}</button></div></div></section>
             </div>
