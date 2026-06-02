@@ -47,13 +47,13 @@ export default function StreamsAIStudioFrame() {
   }, []);
 
   const previewSrc = useMemo(() => {
-    if (typeof window === "undefined") return "/pipeline/test?embed=1";
-    return new URL("/pipeline/test?embed=1", window.location.origin).toString();
+    if (typeof window === "undefined") return "about:blank";
+    return "about:blank";
   }, []);
 
   const editorSrc = useMemo(() => {
-    if (typeof window === "undefined") return "/editor";
-    return new URL("/editor", window.location.origin).toString();
+    if (typeof window === "undefined") return "/visual-editor";
+    return new URL("/visual-editor", window.location.origin).toString();
   }, []);
 
   return (
@@ -127,18 +127,7 @@ export default function StreamsAIStudioFrame() {
         }}
       >
         <PanelHeader title="Preview" meta="Media editor / runtime preview" />
-        <iframe
-          src={previewSrc}
-          title="StreamsAI Preview"
-          allow="clipboard-write; clipboard-read; camera; microphone; display-capture; fullscreen"
-          style={{
-            width: "100%",
-            height: "calc(100% - 42px)",
-            border: 0,
-            display: "block",
-            background: "#050816",
-          }}
-        />
+        <PreviewRuntimePanel />
       </section>
 
       <section
@@ -188,7 +177,7 @@ export default function StreamsAIStudioFrame() {
         {rightMode === "editor" ? (
           <iframe
             src={editorSrc}
-            title="StreamsAI Editor"
+            title="StreamsAI Visual Editor"
             style={{
               width: "100%",
               height: "calc(100% - 54px)",
@@ -223,8 +212,8 @@ export default function StreamsAIStudioFrame() {
 
             <ProofLine label="Route" value="/streams-ai" />
             <ProofLine label="Chat iframe" value="/streams-ai?embed=chat" />
-            <ProofLine label="Preview iframe" value="/pipeline/test?embed=1" />
-            <ProofLine label="Editor iframe" value="/editor" />
+            <ProofLine label="Preview" value="Built-in PreviewRuntimePanel, not /pipeline/test" />
+            <ProofLine label="Editor iframe" value="/visual-editor" />
             <ProofLine label="File" value="src/app/streams-ai/page.tsx" />
             <ProofLine label="Shell" value="src/components/streams-ai/StreamsAIStudioFrame.tsx" />
 
@@ -242,6 +231,83 @@ export default function StreamsAIStudioFrame() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+function PreviewRuntimePanel() {
+  return (
+    <div
+      style={{
+        height: "calc(100% - 42px)",
+        padding: 18,
+        background:
+          "radial-gradient(circle at top left, rgba(20,184,166,.18), transparent 32%), linear-gradient(180deg, #07111f, #02050b)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          height: "100%",
+          border: "1px solid rgba(148,163,184,.18)",
+          borderRadius: 18,
+          background: "rgba(15,23,42,.55)",
+          display: "grid",
+          gridTemplateRows: "auto 1fr auto",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            minHeight: 52,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "0 16px",
+            borderBottom: "1px solid rgba(148,163,184,.14)",
+          }}
+        >
+          <strong style={{ fontSize: 14 }}>StreamsAI Preview Runtime</strong>
+          <span style={{ marginLeft: "auto", color: "#67e8f9", fontSize: 12 }}>
+            Waiting for chat output
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            placeItems: "center",
+            textAlign: "center",
+            padding: 24,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 44, fontWeight: 900, marginBottom: 12 }}>
+              StreamsAI Preview
+            </div>
+            <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5, maxWidth: 720 }}>
+              Visual output, generated pages, image/video previews, and edited content should render here.
+              This replaces the wrong Pipeline/Test screen.
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            minHeight: 62,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "0 16px",
+            borderTop: "1px solid rgba(148,163,184,.14)",
+            color: "#94a3b8",
+            fontSize: 12,
+          }}
+        >
+          <span>Preview route: internal runtime panel</span>
+          <span style={{ marginLeft: "auto" }}>Ready for chat bridge output</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
