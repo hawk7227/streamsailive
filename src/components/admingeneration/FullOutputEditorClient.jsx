@@ -310,6 +310,7 @@ export default function FullOutputEditorClient() {
   const [intelligence, setIntelligence] = useState(null);
   const [editorId, setEditorId] = useState("");
   const [timeline, setTimeline] = useState(null);
+  const [materializedTimeline, setMaterializedTimeline] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [editingBlockId, setEditingBlockId] = useState("");
@@ -348,10 +349,21 @@ export default function FullOutputEditorClient() {
   }, [segments, localBlockLabels]);
 
   const layers = useMemo(() => {
+    if (materializedTimeline?.layers?.length) {
+      return materializedTimeline.layers.map((layer) => ({
+        ...layer,
+        blocks: (layer.blocks || []).map((block) => ({
+          ...block,
+          label: localBlockLabels[block.id] || block.label,
+        })),
+      }));
+    }
+
     const root = pickRoot(intelligence);
 
     return LAYER_DEFINITIONS.map((layer) => ({
       ...layer,
+      status: "needs_analyzer_data",
       blocks: buildRealLayerBlocks({
         layer,
         segments,
@@ -360,7 +372,7 @@ export default function FullOutputEditorClient() {
         localBlockLabels,
       }),
     }));
-  }, [segments, intelligence, assets, localBlockLabels]);
+  }, [materializedTimeline, segments, intelligence, assets, localBlockLabels]);
 
   useEffect(() => {
     const id = getInitialAnalysisId();
@@ -476,6 +488,10 @@ export default function FullOutputEditorClient() {
       if (nextEditorId) {
         const tl = await readJson(`/api/admingeneration/editor/projects/${nextEditorId}/timeline`);
         setTimeline(tl);
+
+        const mt = await readJson(`/api/admingeneration/editor/projects/${nextEditorId}/materialized-timeline`).catch(() => null);
+        setMaterializedTimeline(mt?.materializedTimeline || null);
+
         await loadVersions(nextEditorId);
       }
 
