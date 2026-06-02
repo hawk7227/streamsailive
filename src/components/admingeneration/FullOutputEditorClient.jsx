@@ -419,7 +419,7 @@ export default function FullOutputEditorClient() {
     setStatus("Creating full-video regeneration job. Original video will remain unchanged.");
 
     try {
-      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/execute-edit`, {
+      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/semantic-action`, {
         instruction:
           editInstruction ||
           "Regenerate the entire video as a new full version using the saved analysis, timeline, subject profiles, transcript, audio, motion, and reference frames.",
@@ -445,6 +445,54 @@ export default function FullOutputEditorClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("Full video regeneration failed. Original media was not overwritten.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
+  async function runSemanticAction(action, extra = {}) {
+    if (!editorId) {
+      setError("Load an analysis/editor project first.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setStatus(`Routing ${String(action).replaceAll("_", " ")} through semantic edit router…`);
+
+    try {
+      const result = await postJson(`/api/admingeneration/editor/projects/${editorId}/semantic-action`, {
+        action,
+        instruction: editInstruction,
+        selectedTarget,
+        analysisId,
+        ...extra,
+      });
+
+      await loadVersions(editorId).catch(() => null);
+
+      const resultStatus =
+        result?.status ||
+        result?.result?.status ||
+        result?.result?.result?.status ||
+        "submitted";
+
+      if (typeof setProviderStatus === "function") {
+        setProviderStatus(result?.result?.providerRun?.status || resultStatus);
+      }
+
+      setStatus(
+        String(resultStatus).includes("failed") || String(resultStatus).includes("blocked")
+          ? `Action returned: ${String(resultStatus).replaceAll("_", " ")}`
+          : `Action submitted: ${String(resultStatus).replaceAll("_", " ")}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("Semantic edit action failed. Original media was not overwritten.");
+      if (typeof setProviderStatus === "function") {
+        setProviderStatus("failed");
+      }
     } finally {
       setBusy(false);
     }
@@ -550,15 +598,15 @@ export default function FullOutputEditorClient() {
             </div>
             <textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Selected Target Edit only. Example: make this hand movement smoother, replace this line, change this voice, clean this background…" />
             <div>
-              <button type="button" onClick={() => runAction("segment_edit")} disabled={busy || !selectedTarget}>Save Edit</button>
-              <button type="button" onClick={() => runAction("regenerate_segment")} disabled={busy || !selectedTarget}>Regenerate Selected Segment</button>
-              <button type="button" onClick={() => runAction("replace_clip")} disabled={busy || !selectedTarget}>Replace Clip</button>
-              <button type="button" onClick={() => runAction("voice_edit")} disabled={busy || !selectedTarget}>Edit Voice</button>
-              <button type="button" onClick={() => runAction("motion_edit")} disabled={busy || !selectedTarget}>Edit Motion</button>
-              <button type="button" onClick={() => runAction("transcript_edit")} disabled={busy || !selectedTarget}>Edit Transcript</button>
-              <button type="button" onClick={() => runAction("mouth_sync")} disabled={busy || !selectedTarget}>Fix Lip Sync</button>
-              <button type="button" onClick={() => runAction("restore_upscale_stabilize")} disabled={busy || !selectedTarget}>Restore / Upscale Segment</button>
-              <button type="button" onClick={() => runAction("object_background_cleanup")} disabled={busy || !selectedTarget}>Clean Object / Background</button>
+              <button type="button" onClick={() => runSemanticAction("segment_edit")} disabled={busy || !selectedTarget}>Save Edit</button>
+              <button type="button" onClick={() => runSemanticAction("regenerate_segment")} disabled={busy || !selectedTarget}>Regenerate Selected Segment</button>
+              <button type="button" onClick={() => runSemanticAction("replace_clip")} disabled={busy || !selectedTarget}>Replace Clip</button>
+              <button type="button" onClick={() => runSemanticAction("voice_edit")} disabled={busy || !selectedTarget}>Edit Voice</button>
+              <button type="button" onClick={() => runSemanticAction("motion_edit")} disabled={busy || !selectedTarget}>Edit Motion</button>
+              <button type="button" onClick={() => runSemanticAction("transcript_edit")} disabled={busy || !selectedTarget}>Edit Transcript</button>
+              <button type="button" onClick={() => runSemanticAction("mouth_sync")} disabled={busy || !selectedTarget}>Fix Lip Sync</button>
+              <button type="button" onClick={() => runSemanticAction("restore_upscale_stabilize")} disabled={busy || !selectedTarget}>Restore / Upscale Segment</button>
+              <button type="button" onClick={() => runSemanticAction("object_background_cleanup")} disabled={busy || !selectedTarget}>Clean Object / Background</button>
               <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>QA / Status</button>
             </div>
           </div>
@@ -598,11 +646,11 @@ export default function FullOutputEditorClient() {
           <div className={styles.rightTabs}>{["SUBJECTS", "SCENE", "AUDIO", "MOTION", "OUTPUT"].map((tab) => <button type="button" key={tab} className={activeTopTab === tab ? styles.activeTab : ""} onClick={() => setActiveTopTab(tab)}>{tab}</button>)}</div>
 
           <div className={styles.inspectorCard}><select><option>{selectedTarget?.label || "Subject 1 (Man)"}</option></select><div className={styles.miniTabs}>{["IDENTITY", "FACE", "BODY", "CLOTHING", "TRACKING"].map((tab) => <button type="button" key={tab}>{tab}</button>)}</div>{isTranscriptTarget ? (
-            <div className={styles.transcriptPanel}><strong>TRANSCRIPT / WORD TIMESTAMPS</strong><p>Selected text: {selectedTarget?.label || "Select a dialogue, subtitle, or timeline block."}</p><label>Speaker<select><option>Speaker 1</option><option>Speaker 2</option></select></label><div>{selectedWords.map((word, index) => <button type="button" key={`${word}-${index}`} onClick={() => setEditInstruction(word)}>{word}<small>{sec((selectedTarget?.startSec || 0) + index * 0.35)}</small></button>)}</div><button type="button" onClick={() => runAction("transcript_edit")}>Save Transcript Line</button></div>
+            <div className={styles.transcriptPanel}><strong>TRANSCRIPT / WORD TIMESTAMPS</strong><p>Selected text: {selectedTarget?.label || "Select a dialogue, subtitle, or timeline block."}</p><label>Speaker<select><option>Speaker 1</option><option>Speaker 2</option></select></label><div>{selectedWords.map((word, index) => <button type="button" key={`${word}-${index}`} onClick={() => setEditInstruction(word)}>{word}<small>{sec((selectedTarget?.startSec || 0) + index * 0.35)}</small></button>)}</div><button type="button" onClick={() => runSemanticAction("transcript_edit")}>Save Transcript Line</button></div>
           ) : isAudioTarget ? (
-            <div className={styles.transcriptPanel}><strong>AUDIO TARGET</strong><p>Layer: {selectedTarget?.layer || activeTool}</p><label>Track Type<select><option>Voice</option><option>Music</option><option>Ambient</option><option>SFX</option></select></label><button type="button" onClick={() => runAction("audio_separation")}>Separate Voice / Music / Ambient</button><button type="button" onClick={() => runAction("voice_edit")}>Edit Voice</button><button type="button" onClick={() => runAction("mouth_sync")}>Lip Sync</button></div>
+            <div className={styles.transcriptPanel}><strong>AUDIO TARGET</strong><p>Layer: {selectedTarget?.layer || activeTool}</p><label>Track Type<select><option>Voice</option><option>Music</option><option>Ambient</option><option>SFX</option></select></label><button type="button" onClick={() => runAction("audio_separation")}>Separate Voice / Music / Ambient</button><button type="button" onClick={() => runSemanticAction("voice_edit")}>Edit Voice</button><button type="button" onClick={() => runSemanticAction("mouth_sync")}>Lip Sync</button></div>
           ) : isObjectTarget ? (
-            <div className={styles.transcriptPanel}><strong>OBJECT / BACKGROUND TARGET</strong><p>{selectedTarget?.label || "Object/background selection"}</p><button type="button" onClick={() => runAction("object_background_cleanup")}>Clean Object / Background</button><button type="button" onClick={() => runAction("restore_upscale_stabilize")}>Restore Segment</button></div>
+            <div className={styles.transcriptPanel}><strong>OBJECT / BACKGROUND TARGET</strong><p>{selectedTarget?.label || "Object/background selection"}</p><button type="button" onClick={() => runSemanticAction("object_background_cleanup")}>Clean Object / Background</button><button type="button" onClick={() => runSemanticAction("restore_upscale_stabilize")}>Restore Segment</button></div>
           ) : (
             <div className={styles.formGrid}><label>Gender<select><option>Male</option></select></label><label>Top<select><option>Jacket</option></select></label><label>Age<input value="30" readOnly /></label><label>Bottom<select><option>Jeans</option></select></label><label>Race<select><option>Caucasian</option></select></label><label>Shoes<select><option>Sneakers</option></select></label></div>
           )}<div className={styles.actionBox}><strong>{isMotionTarget ? "MOTION / BODY ACTIONS" : "ACTIONS / MOTION"}</strong><label>Current Action<select><option>{selectedTarget?.layer || "Walking"}</option></select></label><label>Direction<select><option>Turning Left</option></select></label><button type="button" onClick={() => runAction(isTranscriptTarget ? "transcript_edit" : "motion_edit")}>{isTranscriptTarget ? "Edit Transcript Line" : "Edit Motion / Action"}</button></div><div className={styles.actionBox}><strong>EXPRESSION / BODY</strong><label>Emotion<select><option>Neutral</option></select></label><button type="button" onClick={() => runAction("emotion_body_edit")}>Edit Facial Expression</button></div></div>
@@ -617,9 +665,9 @@ export default function FullOutputEditorClient() {
             <button type="button" onClick={regenerateEntireVideo} disabled={busy || !editorId || !analysisId}>Regenerate Entire Video</button>
           </div>
 
-          <div className={styles.exportCard}><strong>EXPORT</strong><select><option>4K (3840x2160)</option></select><button type="button" onClick={() => runAction("export_final")}>RENDER FINAL VIDEO</button></div>
+          <div className={styles.exportCard}><strong>EXPORT</strong><select><option>4K (3840x2160)</option></select><button type="button" onClick={() => runSemanticAction("export_final")}>RENDER FINAL VIDEO</button></div>
 
-          <div className={styles.editInstruction}><strong>Selected Edit</strong><textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type targeted edit instruction…" /><div><button type="button" onClick={() => runAction("segment_edit")}>Save Edit</button><button type="button" onClick={() => runAction("regenerate_segment")}>Regenerate Selected Segment</button><button type="button" onClick={() => runAction("transcript_edit")}>Transcript</button></div></div>
+          <div className={styles.editInstruction}><strong>Selected Edit</strong><textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type targeted edit instruction…" /><div><button type="button" onClick={() => runSemanticAction("segment_edit")}>Save Edit</button><button type="button" onClick={() => runSemanticAction("regenerate_segment")}>Regenerate Selected Segment</button><button type="button" onClick={() => runSemanticAction("transcript_edit")}>Transcript</button></div></div>
 
           <div className={styles.qaChecklist}>
             <strong>QA / STATUS CHECKLIST</strong>
@@ -627,7 +675,7 @@ export default function FullOutputEditorClient() {
             <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>Run QA / Status</button>
           </div>
 
-          <div className={styles.statusBox}>{error ? <b>{error}</b> : <span>{status}</span>}<div className={styles.statusActions}><button type="button" onClick={() => runAction("qa_status")}>QA / Status</button><button type="button" onClick={() => runAction("load_versions")}>Versions</button><button type="button" onClick={() => runAction("export_final")}>Export</button></div></div>
+          <div className={styles.statusBox}>{error ? <b>{error}</b> : <span>{status}</span>}<div className={styles.statusActions}><button type="button" onClick={() => runAction("qa_status")}>QA / Status</button><button type="button" onClick={() => runAction("load_versions")}>Versions</button><button type="button" onClick={() => runSemanticAction("export_final")}>Export</button></div></div>
         </aside>
 
         <aside className={styles.toolRail}>{["Select", "People", "Objects", "Background", "Text", "Audio", "Effects", "Transitions", "Filters", "AI Tools"].map((tool) => <button type="button" key={tool} className={activeTool === tool ? styles.activeTool : ""} onClick={() => { setActiveTool(tool); if (tool !== "Select") setSelectedTarget((current) => current || { id: `tool-${tool}`, targetType: tool.toLowerCase(), label: `${tool} tool target`, startSec: 0, endSec: duration }); }}>{tool}</button>)}</aside>
