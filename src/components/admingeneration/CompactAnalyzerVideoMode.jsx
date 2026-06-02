@@ -51,6 +51,15 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
 
   const negativePrompt = analysis?.blueprint?.generation?.negativePrompt || "";
 
+  function dispatchAnalysisLoaded(nextAnalysis) {
+    const nextId = nextAnalysis?.id || nextAnalysis?.analysisId || "";
+    if (!nextId || typeof window === "undefined") return;
+    window.localStorage.setItem("streams:lastAnalysisId", nextId);
+    window.dispatchEvent(new CustomEvent("streams:analysis-loaded", {
+      detail: { analysisId: nextId, analysis: nextAnalysis },
+    }));
+  }
+
   const counts = useMemo(() => {
     const timelineCounts = timeline?.timeline?.counts || {};
     return {
@@ -91,7 +100,10 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
         "load intelligence",
       );
       setIntelligence(intel);
-      if (intel.analysis) setAnalysis(intel.analysis);
+      if (intel.analysis) {
+        setAnalysis(intel.analysis);
+        dispatchAnalysisLoaded(intel.analysis);
+      }
     }
 
     if (nextEditorId) {
@@ -158,7 +170,10 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
       );
 
       setIntelligence(intel);
-      if (intel.analysis) setAnalysis(intel.analysis);
+      if (intel.analysis) {
+        setAnalysis(intel.analysis);
+        dispatchAnalysisLoaded(intel.analysis);
+      }
 
       const ed = await postJson("/api/admingeneration/editor/from-analysis", {
         analysisId: existingId,
@@ -193,6 +208,7 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
 
       const nextAnalysis = data.analysis || { id: data.analysisId, ...data };
       setAnalysis(nextAnalysis);
+      dispatchAnalysisLoaded(nextAnalysis);
       setMessage("Creating editor project + worker job…");
       await createEditorAndJob(nextAnalysis);
       setMessage(isYoutube ? "Reference saved. YouTube requires downloader/worker for frames." : "Analyzer chain ready.");
@@ -225,6 +241,7 @@ export default function CompactAnalyzerVideoMode({ projectId = DEFAULT_PROJECT_I
 
       const nextAnalysis = data.analysis || { id: data.analysisId, ...data };
       setAnalysis(nextAnalysis);
+      dispatchAnalysisLoaded(nextAnalysis);
       setMessage("Creating editor project + worker job…");
       await createEditorAndJob(nextAnalysis);
       setMessage("Uploaded source ready. Worker can extract frames/audio.");

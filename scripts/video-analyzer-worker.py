@@ -98,24 +98,32 @@ def download_youtube_source(source_url, work_dir, event):
     template = str(work_dir / "source.%(ext)s")
 
     event("youtube_download_started", "running", "Downloading YouTube video source")
-    run([
+
+    subprocess.run([
         sys.executable,
         "-m",
         "yt_dlp",
         "-f",
-        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best",
+        "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/best[height<=480]/best",
         "--merge-output-format",
         "mp4",
+        "--socket-timeout",
+        "20",
+        "--retries",
+        "2",
+        "--fragment-retries",
+        "2",
         "-o",
         template,
         source_url,
-    ])
+    ], check=True)
 
     candidates = sorted(work_dir.glob("source.*"))
     if not candidates:
         raise RuntimeError("yt-dlp completed but source file was not found.")
 
     source_path = next((candidate for candidate in candidates if candidate.suffix.lower() == ".mp4"), candidates[0])
+
     return source_path, {
         "adapter": "youtube_ytdlp",
         "sourceUrl": source_url,
@@ -173,15 +181,27 @@ def main():
         assets = []
         frame_urls = []
 
-        # Store the resolved source video for both uploaded/direct and YouTube sources.
+        # Store the resolved source video only when storage accepts it.
+        # Large YouTube source files can exceed bucket/upload limits, so source video storage is best-effort.
         video_remote = f"{prefix}/source/source.mp4"
-        video_url = upload_file(source_path, bucket, video_remote, "video/mp4")
-        source_meta["downloadedVideoUrl"] = video_url
+        video_url = source_url
+        video_storage_error = None
+
+        try:
+            video_url = upload_file(source_path, bucket, video_remote, "video/mp4")
+            source_meta["downloadedVideoUrl"] = video_url
+            source_meta["sourceVideoStored"] = True
+        except Exception as exc:
+            video_storage_error = str(exc)
+            source_meta["downloadedVideoUrl"] = None
+            source_meta["sourceVideoStored"] = False
+            source_meta["sourceVideoStorageError"] = video_storage_error
+
         assets.append({
-            "assetKind": "source_video",
+            "assetKind": "source_video" if source_meta.get("sourceVideoStored") else "source_video_external",
             "assetUrl": video_url,
-            "storageBucket": bucket,
-            "storagePath": video_remote,
+            "storageBucket": bucket if source_meta.get("sourceVideoStored") else None,
+            "storagePath": video_remote if source_meta.get("sourceVideoStored") else None,
             "mimeType": "video/mp4",
             "metadata": {"source": "unified_video_analyzer_worker", **source_meta},
         })

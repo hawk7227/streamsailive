@@ -28,6 +28,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pdf-parse": "^1.1.5",
     "@types/uuid": "^11.0.0",
+    "@vapi-ai/web": "^2.5.2",
     "adm-zip": "^0.5.16",
     "cheerio": "^1.2.0",
     "fabric": "^7.2.0",
