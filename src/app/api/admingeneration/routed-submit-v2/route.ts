@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildCompiledPrompt, normalizeGenerationMode } from "@/lib/admingeneration/generation-mode";
 import { generateVideo, VideoRuntimeError } from "@/lib/video-runtime/generateVideo";
 
 export const dynamic = "force-dynamic";

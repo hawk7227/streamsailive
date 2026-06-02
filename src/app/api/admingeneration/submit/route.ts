@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildCompiledPrompt, normalizeGenerationMode } from "@/lib/admingeneration/generation-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
