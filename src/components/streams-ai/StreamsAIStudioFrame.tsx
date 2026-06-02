@@ -127,7 +127,18 @@ export default function StreamsAIStudioFrame() {
         }}
       >
         <PanelHeader title="Preview" meta="Media editor / runtime preview" />
-        <PreviewRuntimePanel />
+        <iframe
+          src="/preview"
+          title="StreamsAI Preview"
+          allow="clipboard-write; clipboard-read; camera; microphone; display-capture; fullscreen"
+          style={{
+            width: "100%",
+            height: "calc(100% - 42px)",
+            border: 0,
+            display: "block",
+            background: "#050816",
+          }}
+        />
       </section>
 
       <section
@@ -176,7 +187,7 @@ export default function StreamsAIStudioFrame() {
 
         {rightMode === "editor" ? (
           <iframe
-            src={editorSrc}
+            src="/visual-editor"
             title="StreamsAI Visual Editor"
             style={{
               width: "100%",
