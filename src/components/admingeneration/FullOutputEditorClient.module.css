@@ -1,1 +1,287 @@
 .editorShell{min-height:100vh;background:#050b10;color:#f8fafc;font-family:Inter,ui-sans-serif,system-ui,sans-serif;overflow:hidden}.topBar{height:66px;display:grid;grid-template-columns:260px 1fr 210px;align-items:center;gap:16px;padding:0 16px;border-bottom:1px solid rgba(148,163,184,.18);background:#030a0e}.brand{display:flex;align-items:center;gap:12px}.logoMark{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,#8b5cf6,#4f46e5)}.brand strong{display:block;font-size:24px;letter-spacing:-.04em;line-height:1}.brand small{display:block;margin-top:3px;color:#9fb3c8;font-size:11px;letter-spacing:.06em}.topNav{display:flex;gap:7px;justify-content:center}.topNav button,.activeNav{min-width:92px;height:40px;border:1px solid rgba(148,163,184,.18);border-radius:7px;background:#071118;color:#cbd5e1;font-size:12px}.topNav .activeNav{color:#fff;border-color:rgba(168,85,247,.75);background:rgba(76,29,149,.52)}.systemOnline{display:flex;justify-content:flex-end;align-items:center;gap:8px;color:#d7fbe8;font-size:12px}.systemOnline span{width:8px;height:8px;border-radius:999px;background:#22c55e}.workspace{height:calc(100vh - 66px);min-height:900px;display:grid;grid-template-columns:270px minmax(800px,1fr) 430px 76px;gap:8px;padding:8px;overflow:hidden}.leftRail,.rightRail,.toolRail,.centerStage{min-height:0;border:1px solid rgba(148,163,184,.15);border-radius:8px;background:linear-gradient(180deg,rgba(8,20,26,.92),rgba(3,10,16,.96));overflow:hidden}.leftRail{display:grid;grid-template-rows:36px 34px 310px 230px 1fr;gap:8px;padding:12px}.panelTitle,.projectRow{display:flex;align-items:center;justify-content:space-between;gap:8px}.panelTitle strong{font-size:12px}.panelTitle button,.versions button,.sourceBox button,.analysisCard button,.rightRail button,.toolRail button,.playbar button,.statusPill{border:1px solid rgba(148,163,184,.17);border-radius:6px;background:rgba(15,23,42,.78);color:#e2e8f0}.search,.sourceBox input,.editInstruction textarea,.rightRail input,.rightRail select{width:100%;min-height:34px;border:1px solid rgba(148,163,184,.18);border-radius:6px;background:rgba(2,6,12,.78);color:#f8fafc;padding:0 10px}.sceneList{display:grid;gap:8px;overflow:auto}.sceneList button,.selectedScene{min-height:62px;display:grid;grid-template-columns:78px 26px 1fr;grid-template-rows:auto auto;gap:3px 8px;align-items:center;border:1px solid rgba(148,163,184,.14);border-radius:7px;background:#071018;color:#f8fafc;text-align:left;padding:6px}.sceneList .selectedScene{border-color:rgba(168,85,247,.86);background:rgba(88,28,135,.38)}.thumb{grid-row:1/span 2;width:78px;height:47px;border-radius:5px;background:rgba(15,23,42,.85);overflow:hidden}.thumb img{width:100%;height:100%;object-fit:cover}.sceneList span{color:#cbd5e1;font-size:12px}.sceneList strong{font-size:12px}.sceneList small{grid-column:2/4;color:#9fb3c8;font-size:11px}.versions,.sourceBox{display:grid;gap:8px;padding-top:10px;border-top:1px solid rgba(148,163,184,.12);overflow:auto}.versions>div{display:flex;justify-content:space-between;align-items:center}.versions button{min-height:42px;display:grid;grid-template-columns:32px 1fr;grid-template-rows:18px 16px;gap:0 8px;text-align:left;padding:6px 8px}.versions button span{grid-row:1/span 2;width:26px;height:26px;display:grid;place-items:center;border-radius:999px;background:rgba(59,130,246,.24);color:#bfdbfe}.versions strong,.sourceBox strong{font-size:12px}.versions small,.sourceBox small{color:#94a3b8;font-size:11px}.sourceBox button,.exportCard button{min-height:34px;background:rgba(76,29,149,.55);color:#f5f3ff}.centerStage{display:grid;grid-template-rows:38px 390px 52px 1fr 62px;gap:8px;padding:8px}.projectRow{color:#9fb3c8;font-size:12px;justify-content:flex-start;border-bottom:1px solid rgba(148,163,184,.1);padding:0 8px 6px}.projectRow strong{color:#f8fafc}.statusPill{height:26px;padding:0 14px;color:#fff;background:rgba(88,28,135,.72);border-color:rgba(168,85,247,.55)}.viewerWrap{position:relative;overflow:hidden;border-radius:8px;background:#02070d;border:1px solid rgba(148,163,184,.14)}.viewerVideo,.viewerEmpty{width:100%;height:100%;display:grid;place-items:center;object-fit:cover;color:#94a3b8}.analysisCard{position:absolute;top:26px;left:24px;width:178px;padding:12px;border-radius:8px;border:1px solid rgba(148,163,184,.2);background:rgba(3,10,16,.86)}.analysisCard strong{display:block;margin-bottom:8px;font-size:12px}.analysisCard p{display:flex;justify-content:space-between;margin:8px 0;color:#cbd5e1;font-size:11px}.analysisCard b{color:#22c55e}.analysisCard button{width:100%;height:32px;color:#d8b4fe}.subjectBox,.carBox{position:absolute;border:2px solid #d946ef;border-radius:4px;background:rgba(217,70,239,.08);color:#f5d0fe;font-size:12px}.subjectBox{left:40%;top:10%;width:25%;height:72%}.carBox{right:13%;top:40%;width:8%;height:20%;border-color:#22c55e;color:#bbf7d0}.playbar{display:flex;align-items:center;justify-content:center;gap:16px;border:1px solid rgba(148,163,184,.13);border-radius:7px;background:rgba(5,12,18,.82);color:#e2e8f0}.playbar button{width:28px;height:28px}.timeline{display:grid;gap:6px;overflow:auto;padding-right:2px}.layerRow{display:grid;grid-template-columns:220px minmax(0,1fr);gap:8px;align-items:stretch}.layerLabel{display:grid;align-content:center;padding:0 12px;border:1px solid rgba(148,163,184,.12);border-radius:6px;background:rgba(3,10,16,.84)}.layerLabel strong{font-size:12px}.layerLabel small{color:#94a3b8;font-size:11px}.layerBlocks{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(140px,1fr);gap:5px}.block{min-height:34px;border:1px solid rgba(148,163,184,.14);border-radius:4px;color:#ecfeff;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 10px}.green{background:rgba(22,101,52,.8)}.blue{background:rgba(30,64,175,.8)}.purple{background:rgba(88,28,135,.82)}.pink{background:rgba(157,23,77,.82)}.teal{background:rgba(15,118,110,.82)}.greenWave{background:rgba(21,128,61,.82)}.orange{background:rgba(194,65,12,.82)}.gold{background:rgba(133,77,14,.84)}.toolStrip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.toolStrip button{border:1px solid rgba(148,163,184,.14);border-radius:7px;background:rgba(7,17,24,.86);color:#f8fafc;font-size:11px;text-align:left;padding:8px}.toolStrip small{display:block;margin-top:4px;color:#94a3b8}.rightRail{display:grid;grid-template-rows:42px auto auto auto auto auto auto;gap:8px;padding:8px;overflow:auto}.rightTabs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.rightTabs button,.activeTab,.miniTabs button{border:1px solid rgba(148,163,184,.14);border-radius:6px;background:rgba(7,17,24,.86);color:#cbd5e1;font-size:11px}.rightTabs .activeTab{color:#fff;border-color:rgba(168,85,247,.7);background:rgba(88,28,135,.58)}.inspectorCard,.mixer,.sourcePreview,.exportCard,.editInstruction,.statusBox{display:grid;gap:10px;padding:12px;border:1px solid rgba(148,163,184,.14);border-radius:8px;background:rgba(5,12,18,.86)}.miniTabs{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.formGrid label,.actionBox label{display:grid;gap:4px;color:#9fb3c8;font-size:11px}.actionBox{display:grid;gap:8px}.actionBox strong,.mixer strong,.sourcePreview strong,.exportCard strong,.editInstruction strong{font-size:12px}.actionBox button,.exportCard button,.editInstruction button{min-height:34px;color:#d8b4fe}.mixer p{display:grid;grid-template-columns:80px 1fr 54px;gap:8px;align-items:center;margin:0;color:#cbd5e1;font-size:11px}.mixer i{height:6px;border-radius:999px;background:linear-gradient(90deg,#22c55e 0 60%,rgba(148,163,184,.22) 60% 100%)}.sourcePreview img{width:100%;height:100px;object-fit:cover;border-radius:6px}.sourcePreview p{margin:0;color:#cbd5e1;font-size:11px}.editInstruction textarea{min-height:74px;padding:8px}.editInstruction div{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.statusBox{color:#bfdbfe;font-size:12px}.statusBox b{color:#fecaca}.toolRail{display:grid;grid-auto-rows:64px;gap:6px;padding:8px}.toolRail button,.activeTool{border:1px solid rgba(148,163,184,.14);border-radius:7px;background:rgba(7,17,24,.86);color:#cbd5e1;font-size:11px}.toolRail .activeTool{color:#fff;background:rgba(59,130,246,.28)}@media(max-width:1100px){.editorShell{overflow:auto}.topBar,.workspace{width:1600px}}
+
+/* ============================================================
+   1920x1080 / 100% browser zoom fit pass
+   Goal: no page-level horizontal/vertical scroll, whole editor visible.
+   ============================================================ */
+
+@media (min-width: 1200px) {
+  html,
+  body {
+    overflow: hidden !important;
+  }
+
+  .editorShell {
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .topBar {
+    height: 54px !important;
+    grid-template-columns: 220px minmax(0, 1fr) 190px !important;
+    gap: 10px !important;
+    padding: 0 12px !important;
+  }
+
+  .brand {
+    gap: 9px !important;
+    min-width: 0 !important;
+  }
+
+  .logoMark {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .brand strong {
+    font-size: 25px !important;
+    line-height: 22px !important;
+  }
+
+  .brand small {
+    font-size: 10px !important;
+  }
+
+  .topNav {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(8, minmax(82px, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .topNav button,
+  .activeNav {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+  }
+
+  .systemOnline {
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+
+  .workspace {
+    width: 100vw !important;
+    height: calc(100dvh - 54px) !important;
+    min-height: 0 !important;
+    grid-template-columns: 250px minmax(0, 1fr) 360px 60px !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+  }
+
+  .leftRail,
+  .centerStage,
+  .rightRail,
+  .toolRail {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .leftRail {
+    grid-template-rows: 32px 34px minmax(220px, 1fr) 180px 132px !important;
+    gap: 7px !important;
+    padding: 10px !important;
+  }
+
+  .sceneList {
+    min-height: 0 !important;
+    overflow: auto !important;
+  }
+
+  .sceneList button,
+  .selectedScene {
+    min-height: 54px !important;
+    grid-template-columns: 70px 22px 1fr !important;
+    padding: 5px !important;
+  }
+
+  .thumb {
+    width: 70px !important;
+    height: 40px !important;
+  }
+
+  .versions,
+  .sourceBox {
+    min-height: 0 !important;
+    overflow: auto !important;
+  }
+
+  .centerStage {
+    grid-template-rows: 34px minmax(310px, 39vh) 44px minmax(260px, 1fr) 54px !important;
+    gap: 7px !important;
+    padding: 7px !important;
+  }
+
+  .projectRow {
+    min-width: 0 !important;
+    gap: 14px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    font-size: 12px !important;
+  }
+
+  .viewerWrap {
+    min-height: 0 !important;
+  }
+
+  .viewerVideo,
+  .viewerEmpty {
+    min-height: 0 !important;
+  }
+
+  .analysisCard {
+    width: 172px !important;
+    top: 22px !important;
+    left: 22px !important;
+    padding: 11px !important;
+  }
+
+  .subjectBox {
+    left: 41% !important;
+    top: 9% !important;
+    width: 24% !important;
+    height: 74% !important;
+  }
+
+  .carBox {
+    right: 13% !important;
+    top: 39% !important;
+    width: 8% !important;
+    height: 21% !important;
+  }
+
+  .playbar {
+    min-height: 0 !important;
+    height: 44px !important;
+  }
+
+  .timeline {
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-rows: repeat(8, minmax(30px, 1fr)) !important;
+    gap: 5px !important;
+  }
+
+  .layerRow {
+    min-height: 0 !important;
+    grid-template-columns: 205px minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .layerLabel {
+    min-height: 0 !important;
+    padding: 0 10px !important;
+  }
+
+  .layerLabel strong {
+    font-size: 10px !important;
+  }
+
+  .layerLabel small {
+    font-size: 9px !important;
+  }
+
+  .layerBlocks {
+    min-height: 0 !important;
+    grid-auto-columns: minmax(120px, 1fr) !important;
+    gap: 5px !important;
+  }
+
+  .block {
+    min-height: 0 !important;
+    height: 100% !important;
+    font-size: 10px !important;
+    padding: 0 8px !important;
+  }
+
+  .toolStrip {
+    min-height: 0 !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .toolStrip button {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 7px !important;
+    font-size: 10px !important;
+    overflow: hidden !important;
+  }
+
+  .toolStrip small {
+    font-size: 9px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .rightRail {
+    grid-template-rows: 36px minmax(245px, auto) 116px 140px 78px 118px minmax(70px, 1fr) !important;
+    gap: 7px !important;
+    padding: 7px !important;
+    overflow: auto !important;
+  }
+
+  .rightTabs {
+    min-height: 0 !important;
+  }
+
+  .rightTabs button,
+  .miniTabs button {
+    font-size: 10px !important;
+    padding: 0 4px !important;
+  }
+
+  .inspectorCard,
+  .mixer,
+  .sourcePreview,
+  .exportCard,
+  .editInstruction,
+  .statusBox {
+    padding: 10px !important;
+    gap: 8px !important;
+  }
+
+  .formGrid {
+    gap: 7px !important;
+  }
+
+  .formGrid label,
+  .actionBox label {
+    font-size: 10px !important;
+  }
+
+  .mixer p {
+    grid-template-columns: 66px 1fr 46px !important;
+    font-size: 10px !important;
+  }
+
+  .sourcePreview img {
+    height: 88px !important;
+  }
+
+  .editInstruction textarea {
+    min-height: 60px !important;
+  }
+
+  .toolRail {
+    grid-auto-rows: minmax(47px, 1fr) !important;
+    gap: 5px !important;
+    padding: 7px !important;
+  }
+
+  .toolRail button {
+    font-size: 10px !important;
+    padding: 4px !important;
+  }
+}
