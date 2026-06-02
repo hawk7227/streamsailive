@@ -5,6 +5,35 @@ import styles from "./FullOutputEditorClient.module.css";
 
 const DEFAULT_PROJECT_ID = "fb7bf446-78c9-4905-80bc-32a19d0f9803";
 
+const GUIDE_STEPS = [
+  {
+    title: "1. Load or analyze a video",
+    body: "Start by loading an analysis ID or opening a video already processed by the analyzer. The editor uses saved intelligence instead of re-analyzing every edit.",
+    target: "Source / Reference",
+  },
+  {
+    title: "2. Pick the exact part to fix",
+    body: "Click a scene, shot, frame, subject box, object box, transcript block, motion block, audio block, or caption block.",
+    target: "Scenes / Preview / Timeline",
+  },
+  {
+    title: "3. Type the requested change",
+    body: "Use plain language: fix the hand, change the line, replace the voice, clean background, regenerate only this segment.",
+    target: "Selected Edit",
+  },
+  {
+    title: "4. Run the right action",
+    body: "Use Motion, Voice, Transcript, Lip Sync, Restore, Regenerate Segment, or Export. Every action creates or requests a new version. The original is not overwritten.",
+    target: "Tool Strip / Inspector",
+  },
+  {
+    title: "5. Check QA and export",
+    body: "Use QA to check identity, hands, mouth sync, audio sync, flicker, continuity, and provider status before final export.",
+    target: "QA / Status",
+  },
+];
+
+
 const LAYERS = [
   { id: "motion", label: "MOTION / ACTION LAYER", sub: "Movement & Actions", color: "green", samples: ["Walking forward", "Looks around", "Turns left", "Walks forward", "People pass by", "Crosses street"] },
   { id: "dialogue", label: "TRANSCRIPT / DIALOGUE LAYER", sub: "Spoken Words / Dialogue", color: "blue", samples: ["Reed walks down the street.", "He looks around.", "Reed turns left.", "People are walking.", "Cars passing by."] },
@@ -90,12 +119,17 @@ export default function FullOutputEditorClient() {
   const [timeline, setTimeline] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(null);
+  const [editingBlockId, setEditingBlockId] = useState("");
+  const [inlineEditValue, setInlineEditValue] = useState("");
+  const [localBlockLabels, setLocalBlockLabels] = useState({});
   const [editInstruction, setEditInstruction] = useState("");
   const [activeTopTab, setActiveTopTab] = useState("SUBJECTS");
   const [activeTool, setActiveTool] = useState("Select");
   const [status, setStatus] = useState("Load an analysis to open the full output editor.");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideStep, setGuideStep] = useState(0);
 
   const assets = useMemo(() => {
     const raw = intelligence?.assets || intelligence?.intelligence?.assets || [];
@@ -116,7 +150,7 @@ export default function FullOutputEditorClient() {
   const scenes = useMemo(() => {
     const fallback = Array.from({ length: 5 }, (_, index) => normalizeSegment({}, index));
     return (segments.length ? segments : fallback).slice(0, 8);
-  }, [segments]);
+  }, [segments, localBlockLabels]);
 
   const layers = useMemo(() => {
     return LAYERS.map((layer) => ({
@@ -128,7 +162,8 @@ export default function FullOutputEditorClient() {
           layer: layer.id,
           targetType: layer.id,
           color: layer.color,
-          label: sample,
+          label: localBlockLabels[`${layer.id}-${segment.id}-${index}`] || sample,
+          originalLabel: sample,
           startSec: segment.startSec,
           endSec: segment.endSec,
           segmentId: segment.id,
@@ -142,6 +177,30 @@ export default function FullOutputEditorClient() {
     setLoadValue(id);
     if (id) loadAnalysis(id);
   }, []);
+
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const complete = window.localStorage.getItem("streams:full-editor-guide-complete");
+    if (!complete) setGuideOpen(true);
+  }, []);
+
+  function closeGuide() {
+    setGuideOpen(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("streams:full-editor-guide-complete", "1");
+    }
+  }
+
+  function resetGuide() {
+    setGuideStep(0);
+    setGuideOpen(true);
+  }
+
+  const currentGuideStep = GUIDE_STEPS[guideStep] || GUIDE_STEPS[0];
+  const selectedTargetLabel = selectedTarget
+    ? `${selectedTarget.targetType || selectedTarget.layer || "target"} · ${selectedTarget.label || selectedTarget.id || "selected"} · ${sec(selectedTarget.startSec || 0)}-${sec(selectedTarget.endSec || selectedTarget.startSec || 0)}`
+    : "No target selected yet";
 
   function selectTarget(target) {
     setSelectedTarget(target);
@@ -191,6 +250,84 @@ export default function FullOutputEditorClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("Failed to load output editor.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
+  function startInlineEdit(block) {
+    selectTarget(block);
+    setEditingBlockId(block.id);
+    setInlineEditValue(block.label || "");
+    setEditInstruction(block.label || "");
+  }
+
+  function cancelInlineEdit() {
+    setEditingBlockId("");
+    setInlineEditValue("");
+  }
+
+  async function saveInlineEdit(block) {
+    const nextText = inlineEditValue.trim();
+    if (!nextText) {
+      setError("Inline edit cannot be empty.");
+      return;
+    }
+
+    setSelectedTarget(block);
+    setEditInstruction(nextText);
+    setLocalBlockLabels((current) => ({ ...current, [block.id]: nextText }));
+
+    const isTranscriptLike =
+      block.layer === "dialogue" ||
+      block.layer === "translation" ||
+      block.layer === "subtitle" ||
+      block.targetType === "dialogue" ||
+      block.targetType === "translation" ||
+      block.targetType === "subtitle";
+
+    setBusy(true);
+    setError("");
+    setStatus(isTranscriptLike ? "Saving transcript/timeline text edit…" : "Saving selected block edit…");
+
+    try {
+      let result;
+
+      if (isTranscriptLike) {
+        result = await postJson(`/api/admingeneration/editor/projects/${editorId}/transcript-edits`, {
+          editedText: nextText,
+          originalText: block.originalLabel || block.label || "",
+          segmentId: block.segmentId || block.id || null,
+          startSec: block.startSec ?? null,
+          endSec: block.endSec ?? null,
+          metadata: {
+            selectedTarget: block,
+            analysisId,
+            source: "inline-timeline-editor",
+          },
+        });
+      } else {
+        result = await postJson(`/api/admingeneration/editor/projects/${editorId}/execute-edit`, {
+          instruction: nextText,
+          action: block.layer === "motion" ? "motion_edit" : block.layer === "voice" ? "voice_edit" : block.layer === "lipsync" ? "mouth_sync" : "segment_edit",
+          targetType: block.targetType || block.layer || "segment",
+          targetId: block.segmentId || block.id || null,
+          selected: block,
+          analysisId,
+          semanticFullEditor: true,
+          source: "inline-timeline-editor",
+        });
+      }
+
+      await loadVersions(editorId).catch(() => null);
+      const resultStatus = result?.status || result?.providerRun?.status || result?.edit?.status || "saved";
+      setStatus(String(resultStatus).includes("blocked") ? `Blocked: ${String(resultStatus).replaceAll("_", " ")}` : `Saved: ${String(resultStatus).replaceAll("_", " ")}`);
+      setEditingBlockId("");
+      setInlineEditValue("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("Inline edit failed. Original media was not overwritten.");
     } finally {
       setBusy(false);
     }
@@ -276,7 +413,7 @@ export default function FullOutputEditorClient() {
         </aside>
 
         <section className={styles.centerStage}>
-          <div className={styles.projectRow}><span>PROJECT:</span><strong>The City Walk</strong><button type="button" className={styles.statusPill}>FINISHED</button><span>RAW 4K</span><span>24 FPS</span><span>PRORES 422</span></div>
+          <div className={styles.projectRow}><span>PROJECT:</span><strong>The City Walk</strong><button type="button" className={styles.statusPill}>FINISHED</button><span>RAW 4K</span><span>24 FPS</span><span>PRORES 422</span><button type="button" className={styles.guideButton} onClick={resetGuide}>Guide</button></div>
 
           <div className={styles.viewerWrap}>
             {sourceUrl ? <video ref={videoRef} src={sourceUrl} controls playsInline className={styles.viewerVideo} /> : <div className={styles.viewerEmpty}>Load analysis to preview source video</div>}
@@ -287,7 +424,46 @@ export default function FullOutputEditorClient() {
 
           <div className={styles.playbar}><span>00:00:02:17</span><button type="button">◀</button><button type="button">▶</button><button type="button">▶▶</button><span>{sec(duration)}</span></div>
 
-          <div className={styles.timeline}>{layers.map((layer) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block) => <button type="button" key={block.id} className={`${styles.block} ${styles[block.color]}`} onClick={() => selectTarget(block)}>{block.label}</button>)}</div></div>)}</div>
+          <div className={styles.selectedActionBar}>
+            <div>
+              <span>SELECTED TARGET</span>
+              <strong>{selectedTargetLabel}</strong>
+            </div>
+            <textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type the exact change for the selected scene, shot, frame, subject, transcript, audio, or motion block…" />
+            <div>
+              <button type="button" onClick={() => runAction("segment_edit")} disabled={busy || !selectedTarget}>Save Edit</button>
+              <button type="button" onClick={() => runAction("regenerate_segment")} disabled={busy || !selectedTarget}>Regenerate Segment</button>
+              <button type="button" onClick={() => runAction("transcript_edit")} disabled={busy || !selectedTarget}>Transcript Edit</button>
+              <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>QA / Status</button>
+            </div>
+          </div>
+
+          <div className={styles.timeline}>{layers.map((layer) => <div key={layer.id} className={styles.layerRow}><div className={styles.layerLabel}><strong>{layer.label}</strong><small>{layer.sub}</small></div><div className={styles.layerBlocks}>{layer.blocks.map((block) => editingBlockId === block.id ? (
+            <div key={block.id} className={`${styles.blockEditor} ${styles[block.color]}`}>
+              <input
+                value={inlineEditValue}
+                onChange={(e) => setInlineEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveInlineEdit(block);
+                  if (e.key === "Escape") cancelInlineEdit();
+                }}
+                autoFocus
+              />
+              <button type="button" onClick={() => saveInlineEdit(block)} disabled={busy}>Save</button>
+              <button type="button" onClick={cancelInlineEdit}>Cancel</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              key={block.id}
+              className={`${styles.block} ${styles[block.color]} ${selectedTarget?.id === block.id ? styles.activeBlock : ""}`}
+              onClick={() => selectTarget(block)}
+              onDoubleClick={() => startInlineEdit(block)}
+              title="Click to select. Double-click to edit this block."
+            >
+              {block.label}
+            </button>
+          ))}</div></div>)}</div>
 
           <div className={styles.toolStrip}>{[
             ["VIDEO GENERATION", "regenerate_segment", "Selected segment"],
@@ -313,11 +489,53 @@ export default function FullOutputEditorClient() {
 
           <div className={styles.editInstruction}><strong>Selected Edit</strong><textarea value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="Type targeted edit instruction…" /><div><button type="button" onClick={() => runAction("segment_edit")}>Save Edit</button><button type="button" onClick={() => runAction("regenerate_segment")}>Regenerate</button><button type="button" onClick={() => runAction("transcript_edit")}>Transcript</button></div></div>
 
+          <div className={styles.qaChecklist}>
+            <strong>QA / STATUS CHECKLIST</strong>
+            {[
+              ["Identity", selectedTarget ? "ready" : "select target"],
+              ["Hands", "blocked if provider missing"],
+              ["Mouth Sync", audios.length ? "ready" : "needs audio"],
+              ["Audio Sync", audios.length ? "ready" : "needs audio"],
+              ["Flicker", "check after edit"],
+              ["Continuity", segments.length ? "ready" : "needs segments"],
+              ["Provider Run", editorId ? "tracked" : "load editor"],
+              ["Version Safe", "non-destructive"],
+            ].map(([label, value]) => <p key={label}><span>{label}</span><b>{value}</b></p>)}
+            <button type="button" onClick={() => runAction("qa_status")} disabled={busy || !editorId}>Run QA / Status</button>
+          </div>
+
           <div className={styles.statusBox}>{error ? <b>{error}</b> : <span>{status}</span>}<div className={styles.statusActions}><button type="button" onClick={() => runAction("qa_status")}>QA / Status</button><button type="button" onClick={() => runAction("load_versions")}>Versions</button><button type="button" onClick={() => runAction("export_final")}>Export</button></div></div>
         </aside>
 
         <aside className={styles.toolRail}>{["Select", "People", "Objects", "Background", "Text", "Audio", "Effects", "Transitions", "Filters", "AI Tools"].map((tool) => <button type="button" key={tool} className={activeTool === tool ? styles.activeTool : ""} onClick={() => setActiveTool(tool)}>{tool}</button>)}</aside>
       </section>
+
+      {guideOpen ? (
+        <div className={styles.guideOverlay}>
+          <section className={styles.guideCard}>
+            <div className={styles.guideHeader}>
+              <div>
+                <span>FIRST-TIME GUIDE</span>
+                <strong>{currentGuideStep.title}</strong>
+              </div>
+              <button type="button" onClick={closeGuide}>×</button>
+            </div>
+            <p>{currentGuideStep.body}</p>
+            <div className={styles.guideTarget}>Look at: <b>{currentGuideStep.target}</b></div>
+            <div className={styles.guideProgress}>
+              {GUIDE_STEPS.map((step, index) => <button type="button" key={step.title} className={index === guideStep ? styles.activeGuideDot : ""} onClick={() => setGuideStep(index)}>{index + 1}</button>)}
+            </div>
+            <div className={styles.guideActions}>
+              <button type="button" onClick={() => setGuideStep(Math.max(0, guideStep - 1))} disabled={guideStep === 0}>Back</button>
+              {guideStep < GUIDE_STEPS.length - 1 ? (
+                <button type="button" onClick={() => setGuideStep(guideStep + 1)}>Next</button>
+              ) : (
+                <button type="button" onClick={closeGuide}>Start Editing</button>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
