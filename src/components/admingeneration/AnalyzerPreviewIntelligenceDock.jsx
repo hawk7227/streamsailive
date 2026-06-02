@@ -152,7 +152,7 @@ export default function AnalyzerPreviewIntelligenceDock() {
     mount.style.display = "block";
 
     function attach() {
-      const anchor = findTimelineAnchor();
+      const anchor = document.body;
       if (anchor && mount.parentElement !== anchor) {
         anchor.appendChild(mount);
         setHost(mount);
@@ -335,7 +335,25 @@ export default function AnalyzerPreviewIntelligenceDock() {
 }
 
 const styles = {
-  shell: { margin: "12px 0", padding: 12, borderRadius: 18, border: "1px solid rgba(148,163,184,0.22)", background: "rgba(8,13,24,0.94)", color: "#f8fafc", display: "grid", gap: 12 },
+  shell: {
+    position: "fixed",
+    left: 320,
+    right: 24,
+    bottom: 18,
+    zIndex: 90,
+    maxHeight: "44dvh",
+    overflow: "auto",
+    margin: 0,
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid rgba(148,163,184,0.22)",
+    background: "rgba(8,13,24,0.96)",
+    color: "#f8fafc",
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
+    backdropFilter: "blur(12px)",
+  },
   header: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" },
   headerActions: { display: "flex", gap: 8, flexWrap: "wrap" },
   kicker: { color: "#93c5fd", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" },
