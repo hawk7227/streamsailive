@@ -1039,3 +1039,175 @@
   line-height: 1.45;
   text-align: center;
 }
+
+/* ============================================================
+   Reference editor layout match
+   ============================================================ */
+
+.editorShell {
+  height: 100vh !important;
+  overflow: hidden !important;
+  background: #02070b !important;
+}
+
+.topNav,
+.headerNav {
+  height: 58px !important;
+  min-height: 58px !important;
+}
+
+.mainGrid {
+  height: calc(100vh - 58px) !important;
+  display: grid !important;
+  grid-template-columns: 285px minmax(720px, 1fr) 455px 70px !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+  padding: 0 8px 8px !important;
+}
+
+.leftRail,
+.rightRail,
+.toolRail {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+.centerStage {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows:
+    36px
+    minmax(300px, 38vh)
+    44px
+    minmax(310px, 1fr)
+    62px !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+}
+
+.projectRow {
+  height: 36px !important;
+  min-height: 36px !important;
+  align-items: center !important;
+}
+
+.viewer,
+.previewFrame,
+.videoStage {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 300px !important;
+  max-height: 390px !important;
+  overflow: hidden !important;
+  border-radius: 8px !important;
+}
+
+.viewerVideo,
+.previewFrame video,
+.videoStage video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #020611 !important;
+}
+
+.playbar {
+  height: 44px !important;
+  min-height: 44px !important;
+}
+
+.timeline {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 5px !important;
+}
+
+.layerRow {
+  min-height: 34px !important;
+  grid-template-columns: 205px minmax(0, 1fr) !important;
+  gap: 6px !important;
+}
+
+.layerLabel {
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+}
+
+.block {
+  min-height: 34px !important;
+  font-size: 11px !important;
+}
+
+.toolStrip {
+  height: 62px !important;
+  min-height: 62px !important;
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(110px, 1fr)) !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+}
+
+.rightRail {
+  display: grid !important;
+  grid-template-rows: auto auto auto auto auto auto !important;
+  gap: 8px !important;
+  padding-right: 4px !important;
+}
+
+.inspectorCard,
+.mixer,
+.exportCard,
+.fullRegenerateCard,
+.providerStatus,
+.qaChecklist {
+  border-radius: 8px !important;
+}
+
+.toolRail {
+  width: 70px !important;
+  display: grid !important;
+  gap: 8px !important;
+  align-content: start !important;
+}
+
+.toolRail button {
+  min-height: 66px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+}
+
+.selectedActionBar {
+  display: none !important;
+}
+
+/* Keep source/reference, versions, and scene lists compact like reference */
+.sceneList,
+.versions,
+.sourceBox {
+  max-height: none !important;
+}
+
+@media (max-width: 1400px) {
+  .mainGrid {
+    grid-template-columns: 245px minmax(620px, 1fr) 390px 62px !important;
+  }
+
+  .centerStage {
+    grid-template-rows:
+      34px
+      minmax(270px, 36vh)
+      42px
+      minmax(280px, 1fr)
+      58px !important;
+  }
+
+  .layerRow {
+    grid-template-columns: 180px minmax(0, 1fr) !important;
+  }
+}
+
