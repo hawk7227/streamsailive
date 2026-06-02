@@ -1,4 +1,5 @@
 "use client";
+import { buildFromScratchPrompt, resolveFrontendGenerationMode } from "@/lib/admingeneration/from-scratch-mode";
 
 import { useEffect, useState } from "react";
 import "./opus-locked-frame.css";
@@ -72,7 +73,7 @@ function findAnalysisId(data) {
 }
 
 export default function OpusLockedFrame() {
-  const [activeTypeId, setActiveTypeId] = useState("image-to-video");
+  const [activeTypeId, setActiveTypeId] = useState("generate-from-scratch");
   const [fields, setFields] = useState(initialFields);
   const [provider, setProvider] = useState("fal");
   const [mode, setMode] = useState("advanced");
