@@ -223,7 +223,7 @@ export default function StreamsAIStudioFrame() {
 
             <ProofLine label="Route" value="/streams-ai" />
             <ProofLine label="Chat iframe" value="/streams-ai?embed=chat" />
-            <ProofLine label="Preview" value="Built-in PreviewRuntimePanel, not /pipeline/test" />
+            <ProofLine label="Preview" value="/visual-editor" />
             <ProofLine label="Editor iframe" value="/visual-editor" />
             <ProofLine label="File" value="src/app/streams-ai/page.tsx" />
             <ProofLine label="Shell" value="src/components/streams-ai/StreamsAIStudioFrame.tsx" />
