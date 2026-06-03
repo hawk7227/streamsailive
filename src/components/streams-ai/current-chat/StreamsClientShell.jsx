@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import StreamsWorkspaceShell from "./new-face/StreamsWorkspaceShell";
-import StreamsCleanSidebar from "./new-face/sidebar/StreamsCleanSidebar";
-import SnapPicClickCapture from "./new-face/capture/SnapPicClickCapture";
+import StreamsOperatorShell from "../visual-operator/StreamsOperatorShell";
 import { useStreamsChatRuntime } from "./new-face/hooks/useStreamsChatRuntime";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { createClient } from "@/lib/supabase/client";
@@ -12,6 +10,31 @@ import { useAuth } from "@/contexts/AuthContext";
 const LIBRARY_KEY = "streams-ai.assets.cache.v1";
 
 const supabase = typeof window !== "undefined" ? createClient() : null;
+
+const PUBLIC_STREAMS_CAPABILITY_TEXT = `I’m STREAMS AI — your visual AI business operator, builder, creator assistant, and launch workspace.
+
+I can help you plan, build, create, design, generate, organize, troubleshoot, launch, and grow brands, businesses, content systems, websites, apps, campaigns, and creator projects.
+
+What I can help with:
+
+- General questions and conversation across a wide range of topics.
+- Business ideas, validation, offers, revenue models, pricing, marketing, and growth.
+- Brand Portfolio support for multiple brands, projects, concepts, campaigns, creator identities, and launch paths.
+- Creator workflows including hooks, captions, scripts, social posts, content calendars, campaigns, and monetization ideas.
+- Website, app, and product direction including UI/UX, page structure, user flows, copy, and developer handoff notes.
+- Visual business building with concept previews, income potential estimates, 3D/artifact direction, marketing samples, and launch actions when the connected tools support them.
+- Sample-to-Self workflows such as “Turn This Into You,” where a sample promo can become a personalized image, video, caption, or campaign using your photo, product, message, and brand.
+- Coding support, debugging, software architecture, terminal/deployment troubleshooting, technical documentation, and production audit guidance.
+- Writing, research, strategy, documentation, copywriting, sales scripts, emails, marketplace help, and problem-solving.
+
+How I work:
+
+- If no project is selected, I operate in general assistant mode.
+- If you open a brand, concept, or project, I keep that project’s memory isolated from every other project.
+- I should never mix two businesses, brands, or concepts unless you explicitly ask me to compare or merge them.
+- The inline build panel stays closed by default and opens only when you choose a project or ask to build visually.
+
+Streams AI is not only a planner. My job is to help you build the thing, not just talk about the thing.`;
 
 function encodeSseEvent(type, data) {
   return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -109,7 +132,7 @@ function installComposerUploadBridge() {
   const onChange = (event) => {
     const input = event.target;
     if (!input || input.tagName !== "INPUT" || input.type !== "file") return;
-    // Do NOT intercept the composer's native file selection input
+    // Do NOT intercept the composer's native file selection input.
     if (input.getAttribute("aria-label") === "Add photos and files") return;
     const files = Array.from(input.files || []);
     if (!files.length) return;
@@ -131,15 +154,8 @@ function isStudioToolListIntent(message) {
   return text === "studio.tools" || text === "studio tools" || text === "streams.capabilities" || text === "streams capabilities" || text.includes("list studio tools") || text.includes("what studio tools") || text.includes("what can studio do") || text.includes("show studio tools") || text.includes("what can streams do") || text.includes("what capabilities") || text.includes("all capabilities") || text.includes("all tools");
 }
 
-function formatStudioTools(tools = []) {
-  const lines = tools.map((tool) => `- ${tool.title} (${tool.id}) — ${String(tool.status || "unknown").replace(/_/g, " ").toUpperCase()}`);
-  return ["Studio tools available to Chat:", "", ...lines, "", "Wired now: Image Generation and Text to Video use the existing proven STREAMS provider paths.", "Image to Video is exposed but requires an imageUrl. Other cards stay blocked until their real provider paths are wired.", "Open /studio to use the Studio surface directly."].join("\n");
-}
-
-async function getCapabilitiesText(originalFetch) {
-  const response = await originalFetch("/api/streams-ai/tools", { cache: "no-store" });
-  const data = await response.json();
-  return data?.text || formatStudioTools(data?.capabilities || []);
+async function getCapabilitiesText() {
+  return PUBLIC_STREAMS_CAPABILITY_TEXT;
 }
 
 function makeSseResponse(text, mode = "admin-browser") {
@@ -147,7 +163,7 @@ function makeSseResponse(text, mode = "admin-browser") {
   const startedAt = Date.now();
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(encodeSseEvent("activity", { phase: "tool", mode, statusText: mode === "studio-tools" ? "Reading Studio tools…" : "Running admin browser tool…", startedAt })));
+      controller.enqueue(encoder.encode(encodeSseEvent("activity", { phase: "tool", mode, statusText: mode === "studio-tools" ? "Preparing capability overview…" : "Running admin browser tool…", startedAt })));
       controller.enqueue(encoder.encode(encodeSseEvent("response", { token: text })));
       controller.enqueue(encoder.encode(encodeSseEvent("complete", { elapsedMs: Date.now() - startedAt, mode, messageLength: text.length })));
       controller.close();
@@ -190,7 +206,7 @@ function installAdminBrowserToolFetchBridge() {
   window.fetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input?.url || "";
     const method = String(init?.method || "GET").toUpperCase();
-    
+
     const headers = new Headers(init?.headers || {});
     if (url.startsWith("/api/streams-ai") && supabase) {
       try {
@@ -220,7 +236,7 @@ function installAdminBrowserToolFetchBridge() {
       const body = parseChatBody(init);
       const message = String(body?.message || body?.input || body?.prompt || body?.text || body?.content || "").trim();
       if (isStudioToolListIntent(message)) {
-        try { return makeSseResponse(await getCapabilitiesText((url, opt) => originalFetch(url, { ...opt, credentials: "omit" })), "studio-tools"); } catch (error) { return makeSseResponse(`Studio tools failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
+        try { return makeSseResponse(await getCapabilitiesText(), "studio-tools"); } catch (error) { return makeSseResponse(`Capability overview failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
       }
       if (isAdminBrowserToolIntent(message)) {
         try { const result = await runAdminBrowserTool(message); return makeSseResponse(result.responseText || `${result.tool} completed.`, "admin-browser"); } catch (error) { return makeSseResponse(`Admin browser tool failed: ${error?.message || "Unknown error"}`, "admin-browser"); }
@@ -238,10 +254,6 @@ function installAdminBrowserToolFetchBridge() {
 export default function StreamsClientShell() {
   const { session, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.innerWidth >= 768;
-  });
   const chatRuntime = useStreamsChatRuntime();
 
   useEffect(() => {
@@ -257,6 +269,6 @@ export default function StreamsClientShell() {
   useEffect(() => installAdminBrowserToolFetchBridge(), []);
   useEffect(() => installComposerUploadBridge(), []);
 
-  if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#fff" }} />;
-  return <><StreamsWorkspaceShell chatRuntime={chatRuntime} onOpenSidebar={() => setSidebarOpen(true)} /><StreamsCleanSidebar chatRuntime={chatRuntime} open={sidebarOpen} setOpen={setSidebarOpen} /><SnapPicClickCapture /></>;
+  if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
+  return <StreamsOperatorShell chatRuntime={chatRuntime} />;
 }
