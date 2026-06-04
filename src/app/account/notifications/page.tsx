@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
 
 export default function AccountNotificationsPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="notifications"
-      title="Notifications"
-      description="Review usage, reset, low-balance, auto-reload, spend-limit, and account-control alerts."
-    />
-  );
+  return <StreamsSettingsPanel initialCategory="notifications" />;
 }
