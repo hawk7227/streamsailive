@@ -1,20 +1,46 @@
 import { type NextRequest } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
-import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
-import { StreamsAICreditsRepository } from "@/lib/streams-ai/repositories/credits-repository";
+import { readJsonBody, streamsAIJson } from "@/lib/streams-ai/api";
+import { StreamsAIUsageRepository } from "@/lib/streams-ai/repositories/usage-repository";
+import { STREAMS_AI_USAGE_MESSAGES } from "@/lib/streams-ai/usage-policy";
 
-const credits = new StreamsAICreditsRepository();
+const usage = new StreamsAIUsageRepository();
+
+function setupUnavailable(error: unknown) {
+  console.error("[streams-ai-credits-api-error]", error);
+  return streamsAIJson(
+    {
+      ok: false,
+      code: "usage_setup_unavailable",
+      message: STREAMS_AI_USAGE_MESSAGES.backendSetupUnavailable,
+      availableCredits: null,
+      credits: null,
+      ledger: [],
+    },
+    503,
+  );
+}
 
 export async function GET(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
-    const limitParam = Number(request.nextUrl.searchParams.get("limit") || "50");
-    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 50;
-    const balance = await credits.balance(scope);
-    const ledger = await credits.list(scope, limit);
-    return streamsAIJson({ ok: true, balance, ledger });
+    const state = await usage.getUsageState(scope);
+    return streamsAIJson({
+      ok: true,
+      availableCredits: state.usageCredits.available,
+      monthlyIncludedCredits: state.usageCredits.includedMonthlyGranted,
+      usedThisPeriod: state.usageCredits.includedMonthlyUsed + state.usageCredits.used,
+      reservedCredits: 0,
+      credits: state.usageCredits,
+      plan: state.plan,
+      session: state.session,
+      daily: state.daily,
+      spend: state.spend,
+      autoReload: state.autoReload,
+      ledger: state.ledger,
+    });
   } catch (error) {
-    return streamsAIError(error);
+    return setupUnavailable(error);
   }
 }
 
@@ -22,30 +48,16 @@ export async function POST(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
     const body = await readJsonBody<{
-      amount?: number;
-      source?: string;
-      reason?: string | null;
-      relatedJobId?: string | null;
-      relatedSessionId?: string | null;
-      metadata?: Record<string, unknown>;
+      paidUsageEnabled?: boolean;
+      autoReloadEnabled?: boolean;
+      reloadThresholdUsd?: number;
+      reloadTopUpUsd?: number;
+      monthlySpendLimitUsd?: number | null;
     }>(request);
 
-    if (typeof body.amount !== "number" || !Number.isFinite(body.amount)) {
-      return streamsAIJson({ ok: false, error: "amount must be a finite number" }, 400);
-    }
-
-    const ledgerEntry = await credits.create(scope, {
-      amount: body.amount,
-      source: body.source,
-      reason: body.reason,
-      relatedJobId: body.relatedJobId,
-      relatedSessionId: body.relatedSessionId,
-      metadata: body.metadata,
-    });
-
-    const balance = await credits.balance(scope);
-    return streamsAIJson({ ok: true, balance, ledgerEntry }, 201);
+    const state = await usage.updateSettings(scope, body);
+    return streamsAIJson({ ok: true, ...state });
   } catch (error) {
-    return streamsAIError(error);
+    return setupUnavailable(error);
   }
 }
