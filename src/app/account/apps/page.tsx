@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
 
-export default function AccountPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="apps"
-      title="Apps and connectors"
-      description="Review project and connector actions with project and GitHub activity hooks."
-    />
-  );
+export default function AccountAppsPage() {
+  return <StreamsSettingsPanel initialCategory="apps" />;
 }
