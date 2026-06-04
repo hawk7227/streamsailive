@@ -1,15 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  fetchAccountWithActivity,
-  fetchCreditsWithActivity,
-  openBillingPortalWithActivity,
-  startCheckoutWithActivity,
-  fetchProjectsWithActivity,
-  callGroupChatWithActivity,
-  emitGitHubBuildBlockedActivity,
-} from "@/components/streams-ai/current-chat/new-face/runtime/streamsAccountActivityClient";
 import styles from "./StreamsAccountActionPanel.module.css";
 
 type PageKind =
@@ -19,10 +10,15 @@ type PageKind =
   | "privacy"
   | "billing"
   | "credits"
+  | "usage"
   | "modules"
+  | "notifications"
   | "personalization"
   | "language"
   | "apps"
+  | "storage"
+  | "security"
+  | "keyboard"
   | "gift"
   | "help"
   | "learnMore";
@@ -33,452 +29,542 @@ type Props = {
   description: string;
 };
 
+type UsageCounter = {
+  used?: number;
+  available?: number;
+  limit?: number;
+  resetAt?: string;
+  status?: string;
+  operatorUsed?: number;
+  studioUsed?: number;
+  videoUsed?: number;
+  launchUsed?: number;
+};
+
+type UsageCredits = {
+  eligible?: boolean;
+  enabled?: boolean;
+  received?: number;
+  used?: number;
+  available?: number;
+  includedMonthlyGranted?: number;
+  includedMonthlyUsed?: number;
+  includedMonthlyAvailable?: number;
+  monthlyResetAt?: string;
+};
+
+type UsageState = {
+  ok?: boolean;
+  plan?: { name?: string; monthlyPriceUsd?: number; dailyChatMessages?: number; previewAccess?: string };
+  account?: { status?: string; paymentMethodStatus?: string };
+  session?: UsageCounter;
+  daily?: UsageCounter;
+  usageCredits?: UsageCredits;
+  spend?: { currentMonthSpendUsd?: number; monthlyLimitUsd?: number | null; status?: string; unlimitedAllowed?: boolean };
+  autoReload?: { enabled?: boolean; thresholdUsd?: number; topUpUsd?: number; status?: string; nextCondition?: string };
+  featureCosts?: Array<{ key: string; label: string; draft: number; final: number }>;
+  ledger?: Array<{ id?: string; ledger_type?: string; amount?: number; balance_after?: number; feature_key?: string; stage?: string; reason?: string; created_at?: string }>;
+  notifications?: Array<{ id?: string; title?: string; message?: string; event_type?: string; created_at?: string; action_href?: string }>;
+  messages?: Record<string, string>;
+};
+
 type PageConfig = {
   eyebrow: string;
   gradient: string;
   badge: string;
   narrative: string;
-  cards: Array<{ label: string; title: string; body: string; metric: string }>;
-  rows: Array<{ label: string; value: string }>;
 };
+
+const SAFE_SETUP_MESSAGE =
+  "This account control is not fully set up yet. Your current work is safe, but this action cannot run until account usage is connected.";
 
 const CONFIG: Record<PageKind, PageConfig> = {
   overview: {
     eyebrow: "Workspace command center",
     gradient: "blue",
-    badge: "Live account",
-    narrative: "A premium command-center view for plan, credits, modules, billing, and account activity.",
-    cards: [
-      { label: "Plan", metric: "Live", title: "Current access", body: "Loaded through the account route and account activity lifecycle." },
-      { label: "Credits", metric: "Synced", title: "Credit balance", body: "Credits refresh through the real credits route." },
-      { label: "Modules", metric: "10", title: "Capabilities", body: "Module/bundle display is prepared for entitlement data." },
-      { label: "Activity", metric: "On", title: "Live layer", body: "Actions emit account, credits, billing, and project activity." },
-    ],
-    rows: [
-      { label: "Account route", value: "/api/streams-ai/account" },
-      { label: "Credits route", value: "/api/streams-ai/credits" },
-      { label: "Billing routes", value: "/api/stripe/checkout + /api/stripe/portal" },
-    ],
+    badge: "Account ready",
+    narrative: "Manage plan access, usage, credits, billing controls, and account readiness in one compact Streams view.",
   },
   profile: {
     eyebrow: "Identity",
     gradient: "violet",
-    badge: "Profile",
-    narrative: "A profile-focused layout for visible identity, email, role, and session status.",
-    cards: [
-      { label: "Name", metric: "User", title: "Display identity", body: "Profile data is loaded from account state, not hardcoded text." },
-      { label: "Email", metric: "Auth", title: "Login identity", body: "Authentication context drives identity display." },
-      { label: "Role", metric: "Owner", title: "Workspace role", body: "Role display is account-data backed when returned." },
-      { label: "Refresh", metric: "Live", title: "Account refresh", body: "Refresh account emits running/success/failure activity." },
-    ],
-    rows: [
-      { label: "Primary action", value: "Refresh account" },
-      { label: "No fake data", value: "Missing values render as Not loaded" },
-      { label: "Mobile", value: "One-column safe-area account cards" },
-    ],
+    badge: "Account",
+    narrative: "Review account status, workspace access, and plan-linked limits without exposing internal system details.",
   },
   settings: {
     eyebrow: "Controls",
     gradient: "slate",
-    badge: "Settings",
-    narrative: "Workspace behavior, app defaults, assistant preferences, and product controls.",
-    cards: [
-      { label: "Workspace", metric: "Ready", title: "Workspace defaults", body: "Prepared for real settings routes." },
-      { label: "Runtime", metric: "Live", title: "Assistant behavior", body: "Shared activity/status system is active." },
-      { label: "Alerts", metric: "Planned", title: "Notifications", body: "No fake notification success state is shown." },
-      { label: "Truth", metric: "Strict", title: "Blocked states", body: "Missing backend actions remain explicit." },
-    ],
-    rows: [
-      { label: "Settings source", value: "Account/runtime APIs" },
-      { label: "Activity", value: "emitAccountActivity on real refresh" },
-      { label: "Blocked actions", value: "Shown, not hidden" },
-    ],
+    badge: "Setup ready",
+    narrative: "Workspace controls are organized and ready for deeper persistence without showing technical setup text.",
   },
   privacy: {
     eyebrow: "Trust layer",
     gradient: "green",
     badge: "Privacy",
-    narrative: "Data, retention, visibility, and privacy controls with truthful availability states.",
-    cards: [
-      { label: "Data", metric: "Scoped", title: "Account data", body: "Requested through existing account routes." },
-      { label: "Visibility", metric: "Private", title: "Workspace access", body: "Group/session access must be explicitly enabled." },
-      { label: "Exports", metric: "Blocked", title: "Data export", body: "Export stays blocked until a backend exists." },
-      { label: "Deletion", metric: "Real only", title: "Delete state", body: "Deletion must call real backend actions." },
-    ],
-    rows: [
-      { label: "Privacy state", value: "No fake toggles" },
-      { label: "Access model", value: "Owner/session scoped" },
-      { label: "Data rule", value: "Backend required before success UI" },
-    ],
+    narrative: "Data controls, privacy settings, and export/delete readiness with polished setup-required states.",
   },
   billing: {
-    eyebrow: "Revenue system",
+    eyebrow: "Plan and billing",
     gradient: "gold",
-    badge: "Stripe live",
-    narrative: "Stripe portal and checkout entry points with real billing activity events.",
-    cards: [
-      { label: "Portal", metric: "Stripe", title: "Manage billing", body: "Open billing portal calls /api/stripe/portal." },
-      { label: "Checkout", metric: "Live", title: "Start checkout", body: "Checkout redirects only when a URL is returned." },
-      { label: "Plan", metric: "API", title: "Subscription state", body: "Subscription status is loaded from account data." },
-      { label: "Errors", metric: "Visible", title: "Exact failure", body: "Missing tables/env return visible API errors." },
-    ],
-    rows: [
-      { label: "Portal action", value: "openBillingPortalWithActivity" },
-      { label: "Checkout action", value: "startCheckoutWithActivity" },
-      { label: "Emitter", value: "emitBillingActivity" },
-    ],
+    badge: "Billing",
+    narrative: "Manage plan access, account billing, usage credits, spend controls, and recent usage activity.",
   },
   credits: {
-    eyebrow: "Usage ledger",
+    eyebrow: "Usage credits",
     gradient: "cyan",
     badge: "Credits",
-    narrative: "Credit refresh, credit checkout, usage state, and visible ledger errors.",
-    cards: [
-      { label: "Available", metric: "API", title: "Available credits", body: "Loaded through /api/streams-ai/credits." },
-      { label: "Included", metric: "Plan", title: "Monthly included", body: "Shown when returned by account/credits routes." },
-      { label: "Reserved", metric: "Jobs", title: "Reserved credits", body: "Reserved state should come from jobs/ledger backend." },
-      { label: "Buy", metric: "Stripe", title: "Credit packs", body: "Buy credits starts checkout with product=credits." },
-    ],
-    rows: [
-      { label: "Refresh action", value: "fetchCreditsWithActivity" },
-      { label: "Buy action", value: "startCheckoutWithActivity({ product: credits })" },
-      { label: "Emitter", value: "emitCreditsActivity" },
-    ],
+    narrative: "Track credits received, credits used, credits available, low-balance alerts, and credit-pack options.",
+  },
+  usage: {
+    eyebrow: "Account usage",
+    gradient: "cyan",
+    badge: "Usage live",
+    narrative: "See included usage, daily limits, paid usage credits, spend limits, auto-reload, and feature credit costs.",
   },
   modules: {
-    eyebrow: "Capability store",
+    eyebrow: "Capabilities",
     gradient: "pink",
-    badge: "Modules",
-    narrative: "A capability-store view for individual modules, bundle upsell, and module credit paths.",
-    cards: [
-      { label: "Image", metric: "Module", title: "Image Studio", body: "Individual entitlement-ready card." },
-      { label: "Video", metric: "Module", title: "Video Studio", body: "Video entitlement and credit state." },
-      { label: "Voice", metric: "Module", title: "Voice Studio", body: "Realtime voice and generated voice access." },
-      { label: "Bundle", metric: "Upsell", title: "All modules", body: "Bundle path is ready for checkout wiring." },
-    ],
-    rows: [
-      { label: "Module plans", value: "Individual signup + bundle upsell" },
-      { label: "Credits", value: "Included credits + action cost display" },
-      { label: "Trial", value: "One trial per module/workspace when backend supports it" },
-    ],
+    badge: "Capabilities",
+    narrative: "Review the Streams capability surface and the credit costs tied to premium actions.",
+  },
+  notifications: {
+    eyebrow: "Alerts",
+    gradient: "blue",
+    badge: "Notifications",
+    narrative: "Usage, spend, balance, reset, and account-control alerts appear here with clear next steps.",
   },
   personalization: {
     eyebrow: "Assistant style",
     gradient: "violet",
     badge: "Personalization",
-    narrative: "Assistant preferences, response behavior, style, model mode, and account experience settings.",
-    cards: [
-      { label: "Tone", metric: "Config", title: "Assistant tone", body: "Prepared for a real personalization route." },
-      { label: "Memory", metric: "Scoped", title: "Project memory", body: "Memory settings must connect to memory backend." },
-      { label: "Modes", metric: "Runtime", title: "Default modes", body: "Mode defaults should map to runtime state." },
-      { label: "Safety", metric: "Strict", title: "Truthful UI", body: "No fake model/provider preference claims." },
-    ],
-    rows: [
-      { label: "Runtime tie-in", value: "Mode/menu configuration" },
-      { label: "Status tie-in", value: "emitAccountActivity on save/load" },
-      { label: "Backend requirement", value: "Personalization persistence route" },
-    ],
+    narrative: "Personalization controls are staged in the account system with safe setup-ready states.",
   },
   language: {
     eyebrow: "Region",
     gradient: "blue",
     badge: "Locale",
-    narrative: "Language, region, timezone, formatting, and accessibility-ready preferences.",
-    cards: [
-      { label: "Language", metric: "Default", title: "Display language", body: "Needs persistence route before save." },
-      { label: "Timezone", metric: "Detected", title: "Local time", body: "Can be detected and stored when backend supports it." },
-      { label: "Currency", metric: "Stripe", title: "Billing currency", body: "Currency display should follow Stripe/account data." },
-      { label: "Access", metric: "Mobile", title: "Readability", body: "Large touch targets and clear contrast." },
-    ],
-    rows: [
-      { label: "Save rule", value: "No fake save without backend persistence" },
-      { label: "Mobile", value: "100dvh safe-area layout" },
-      { label: "Emitter", value: "emitAccountActivity on future saves" },
-    ],
+    narrative: "Language, timezone, and formatting controls are organized for account-level persistence.",
   },
   apps: {
     eyebrow: "Connected systems",
     gradient: "green",
-    badge: "Apps",
-    narrative: "Projects, connectors, GitHub/build activity, app installs, and integration visibility.",
-    cards: [
-      { label: "Projects", metric: "API", title: "Project refresh", body: "Refresh projects calls /api/projects." },
-      { label: "GitHub", metric: "Emitter", title: "Build activity", body: "Current UI emits blocked GitHub/build activity." },
-      { label: "PWA", metric: "Ready", title: "Web app", body: "PWA support should be surfaced from app runtime." },
-      { label: "Connectors", metric: "Live", title: "Connector state", body: "Connector cards should be route-backed only." },
-    ],
-    rows: [
-      { label: "Project action", value: "fetchProjectsWithActivity" },
-      { label: "GitHub action", value: "emitGitHubBuildBlockedActivity" },
-      { label: "Group chat test", value: "/api/streams-ai/group-chat" },
-    ],
+    badge: "Connectors",
+    narrative: "Connectors and app connections stay user-facing and setup-ready until each connection is live.",
+  },
+  storage: {
+    eyebrow: "Storage",
+    gradient: "slate",
+    badge: "Storage",
+    narrative: "Manage account storage readiness, saved work, exports, and retained project assets.",
+  },
+  security: {
+    eyebrow: "Security",
+    gradient: "green",
+    badge: "Security",
+    narrative: "Review login, session, workspace access, and security readiness without raw backend labels.",
+  },
+  keyboard: {
+    eyebrow: "Keyboard",
+    gradient: "slate",
+    badge: "Shortcuts",
+    narrative: "Keyboard shortcuts and productivity controls are kept clean and ready for account persistence.",
   },
   gift: {
     eyebrow: "Growth loop",
     gradient: "gold",
     badge: "Invites",
-    narrative: "Invite credits, referrals, and gift flows prepared for Stripe/ledger backend routes.",
-    cards: [
-      { label: "Invite", metric: "Planned", title: "Invite link", body: "Requires referral route before success state." },
-      { label: "Gift", metric: "Checkout", title: "Gift credits", body: "Should use Stripe checkout and credit ledger." },
-      { label: "Ledger", metric: "Required", title: "Credit ledger", body: "Gift credits must write to the ledger." },
-      { label: "Status", metric: "Live", title: "Activity", body: "Future gift actions emit billing/credit activity." },
-    ],
-    rows: [
-      { label: "No fake gifting", value: "Must use Stripe + ledger" },
-      { label: "Emitter", value: "emitCreditsActivity + emitBillingActivity" },
-      { label: "Pending backend", value: "Referral/gift credit route" },
-    ],
+    narrative: "Invite and gift-credit flows remain setup-ready until real account credit handling is connected.",
   },
   help: {
     eyebrow: "Support",
     gradient: "slate",
     badge: "Help",
-    narrative: "Support, docs, status checks, and product assistance with real status surfaces.",
-    cards: [
-      { label: "Docs", metric: "Ready", title: "Documentation", body: "Docs and help center routes exist." },
-      { label: "Status", metric: "Route", title: "System status", body: "System status should reflect API route truth." },
-      { label: "Support", metric: "Planned", title: "Contact support", body: "Needs real support ticket route." },
-      { label: "Activity", metric: "Visible", title: "Live errors", body: "Failures show exact API messages." },
-    ],
-    rows: [
-      { label: "Help center", value: "/help-center" },
-      { label: "Docs", value: "/docs" },
-      { label: "Status", value: "/system-status" },
-    ],
+    narrative: "Find account support, usage guidance, and safe setup-required states for unavailable controls.",
   },
   learnMore: {
     eyebrow: "Product education",
     gradient: "cyan",
     badge: "Learn",
-    narrative: "STREAMS modules, generation paths, pricing, credits, and team-ready behavior.",
-    cards: [
-      { label: "Create", metric: "AI", title: "Generation stack", body: "Image, video, voice, music, and builder modules." },
-      { label: "Scale", metric: "1M-ready", title: "Teams and accounts", body: "Account system is being hardened for scale." },
-      { label: "Credits", metric: "Profit", title: "Usage model", body: "Credits and usage ledger remain the business model." },
-      { label: "Launch", metric: "Next", title: "Deployment", body: "GitHub/build/deploy proof layer remains next backend work." },
-    ],
-    rows: [
-      { label: "Pricing", value: "/pricing" },
-      { label: "Capabilities", value: "10 module surfaces" },
-      { label: "Next backend", value: "GitHub/build/deploy actions" },
-    ],
+    narrative: "Learn how Streams usage, feature costs, billing controls, and plan limits work together.",
   },
 };
 
-function summarize(value: unknown) {
-  if (!value || typeof value !== "object") return "Not loaded";
-  const object = value as Record<string, unknown>;
-  if (typeof object.email === "string") return object.email;
-  if (typeof object.plan === "string") return object.plan;
-  if (typeof object.status === "string") return object.status;
-  if (typeof object.ok === "boolean") return object.ok ? "Loaded" : "Error";
-  return "Loaded";
+function numberValue(value: unknown, fallback = 0) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function creditValue(value: unknown, key: string) {
-  if (!value || typeof value !== "object") return "Not loaded";
-  const object = value as Record<string, unknown>;
-  const direct = object[key];
+function formatCredits(value: unknown) {
+  return numberValue(value).toLocaleString();
+}
 
-  if (direct === null || typeof direct === "undefined") return "Not returned";
-  if (typeof direct === "number") return direct.toLocaleString();
-  return String(direct);
+function formatMoney(value: unknown) {
+  return `$${numberValue(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
+function formatDateTime(value: unknown) {
+  if (typeof value !== "string" || !value) return "Not scheduled";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not scheduled";
+  return parsed.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function percent(used: unknown, limit: unknown) {
+  const max = numberValue(limit);
+  if (max <= 0) return 0;
+  return Math.min(100, Math.max(0, (numberValue(used) / max) * 100));
+}
+
+function sanitizeMessage(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return SAFE_SETUP_MESSAGE;
+  return value
+    .replace(/\bStripe\b/gi, "billing")
+    .replace(/\bOpenAI\b/gi, "AI")
+    .replace(/\bAPI\b/g, "account control")
+    .replace(/schema cache/gi, "account setup")
+    .replace(/table missing/gi, "account setup missing")
+    .replace(/\/api\/[\w\-/]+/gi, "account service")
+    .replace(/streams_ai_[a-z_]+/gi, "account record")
+    .replace(/provider/gi, "service")
+    .replace(/backend/gi, "account system");
+}
+
+function ledgerTitle(row: UsageState["ledger"] extends Array<infer T> ? T : never) {
+  const amount = numberValue(row?.amount);
+  if ((row?.ledger_type || "").includes("paid")) return amount < 0 ? "Usage credits applied" : "Usage credits added";
+  if ((row?.ledger_type || "").includes("reset")) return "Included usage reset";
+  if ((row?.ledger_type || "").includes("grant")) return "Included usage granted";
+  return amount < 0 ? "Usage recorded" : "Credit activity";
+}
+
+async function readJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function pickRedirect(data: Record<string, unknown>) {
+  const candidates = [data.redirectUrl, data.url, data.portalUrl, data.checkoutUrl, (data.session as Record<string, unknown> | undefined)?.url];
+  return candidates.find((item): item is string => typeof item === "string" && item.length > 0) || "";
+}
+
+function ProgressLine({ label, used, limit, helper }: { label: string; used: unknown; limit: unknown; helper?: string }) {
+  const progress = percent(used, limit);
+  return (
+    <div className={styles.progressLine}>
+      <div className={styles.progressTop}>
+        <span>{label}</span>
+        <strong>
+          {formatCredits(used)} / {formatCredits(limit)}
+        </strong>
+      </div>
+      <div className={styles.progressTrack} aria-hidden="true">
+        <i style={{ width: `${progress}%` }} />
+      </div>
+      {helper ? <p>{helper}</p> : null}
+    </div>
+  );
 }
 
 export default function StreamsAccountActionPanel({ pageKind, title, description }: Props) {
   const config = CONFIG[pageKind] || CONFIG.overview;
-  const [account, setAccount] = useState<unknown>(null);
-  const [credits, setCredits] = useState<unknown>(null);
-  const [projects, setProjects] = useState<unknown>(null);
+  const [usage, setUsage] = useState<UsageState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [lastAction, setLastAction] = useState("");
-  const [lastRedirect, setLastRedirect] = useState("");
-  const [groupSessionId, setGroupSessionId] = useState("");
-  const [groupEmail, setGroupEmail] = useState("");
-  const [groupName, setGroupName] = useState("STREAMS Group Chat");
 
-  async function loadAccount() {
+  async function loadUsage() {
+    setLoading(true);
     setError("");
-    setLastAction("Loading account...");
     try {
-      setAccount(await fetchAccountWithActivity());
-      setLastAction("Account loaded.");
+      const response = await fetch("/api/streams-ai/usage", { method: "GET", headers: { "Content-Type": "application/json" } });
+      const data = (await readJson(response)) as UsageState & { message?: string; error?: string };
+      if (!response.ok || data?.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
+      setUsage(data);
+      setNotice("Account usage loaded.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Account loading failed.";
-      setError(message);
-      setLastAction(message);
+      setError(sanitizeMessage(err instanceof Error ? err.message : SAFE_SETUP_MESSAGE));
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function loadCredits() {
+  async function updateUsageSettings(patch: Record<string, unknown>, success: string) {
+    setBusy(true);
     setError("");
-    setLastAction("Loading credits...");
     try {
-      setCredits(await fetchCreditsWithActivity());
-      setLastAction("Credits loaded.");
+      const response = await fetch("/api/streams-ai/usage", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = (await readJson(response)) as UsageState & { message?: string; error?: string };
+      if (!response.ok || data?.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
+      setUsage(data);
+      setNotice(success);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Credits loading failed.";
-      setError(message);
-      setLastAction(message);
+      setError(sanitizeMessage(err instanceof Error ? err.message : SAFE_SETUP_MESSAGE));
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function loadProjects() {
+  async function openAccountBilling() {
+    setBusy(true);
     setError("");
-    setLastAction("Loading projects...");
     try {
-      setProjects(await fetchProjectsWithActivity());
-      setLastAction("Projects loaded.");
+      const response = await fetch("/api/stripe/portal", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const data = (await readJson(response)) as Record<string, unknown>;
+      const redirect = pickRedirect(data);
+      if (!response.ok || !redirect) throw new Error("Billing setup is not ready yet.");
+      window.location.assign(redirect);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Projects loading failed.";
-      setError(message);
-      setLastAction(message);
+      setError(sanitizeMessage(err instanceof Error ? err.message : SAFE_SETUP_MESSAGE));
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function openPortal() {
+  async function startPlanSetup(product = "plan") {
+    setBusy(true);
     setError("");
-    setLastAction("Opening billing portal...");
     try {
-      const result = await openBillingPortalWithActivity();
-      setLastRedirect(result?.redirectUrl || "Redirect started");
-      setLastAction("Billing portal redirect started.");
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: pageKind, product }),
+      });
+      const data = (await readJson(response)) as Record<string, unknown>;
+      const redirect = pickRedirect(data);
+      if (!response.ok || !redirect) throw new Error("Billing setup is not ready yet.");
+      window.location.assign(redirect);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Billing portal failed.";
-      setError(message);
-      setLastAction(message);
-    }
-  }
-
-  async function startCheckout(source: string, product?: string) {
-    setError("");
-    setLastAction("Starting checkout...");
-    try {
-      const result = await startCheckoutWithActivity({ source, product });
-      setLastRedirect(result?.redirectUrl || "Redirect started");
-      setLastAction("Checkout redirect started.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Checkout failed.";
-      setError(message);
-      setLastAction(message);
-    }
-  }
-
-  async function runGroupChatTest(action: "create" | "invite" | "remove" | "leave" | "rename") {
-    setError("");
-    setLastAction(`${action} group chat...`);
-    try {
-      await callGroupChatWithActivity({ sessionId: groupSessionId, action, email: groupEmail, name: groupName });
-      setLastAction(`Group chat ${action} complete.`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : `Group chat ${action} failed.`;
-      setError(message);
-      setLastAction(message);
+      setError(sanitizeMessage(err instanceof Error ? err.message : SAFE_SETUP_MESSAGE));
+    } finally {
+      setBusy(false);
     }
   }
 
   useEffect(() => {
-    loadAccount();
-    if (pageKind === "credits" || pageKind === "billing" || pageKind === "modules") loadCredits();
-    if (pageKind === "apps") loadProjects();
-  }, [pageKind]);
+    loadUsage();
+  }, []);
 
-  const primaryActions = useMemo(() => {
+  const session = usage?.session || {};
+  const daily = usage?.daily || {};
+  const credits = usage?.usageCredits || {};
+  const spend = usage?.spend || {};
+  const autoReload = usage?.autoReload || {};
+  const planName = usage?.plan?.name || "Free Builder";
+  const monthlyLimitLabel = spend.monthlyLimitUsd === null ? "Unlimited" : formatMoney(spend.monthlyLimitUsd ?? 0);
+
+  const heroActions = useMemo(() => {
+    const base = [{ label: "Refresh usage", action: loadUsage }];
     if (pageKind === "billing") {
       return [
-        { label: "Open billing portal", action: openPortal },
-        { label: "Start checkout", action: () => startCheckout("account_billing") },
+        { label: "Open billing portal", action: openAccountBilling },
+        { label: "Set up plan", action: () => startPlanSetup("plan") },
+        ...base,
       ];
     }
-    if (pageKind === "credits") {
+    if (pageKind === "credits" || pageKind === "usage") {
       return [
-        { label: "Refresh credits", action: loadCredits },
-        { label: "Buy credits", action: () => startCheckout("account_credits", "credits") },
+        { label: "Add usage credits", action: () => startPlanSetup("credits") },
+        { label: credits.enabled ? "Usage credits on" : "Turn on usage credits", action: () => updateUsageSettings({ paidUsageEnabled: true }, "Usage credits turned on.") },
+        { label: autoReload.enabled ? "Auto-reload on" : "Enable auto-reload", action: () => updateUsageSettings({ autoReloadEnabled: true }, "Auto-reload enabled.") },
+        ...base,
       ];
     }
-    if (pageKind === "apps") {
-      return [
-        { label: "Refresh projects", action: loadProjects },
-        { label: "GitHub/build activity", action: () => emitGitHubBuildBlockedActivity("GitHub/build/deploy") },
-      ];
-    }
-    return [{ label: "Refresh account", action: loadAccount }];
-  }, [pageKind, groupSessionId, groupEmail, groupName]);
+    return base;
+  }, [pageKind, credits.enabled, autoReload.enabled]);
+
+  const setupRows = [
+    { label: "Current plan", value: planName, status: "live" },
+    { label: "Included reset", value: formatDateTime(session.resetAt), status: "live" },
+    { label: "Usage credits", value: credits.enabled ? "On" : credits.eligible ? "Available" : "Upgrade required", status: credits.enabled ? "live" : "setup" },
+    { label: "Account status", value: usage?.account?.status || "Active", status: "live" },
+  ];
 
   return (
     <main className={styles.shell} data-gradient={config.gradient}>
       <section className={styles.hero}>
-        <div className={styles.heroGlow} />
         <div className={styles.heroContent}>
           <p className={styles.kicker}>{config.eyebrow}</p>
           <h1>{title}</h1>
           <p>{description || config.narrative}</p>
           <div className={styles.heroMeta}>
             <span>{config.badge}</span>
-            <span>Mobile-first</span>
-            <span>Activity wired</span>
+            <span>{planName}</span>
+            <span>{loading ? "Loading" : "Usage ready"}</span>
           </div>
         </div>
         <div className={styles.heroActions}>
-          {primaryActions.map((item) => (
-            <button key={item.label} type="button" onClick={item.action}>{item.label}</button>
+          {heroActions.map((item) => (
+            <button key={item.label} type="button" onClick={item.action} disabled={busy || (item.label.includes("on") && !item.label.includes("Turn"))}>
+              {busy ? "Working..." : item.label}
+            </button>
           ))}
         </div>
       </section>
 
       {error ? <section className={styles.error}>{error}</section> : null}
+      {!error && notice ? <section className={styles.notice}>{notice}</section> : null}
 
       <section className={styles.grid}>
-        {config.cards.map((card) => (
-          <article className={styles.card} key={`${pageKind}-${card.label}`}>
-            <span>{card.label}</span>
-            <strong>{card.metric}</strong>
-            <h3>{card.title}</h3>
-            <p>{card.body}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className={styles.liveDataGrid}>
-        <article><span>Account</span><strong>{summarize(account)}</strong><p>/api/streams-ai/account + emitAccountActivity</p></article>
-        <article>
-          <span>Credits</span>
-          <strong>{creditValue(credits, "availableCredits")}</strong>
-          <p>
-            Available: {creditValue(credits, "availableCredits")} · Monthly: {creditValue(credits, "monthlyIncludedCredits")} · Reserved: {creditValue(credits, "reservedCredits")} · Used: {creditValue(credits, "usedThisPeriod")}
-          </p>
+        <article className={styles.card}>
+          <span>Current plan</span>
+          <strong>{planName}</strong>
+          <h3>{formatMoney(usage?.plan?.monthlyPriceUsd || 0)} / month</h3>
+          <p>{usage?.plan?.previewAccess || "Account access is being prepared."}</p>
         </article>
-        <article><span>Projects</span><strong>{summarize(projects)}</strong><p>/api/projects + emitProjectActivity</p></article>
+        <article className={styles.card}>
+          <span>Included usage</span>
+          <strong>{formatCredits(session.available)}</strong>
+          <h3>Session credits available</h3>
+          <p>Resets {formatDateTime(session.resetAt)}.</p>
+        </article>
+        <article className={styles.card}>
+          <span>Usage credits</span>
+          <strong>{formatCredits(credits.available)}</strong>
+          <h3>{credits.enabled ? "Paid usage credits on" : "Paid usage credits off"}</h3>
+          <p>{credits.eligible ? "Paid plans can continue with usage credits after included usage is exhausted." : "Free plans can wait for reset or upgrade."}</p>
+        </article>
+        <article className={styles.card}>
+          <span>Spend limit</span>
+          <strong>{monthlyLimitLabel}</strong>
+          <h3>{formatMoney(spend.currentMonthSpendUsd || 0)} used this month</h3>
+          <p>{spend.status === "limit_reached" ? "Monthly spend limit reached." : "Spend controls are active."}</p>
+        </article>
       </section>
 
-      <section className={styles.proofBar}><strong>Last action</strong><span>{lastAction || "No account action has run yet."}</span></section>
+      <section className={styles.panelGrid}>
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span>Plan usage limits</span>
+            <h2>Included session usage</h2>
+            <p>{usage?.messages?.approachingIncludedLimit || "Session usage resets automatically in the current window."}</p>
+          </div>
+          <ProgressLine label="Current session" used={session.used} limit={session.limit} helper={`${formatCredits(session.available)} available · resets ${formatDateTime(session.resetAt)}`} />
+          <ProgressLine label="Monthly included" used={credits.includedMonthlyUsed} limit={credits.includedMonthlyGranted} helper={`${formatCredits(credits.includedMonthlyAvailable)} included credits available`} />
+        </article>
 
-      <section className={styles.proofBar}><strong>Last redirect</strong><span>{lastRedirect || "No redirect has started yet."}</span></section>
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span>Daily limits</span>
+            <h2>Today’s usage</h2>
+            <p>Operator, studio, video, and launch usage share your daily plan allowance.</p>
+          </div>
+          <ProgressLine label="Daily usage" used={daily.used} limit={daily.limit} helper={`${formatCredits(daily.available)} credits available today`} />
+          <div className={styles.compactStats}>
+            <b>Operator {formatCredits(daily.operatorUsed)}</b>
+            <b>Studio {formatCredits(daily.studioUsed)}</b>
+            <b>Video {formatCredits(daily.videoUsed)}</b>
+            <b>Launch {formatCredits(daily.launchUsed)}</b>
+          </div>
+        </article>
 
-      <section className={styles.groupCard}>
-        <div>
-          <p className={styles.kicker}>Group chat backend test</p>
-          <h2>Real session test</h2>
-          <p>Calls /api/streams-ai/group-chat against a real session id and emits group chat activity events.</p>
-        </div>
-        <label>Session ID<input value={groupSessionId} onChange={(event) => setGroupSessionId(event.target.value)} placeholder="Paste a real STREAMS chat session id" /></label>
-        <label>Invite email<input value={groupEmail} onChange={(event) => setGroupEmail(event.target.value)} placeholder="person@example.com" type="email" /></label>
-        <label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="STREAMS Group Chat" /></label>
-        <div className={styles.groupActions}>
-          <button type="button" onClick={() => runGroupChatTest("create")}>Create group</button>
-          <button type="button" onClick={() => runGroupChatTest("invite")}>Invite</button>
-          <button type="button" onClick={() => runGroupChatTest("rename")}>Rename</button>
-          <button type="button" onClick={() => runGroupChatTest("remove")}>Remove</button>
-          <button type="button" onClick={() => runGroupChatTest("leave")}>Leave</button>
-        </div>
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span>Usage credits</span>
+            <h2>Paid credit balance</h2>
+            <p>{usage?.messages?.lowBalance || "Add credits or turn on auto-reload to keep building without interruption."}</p>
+          </div>
+          <div className={styles.rows}>
+            <div className={styles.row} data-status="live"><b>Credits received</b><span>{formatCredits(credits.received)}</span><i>Live</i></div>
+            <div className={styles.row} data-status="live"><b>Credits used</b><span>{formatCredits(credits.used)}</span><i>Live</i></div>
+            <div className={styles.row} data-status="live"><b>Credits available</b><span>{formatCredits(credits.available)}</span><i>Live</i></div>
+            <div className={styles.row} data-status={credits.enabled ? "live" : "setup"}><b>Paid usage credits</b><span>{credits.enabled ? "Enabled" : credits.eligible ? "Ready to enable" : "Upgrade required"}</span><i>{credits.enabled ? "On" : "Setup"}</i></div>
+          </div>
+        </article>
+
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span>Auto-reload</span>
+            <h2>{autoReload.enabled ? "Auto-reload enabled" : "Auto-reload off"}</h2>
+            <p>{usage?.messages?.autoReloadSetup || "You control the threshold, top-up amount, and monthly spend limit."}</p>
+          </div>
+          <div className={styles.rows}>
+            <div className={styles.row} data-status={autoReload.enabled ? "live" : "off"}><b>Status</b><span>{autoReload.enabled ? "Enabled" : "Disabled"}</span><i>{autoReload.enabled ? "On" : "Off"}</i></div>
+            <div className={styles.row} data-status="setup"><b>Reload threshold</b><span>{formatMoney(autoReload.thresholdUsd || 0)}</span><i>Set</i></div>
+            <div className={styles.row} data-status="setup"><b>Reload amount</b><span>{formatMoney(autoReload.topUpUsd || 0)}</span><i>Set</i></div>
+            <div className={styles.row} data-status="setup"><b>Next condition</b><span>{autoReload.nextCondition || "Balance, payment, and spend limit must allow it."}</span><i>Rule</i></div>
+          </div>
+        </article>
       </section>
 
-      <section className={styles.section}>
-        <div><p className={styles.kicker}>{config.badge}</p><h2>{config.narrative}</h2></div>
+      {pageKind === "usage" || pageKind === "credits" || pageKind === "billing" || pageKind === "modules" ? (
+        <section className={styles.sectionVisible}>
+          <div className={styles.panelHead}>
+            <span>Feature usage costs</span>
+            <h2>Premium action cost guide</h2>
+            <p>Draft actions use fewer credits. Final generation, launch, video, and code actions use more credits before execution.</p>
+          </div>
+          <div className={styles.costTable}>
+            {(usage?.featureCosts || []).map((item) => (
+              <div key={item.key}>
+                <b>{item.label}</b>
+                <span>Draft {formatCredits(item.draft)}</span>
+                <span>Final {formatCredits(item.final)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {pageKind === "usage" || pageKind === "billing" || pageKind === "credits" ? (
+        <section className={styles.panelGrid}>
+          <article className={styles.panel}>
+            <div className={styles.panelHead}>
+              <span>Recent usage activity</span>
+              <h2>Ledger activity</h2>
+              <p>Credit grants, included usage, paid credits, resets, and account adjustments appear here.</p>
+            </div>
+            <div className={styles.rows}>
+              {(usage?.ledger || []).slice(0, 6).map((row, index) => (
+                <div className={styles.row} data-status="live" key={row.id || index}>
+                  <b>{ledgerTitle(row)}</b>
+                  <span>{formatCredits(row.amount)} credits · {formatDateTime(row.created_at)}</span>
+                  <i>Saved</i>
+                </div>
+              ))}
+              {usage?.ledger?.length ? null : <div className={styles.emptyState}>No usage activity has been recorded yet.</div>}
+            </div>
+          </article>
+          <article className={styles.panel}>
+            <div className={styles.panelHead}>
+              <span>Account alerts</span>
+              <h2>Notifications</h2>
+              <p>Limit, reset, balance, spend, and auto-reload alerts link back to this usage state.</p>
+            </div>
+            <div className={styles.rows}>
+              {(usage?.notifications || []).slice(0, 6).map((item, index) => (
+                <div className={styles.row} data-status="setup" key={item.id || index}>
+                  <b>{sanitizeMessage(item.title || "Account notification")}</b>
+                  <span>{sanitizeMessage(item.message || "Review your usage settings.")}</span>
+                  <i>Alert</i>
+                </div>
+              ))}
+              {usage?.notifications?.length ? null : <div className={styles.emptyState}>No account alerts yet.</div>}
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      <section className={styles.sectionVisible}>
+        <div className={styles.panelHead}>
+          <span>{config.badge}</span>
+          <h2>{config.narrative}</h2>
+          <p>{loading ? "Loading account usage..." : "Only user-facing account states are shown here."}</p>
+        </div>
         <div className={styles.rows}>
-          {config.rows.map((row) => (
-            <div key={`${pageKind}-${row.label}`}><strong>{row.label}</strong><span>{row.value}</span></div>
+          {setupRows.map((row) => (
+            <div className={styles.row} data-status={row.status} key={row.label}>
+              <b>{row.label}</b>
+              <span>{row.value}</span>
+              <i>{row.status === "live" ? "Live" : "Ready"}</i>
+            </div>
           ))}
         </div>
       </section>
