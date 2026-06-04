@@ -13,9 +13,7 @@ import styles from "./StreamsSettingsPanel.module.css";
 type SettingValue = string | boolean | number | null;
 type SettingItem = StreamsSettingDefinition & { value?: SettingValue; status?: string; updatedAt?: string | null };
 
-type Props = {
-  initialCategory?: StreamsSettingsCategory;
-};
+type Props = { initialCategory?: StreamsSettingsCategory };
 
 const ICONS: Record<string, string> = {
   gear: "⚙",
@@ -131,11 +129,8 @@ function safeMessage(value: unknown) {
 }
 
 function actionNotice(setting: SettingItem) {
-  if (setting.type === "danger") {
-    return `${setting.label} is protected. A verification step is required before this action can continue.`;
-  }
-
-  return `${setting.label} opens a dedicated account flow. Your saved preferences on this page remain active.`;
+  if (setting.type === "danger") return `${setting.label} is protected. A verification step is required before this action can continue.`;
+  return `${setting.label} opened. Review the details below.`;
 }
 
 function settingStatusLabel(setting: SettingItem, busy: boolean) {
@@ -153,6 +148,30 @@ function renderValuePreview(setting: SettingItem, value: unknown) {
   return text || "Not set";
 }
 
+function ActionPanel({ setting, onClose }: { setting: SettingItem; onClose: () => void }) {
+  const protectedAction = setting.type === "danger";
+  return (
+    <section className={styles.actionPanel} data-danger={protectedAction}>
+      <div>
+        <span>{protectedAction ? "Protected action" : "Account action"}</span>
+        <h2>{setting.label}</h2>
+        <p>{setting.description || "This setting uses a dedicated account flow."}</p>
+        <div className={styles.actionPanelMeta}>
+          <b>Category</b><strong>{setting.category.replace(/-/g, " ")}</strong>
+          <b>Status</b><strong>{protectedAction ? "Verification required" : "Ready for dedicated flow"}</strong>
+          <b>Current action</b><strong>{setting.actionLabel || "Open"}</strong>
+        </div>
+        <p className={styles.actionPanelNote}>
+          {protectedAction
+            ? "This is intentionally blocked until a real verification flow is connected. No destructive action was performed."
+            : "This click is now live in the UI. The next production step is wiring this button to its real provider or account completion flow."}
+        </p>
+      </div>
+      <button type="button" onClick={onClose}>Close</button>
+    </section>
+  );
+}
+
 export default function StreamsSettingsPanel({ initialCategory = "general" }: Props) {
   const [activeTab, setActiveTab] = useState<StreamsSettingsCategory>(initialCategory);
   const [settings, setSettings] = useState<SettingItem[]>(defaultSettings);
@@ -160,6 +179,7 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
   const [savingKey, setSavingKey] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [activeAction, setActiveAction] = useState<SettingItem | null>(null);
 
   const activeMeta = useMemo(() => STREAMS_SETTINGS_TABS.find((tab) => tab.id === activeTab) || STREAMS_SETTINGS_TABS[0], [activeTab]);
   const activeSettings = useMemo(() => settings.filter((setting) => setting.category === activeTab), [settings, activeTab]);
@@ -182,6 +202,7 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
 
   async function saveSetting(setting: SettingItem, value: SettingValue) {
     if (setting.type === "button" || setting.type === "danger") {
+      setActiveAction(setting);
       setNotice(actionNotice(setting));
       setError("");
       return;
@@ -232,6 +253,7 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
                 event.preventDefault();
                 window.history.pushState(null, "", TAB_ROUTES[tab.id] || "/account");
                 setActiveTab(tab.id);
+                setActiveAction(null);
                 setNotice("");
                 setError("");
               }}
@@ -258,6 +280,7 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
         {loading ? <div className={styles.notice}>Loading saved settings…</div> : null}
         {notice ? <div className={styles.notice}>{notice}</div> : null}
         {error ? <div className={styles.error}>{error}</div> : null}
+        {activeAction ? <ActionPanel setting={activeAction} onClose={() => setActiveAction(null)} /> : null}
 
         {activeTab === "general" ? (
           <div className={styles.secureCard}>
@@ -266,7 +289,10 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
               <h2>Secure your account</h2>
               <p>Add multi-factor authentication before billing, deployments, app writes, and other protected builder actions.</p>
             </div>
-            <button type="button" onClick={() => setNotice("Multi-factor authentication opens a protected account security flow.")}>Set up MFA</button>
+            <button type="button" onClick={() => {
+              const setting = settings.find((item) => item.key === "mfaPrompt") || activeSettings[0];
+              if (setting) void saveSetting(setting, String(setting.defaultValue || "Recommended"));
+            }}>Set up MFA</button>
           </div>
         ) : null}
 
@@ -301,9 +327,16 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
                   const value = visibleValue(setting.value, setting.defaultValue);
                   const busy = savingKey === `${setting.category}:${setting.key}`;
                   const preview = renderValuePreview(setting, value);
+                  const rowClickable = setting.type === "button" || setting.type === "danger";
 
                   return (
-                    <div className={styles.settingRow} key={`${setting.category}:${setting.key}`} data-kind={setting.type}>
+                    <div
+                      className={styles.settingRow}
+                      key={`${setting.category}:${setting.key}`}
+                      data-kind={setting.type}
+                      data-clickable={rowClickable}
+                      onClick={rowClickable ? () => void saveSetting(setting, String(value || setting.defaultValue)) : undefined}
+                    >
                       <div className={styles.settingText}>
                         <h3>{setting.label}</h3>
                         {setting.description ? <p>{setting.description}</p> : null}
@@ -311,25 +344,13 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
                       </div>
 
                       {setting.type === "select" ? (
-                        <select
-                          className={styles.select}
-                          value={String(value)}
-                          disabled={busy}
-                          onChange={(event) => void saveSetting(setting, event.target.value)}
-                        >
+                        <select className={styles.select} value={String(value)} disabled={busy} onChange={(event) => void saveSetting(setting, event.target.value)}>
                           {(setting.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       ) : null}
 
                       {setting.type === "toggle" ? (
-                        <button
-                          type="button"
-                          className={styles.toggle}
-                          data-on={Boolean(value)}
-                          aria-pressed={Boolean(value)}
-                          disabled={busy}
-                          onClick={() => void saveSetting(setting, !Boolean(value))}
-                        >
+                        <button type="button" className={styles.toggle} data-on={Boolean(value)} aria-pressed={Boolean(value)} disabled={busy} onClick={() => void saveSetting(setting, !Boolean(value))}>
                           <span />
                         </button>
                       ) : null}
@@ -349,7 +370,10 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
                         <button
                           type="button"
                           className={`${styles.actionButton} ${setting.type === "danger" ? styles.dangerButton : ""}`}
-                          onClick={() => void saveSetting(setting, String(value || setting.defaultValue))}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void saveSetting(setting, String(value || setting.defaultValue));
+                          }}
                         >
                           {setting.actionLabel || String(value || "Open")}
                         </button>
