@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }>(request);
 
     const state = await usage.updateSettings(scope, body);
-    return streamsAIJson({ ok: true, ...state });
+    return streamsAIJson(state);
   } catch (error) {
     return setupUnavailable(error);
   }
