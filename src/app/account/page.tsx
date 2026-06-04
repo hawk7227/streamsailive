@@ -5,7 +5,7 @@ export default function AccountPage() {
     <StreamsAccountActionPanel
       pageKind="overview"
       title="Account"
-      description="Manage your STREAMS account with real loading, billing, credits, and activity events."
+      description="Manage your Streams account, plan access, usage, credits, privacy, billing controls, and account readiness."
     />
   );
 }
