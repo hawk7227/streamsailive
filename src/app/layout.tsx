@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
+import StreamsGlobalAccountNavLinks from "@/components/account/StreamsGlobalAccountNavLinks";
 
 const inter = { variable: "--font-inter", className: "font-inter" };
 
@@ -30,9 +31,12 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <StreamsGlobalAccountNavLinks />
+            {children}
+          </AuthProvider>
         </QueryProvider>
-            </body>
+      </body>
     </html>
   );
 }
