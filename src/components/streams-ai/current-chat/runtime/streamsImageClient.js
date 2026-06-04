@@ -1,3 +1,5 @@
+import { requestStreamsUsageApproval } from "./streamsUsageGateClient";
+
 const DEFAULT_BASE =
   process.env.NEXT_PUBLIC_STREAMS_API_BASE_URL || "";
 
@@ -45,7 +47,19 @@ export async function generateStreamsImage({
     throw new Error("Image prompt is required.");
   }
 
-  onStatus?.("Submitting image generation…");
+  onStatus?.("Checking usage approval...");
+  const gate = await requestStreamsUsageApproval({
+    featureKey: numImages >= 4 ? "four_image_pack" : "image_studio",
+    stage: "final",
+    relatedSessionId: sessionId,
+    signal,
+  });
+
+  if (!gate.ok) {
+    throw new Error(gate.message || "Usage approval is required before image generation can run.");
+  }
+
+  onStatus?.("Submitting image generation...");
 
   const generationRes = await fetch(apiUrl("/api/streams/image/generate"), {
     method: "POST",
@@ -73,13 +87,13 @@ export async function generateStreamsImage({
     throw new Error(generationData?.error || "Image generation did not return a valid job.");
   }
 
-  onStatus?.("Generating image…");
+  onStatus?.("Generating image...");
 
   const maxPolls = 90;
 
   for (let attempt = 0; attempt < maxPolls; attempt += 1) {
     if (signal?.aborted) {
-      throw new DOMException("Image generation aborted.", "AbortError");
+      throw new Error("Image generation aborted.");
     }
 
     await sleep(2000);
@@ -118,7 +132,7 @@ export async function generateStreamsImage({
       throw new Error(statusData?.error || "Image generation failed.");
     }
 
-    onStatus?.(`Generating image… (${attempt + 1})`);
+    onStatus?.(`Generating image... (${attempt + 1})`);
   }
 
   throw new Error("Image generation timed out.");
