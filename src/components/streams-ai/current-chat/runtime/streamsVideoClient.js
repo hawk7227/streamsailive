@@ -1,3 +1,5 @@
+import { requestStreamsUsageApproval } from "./streamsUsageGateClient";
+
 const DEFAULT_BASE =
   process.env.NEXT_PUBLIC_STREAMS_API_BASE_URL || "";
 
@@ -65,6 +67,18 @@ export async function generateStreamsVideo({
     throw new Error("Video prompt is required.");
   }
 
+  onStatus?.("Checking usage approval…");
+  const gate = await requestStreamsUsageApproval({
+    featureKey: mode === "i2v" || mode === "motion" ? "photo_to_motion" : "text_to_video",
+    stage: "final",
+    relatedSessionId: sessionId,
+    signal,
+  });
+
+  if (!gate.ok) {
+    throw new Error(gate.message || "Usage approval is required before video generation can run.");
+  }
+
   onStatus?.("Submitting video generation…");
 
   const body = {
@@ -100,7 +114,7 @@ export async function generateStreamsVideo({
     throw new Error(generationData?.error || "Video generation did not return a valid job.");
   }
 
-  onStatus?.(`Waiting on FAL provider… job ${generationData.generationId}`);
+  onStatus?.(`Waiting on video render… job ${generationData.generationId}`);
 
   const maxPolls = 80;
   const startedAt = Date.now();
@@ -147,8 +161,8 @@ export async function generateStreamsVideo({
     }
 
     const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
-    onStatus?.(`Waiting on FAL provider… ${providerStatusLabel(statusData)} · ${elapsedSeconds}s · poll ${attempt + 1}/${maxPolls}`);
+    onStatus?.(`Rendering video… ${providerStatusLabel(statusData)} · ${elapsedSeconds}s · poll ${attempt + 1}/${maxPolls}`);
   }
 
-  throw new Error(`Video generation timed out after ${Math.round((Date.now() - startedAt) / 1000)}s waiting on FAL provider.`);
+  throw new Error(`Video generation timed out after ${Math.round((Date.now() - startedAt) / 1000)}s waiting on video render.`);
 }
