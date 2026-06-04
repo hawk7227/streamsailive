@@ -13,8 +13,14 @@ import styles from "./StreamsSettingsPanel.module.css";
 type SettingValue = string | boolean | number | null;
 type SettingItem = StreamsSettingDefinition & { value?: SettingValue; status?: string; updatedAt?: string | null };
 type Props = { initialCategory?: StreamsSettingsCategory };
+type SettingsNavTab = { id: StreamsSettingsCategory | "usage"; label: string; icon: string; title: string; description: string };
 
-const ICONS: Record<string, string> = { gear: "⚙", bell: "◖", spark: "✦", apps: "⌘", clock: "◷", card: "▭", database: "▣", box: "▱", key: "⚿", family: "♙", life: "◎", user: "◉" };
+const ICONS: Record<string, string> = { gear: "⚙", bell: "◖", spark: "✦", apps: "⌘", clock: "◷", card: "▭", database: "▣", usage: "◌", box: "▱", key: "⚿", family: "♙", life: "◎", user: "◉" };
+const SETTINGS_NAV_TABS: SettingsNavTab[] = [
+  ...STREAMS_SETTINGS_TABS.slice(0, 5),
+  { id: "usage", label: "Usage", icon: "usage", title: "Usage", description: "Track usage, credits, limits, resets, credit packs, auto-reload, spend caps, and detailed ledger activity." },
+  ...STREAMS_SETTINGS_TABS.slice(5),
+];
 
 const CATEGORY_GROUPS: Partial<Record<StreamsSettingsCategory, Array<{ title: string; keys: string[]; description?: string }>>> = {
   general: [
@@ -78,12 +84,13 @@ const CATEGORY_GROUPS: Partial<Record<StreamsSettingsCategory, Array<{ title: st
   ],
 };
 
-const TAB_ROUTES: Record<StreamsSettingsCategory, string> = {
+const TAB_ROUTES: Record<string, string> = {
   general: "/account",
   notifications: "/account/notifications",
   personalization: "/account/personalization",
   apps: "/account/apps",
   schedules: "/account/schedules",
+  usage: "/account/usage",
   billing: "/account/billing",
   "data-controls": "/account/data-controls",
   storage: "/account/storage",
@@ -175,8 +182,8 @@ export default function StreamsSettingsPanel({ initialCategory = "general" }: Pr
     <main className={styles.settingsShell}>
       <aside className={styles.settingsSide} aria-label="Settings sections">
         <Link className={styles.closeButton} href="/streams-ai" aria-label="Close settings">×</Link>
-        <nav className={styles.tabList}>{STREAMS_SETTINGS_TABS.map((tab) => (
-          <Link key={tab.id} className={styles.tabButton} data-active={activeTab === tab.id} href={TAB_ROUTES[tab.id] || "/account"} onClick={(event) => { event.preventDefault(); window.history.pushState(null, "", TAB_ROUTES[tab.id] || "/account"); setActiveTab(tab.id); setActiveAction(null); setNotice(""); setError(""); }}>
+        <nav className={styles.tabList}>{SETTINGS_NAV_TABS.map((tab) => (
+          <Link key={tab.id} className={styles.tabButton} data-active={activeTab === tab.id} href={TAB_ROUTES[tab.id] || "/account"} onClick={(event) => { if (tab.id === "usage") return; event.preventDefault(); window.history.pushState(null, "", TAB_ROUTES[tab.id] || "/account"); setActiveTab(tab.id); setActiveAction(null); setNotice(""); setError(""); }}>
             <span className={styles.tabIcon}>{ICONS[tab.icon] || "•"}</span><span>{tab.label}</span>
           </Link>
         ))}</nav>
