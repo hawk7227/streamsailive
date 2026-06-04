@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
 
-export default function AccountPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="settings"
-      title="Settings"
-      description="Control workspace, product, and account preferences."
-    />
-  );
+export default function AccountSettingsPage() {
+  return <StreamsSettingsPanel initialCategory="general" />;
 }
