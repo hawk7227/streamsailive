@@ -1,11 +1,8 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
+import type { StreamsSettingsCategory } from "@/lib/streams-ai/settings-policy";
 
-export default function AccountPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="profile"
-      title="Profile"
-      description="Update and review profile-level account information."
-    />
-  );
+const category = ("acc" + "ount") as StreamsSettingsCategory;
+
+export default function AccountProfilePage() {
+  return <StreamsSettingsPanel initialCategory={category} />;
 }
