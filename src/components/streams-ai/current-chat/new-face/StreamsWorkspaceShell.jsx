@@ -2,78 +2,36 @@
 import dynamic from "next/dynamic";
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import {
+  STREAMS_SPLIT_PREVIEW_EVENT,
+  createPreviewHtmlFromSource,
+  extractPreviewSourceFromText,
+  inferPreviewKindFromSource,
+  openLastStreamsSplitPreview,
+  openStreamsSplitPreview,
+} from "./runtime/streamsSplitPreviewBridge";
 
-
-const STREAMS_SPLIT_PREVIEW_EVENT = "streams:split-preview";
-const STREAMS_SPLIT_PREVIEW_LAST_KEY = "streams:split-preview:last";
 
 function hasPreviewableContent(content = "") {
-  return Boolean(extractPreviewSource(content));
-}
-
-function extractPreviewSource(content = "") {
-  const value = String(content || "");
-  const fenced = value.match(/```(?:html|tsx|jsx|react|javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
-
-  if (fenced?.[1]?.trim()) return fenced[1].trim();
-
-  const htmlStart = value.search(/<!doctype html|<html[\s>]|<body[\s>]|<main[\s>]|<section[\s>]|<div[\s>]|<svg[\s>]/i);
-  return htmlStart >= 0 ? value.slice(htmlStart).trim() : "";
-}
-
-function escapePreviewText(value = "") {
-  return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function buildPreviewHtmlFromSource(source = "") {
-  const value = String(source || "").trim();
-
-  if (/<!doctype html|<html[\s>]/i.test(value)) return value;
-
-  if (/<svg[\s>]/i.test(value)) {
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0b10;color:white}</style></head><body>${value}</body></html>`;
-  }
-
-  if (/<[a-z][\s\S]*>/i.test(value) && !/export\s+default|className=/.test(value)) {
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;font-family:Inter,system-ui;background:#f7f7f8;color:#111}</style></head><body>${value}</body></html>`;
-  }
-
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui;background:#0b0b10;color:white}main{width:min(760px,calc(100vw - 36px));border:1px solid rgba(255,255,255,.14);border-radius:30px;background:rgba(255,255,255,.08);padding:30px}pre{white-space:pre-wrap;overflow:auto;color:rgba(255,255,255,.82)}</style></head><body><main><pre>${escapePreviewText(value || "No previewable source was found.")}</pre></main></body></html>`;
+  return Boolean(extractPreviewSourceFromText(content));
 }
 
 function openAssistantMessageInPreview(content = "", title = "Assistant Preview") {
   if (typeof window === "undefined") return false;
 
-  const sourceCode = extractPreviewSource(content);
+  const sourceCode = extractPreviewSourceFromText(content);
   if (!sourceCode) return false;
 
-  const detail = {
-    action: "open",
+  openStreamsSplitPreview({
     id: `assistant_preview_${Date.now()}`,
     title,
-    kind: /export\s+default|className=/.test(sourceCode) ? "tsx" : "html",
+    kind: inferPreviewKindFromSource(sourceCode),
     sourceVisible: false,
     conversationCodeSuppressed: true,
-    previewPanelOpen: true,
     sourceCode,
-    previewHtml: buildPreviewHtmlFromSource(sourceCode),
-    repoFullName: "",
-    branch: "",
+    previewHtml: createPreviewHtmlFromSource(sourceCode, title),
     filePath: "assistant-message",
-    fileSha: "",
-  };
-
-  try {
-    window.sessionStorage.setItem(STREAMS_SPLIT_PREVIEW_LAST_KEY, JSON.stringify(detail));
-  } catch {}
-
-  window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
-
-  // If the preview pane was closed, React mounts it after this event.
-  // Re-dispatch once after mount so the embedded preview receives the artifact.
-  window.setTimeout(() => {
-    window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
-  }, 50);
+  });
 
   return true;
 }
@@ -140,6 +98,7 @@ import ChatMarkdownMessage from "./markdown/ChatMarkdownMessage";
 import InlineAssistantImageCard from "./media/InlineAssistantImageCard";
 import ImageViewerModal from "./media/ImageViewerModal";
 import GenerationActivityStrip from "./media/GenerationActivityStrip";
+import StreamsSplitPreview from "./preview/StreamsSplitPreview";
 import StreamsComposer from "./composer/StreamsComposer";
 import { archiveArtifact, copyArtifactText, deleteArtifact, downloadArtifactText, moveArtifactToProject, pinArtifact, shareArtifactText, viewArtifactInfo } from "./artifact/artifactActions";
 
@@ -536,7 +495,7 @@ function Section({ title, items, selected }) {
 
 
 function SharePopover({ onClose }) {
-  return <div className="sharePopover" role="dialog" aria-label="Share dialog"><div className="sharePopoverHeader"><b>Share 'Lumen Chat Workspace Ui'</b><button type="button" aria-label="Close share" onClick={onClose}>×</button></div><div className="shareRow"><input value="https://chatgpt.com/canvas/shared/..." readOnly /><button type="button" onClick={onClose}>Create link</button></div></div>;
+  return <div className="sharePopover" role="dialog" aria-label="Share dialog"><div className="sharePopoverHeader"><b>Share &apos;Lumen Chat Workspace Ui&apos;</b><button type="button" aria-label="Close share" onClick={onClose}>×</button></div><div className="shareRow"><input value="https://chatgpt.com/canvas/shared/..." readOnly /><button type="button" onClick={onClose}>Create link</button></div></div>;
 }
 
 function useCloseOnOutside(open, close) {
@@ -888,8 +847,80 @@ function SplitChatContext() {
   return <main className="splitChatContext"><div className="splitChatScroll"><div className="splitAssistant"><div className="aiIcon"><Icon name="logo"/></div><div><MarkdownMessage content={(active && active.content) || text}/><div className="streamStateRow"><span>{data.stream.status}</span></div></div></div></div><div className="splitComposer"><div className="startComposer"><input placeholder="Ask anything" readOnly /></div><small>ChatGPT can make mistakes. Check important info. See <u>Cookie Preferences</u>.</small></div></main>;
 }
 
-function PreviewWorkspace({ chatRuntime }) {
-  return <StreamsSplitPreview embedded state={chatRuntime?.previewState} />;
+function PreviewWorkspace({ onClose }) {
+  return <StreamsSplitPreview embedded initialOpen onClose={onClose} />;
+}
+
+function CodeArtifactPane({ openPreview, openStart, artifactText, setArtifactText }) {
+  const [draft, setDraft] = useState(artifactText || "");
+  const [status, setStatus] = useState("Ready");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDraft(artifactText || ""), 0);
+    return () => window.clearTimeout(timer);
+  }, [artifactText]);
+
+  const dirty = draft !== (artifactText || "");
+
+  const previewDraft = () => {
+    const sourceCode = draft || artifactText || "";
+    openStreamsSplitPreview({
+      id: `code_candidate_${Date.now()}`,
+      title: "Candidate Preview",
+      kind: inferPreviewKindFromSource(sourceCode),
+      sourceCode,
+      previewHtml: createPreviewHtmlFromSource(sourceCode, "Candidate Preview"),
+      sourceVisible: false,
+      conversationCodeSuppressed: true,
+      filePath: "candidate-edit",
+    });
+    openPreview?.();
+  };
+
+  const discardDraft = () => {
+    setDraft(artifactText || "");
+    setStatus("Discarded");
+    window.setTimeout(() => setStatus("Ready"), 1200);
+  };
+
+  const saveCandidate = () => {
+    setArtifactText?.(draft);
+    setStatus("Candidate saved");
+    window.setTimeout(() => setStatus("Ready"), 1200);
+  };
+
+  const copyDraft = async () => {
+    await navigator.clipboard?.writeText(draft);
+    setStatus("Copied");
+    window.setTimeout(() => setStatus("Ready"), 1200);
+  };
+
+  return (
+    <section className="codeArtifactPane" aria-label="Builder source panel">
+      <div className="artifactCodeShell">
+        <header className="codeTopbar">
+          <div className="codeTitle">
+            <b>Builder Source</b>
+            <span>{dirty ? " · unsaved candidate" : " · clean"}</span>
+          </div>
+          <div className="codePrimaryActions">
+            <button type="button" onClick={openStart}>Chat</button>
+            <button type="button" onClick={previewDraft}>Preview before apply</button>
+            <button type="button" onClick={copyDraft}>Copy</button>
+            <button type="button" onClick={discardDraft} disabled={!dirty}>Discard</button>
+            <button type="button" onClick={saveCandidate} disabled={!dirty}>Save candidate</button>
+          </div>
+        </header>
+        <textarea
+          aria-label="Candidate source editor"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          spellCheck={false}
+        />
+        <div className="codeCandidateStatus" role="status">{status}</div>
+      </div>
+    </section>
+  );
 }
 
 
@@ -1006,11 +1037,21 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  const openPreviewPane = () => {
+    setPreviewOpen(true);
+    openLastStreamsSplitPreview();
+  };
+
   useEffect(() => {
     const handler = (event) => {
       if (event?.detail?.action === "open") {
         console.info("[STREAMS_PREVIEW_EVENT_OPEN_PANE]", event.detail?.title || "Preview");
         setPreviewOpen(true);
+        return;
+      }
+
+      if (event?.detail?.action === "close") {
+        setPreviewOpen(false);
       }
     };
 
@@ -1024,24 +1065,43 @@ export default function LumenWorkspace({ chatRuntime: propChatRuntime, onOpenSid
   const actionText = `Action: ${actionLabel} · ${runtime.mode}${runtime.keyboard ? " · keyboard" : ""}`;
 useEffect(() => {
   const artifact = chatRuntime.activeArtifact;
-  if (!artifact?.code) return;
+  const sourceCode = artifact?.sourceCode || artifact?.code || "";
+  const previewHtml = artifact?.previewHtml || artifact?.html || "";
+  if (!sourceCode && !previewHtml) return;
 
-  setArtifactText(artifact.code);
+  const timer = window.setTimeout(() => {
+    setArtifactText(sourceCode || previewHtml);
 
-  if (artifact.preview) {
-    setPreviewOpen(true);
-  } else {
-    setPreviewOpen(false);
-    setMode("code");
-  }
+    if (artifact.preview || previewHtml) {
+      setPreviewOpen(true);
+      openStreamsSplitPreview({
+        id: artifact.id || `artifact_preview_${Date.now()}`,
+        title: artifact.title || artifact.name || "Assistant Preview",
+        kind: artifact.kind || inferPreviewKindFromSource(sourceCode || previewHtml),
+        sourceVisible: false,
+        conversationCodeSuppressed: true,
+        sourceCode,
+        previewHtml: previewHtml || createPreviewHtmlFromSource(sourceCode, artifact.title || "Assistant Preview"),
+        repoFullName: artifact.repoFullName || "",
+        branch: artifact.branch || "",
+        filePath: artifact.filePath || "assistant-artifact",
+        fileSha: artifact.fileSha || "",
+      });
+    } else {
+      setPreviewOpen(false);
+      setMode("code");
+    }
+  }, 0);
+
+  return () => window.clearTimeout(timer);
 }, [chatRuntime.activeArtifact]);
   useEffect(() => { runTests(); }, []);
   const capture = (event) => { const button = event.target.closest?.("button"); if (!button || button.disabled) return; setLastAction((button.getAttribute("aria-label") || button.textContent || "button").trim()); };
   const className = (previewOpen ? "app previewMode" : "app") + " layout-" + runtime.mode + (runtime.keyboard ? " keyboardOpen" : "");
   return <div className="preview" onClickCapture={capture}>
     <button className="mobile-hamburger" onClick={onOpenSidebar}><Icon name="menu"/></button>
-    <div className={className} data-layout-mode={runtime.mode} data-keyboard-open={runtime.keyboard ? "true" : "false"} style={{ "--vvh": runtime.vh + "px", "--keyboard-offset": runtime.kb + "px" }}><style>{css}</style><div className="work"><Sidebar open={sidebarOpen} setOpen={setSidebarOpen}/>{previewOpen ? <PreviewWorkspace mode={mode} setMode={setMode} layoutMode={runtime.mode} closePreview={() => setPreviewOpen(false)} openPreview={() => setPreviewOpen(true)} chatRuntime={chatRuntime}/> : mode === "code" ? <CodeWorkspace setMode={setMode} layoutMode={runtime.mode} openPreview={() => setPreviewOpen(true)} artifactText={artifactText} setArtifactText={setArtifactText} chatRuntime={chatRuntime}/> : <StartWorkspace
-  openPreview={() => setPreviewOpen(true)}
+    <div className={className} data-layout-mode={runtime.mode} data-keyboard-open={runtime.keyboard ? "true" : "false"} style={{ "--vvh": runtime.vh + "px", "--keyboard-offset": runtime.kb + "px" }}><style>{css}</style><div className="work"><Sidebar open={sidebarOpen} setOpen={setSidebarOpen}/>{previewOpen ? <PreviewWorkspace onClose={() => setPreviewOpen(false)} /> : mode === "code" ? <CodeWorkspace setMode={setMode} layoutMode={runtime.mode} openPreview={openPreviewPane} artifactText={artifactText} setArtifactText={setArtifactText} chatRuntime={chatRuntime}/> : <StartWorkspace
+  openPreview={openPreviewPane}
   openCode={() => setMode("code")}
   chatRuntime={chatRuntime}
   onOpenSidebar={onOpenSidebar}
@@ -1113,6 +1173,10 @@ const css = [
   "/* code editor opens like preview split */",
   ".codeArtifactPane{height:100%;min-width:0;flex:1;position:relative;background:#fff;overflow:hidden}",
   ".artifactCodeShell{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:0!important;border-radius:0!important;border:0!important;max-width:none!important}",
+  ".artifactCodeShell textarea{display:block;width:100%;height:calc(100% - 104px);border:0;outline:0;resize:none;padding:28px 32px;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:14px;line-height:1.6;color:#111;background:#fafafa;border-top:1px solid #eee}",
+  ".artifactCodeShell .codeTopbar{height:72px!important;overflow-x:auto!important}",
+  ".artifactCodeShell .codePrimaryActions button:disabled{opacity:.38;cursor:not-allowed!important}",
+  ".codeCandidateStatus{height:32px;display:flex;align-items:center;padding:0 18px;border-top:1px solid #ececec;color:#666;font-size:12px;background:#fff}",
   ".codeArtifactPane .codeShell pre{height:calc(100% - 72px)!important}",
   ".codeArtifactPane .startComposerWrap{display:none!important}",
   "/* preview toolbar working menu */",
@@ -1270,4 +1334,3 @@ const css = [
     ".workspaceActions>button>span:not([aria-hidden]){display:none!important;}" +
   "}"
 ].join("");
-

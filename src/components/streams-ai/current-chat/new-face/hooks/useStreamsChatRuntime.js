@@ -541,14 +541,14 @@ export function useStreamsChatRuntime() {
         .trim() || trimmed;
 
       setActivity(createActivity("thinking", "tool", "Searching the web…"));
-      setMessages((current) => [...current, {
-        id: assistantId,
-        role: "assistant",
+      setIsStreaming(true);
+      setMessages((current) => current.map((item) => item.id === assistantId ? {
+        ...item,
         content: "Searching the web…",
         isStreaming: true,
+        isStatusOnly: true,
         status: "thinking",
-        createdAt: new Date().toISOString()
-      }]);
+      } : item));
 
       try {
         const searchResponse = await fetch("/api/streams-ai/search", {
@@ -580,6 +580,7 @@ export function useStreamsChatRuntime() {
         } : item));
 
         setActivity(createActivity("complete", "tool", "Search complete"));
+        setIsStreaming(false);
       } catch (error) {
         setMessages((current) => current.map((item) => item.id === assistantId ? {
           ...item,
@@ -588,6 +589,7 @@ export function useStreamsChatRuntime() {
           status: "error",
         } : item));
         setActivity(createActivity("error", "tool", "Search failed"));
+        setIsStreaming(false);
       }
 
       return;
@@ -886,13 +888,19 @@ export function useStreamsChatRuntime() {
     } catch (error) {
       window.clearTimeout(fallbackTimer);
       clearFlushTimer();
+      if (error?.name === "AbortError") {
+        setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, status: "stopped" } : item));
+        setActivity(defaultActivity());
+        setIsStreaming(false);
+        return;
+      }
       const normalized = normalizeStreamsError(error);
       setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, isStatusOnly: false, content: formatErrorForChat(normalized), status: "error" } : item));
       setActivity(createActivity("error", "chat", "Error"));
       setIsStreaming(false);
       scrollActiveChatToBottom();
     }
-  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback, sessionId, composerAttachments, ensureUrlSession]);
+  }, [mounted, refreshSidebarData, updateMessageImage, appendAssistantFallback, sessionId, composerAttachments, ensureUrlSession, selectedMode, selectedProvider]);
 
   const api = useMemo(() => ({
     messages,
@@ -958,7 +966,7 @@ export function useStreamsChatRuntime() {
       if (sessionId === id) newChat();
     },
     addMediaItem,
-  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, forceTerminalChatFallback, refreshSidebarData, selectedMode, selectedProvider, setSelectedMode, setSelectedProvider]);
+  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, removeComposerAttachment, forceTerminalChatFallback, refreshSidebarData, composerAttachments, selectedMode, selectedProvider, isLoadingMessages]);
 
   return api;
 }

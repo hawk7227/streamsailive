@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { subscribeToStreamsSplitPreview } from "../runtime/streamsSplitPreviewBridge";
+import { getLastStreamsSplitPreview, subscribeToStreamsSplitPreview } from "../runtime/streamsSplitPreviewBridge";
 import "./streams-split-preview.css";
 
 const EMPTY_PREVIEW = `<!doctype html>
@@ -50,25 +50,32 @@ function buildSrcDoc(previewHtml, sourceCode, kind) {
 }
 
 export default function StreamsSplitPreview({ embedded = false, initialOpen = false, onClose, onOpenLatestPreview } = {}) {
-  const [state, setState] = useState({
-    open: false,
-    id: "",
-    title: "Preview",
-    kind: "html",
-    sourceVisible: false,
-    conversationCodeSuppressed: true,
-    previewHtml: "",
-    sourceCode: "",
-    repoFullName: "",
-    branch: "",
-    filePath: "",
-    fileSha: "",
+  const [state, setState] = useState(() => {
+    const last = initialOpen ? getLastStreamsSplitPreview() : null;
+    return {
+      open: initialOpen,
+      id: "",
+      title: "Preview",
+      kind: "html",
+      sourceVisible: false,
+      conversationCodeSuppressed: true,
+      previewHtml: "",
+      sourceCode: "",
+      repoFullName: "",
+      branch: "",
+      filePath: "",
+      fileSha: "",
+      ...(last || {}),
+      open: initialOpen || Boolean(last?.open),
+      sourceVisible: Boolean(last?.sourceVisible),
+    };
   });
 
   useEffect(() => {
     return subscribeToStreamsSplitPreview((event) => {
       if (event.action === "close") {
         setState((current) => ({ ...current, open: false }));
+        onClose?.();
         return;
       }
 
@@ -77,6 +84,7 @@ export default function StreamsSplitPreview({ embedded = false, initialOpen = fa
           ...current,
           ...event,
           open: true,
+          sourceVisible: Boolean(event.sourceVisible),
         }));
         return;
       }
@@ -89,7 +97,7 @@ export default function StreamsSplitPreview({ embedded = false, initialOpen = fa
         }));
       }
     });
-  }, []);
+  }, [initialOpen, onClose]);
 
   const srcDoc = useMemo(
     () => buildSrcDoc(state.previewHtml, state.sourceCode, state.kind),
@@ -127,7 +135,13 @@ export default function StreamsSplitPreview({ embedded = false, initialOpen = fa
           >
             {state.sourceVisible ? "Hide source" : "Show source"}
           </button>
-          <button type="button" onClick={() => setState((current) => ({ ...current, open: false }))}>
+          <button
+            type="button"
+            onClick={() => {
+              setState((current) => ({ ...current, open: false }));
+              onClose?.();
+            }}
+          >
             Close
           </button>
         </div>

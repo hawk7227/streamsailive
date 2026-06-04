@@ -13,10 +13,12 @@
 
 - STREAMS Self-Build Runtime Foundation (in progress in this slice).
 - Chat UI Slice mobile shell & double-sidebar fixes (hidden duplicate inner sidebar, hidden top actions and action status pill on mobile, hidden floating "Snap Pic Click" button on mobile, drawer hamburger menu, full width layout, mobile bottom message scroll spacer).
+- Chat UI Slice preview/chat stabilization pass: shared split-preview artifact bridge with last-preview replay, embedded preview source hidden by default with show/hide toggle, active artifact preview opening, basic Builder Source candidate editor with dirty/discard/copy/save/preview-before-apply controls, composer provider payload restored, URL/YouTube submenu restored, realtime voice panel lazy-mounted, and web-search/status streaming cleanup. Source/type/test/route proof completed; authenticated browser chat-send proof still required.
 
 ## Blocked items
 
 - Full Codex-like self-build loop remains blocked on runtime integrations (workspace orchestration beyond local process, durable task persistence wiring, GitHub write path, CI log APIs, browser proof runner).
+- Authenticated browser proof for `/streams-ai` chat, preview, sidebar, and media generation requires a real logged-in Supabase session; unauthenticated local browser run redirects to `/login`.
 
 ## Target files for this slice
 

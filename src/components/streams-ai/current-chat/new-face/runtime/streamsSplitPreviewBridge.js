@@ -1,27 +1,58 @@
 export const STREAMS_SPLIT_PREVIEW_EVENT = "streams:split-preview";
+export const STREAMS_SPLIT_PREVIEW_LAST_KEY = "streams:split-preview:last";
+
+function normalizePreviewPayload(payload = {}) {
+  return {
+    action: "open",
+    id: payload.id || `preview_${Date.now()}`,
+    title: payload.title || "Preview",
+    kind: payload.kind || "html",
+    sourceVisible: Boolean(payload.sourceVisible),
+    conversationCodeSuppressed: payload.conversationCodeSuppressed !== false,
+    previewPanelOpen: true,
+    sourceCode: payload.sourceCode || payload.code || "",
+    previewHtml: payload.previewHtml || payload.html || "",
+    repoFullName: payload.repoFullName || "",
+    branch: payload.branch || "",
+    filePath: payload.filePath || "",
+    fileSha: payload.fileSha || "",
+  };
+}
+
+function saveLastPreview(detail) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(STREAMS_SPLIT_PREVIEW_LAST_KEY, JSON.stringify(detail));
+  } catch {}
+}
+
+export function getLastStreamsSplitPreview() {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(STREAMS_SPLIT_PREVIEW_LAST_KEY) || "null");
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export function openStreamsSplitPreview(payload = {}) {
   if (typeof window === "undefined") return;
+  const detail = normalizePreviewPayload(payload);
+
+  saveLastPreview(detail);
 
   window.dispatchEvent(
     new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, {
-      detail: {
-        action: "open",
-        id: payload.id || `preview_${Date.now()}`,
-        title: payload.title || "Preview",
-        kind: payload.kind || "html",
-        sourceVisible: Boolean(payload.sourceVisible),
-        conversationCodeSuppressed: payload.conversationCodeSuppressed !== false,
-        previewPanelOpen: true,
-        sourceCode: payload.sourceCode || "",
-        previewHtml: payload.previewHtml || "",
-        repoFullName: payload.repoFullName || "",
-        branch: payload.branch || "",
-        filePath: payload.filePath || "",
-        fileSha: payload.fileSha || "",
-      },
+      detail,
     })
   );
+
+  // The pane may be mounted by the same open action. Replay once after mount
+  // so preview artifacts are not lost when opening from a closed state.
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent(STREAMS_SPLIT_PREVIEW_EVENT, { detail }));
+  }, 50);
 }
 
 export function closeStreamsSplitPreview() {
@@ -34,6 +65,17 @@ export function closeStreamsSplitPreview() {
       },
     })
   );
+}
+
+export function openLastStreamsSplitPreview(fallback = {}) {
+  const last = getLastStreamsSplitPreview();
+  openStreamsSplitPreview(last || {
+    title: "Split Preview",
+    kind: "html",
+    previewHtml: createPreviewHtmlFromSource("", "Split Preview"),
+    sourceVisible: false,
+    ...fallback,
+  });
 }
 
 export function updateStreamsSplitPreview(payload = {}) {

@@ -3,12 +3,17 @@ import "./streams-composer.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 
 const MODES = ["Thinking", "Configure..."];
+const PROVIDERS = ["Auto", "OpenAI", "Claude", "Gemini"];
 
 const BASE_TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U", enabled: true },
-  { id: "url", icon: "▣", label: "Add link", enabled: true },
   { id: "create_image", icon: "✦", label: "Create image", enabled: true },
   { id: "web_search", icon: "◎", label: "Web search", enabled: true, shortcut: "Live" },
+  { id: "more", icon: "⋯", label: "More ›", enabled: true },
+];
+
+const MORE_TOOL_ITEMS = [
+  { id: "url", icon: "▣", label: "Read URL / YouTube", enabled: true },
 ];
 
 export default function StreamsComposer({
@@ -16,6 +21,7 @@ export default function StreamsComposer({
   onFilesSelected,
   onToolSelect,
   onModeChange,
+  onProviderChange,
   libraryFiles = [],
   onRemoveFile,
   isStreaming = false,
@@ -23,6 +29,7 @@ export default function StreamsComposer({
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
   const [mode, setMode] = useState("Thinking");
+  const [provider, setProvider] = useState("Auto");
   const [selectedTool, setSelectedTool] = useState(null);
   const [blockedNotice, setBlockedNotice] = useState("");
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
@@ -37,7 +44,24 @@ export default function StreamsComposer({
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/streams-ai/search/status", { method: "GET" })
+    const statusRequest = typeof fetch === "function"
+      ? fetch("/api/streams-ai/search/status", { method: "GET" })
+      : null;
+
+    if (!statusRequest || typeof statusRequest.then !== "function") {
+      const timer = window.setTimeout(() => {
+        setWebSearchStatus({
+          configured: false,
+          blockedReason: "Unable to verify real web search backend configuration.",
+        });
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
+
+    statusRequest
       .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;
@@ -92,7 +116,7 @@ export default function StreamsComposer({
 
   const placeholder = selectedTool
     ? selectedTool.id === "url"
-      ? "Paste a link..."
+      ? "Paste a webpage, file link, or YouTube URL..."
       : selectedTool.id === "create_image"
         ? "Describe the image..."
         : selectedTool.id === "web_search"
@@ -147,6 +171,7 @@ export default function StreamsComposer({
       message: finalMessage,
       composerMode: selectedTool?.id === "url" ? "url" : "chat",
       mode,
+      provider,
       webSearchEnabled: selectedTool?.id === "web_search",
     });
 
@@ -173,6 +198,11 @@ export default function StreamsComposer({
     if (item.id === "files") {
       setActiveMenu("");
       setTimeout(() => fileInputRef.current?.click(), 50);
+      return;
+    }
+
+    if (item.id === "more") {
+      setActiveMenu("tools-more");
       return;
     }
 
@@ -335,6 +365,24 @@ export default function StreamsComposer({
         </div>
       ) : null}
 
+      {activeMenu === "tools-more" ? (
+        <div className="streamsComposerMenu toolsMenu" role="menu">
+          {MORE_TOOL_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              disabled={!item.enabled}
+              aria-disabled={!item.enabled}
+              onClick={() => handleTool(item)}
+            >
+              <span>{item.icon}</span>
+              <strong>{item.label}</strong>
+              <em />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {activeMenu === "model" ? (
         <div className="streamsComposerMenu modelMenu" role="menu">
           {MODES.map((item) => (
@@ -344,11 +392,26 @@ export default function StreamsComposer({
               <em />
             </button>
           ))}
+          {PROVIDERS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                setProvider(item);
+                onProviderChange?.(item);
+                setActiveMenu("");
+              }}
+            >
+              <span>{item === provider ? "✓" : ""}</span>
+              <strong>{item}</strong>
+              <em>Provider</em>
+            </button>
+          ))}
           <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       ) : null}
 
-      <RealtimeVoicePanel open={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
+      {voicePanelOpen ? <RealtimeVoicePanel open onClose={() => setVoicePanelOpen(false)} /> : null}
     </section>
   );
 }
