@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./StreamsAccountActionPanel.module.css";
 
 type PageKind =
@@ -53,6 +53,26 @@ type UsageCredits = {
   monthlyResetAt?: string;
 };
 
+type LedgerRow = {
+  id?: string;
+  ledger_type?: string;
+  amount?: number;
+  balance_after?: number;
+  feature_key?: string;
+  stage?: string;
+  reason?: string;
+  created_at?: string;
+};
+
+type UsageNotification = {
+  id?: string;
+  title?: string;
+  message?: string;
+  event_type?: string;
+  created_at?: string;
+  action_href?: string;
+};
+
 type UsageState = {
   ok?: boolean;
   plan?: { name?: string; monthlyPriceUsd?: number; dailyChatMessages?: number; previewAccess?: string };
@@ -63,8 +83,8 @@ type UsageState = {
   spend?: { currentMonthSpendUsd?: number; monthlyLimitUsd?: number | null; status?: string; unlimitedAllowed?: boolean };
   autoReload?: { enabled?: boolean; thresholdUsd?: number; topUpUsd?: number; status?: string; nextCondition?: string };
   featureCosts?: Array<{ key: string; label: string; draft: number; final: number }>;
-  ledger?: Array<{ id?: string; ledger_type?: string; amount?: number; balance_after?: number; feature_key?: string; stage?: string; reason?: string; created_at?: string }>;
-  notifications?: Array<{ id?: string; title?: string; message?: string; event_type?: string; created_at?: string; action_href?: string }>;
+  ledger?: LedgerRow[];
+  notifications?: UsageNotification[];
   messages?: Record<string, string>;
 };
 
@@ -79,114 +99,24 @@ const SAFE_SETUP_MESSAGE =
   "This account control is not fully set up yet. Your current work is safe, but this action cannot run until account usage is connected.";
 
 const CONFIG: Record<PageKind, PageConfig> = {
-  overview: {
-    eyebrow: "Workspace command center",
-    gradient: "blue",
-    badge: "Account ready",
-    narrative: "Manage plan access, usage, credits, billing controls, and account readiness in one compact Streams view.",
-  },
-  profile: {
-    eyebrow: "Identity",
-    gradient: "violet",
-    badge: "Account",
-    narrative: "Review account status, workspace access, and plan-linked limits without exposing internal system details.",
-  },
-  settings: {
-    eyebrow: "Controls",
-    gradient: "slate",
-    badge: "Setup ready",
-    narrative: "Workspace controls are organized and ready for deeper persistence without showing technical setup text.",
-  },
-  privacy: {
-    eyebrow: "Trust layer",
-    gradient: "green",
-    badge: "Privacy",
-    narrative: "Data controls, privacy settings, and export/delete readiness with polished setup-required states.",
-  },
-  billing: {
-    eyebrow: "Plan and billing",
-    gradient: "gold",
-    badge: "Billing",
-    narrative: "Manage plan access, account billing, usage credits, spend controls, and recent usage activity.",
-  },
-  credits: {
-    eyebrow: "Usage credits",
-    gradient: "cyan",
-    badge: "Credits",
-    narrative: "Track credits received, credits used, credits available, low-balance alerts, and credit-pack options.",
-  },
-  usage: {
-    eyebrow: "Account usage",
-    gradient: "cyan",
-    badge: "Usage live",
-    narrative: "See included usage, daily limits, paid usage credits, spend limits, auto-reload, and feature credit costs.",
-  },
-  modules: {
-    eyebrow: "Capabilities",
-    gradient: "pink",
-    badge: "Capabilities",
-    narrative: "Review the Streams capability surface and the credit costs tied to premium actions.",
-  },
-  notifications: {
-    eyebrow: "Alerts",
-    gradient: "blue",
-    badge: "Notifications",
-    narrative: "Usage, spend, balance, reset, and account-control alerts appear here with clear next steps.",
-  },
-  personalization: {
-    eyebrow: "Assistant style",
-    gradient: "violet",
-    badge: "Personalization",
-    narrative: "Personalization controls are staged in the account system with safe setup-ready states.",
-  },
-  language: {
-    eyebrow: "Region",
-    gradient: "blue",
-    badge: "Locale",
-    narrative: "Language, timezone, and formatting controls are organized for account-level persistence.",
-  },
-  apps: {
-    eyebrow: "Connected systems",
-    gradient: "green",
-    badge: "Connectors",
-    narrative: "Connectors and app connections stay user-facing and setup-ready until each connection is live.",
-  },
-  storage: {
-    eyebrow: "Storage",
-    gradient: "slate",
-    badge: "Storage",
-    narrative: "Manage account storage readiness, saved work, exports, and retained project assets.",
-  },
-  security: {
-    eyebrow: "Security",
-    gradient: "green",
-    badge: "Security",
-    narrative: "Review login, session, workspace access, and security readiness without raw backend labels.",
-  },
-  keyboard: {
-    eyebrow: "Keyboard",
-    gradient: "slate",
-    badge: "Shortcuts",
-    narrative: "Keyboard shortcuts and productivity controls are kept clean and ready for account persistence.",
-  },
-  gift: {
-    eyebrow: "Growth loop",
-    gradient: "gold",
-    badge: "Invites",
-    narrative: "Invite and gift-credit flows remain setup-ready until real account credit handling is connected.",
-  },
-  help: {
-    eyebrow: "Support",
-    gradient: "slate",
-    badge: "Help",
-    narrative: "Find account support, usage guidance, and safe setup-required states for unavailable controls.",
-  },
-  learnMore: {
-    eyebrow: "Product education",
-    gradient: "cyan",
-    badge: "Learn",
-    narrative: "Learn how Streams usage, feature costs, billing controls, and plan limits work together.",
-  },
+  overview: { eyebrow: "Workspace command center", gradient: "blue", badge: "Account ready", narrative: "Manage plan access, usage, credits, billing controls, and account readiness in one compact Streams view." },
+  profile: { eyebrow: "Identity", gradient: "violet", badge: "Account", narrative: "Review account status, workspace access, and plan-linked limits without exposing internal system details." },
+  settings: { eyebrow: "Controls", gradient: "slate", badge: "Setup ready", narrative: "Workspace controls are organized and ready for deeper persistence without showing technical setup text." },
+  privacy: { eyebrow: "Trust layer", gradient: "green", badge: "Privacy", narrative: "Data controls, privacy settings, and export/delete readiness with polished setup-required states." },
+  billing: { eyebrow: "Plan and billing", gradient: "gold", badge: "Billing", narrative: "Manage plan access, account billing, usage credits, spend controls, and recent usage activity." },
+  credits: { eyebrow: "Usage credits", gradient: "cyan", badge: "Credits", narrative: "Track credits received, credits used, credits available, low-balance alerts, and credit-pack options." },
+  usage: { eyebrow: "Account usage", gradient: "cyan", badge: "Usage live", narrative: "See included usage, daily limits, paid usage credits, spend limits, auto-reload, and feature credit costs." },
+  modules: { eyebrow: "Capabilities", gradient: "pink", badge: "Capabilities", narrative: "Review the Streams capability surface and the credit costs tied to premium actions." },
+  notifications: { eyebrow: "Alerts", gradient: "blue", badge: "Notifications", narrative: "Usage, spend, balance, reset, and account-control alerts appear here with clear next steps." },
+  personalization: { eyebrow: "Assistant style", gradient: "violet", badge: "Personalization", narrative: "Personalization controls are staged in the account system with safe setup-ready states." },
+  language: { eyebrow: "Region", gradient: "blue", badge: "Locale", narrative: "Language, timezone, and formatting controls are organized for account-level persistence." },
+  apps: { eyebrow: "Connected systems", gradient: "green", badge: "Connectors", narrative: "Connectors and app connections stay user-facing and setup-ready until each connection is live." },
+  storage: { eyebrow: "Storage", gradient: "slate", badge: "Storage", narrative: "Manage account storage readiness, saved work, exports, and retained project assets." },
+  security: { eyebrow: "Security", gradient: "green", badge: "Security", narrative: "Review login, session, workspace access, and security readiness without raw backend labels." },
+  keyboard: { eyebrow: "Keyboard", gradient: "slate", badge: "Shortcuts", narrative: "Keyboard shortcuts and productivity controls are kept clean and ready for account persistence." },
+  gift: { eyebrow: "Growth loop", gradient: "gold", badge: "Invites", narrative: "Invite and gift-credit flows remain setup-ready until real account credit handling is connected." },
+  help: { eyebrow: "Support", gradient: "slate", badge: "Help", narrative: "Find account support, usage guidance, and safe setup-required states for unavailable controls." },
+  learnMore: { eyebrow: "Product education", gradient: "cyan", badge: "Learn", narrative: "Learn how Streams usage, feature costs, billing controls, and plan limits work together." },
 };
 
 function numberValue(value: unknown, fallback = 0) {
@@ -209,7 +139,7 @@ function formatDateTime(value: unknown) {
   return parsed.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function percent(used: unknown, limit: unknown) {
+function progressPercent(used: unknown, limit: unknown) {
   const max = numberValue(limit);
   if (max <= 0) return 0;
   return Math.min(100, Math.max(0, (numberValue(used) / max) * 100));
@@ -229,11 +159,11 @@ function sanitizeMessage(value: unknown) {
     .replace(/backend/gi, "account system");
 }
 
-function ledgerTitle(row: UsageState["ledger"] extends Array<infer T> ? T : never) {
-  const amount = numberValue(row?.amount);
-  if ((row?.ledger_type || "").includes("paid")) return amount < 0 ? "Usage credits applied" : "Usage credits added";
-  if ((row?.ledger_type || "").includes("reset")) return "Included usage reset";
-  if ((row?.ledger_type || "").includes("grant")) return "Included usage granted";
+function ledgerTitle(row: LedgerRow) {
+  const amount = numberValue(row.amount);
+  if ((row.ledger_type || "").includes("paid")) return amount < 0 ? "Usage credits applied" : "Usage credits added";
+  if ((row.ledger_type || "").includes("reset")) return "Included usage reset";
+  if ((row.ledger_type || "").includes("grant")) return "Included usage granted";
   return amount < 0 ? "Usage recorded" : "Credit activity";
 }
 
@@ -246,22 +176,20 @@ async function readJson(response: Response) {
 }
 
 function pickRedirect(data: Record<string, unknown>) {
-  const candidates = [data.redirectUrl, data.url, data.portalUrl, data.checkoutUrl, (data.session as Record<string, unknown> | undefined)?.url];
+  const session = data.session as Record<string, unknown> | undefined;
+  const candidates = [data.redirectUrl, data.url, data.portalUrl, data.checkoutUrl, session?.url];
   return candidates.find((item): item is string => typeof item === "string" && item.length > 0) || "";
 }
 
 function ProgressLine({ label, used, limit, helper }: { label: string; used: unknown; limit: unknown; helper?: string }) {
-  const progress = percent(used, limit);
   return (
     <div className={styles.progressLine}>
       <div className={styles.progressTop}>
         <span>{label}</span>
-        <strong>
-          {formatCredits(used)} / {formatCredits(limit)}
-        </strong>
+        <strong>{formatCredits(used)} / {formatCredits(limit)}</strong>
       </div>
       <div className={styles.progressTrack} aria-hidden="true">
-        <i style={{ width: `${progress}%` }} />
+        <i style={{ width: `${progressPercent(used, limit)}%` }} />
       </div>
       {helper ? <p>{helper}</p> : null}
     </div>
@@ -282,7 +210,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
     try {
       const response = await fetch("/api/streams-ai/usage", { method: "GET", headers: { "Content-Type": "application/json" } });
       const data = (await readJson(response)) as UsageState & { message?: string; error?: string };
-      if (!response.ok || data?.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
+      if (!response.ok || data.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
       setUsage(data);
       setNotice("Account usage loaded.");
     } catch (err) {
@@ -302,7 +230,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
         body: JSON.stringify(patch),
       });
       const data = (await readJson(response)) as UsageState & { message?: string; error?: string };
-      if (!response.ok || data?.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
+      if (!response.ok || data.ok === false) throw new Error(data.message || data.error || SAFE_SETUP_MESSAGE);
       setUsage(data);
       setNotice(success);
     } catch (err) {
@@ -349,7 +277,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
   }
 
   useEffect(() => {
-    loadUsage();
+    void loadUsage();
   }, []);
 
   const session = usage?.session || {};
@@ -360,25 +288,18 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
   const planName = usage?.plan?.name || "Free Builder";
   const monthlyLimitLabel = spend.monthlyLimitUsd === null ? "Unlimited" : formatMoney(spend.monthlyLimitUsd ?? 0);
 
-  const heroActions = useMemo(() => {
-    const base = [{ label: "Refresh usage", action: loadUsage }];
-    if (pageKind === "billing") {
-      return [
-        { label: "Open billing portal", action: openAccountBilling },
-        { label: "Set up plan", action: () => startPlanSetup("plan") },
-        ...base,
-      ];
-    }
-    if (pageKind === "credits" || pageKind === "usage") {
-      return [
-        { label: "Add usage credits", action: () => startPlanSetup("credits") },
-        { label: credits.enabled ? "Usage credits on" : "Turn on usage credits", action: () => updateUsageSettings({ paidUsageEnabled: true }, "Usage credits turned on.") },
-        { label: autoReload.enabled ? "Auto-reload on" : "Enable auto-reload", action: () => updateUsageSettings({ autoReloadEnabled: true }, "Auto-reload enabled.") },
-        ...base,
-      ];
-    }
-    return base;
-  }, [pageKind, credits.enabled, autoReload.enabled]);
+  const heroActions = [
+    ...(pageKind === "billing" ? [
+      { label: "Open billing portal", action: openAccountBilling, disabled: false },
+      { label: "Set up plan", action: () => startPlanSetup("plan"), disabled: false },
+    ] : []),
+    ...((pageKind === "credits" || pageKind === "usage") ? [
+      { label: "Add usage credits", action: () => startPlanSetup("credits"), disabled: false },
+      { label: credits.enabled ? "Usage credits on" : "Turn on usage credits", action: () => updateUsageSettings({ paidUsageEnabled: true }, "Usage credits turned on."), disabled: Boolean(credits.enabled) },
+      { label: autoReload.enabled ? "Auto-reload on" : "Enable auto-reload", action: () => updateUsageSettings({ autoReloadEnabled: true }, "Auto-reload enabled."), disabled: Boolean(autoReload.enabled) },
+    ] : []),
+    { label: "Refresh usage", action: loadUsage, disabled: false },
+  ];
 
   const setupRows = [
     { label: "Current plan", value: planName, status: "live" },
@@ -402,7 +323,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
         </div>
         <div className={styles.heroActions}>
           {heroActions.map((item) => (
-            <button key={item.label} type="button" onClick={item.action} disabled={busy || (item.label.includes("on") && !item.label.includes("Turn"))}>
+            <button key={item.label} type="button" onClick={item.action} disabled={busy || item.disabled}>
               {busy ? "Working..." : item.label}
             </button>
           ))}
@@ -449,7 +370,6 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
           <ProgressLine label="Current session" used={session.used} limit={session.limit} helper={`${formatCredits(session.available)} available · resets ${formatDateTime(session.resetAt)}`} />
           <ProgressLine label="Monthly included" used={credits.includedMonthlyUsed} limit={credits.includedMonthlyGranted} helper={`${formatCredits(credits.includedMonthlyAvailable)} included credits available`} />
         </article>
-
         <article className={styles.panel}>
           <div className={styles.panelHead}>
             <span>Daily limits</span>
@@ -464,7 +384,6 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
             <b>Launch {formatCredits(daily.launchUsed)}</b>
           </div>
         </article>
-
         <article className={styles.panel}>
           <div className={styles.panelHead}>
             <span>Usage credits</span>
@@ -478,7 +397,6 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
             <div className={styles.row} data-status={credits.enabled ? "live" : "setup"}><b>Paid usage credits</b><span>{credits.enabled ? "Enabled" : credits.eligible ? "Ready to enable" : "Upgrade required"}</span><i>{credits.enabled ? "On" : "Setup"}</i></div>
           </div>
         </article>
-
         <article className={styles.panel}>
           <div className={styles.panelHead}>
             <span>Auto-reload</span>
@@ -494,7 +412,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
         </article>
       </section>
 
-      {pageKind === "usage" || pageKind === "credits" || pageKind === "billing" || pageKind === "modules" ? (
+      {(pageKind === "usage" || pageKind === "credits" || pageKind === "billing" || pageKind === "modules") ? (
         <section className={styles.sectionVisible}>
           <div className={styles.panelHead}>
             <span>Feature usage costs</span>
@@ -513,7 +431,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
         </section>
       ) : null}
 
-      {pageKind === "usage" || pageKind === "billing" || pageKind === "credits" ? (
+      {(pageKind === "usage" || pageKind === "billing" || pageKind === "credits" || pageKind === "notifications") ? (
         <section className={styles.panelGrid}>
           <article className={styles.panel}>
             <div className={styles.panelHead}>
