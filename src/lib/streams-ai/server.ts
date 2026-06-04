@@ -83,4 +83,5 @@ export const streamsAITables = {
   autoReloadSettings: "streams_ai_auto_reload_settings",
   spendLimits: "streams_ai_spend_limits",
   usageNotifications: "streams_ai_usage_notifications",
+  userSettings: "streams_ai_user_settings",
 } as const;
