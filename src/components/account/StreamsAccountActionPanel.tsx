@@ -103,16 +103,16 @@ const CONFIG: Record<PageKind, PageConfig> = {
   profile: { eyebrow: "Identity", gradient: "violet", badge: "Account", narrative: "Review account status, workspace access, and plan-linked limits without exposing internal system details." },
   settings: { eyebrow: "Controls", gradient: "slate", badge: "Setup ready", narrative: "Workspace controls are organized and ready for deeper persistence without showing technical setup text." },
   privacy: { eyebrow: "Trust layer", gradient: "green", badge: "Privacy", narrative: "Data controls, privacy settings, and export/delete readiness with polished setup-required states." },
-  billing: { eyebrow: "Plan and billing", gradient: "gold", badge: "Billing", narrative: "Manage plan access, account billing, usage credits, spend controls, and recent usage activity." },
+  billing: { eyebrow: "Plan and billing", gradient: "gold", badge: "Billing", narrative: "Manage plan access, billing controls, usage credits, spend controls, and recent usage activity." },
   credits: { eyebrow: "Usage credits", gradient: "cyan", badge: "Credits", narrative: "Track credits received, credits used, credits available, low-balance alerts, and credit-pack options." },
   usage: { eyebrow: "Account usage", gradient: "cyan", badge: "Usage live", narrative: "See included usage, daily limits, paid usage credits, spend limits, auto-reload, and feature credit costs." },
   modules: { eyebrow: "Capabilities", gradient: "pink", badge: "Capabilities", narrative: "Review the Streams capability surface and the credit costs tied to premium actions." },
-  notifications: { eyebrow: "Alerts", gradient: "blue", badge: "Notifications", narrative: "Usage, spend, balance, reset, and account-control alerts appear here with clear next steps." },
+  notifications: { eyebrow: "Alerts", gradient: "blue", badge: "Notifications", narrative: "Usage, spend, balance, reset, and account alerts appear here with clear next steps." },
   personalization: { eyebrow: "Assistant style", gradient: "violet", badge: "Personalization", narrative: "Personalization controls are staged in the account system with safe setup-ready states." },
   language: { eyebrow: "Region", gradient: "blue", badge: "Locale", narrative: "Language, timezone, and formatting controls are organized for account-level persistence." },
   apps: { eyebrow: "Connected systems", gradient: "green", badge: "Connectors", narrative: "Connectors and app connections stay user-facing and setup-ready until each connection is live." },
   storage: { eyebrow: "Storage", gradient: "slate", badge: "Storage", narrative: "Manage account storage readiness, saved work, exports, and retained project assets." },
-  security: { eyebrow: "Security", gradient: "green", badge: "Security", narrative: "Review login, session, workspace access, and security readiness without raw backend labels." },
+  security: { eyebrow: "Security", gradient: "green", badge: "Security", narrative: "Review login, session, workspace access, and security readiness without exposing internal details." },
   keyboard: { eyebrow: "Keyboard", gradient: "slate", badge: "Shortcuts", narrative: "Keyboard shortcuts and productivity controls are kept clean and ready for account persistence." },
   gift: { eyebrow: "Growth loop", gradient: "gold", badge: "Invites", narrative: "Invite and gift-credit flows remain setup-ready until real account credit handling is connected." },
   help: { eyebrow: "Support", gradient: "slate", badge: "Help", narrative: "Find account support, usage guidance, and safe setup-required states for unavailable controls." },
@@ -156,7 +156,8 @@ function sanitizeMessage(value: unknown) {
     .replace(/\/api\/[\w\-/]+/gi, "account service")
     .replace(/streams_ai_[a-z_]+/gi, "account record")
     .replace(/provider/gi, "service")
-    .replace(/backend/gi, "account system");
+    .replace(/backend/gi, "account system")
+    .replace(/portal/gi, "billing center");
 }
 
 function ledgerTitle(row: LedgerRow) {
@@ -290,7 +291,7 @@ export default function StreamsAccountActionPanel({ pageKind, title, description
 
   const heroActions = [
     ...(pageKind === "billing" ? [
-      { label: "Open billing portal", action: openAccountBilling, disabled: false },
+      { label: "Open billing center", action: openAccountBilling, disabled: false },
       { label: "Set up plan", action: () => startPlanSetup("plan"), disabled: false },
     ] : []),
     ...((pageKind === "credits" || pageKind === "usage") ? [
