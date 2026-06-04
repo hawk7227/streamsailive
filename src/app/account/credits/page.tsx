@@ -1,11 +1,11 @@
 import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
 
-export default function AccountPage() {
+export default function AccountCreditsPage() {
   return (
     <StreamsAccountActionPanel
       pageKind="credits"
-      title="Credits and usage"
-      description="Refresh credits, review usage, and start credit checkout with live credit activity."
+      title="Credits"
+      description="Review usage credits, credits received, credits used, available balance, auto-reload, and credit-pack options."
     />
   );
 }
