@@ -4,6 +4,22 @@
 create schema if not exists streams;
 create extension if not exists pgcrypto;
 
+create table if not exists streams.streams_ai_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references streams.streams_ai_tenants(id) on delete cascade,
+  user_id uuid not null,
+  plan_id text not null default 'free_builder',
+  status text not null default 'active',
+  billing_provider text,
+  billing_customer_id text,
+  billing_subscription_id text,
+  current_period_end timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, user_id, plan_id)
+);
+
 create table if not exists streams.streams_ai_accounts (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references streams.streams_ai_tenants(id) on delete cascade,
@@ -145,6 +161,7 @@ create table if not exists streams.streams_ai_usage_notifications (
   read_at timestamptz
 );
 
+create index if not exists streams_ai_subscriptions_owner_idx on streams.streams_ai_subscriptions(tenant_id, user_id, status, created_at desc);
 create index if not exists streams_ai_accounts_owner_idx on streams.streams_ai_accounts(tenant_id, user_id);
 create index if not exists streams_ai_usage_wallets_owner_idx on streams.streams_ai_usage_wallets(tenant_id, user_id);
 create index if not exists streams_ai_usage_ledger_owner_idx on streams.streams_ai_usage_ledger(tenant_id, user_id, created_at desc);
@@ -155,6 +172,7 @@ create index if not exists streams_ai_auto_reload_owner_idx on streams.streams_a
 create index if not exists streams_ai_spend_limits_owner_idx on streams.streams_ai_spend_limits(tenant_id, user_id);
 create index if not exists streams_ai_usage_notifications_owner_idx on streams.streams_ai_usage_notifications(tenant_id, user_id, created_at desc);
 
+alter table streams.streams_ai_subscriptions enable row level security;
 alter table streams.streams_ai_accounts enable row level security;
 alter table streams.streams_ai_usage_wallets enable row level security;
 alter table streams.streams_ai_usage_ledger enable row level security;
