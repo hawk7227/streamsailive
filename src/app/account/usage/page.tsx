@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsUsageDashboard from "@/components/account/StreamsUsageDashboard";
 
 export default function AccountUsagePage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="usage"
-      title="Usage"
-      description="Track included usage, daily limits, usage credits, spend controls, auto-reload, alerts, and feature credit costs."
-    />
-  );
+  return <StreamsUsageDashboard />;
 }
