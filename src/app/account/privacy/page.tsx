@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
 
-export default function AccountPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="privacy"
-      title="Privacy"
-      description="Review privacy controls and data-related account states."
-    />
-  );
+export default function AccountPrivacyPage() {
+  return <StreamsSettingsPanel initialCategory="data-controls" />;
 }
