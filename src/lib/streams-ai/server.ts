@@ -62,6 +62,7 @@ export function streamsAISchema(client: SupabaseClient) {
 export const streamsAITables = {
   tenants: "streams_ai_tenants",
   memberships: "streams_ai_memberships",
+  accounts: "streams_ai_accounts",
   projects: "streams_ai_projects",
   subscriptions: "streams_ai_subscriptions",
   productEntitlements: "streams_ai_product_entitlements",
@@ -74,4 +75,12 @@ export const streamsAITables = {
   providerRuns: "streams_ai_provider_runs",
   creditLedger: "streams_ai_credit_ledger",
   usageEvents: "streams_ai_usage_events",
+  usageWallets: "streams_ai_usage_wallets",
+  usageLedger: "streams_ai_usage_ledger",
+  usageSessions: "streams_ai_usage_sessions",
+  dailyUsage: "streams_ai_daily_usage",
+  usageCreditPurchases: "streams_ai_usage_credit_purchases",
+  autoReloadSettings: "streams_ai_auto_reload_settings",
+  spendLimits: "streams_ai_spend_limits",
+  usageNotifications: "streams_ai_usage_notifications",
 } as const;
