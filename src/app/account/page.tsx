@@ -1,11 +1,5 @@
-import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import StreamsSettingsPanel from "@/components/account/StreamsSettingsPanel";
 
 export default function AccountPage() {
-  return (
-    <StreamsAccountActionPanel
-      pageKind="overview"
-      title="Account"
-      description="Manage your Streams account, plan access, usage, credits, privacy, billing controls, and account readiness."
-    />
-  );
+  return <StreamsSettingsPanel initialCategory="general" />;
 }
