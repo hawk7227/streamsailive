@@ -8,6 +8,25 @@ import {
 } from "./streamsGlobalActivityBridge";
 import { STREAMS_ACTIVITY_PHASES } from "./streamsActivityEvents";
 
+const SAFE_ACCOUNT_MESSAGE =
+  "This account control is not fully set up yet. Your current work is safe, but this action cannot run until account usage is connected.";
+
+function cleanAccountMessage(value) {
+  if (!value || typeof value !== "string") return SAFE_ACCOUNT_MESSAGE;
+  return value
+    .replace(/\bStripe\b/gi, "billing")
+    .replace(/\bOpenAI\b/gi, "AI")
+    .replace(/\bAPI\b/g, "account control")
+    .replace(/schema cache/gi, "account setup")
+    .replace(/table missing/gi, "account setup missing")
+    .replace(/\/api\/[\w\-/]+/gi, "account service")
+    .replace(/streams_ai_[a-z_]+/gi, "account record")
+    .replace(/provider/gi, "service")
+    .replace(/backend/gi, "account system")
+    .replace(/checkout/gi, "billing setup")
+    .replace(/portal/gi, "billing center");
+}
+
 async function readJson(response) {
   return response.json().catch(() => ({}));
 }
@@ -28,14 +47,14 @@ function assertRedirectUrl(data, fallbackMessage) {
   const url = pickRedirectUrl(data);
 
   if (!url || typeof url !== "string") {
-    throw new Error(fallbackMessage);
+    throw new Error(cleanAccountMessage(fallbackMessage));
   }
 
   try {
     const parsed = new URL(url, window.location.origin);
     return parsed.toString();
   } catch {
-    throw new Error("Redirect URL returned by backend is invalid.");
+    throw new Error("Billing setup could not open a valid secure link.");
   }
 }
 
@@ -45,7 +64,7 @@ export async function fetchAccountWithActivity() {
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || "Account loading failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || "Account loading failed.");
     emitAccountActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason);
     throw new Error(reason);
   }
@@ -65,7 +84,7 @@ export async function fetchCreditsWithActivity() {
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || data?.details || "Credits loading failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || data?.details || "Credits loading failed.");
     emitCreditsActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason);
     throw new Error(reason);
   }
@@ -102,7 +121,7 @@ export async function fetchCreditsWithActivity() {
 }
 
 export async function openBillingPortalWithActivity() {
-  emitBillingActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Opening billing portal...");
+  emitBillingActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Opening billing center...");
 
   const response = await fetch("/api/stripe/portal", {
     method: "POST",
@@ -112,14 +131,14 @@ export async function openBillingPortalWithActivity() {
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || data?.details || "Billing portal failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || data?.details || "Billing center failed.");
     emitBillingActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason);
     throw new Error(reason);
   }
 
-  const url = assertRedirectUrl(data, "Billing portal did not return a redirect URL.");
+  const url = assertRedirectUrl(data, "Billing center did not return a secure link.");
 
-  emitBillingActivity(STREAMS_ACTIVITY_PHASES.COMPLETE, "Billing portal redirect ready", {
+  emitBillingActivity(STREAMS_ACTIVITY_PHASES.COMPLETE, "Billing center link ready", {
     redirectUrl: url,
   });
 
@@ -128,7 +147,7 @@ export async function openBillingPortalWithActivity() {
 }
 
 export async function startCheckoutWithActivity(payload = {}) {
-  emitBillingActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Starting checkout...", payload);
+  emitBillingActivity(STREAMS_ACTIVITY_PHASES.RUNNING, "Starting billing setup...", payload);
 
   const response = await fetch("/api/stripe/checkout", {
     method: "POST",
@@ -139,14 +158,14 @@ export async function startCheckoutWithActivity(payload = {}) {
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || data?.details || "Checkout failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || data?.details || "Billing setup failed.");
     emitBillingActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason, payload);
     throw new Error(reason);
   }
 
-  const url = assertRedirectUrl(data, "Checkout did not return a redirect URL.");
+  const url = assertRedirectUrl(data, "Billing setup did not return a secure link.");
 
-  emitBillingActivity(STREAMS_ACTIVITY_PHASES.COMPLETE, "Checkout redirect ready", {
+  emitBillingActivity(STREAMS_ACTIVITY_PHASES.COMPLETE, "Billing setup link ready", {
     ...payload,
     redirectUrl: url,
   });
@@ -161,7 +180,7 @@ export async function fetchProjectsWithActivity() {
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || "Projects loading failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || "Projects loading failed.");
     emitProjectActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason);
     throw new Error(reason);
   }
@@ -180,7 +199,7 @@ export async function callGroupChatWithActivity({ sessionId, action, email, name
   const data = await readJson(response);
 
   if (!response.ok || data?.ok === false) {
-    const reason = data?.error || data?.details || "Group chat action failed.";
+    const reason = cleanAccountMessage(data?.message || data?.error || data?.details || "Group chat action failed.");
     emitGroupChatActivity(STREAMS_ACTIVITY_PHASES.FAILED, reason, { sessionId, email, name });
     throw new Error(reason);
   }
@@ -192,7 +211,7 @@ export async function callGroupChatWithActivity({ sessionId, action, email, name
 export function emitGitHubBuildBlockedActivity(label = "GitHub build/deploy action") {
   emitGitHubActivity(
     STREAMS_ACTIVITY_PHASES.BLOCKED,
-    `Blocked: real ${label} backend/action is not wired to this UI yet.`,
+    `${label} is not connected to this account control yet. Your current work is safe.`,
     { tool: label }
   );
 }
