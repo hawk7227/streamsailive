@@ -64,6 +64,30 @@ describe("Streams Builder repository execution planning", () => {
     expect(plan.blockedReasons).toContain("Unsafe file path: ../secret.env");
   });
 
+  it("requires target files before reading full files", () => {
+    const plan = createRepositoryExecutionPlan({
+      projectId: "project-123",
+      sessionId: "session-123",
+      repoFullName: "hawk7227/streamsailive",
+      requestedCommands: ["read_full_file"],
+    });
+
+    expect(plan.truthState).toBe("FAILED");
+    expect(plan.blockedReasons).toContain("targetFiles is required before read_full_file.");
+  });
+
+  it("requires target files before staging specific files", () => {
+    const plan = createRepositoryExecutionPlan({
+      projectId: "project-123",
+      sessionId: "session-123",
+      repoFullName: "hawk7227/streamsailive",
+      requestedCommands: ["git_add_specific_file"],
+    });
+
+    expect(plan.truthState).toBe("FAILED");
+    expect(plan.blockedReasons).toContain("targetFiles is required before git_add_specific_file.");
+  });
+
   it("requires a unified diff before applying a patch", () => {
     const plan = createRepositoryExecutionPlan({
       projectId: "project-123",
