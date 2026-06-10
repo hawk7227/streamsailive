@@ -51,17 +51,29 @@ describe("Streams Builder repository execution planning", () => {
     expect(plan.blockedReasons).toContain("repoFullName must be owner/name.");
   });
 
+  it("requires clone before repository commands", () => {
+    const plan = createRepositoryExecutionPlan({
+      projectId: "project-123",
+      sessionId: "session-123",
+      repoFullName: "hawk7227/streamsailive",
+      requestedCommands: ["git_status"],
+    });
+
+    expect(plan.truthState).toBe("FAILED");
+    expect(plan.blockedReasons).toContain("clone_repo is required before repository commands.");
+  });
+
   it("blocks unsafe target file paths", () => {
     const plan = createRepositoryExecutionPlan({
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["read_full_file"],
-      targetFiles: ["../secret.env"],
+      requestedCommands: ["clone_repo", "read_full_file"],
+      targetFiles: ["../outside.txt"],
     });
 
     expect(plan.truthState).toBe("FAILED");
-    expect(plan.blockedReasons).toContain("Unsafe file path: ../secret.env");
+    expect(plan.blockedReasons).toContain("Unsafe file path: ../outside.txt");
   });
 
   it("requires target files before reading full files", () => {
@@ -69,7 +81,7 @@ describe("Streams Builder repository execution planning", () => {
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["read_full_file"],
+      requestedCommands: ["clone_repo", "read_full_file"],
     });
 
     expect(plan.truthState).toBe("FAILED");
@@ -81,7 +93,7 @@ describe("Streams Builder repository execution planning", () => {
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["git_add_specific_file"],
+      requestedCommands: ["clone_repo", "git_add_specific_file"],
     });
 
     expect(plan.truthState).toBe("FAILED");
@@ -93,7 +105,7 @@ describe("Streams Builder repository execution planning", () => {
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["apply_unified_diff"],
+      requestedCommands: ["clone_repo", "apply_unified_diff"],
     });
 
     expect(plan.truthState).toBe("FAILED");
@@ -105,7 +117,7 @@ describe("Streams Builder repository execution planning", () => {
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["git_commit"],
+      requestedCommands: ["clone_repo", "git_commit"],
     });
 
     expect(plan.truthState).toBe("FAILED");
@@ -117,13 +129,13 @@ describe("Streams Builder repository execution planning", () => {
       projectId: "project-123",
       sessionId: "session-123",
       repoFullName: "hawk7227/streamsailive",
-      requestedCommands: ["git_add_specific_file"],
+      requestedCommands: ["clone_repo", "git_add_specific_file"],
       targetFiles: ["src/lib/streams-builder/repository-execution.ts"],
     });
 
     expect(plan.blockedReasons).toHaveLength(0);
-    expect(plan.steps[0].command).toBe("git_add_specific_file");
-    expect(plan.steps[0].requiresApproval).toBe(true);
-    expect(plan.steps[0].description).toContain("Never use git add dot");
+    expect(plan.steps[1].command).toBe("git_add_specific_file");
+    expect(plan.steps[1].requiresApproval).toBe(true);
+    expect(plan.steps[1].description).toContain("Never use git add dot");
   });
 });
