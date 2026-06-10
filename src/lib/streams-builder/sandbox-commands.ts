@@ -77,7 +77,7 @@ export function createSandboxCommandBatch(input: {
             ...base,
             args: ["git", "apply", "--check", "PATCH_FILE_THEN_APPLY"],
             requiresApproval: false,
-            proofLabel: "Unified diff validated before apply.",
+            proofLabel: "Unified diff validated and applied.",
           };
         case "npm_run_build":
           return {
@@ -117,9 +117,9 @@ export function createSandboxCommandBatch(input: {
         case "git_push":
           return {
             ...base,
-            args: ["git", "push", "origin", input.branchName],
+            args: ["git", "push", "origin", `HEAD:${input.branchName}`],
             requiresApproval: true,
-            proofLabel: "Approved branch pushed to origin.",
+            proofLabel: "Approved branch pushed to origin using HEAD target ref.",
           };
       }
     }),
