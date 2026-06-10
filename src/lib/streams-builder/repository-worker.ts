@@ -173,17 +173,18 @@ export async function processRepositoryExecutionJob(
     return { ok: false, jobId, status: "blocked", truthState: "FAILED", proof: ["worker claimed job", "plan validation executed"], unproven: ["sandbox execution"], blockedReasons: plan.blockedReasons };
   }
 
+  const workspaceDir = workspacePath(projectId);
   const sandboxBatch = createSandboxCommandBatch({
     projectId,
     sessionId,
     repoFullName,
     branchName,
+    workspaceDir,
     commands,
     targetFiles,
     commitMessage,
   });
 
-  const workspaceDir = workspacePath(projectId);
   await rm(workspaceDir, { recursive: true, force: true });
   await mkdir(WORKSPACE_ROOT, { recursive: true });
   await jobs.createEvent(scope, {
