@@ -185,6 +185,14 @@ export function createRepositoryExecutionPlan(
     if (!isSafeFilePath(file)) blockedReasons.push(`Unsafe file path: ${file}`);
   }
 
+  if (request.requestedCommands.includes("read_full_file") && targetFiles.length === 0) {
+    blockedReasons.push("targetFiles is required before read_full_file.");
+  }
+
+  if (request.requestedCommands.includes("git_add_specific_file") && targetFiles.length === 0) {
+    blockedReasons.push("targetFiles is required before git_add_specific_file.");
+  }
+
   if (request.requestedCommands.includes("apply_unified_diff") && !request.unifiedDiff?.trim()) {
     blockedReasons.push("unifiedDiff is required before apply_unified_diff.");
   }
