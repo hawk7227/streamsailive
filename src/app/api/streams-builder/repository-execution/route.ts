@@ -1,11 +1,14 @@
 import { type NextRequest } from "next/server";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
+import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
 import {
   createRepositoryExecutionPlan,
   type StreamsRepositoryExecutionCommand,
 } from "@/lib/streams-builder/repository-execution";
 import { createSandboxCommandBatch } from "@/lib/streams-builder/sandbox-commands";
+
+const jobs = new StreamsAIJobsRepository();
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +23,8 @@ export async function POST(request: NextRequest) {
       targetFiles?: string[];
       unifiedDiff?: string;
       commitMessage?: string;
+      approvalGranted?: boolean;
+      enqueue?: boolean;
     }>(request);
 
     const requestedCommands = body.requestedCommands || [
@@ -29,9 +34,12 @@ export async function POST(request: NextRequest) {
       "git_diff",
     ];
 
+    const projectId = body.projectId || scope.defaultProjectId || "project-pending";
+    const sessionId = body.sessionId || "builder-session-pending";
+
     const plan = createRepositoryExecutionPlan({
-      projectId: body.projectId || scope.defaultProjectId || "project-pending",
-      sessionId: body.sessionId || "builder-session-pending",
+      projectId,
+      sessionId,
       repoFullName: body.repoFullName || "",
       branchName: body.branchName,
       baseBranch: body.baseBranch,
@@ -54,13 +62,39 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
+    const queuedJob =
+      body.enqueue === true && plan.blockedReasons.length === 0
+        ? await jobs.create(scope, {
+            projectId,
+            sessionId,
+            kind: "repository_execution",
+            status: "queued",
+            inputJson: {
+              projectId,
+              sessionId,
+              repoFullName: plan.repoFullName,
+              branchName: plan.branchName,
+              baseBranch: plan.baseBranch,
+              requestedCommands,
+              targetFiles: body.targetFiles || [],
+              unifiedDiff: body.unifiedDiff || "",
+              commitMessage: body.commitMessage || "",
+              approvalGranted: body.approvalGranted === true,
+              plan,
+              sandboxBatch,
+            },
+          })
+        : null;
+
     return streamsAIJson({
       ok: plan.blockedReasons.length === 0,
-      mode: "repository_execution_plan",
+      mode: queuedJob ? "repository_execution_queued" : "repository_execution_plan",
       message:
-        plan.blockedReasons.length === 0
-          ? "Repository execution plan and sandbox command batch created. Worker execution is not wired in this endpoint yet."
-          : "Repository execution plan blocked by validation.",
+        plan.blockedReasons.length > 0
+          ? "Repository execution plan blocked by validation."
+          : queuedJob
+            ? "Repository execution job queued for worker claim."
+            : "Repository execution plan and sandbox command batch created. Set enqueue=true to queue worker execution.",
       scope: {
         tenantId: scope.tenantId,
         userId: scope.userId,
@@ -68,6 +102,7 @@ export async function POST(request: NextRequest) {
       },
       plan,
       sandboxBatch,
+      queuedJob,
     });
   } catch (error) {
     return streamsAIError(error);
