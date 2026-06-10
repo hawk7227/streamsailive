@@ -316,15 +316,36 @@ async function runElevenLabs(input: CreateGenerationRequest): Promise<ProviderRe
   return { provider: "elevenlabs", status: "completed", outputBase64: audio };
 }
 
-async function runBlockedProvider(provider: Provider, input: CreateGenerationRequest): Promise<ProviderResult> {
-  const envName = provider === "kling" ? "KLING_API_KEY" : provider === "veo" ? "VEO_API_KEY" : `${provider.toUpperCase()}_API_KEY`;
-  if (!hasEnv(envName)) {
-    return { provider, status: "blocked", blockedReason: `${envName} is not configured for ${input.kind}.` };
-  }
+async function runConfiguredVideoProvider(provider: Provider, input: CreateGenerationRequest): Promise<ProviderResult> {
+  const prefix = provider.toUpperCase();
+  const key = process.env[`${prefix}_API_KEY`];
+  const endpoint = process.env[`${prefix}_GENERATION_ENDPOINT`] || process.env[`${prefix}_EDIT_ENDPOINT`];
+  if (!key) return { provider, status: "blocked", blockedReason: `${prefix}_API_KEY is not configured for ${input.kind}.` };
+  if (!endpoint) return { provider, status: "blocked", blockedReason: `${prefix}_GENERATION_ENDPOINT or ${prefix}_EDIT_ENDPOINT is not configured for ${input.kind}.` };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: input.prompt,
+      promptText: input.prompt,
+      aspectRatio: input.aspectRatio || "16:9",
+      ratio: input.aspectRatio || "16:9",
+      image: input.sourceImageUrl || undefined,
+      voiceId: input.voiceId || undefined,
+      metadata: { source: "admingeneration-jobs-route", kind: input.kind },
+    }),
+  });
+  const data = await response.json().catch(async () => ({ text: await response.text().catch(() => "") }));
+  if (!response.ok) return { provider, status: "blocked", blockedReason: `${provider} request failed with HTTP ${response.status}.`, response: data };
+
+  const outputUrl = data?.outputUrl || data?.videoUrl || data?.url || data?.asset?.url || null;
   return {
     provider,
-    status: "blocked",
-    blockedReason: `${provider} is selected, but this repository does not yet contain a verified production endpoint contract for ${provider}. Add the official endpoint and request schema before enabling this path.`,
+    status: outputUrl ? "completed" : "submitted",
+    providerRunId: data?.id || data?.taskId || data?.jobId || data?.request_id || null,
+    outputUrl,
+    response: data,
   };
 }
 
@@ -340,7 +361,7 @@ async function runProvider(provider: Provider, input: CreateGenerationRequest): 
       return runElevenLabs(input);
     case "kling":
     case "veo":
-      return runBlockedProvider(provider, input);
+      return runConfiguredVideoProvider(provider, input);
     case "auto":
     default:
       return runProvider(resolveProvider(input.kind, input.provider), input);
