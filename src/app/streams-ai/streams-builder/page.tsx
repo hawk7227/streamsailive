@@ -1,3 +1,4 @@
+import StreamsBuilderControlPanel from "@/components/streams-builder/StreamsBuilderControlPanel";
 import {
   createStreamsBuilderBridgePayloadFromSearchParams,
   createStreamsBuilderBridgeState,
@@ -6,7 +7,7 @@ import type { StreamsBuilderTruthState } from "@/lib/streams-builder/types";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-type StreamsBuilderPageProps = {
+type PageProps = {
   searchParams?: SearchParams | Promise<SearchParams>;
 };
 
@@ -18,207 +19,123 @@ const truthColor: Record<StreamsBuilderTruthState, string> = {
   WAITING_FOR_USER: "#38bdf8",
 };
 
-const styles = {
-  page: {
-    minHeight: "100dvh",
-    background: "linear-gradient(135deg, #020617 0%, #0f172a 52%, #111827 100%)",
-    color: "#f8fafc",
-    padding: "32px",
-    fontFamily:
-      "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  },
-  shell: {
-    display: "grid",
-    gap: "18px",
-    maxWidth: "1440px",
-    margin: "0 auto",
-  },
-  hero: {
-    border: "1px solid rgba(148, 163, 184, 0.26)",
-    background: "rgba(15, 23, 42, 0.78)",
-    borderRadius: "28px",
-    padding: "24px",
-    boxShadow: "0 24px 80px rgba(0, 0, 0, 0.32)",
-  },
-  eyebrow: {
-    color: "#38bdf8",
-    fontSize: "12px",
-    fontWeight: 800,
-    letterSpacing: "0.16em",
-    textTransform: "uppercase" as const,
-    marginBottom: "10px",
-  },
-  title: {
-    fontSize: "clamp(30px, 5vw, 60px)",
-    lineHeight: 1,
-    margin: "0 0 14px",
-    fontWeight: 900,
-  },
-  description: {
-    color: "#cbd5e1",
-    fontSize: "16px",
-    lineHeight: 1.65,
-    maxWidth: "920px",
-    margin: 0,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "18px",
-  },
-  card: {
-    border: "1px solid rgba(148, 163, 184, 0.22)",
-    background: "rgba(15, 23, 42, 0.72)",
-    borderRadius: "24px",
-    padding: "20px",
-  },
-  cardTitle: {
-    fontSize: "18px",
-    margin: "0 0 14px",
-    fontWeight: 850,
-  },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "12px",
-    borderTop: "1px solid rgba(148, 163, 184, 0.14)",
-    padding: "10px 0",
-    fontSize: "13px",
-  },
-  label: {
-    color: "#94a3b8",
-  },
-  value: {
-    color: "#f8fafc",
-    fontWeight: 700,
-    textAlign: "right" as const,
-    overflowWrap: "anywhere" as const,
-  },
-  status: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "8px",
-    borderRadius: "999px",
-    border: "1px solid rgba(148, 163, 184, 0.28)",
-    padding: "8px 12px",
-    fontSize: "12px",
-    fontWeight: 850,
-  },
-  dot: {
-    width: "9px",
-    height: "9px",
-    borderRadius: "999px",
-  },
-  contextBox: {
-    minHeight: "110px",
-    borderRadius: "18px",
-    background: "rgba(2, 6, 23, 0.58)",
-    border: "1px solid rgba(148, 163, 184, 0.16)",
-    padding: "14px",
-    color: "#dbeafe",
-    whiteSpace: "pre-wrap" as const,
-    fontSize: "13px",
-    lineHeight: 1.55,
-  },
-};
-
-function ValueRow({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div style={styles.row}>
-      <span style={styles.label}>{label}</span>
-      <span style={styles.value}>{value || "UNPROVEN"}</span>
-    </div>
-  );
-}
-
 function TruthBadge({ state }: { state: StreamsBuilderTruthState }) {
   return (
-    <span style={styles.status}>
-      <span style={{ ...styles.dot, background: truthColor[state] }} />
+    <span className="rounded-full border border-slate-600 px-3 py-1 text-xs font-bold text-slate-100">
+      <span
+        aria-hidden="true"
+        className="mr-2 inline-block size-2 rounded-full"
+        style={{ backgroundColor: truthColor[state] }}
+      />
       {state}
     </span>
   );
 }
 
-export default async function StreamsAIBuilderPage({ searchParams }: StreamsBuilderPageProps) {
+function Row({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex justify-between gap-4 border-t border-slate-700 py-3 text-sm">
+      <span className="text-slate-400">{label}</span>
+      <span className="max-w-[60%] break-words text-right font-semibold text-slate-100">
+        {value || "UNPROVEN"}
+      </span>
+    </div>
+  );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl border border-slate-700 bg-slate-950/70 p-5 shadow-2xl shadow-black/20">
+      <h2 className="mb-4 text-lg font-black text-white">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export default async function StreamsAIBuilderPage({ searchParams }: PageProps) {
   const resolvedSearchParams = searchParams ? await Promise.resolve(searchParams) : {};
   const payload = createStreamsBuilderBridgePayloadFromSearchParams(resolvedSearchParams);
   const bridge = createStreamsBuilderBridgeState(payload);
 
   return (
-    <main style={styles.page}>
-      <section style={styles.shell}>
-        <div style={styles.hero}>
-          <div style={styles.eyebrow}>Streams AI / Streams Builder Bridge</div>
-          <h1 style={styles.title}>Conversation becomes execution here.</h1>
-          <p style={styles.description}>
-            This nested Builder route receives Streams AI conversation context, creates a project container,
-            opens a builder session, exposes source truth, and tracks the required loops before repository
-            execution, proof, and approval are allowed.
+    <main className="min-h-dvh bg-slate-950 px-4 py-8 text-slate-100 sm:px-8">
+      <div className="mx-auto grid max-w-7xl gap-5">
+        <header className="rounded-3xl border border-slate-700 bg-slate-900/80 p-6 shadow-2xl shadow-black/30">
+          <p className="mb-3 text-xs font-black uppercase tracking-[0.24em] text-sky-400">
+            Streams AI / Streams Builder Bridge
           </p>
-        </div>
+          <h1 className="mb-4 text-4xl font-black tracking-tight sm:text-6xl">
+            Conversation becomes execution here.
+          </h1>
+          <p className="max-w-4xl text-base leading-7 text-slate-300">
+            This route lives inside Streams AI at /streams-ai/streams-builder. It receives conversation context,
+            creates a project container, opens a builder session, exposes source truth, tracks loop state, runs browser
+            verification, and blocks live approval until the required proof gates are satisfied.
+          </p>
+        </header>
 
-        <div style={styles.grid}>
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Project Container</h2>
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card title="Project Container">
             <TruthBadge state={bridge.project.truthState} />
-            <ValueRow label="Project" value={bridge.project.name} />
-            <ValueRow label="Project ID" value={bridge.project.projectId} />
-            <ValueRow label="Repo" value={bridge.project.repo} />
-            <ValueRow label="Status" value={bridge.project.status} />
-            <ValueRow label="Conversation" value={bridge.project.createdFromConversationId} />
-          </article>
+            <Row label="Project" value={bridge.project.name} />
+            <Row label="Project ID" value={bridge.project.projectId} />
+            <Row label="Repo" value={bridge.project.repo} />
+            <Row label="Status" value={bridge.project.status} />
+            <Row label="Conversation" value={bridge.project.createdFromConversationId} />
+          </Card>
 
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Builder Session</h2>
+          <Card title="Builder Session">
             <TruthBadge state={bridge.session.activeProofStatus} />
-            <ValueRow label="Session" value={bridge.session.sessionId} />
-            <ValueRow label="Workspace" value={bridge.session.activeWorkspace} />
-            <ValueRow label="Route" value={bridge.session.activeRoute} />
-            <ValueRow label="Component" value={bridge.session.activeComponent} />
-            <ValueRow label="File" value={bridge.session.activeFile} />
-          </article>
+            <Row label="Session" value={bridge.session.sessionId} />
+            <Row label="Workspace" value={bridge.session.activeWorkspace} />
+            <Row label="Route" value={bridge.session.activeRoute} />
+            <Row label="Component" value={bridge.session.activeComponent} />
+            <Row label="File" value={bridge.session.activeFile} />
+          </Card>
 
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Source Truth Registry</h2>
+          <Card title="Source Truth Registry">
             <TruthBadge state={bridge.sourceTruth.truthState} />
-            <ValueRow label="Preview URL" value={bridge.sourceTruth.previewUrl} />
-            <ValueRow label="Route" value={bridge.sourceTruth.route} />
-            <ValueRow label="Component" value={bridge.sourceTruth.component} />
-            <ValueRow label="GitHub Path" value={bridge.sourceTruth.githubPath} />
-            <ValueRow label="Checkpoint" value={bridge.sourceTruth.checkpoint} />
-          </article>
+            <Row label="Preview URL" value={bridge.sourceTruth.previewUrl} />
+            <Row label="Route" value={bridge.sourceTruth.route} />
+            <Row label="Component" value={bridge.sourceTruth.component} />
+            <Row label="GitHub Path" value={bridge.sourceTruth.githubPath} />
+            <Row label="Checkpoint" value={bridge.sourceTruth.checkpoint} />
+          </Card>
         </div>
 
-        <div style={styles.grid}>
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Transferred Requirements</h2>
-            <div style={styles.contextBox}>{bridge.transferredContext.requirements}</div>
-          </article>
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Transferred Architecture</h2>
-            <div style={styles.contextBox}>{bridge.transferredContext.architecture}</div>
-          </article>
-          <article style={styles.card}>
-            <h2 style={styles.cardTitle}>Transferred Blueprint</h2>
-            <div style={styles.contextBox}>{bridge.transferredContext.blueprint}</div>
-          </article>
+        <StreamsBuilderControlPanel bridge={bridge} />
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card title="Transferred Requirements">
+            <pre className="whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-sm leading-6 text-slate-200">
+              {bridge.transferredContext.requirements}
+            </pre>
+          </Card>
+          <Card title="Transferred Architecture">
+            <pre className="whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-sm leading-6 text-slate-200">
+              {bridge.transferredContext.architecture}
+            </pre>
+          </Card>
+          <Card title="Transferred Blueprint">
+            <pre className="whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-sm leading-6 text-slate-200">
+              {bridge.transferredContext.blueprint}
+            </pre>
+          </Card>
         </div>
 
-        <article style={styles.card}>
-          <h2 style={styles.cardTitle}>Loop Logic</h2>
-          <div style={styles.grid}>
+        <Card title="Loop Logic">
+          <div className="grid gap-4 lg:grid-cols-4">
             {bridge.loops.map((loop) => (
-              <section key={loop.id} style={styles.contextBox}>
+              <section key={loop.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
                 <TruthBadge state={loop.truthState} />
-                <h3 style={{ fontSize: "16px", margin: "14px 0 8px" }}>{loop.label}</h3>
-                <p style={{ margin: "0 0 8px", color: "#cbd5e1" }}>{loop.currentStep}</p>
-                <p style={{ margin: 0, color: "#94a3b8" }}>Stop: {loop.stopCondition}</p>
+                <h3 className="mt-4 text-base font-black text-white">{loop.label}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{loop.currentStep}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-400">Stop: {loop.stopCondition}</p>
               </section>
             ))}
           </div>
-        </article>
-      </section>
+        </Card>
+      </div>
     </main>
   );
 }
