@@ -1,3 +1,4 @@
+import StreamsBuilderControlPanel from "@/components/streams-builder/StreamsBuilderControlPanel";
 import {
   createStreamsBuilderBridgePayloadFromSearchParams,
   createStreamsBuilderBridgeState,
@@ -68,8 +69,8 @@ export default async function StreamsAIBuilderPage({ searchParams }: PageProps) 
           </h1>
           <p className="max-w-4xl text-base leading-7 text-slate-300">
             This route lives inside Streams AI at /streams-ai/streams-builder. It receives conversation context,
-            creates a project container, opens a builder session, exposes source truth, and tracks loop state before
-            repository execution, proof, and approval are allowed.
+            creates a project container, opens a builder session, exposes source truth, tracks loop state, runs browser
+            verification, and blocks live approval until the required proof gates are satisfied.
           </p>
         </header>
 
@@ -101,6 +102,8 @@ export default async function StreamsAIBuilderPage({ searchParams }: PageProps) 
             <Row label="Checkpoint" value={bridge.sourceTruth.checkpoint} />
           </Card>
         </div>
+
+        <StreamsBuilderControlPanel bridge={bridge} />
 
         <div className="grid gap-5 lg:grid-cols-3">
           <Card title="Transferred Requirements">
