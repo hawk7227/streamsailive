@@ -10,6 +10,12 @@ import { createSandboxCommandBatch } from "@/lib/streams-builder/sandbox-command
 
 const jobs = new StreamsAIJobsRepository();
 
+function defaultRepositoryCommands(targetFiles?: string[]): StreamsRepositoryExecutionCommand[] {
+  return targetFiles?.length
+    ? ["clone_repo", "read_full_file", "git_status", "git_diff"]
+    : ["clone_repo", "git_status", "git_diff"];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
@@ -27,13 +33,7 @@ export async function POST(request: NextRequest) {
       enqueue?: boolean;
     }>(request);
 
-    const requestedCommands = body.requestedCommands || [
-      "clone_repo",
-      "read_full_file",
-      "git_status",
-      "git_diff",
-    ];
-
+    const requestedCommands = body.requestedCommands || defaultRepositoryCommands(body.targetFiles);
     const projectId = body.projectId || scope.defaultProjectId || "project-pending";
     const sessionId = body.sessionId || "builder-session-pending";
 
