@@ -5,6 +5,7 @@ import {
   createRepositoryExecutionPlan,
   type StreamsRepositoryExecutionCommand,
 } from "@/lib/streams-builder/repository-execution";
+import { createSandboxCommandBatch } from "@/lib/streams-builder/sandbox-commands";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,29 +22,44 @@ export async function POST(request: NextRequest) {
       commitMessage?: string;
     }>(request);
 
+    const requestedCommands = body.requestedCommands || [
+      "clone_repo",
+      "read_full_file",
+      "git_status",
+      "git_diff",
+    ];
+
     const plan = createRepositoryExecutionPlan({
       projectId: body.projectId || scope.defaultProjectId || "project-pending",
       sessionId: body.sessionId || "builder-session-pending",
       repoFullName: body.repoFullName || "",
       branchName: body.branchName,
       baseBranch: body.baseBranch,
-      requestedCommands: body.requestedCommands || [
-        "clone_repo",
-        "read_full_file",
-        "git_status",
-        "git_diff",
-      ],
+      requestedCommands,
       targetFiles: body.targetFiles,
       unifiedDiff: body.unifiedDiff,
       commitMessage: body.commitMessage,
     });
+
+    const sandboxBatch =
+      plan.blockedReasons.length === 0
+        ? createSandboxCommandBatch({
+            projectId: plan.projectId,
+            sessionId: plan.sessionId,
+            repoFullName: plan.repoFullName,
+            branchName: plan.branchName,
+            commands: requestedCommands,
+            targetFiles: body.targetFiles,
+            commitMessage: body.commitMessage,
+          })
+        : null;
 
     return streamsAIJson({
       ok: plan.blockedReasons.length === 0,
       mode: "repository_execution_plan",
       message:
         plan.blockedReasons.length === 0
-          ? "Repository execution plan created. Sandbox execution is not wired in this endpoint yet."
+          ? "Repository execution plan and sandbox command batch created. Worker execution is not wired in this endpoint yet."
           : "Repository execution plan blocked by validation.",
       scope: {
         tenantId: scope.tenantId,
@@ -51,6 +67,7 @@ export async function POST(request: NextRequest) {
         workspaceId: scope.workspaceId,
       },
       plan,
+      sandboxBatch,
     });
   } catch (error) {
     return streamsAIError(error);
