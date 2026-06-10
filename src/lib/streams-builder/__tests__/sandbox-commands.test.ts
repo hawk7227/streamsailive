@@ -70,6 +70,6 @@ describe("Streams Builder sandbox command batches", () => {
 
     expect(batch.commands.every((command) => command.requiresApproval)).toBe(true);
     expect(batch.commands[0].args).toEqual(["git", "commit", "-m", "Safe commit"]);
-    expect(batch.commands[1].args).toEqual(["git", "push", "origin", "streams-builder/project-123"]);
+    expect(batch.commands[1].args).toEqual(["git", "push", "origin", "HEAD:streams-builder/project-123"]);
   });
 });
