@@ -185,6 +185,15 @@ export function createRepositoryExecutionPlan(
     if (!isSafeFilePath(file)) blockedReasons.push(`Unsafe file path: ${file}`);
   }
 
+  const cloneIndex = request.requestedCommands.indexOf("clone_repo");
+  const repositoryCommandIndex = request.requestedCommands.findIndex((command) => command !== "clone_repo");
+  if (repositoryCommandIndex >= 0 && cloneIndex < 0) {
+    blockedReasons.push("clone_repo is required before repository commands.");
+  }
+  if (cloneIndex > repositoryCommandIndex && repositoryCommandIndex >= 0) {
+    blockedReasons.push("clone_repo must run before repository commands.");
+  }
+
   if (request.requestedCommands.includes("read_full_file") && targetFiles.length === 0) {
     blockedReasons.push("targetFiles is required before read_full_file.");
   }
