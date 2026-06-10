@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import type { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
@@ -58,16 +58,16 @@ function assertInsideWorkspace(cwd: string) {
   }
 }
 
-async function writeUnifiedDiff(workspaceDir: string, unifiedDiff: string) {
-  const patchPath = join(workspaceDir, ".streams-builder", "patch.diff");
-  await mkdir(dirname(patchPath), { recursive: true });
+async function writeUnifiedDiff(projectId: string, unifiedDiff: string) {
+  const patchPath = join(WORKSPACE_ROOT, `${projectId.replace(/[^A-Za-z0-9_.-]+/g, "-")}.patch.diff`);
+  await mkdir(WORKSPACE_ROOT, { recursive: true });
   await writeFile(patchPath, unifiedDiff, "utf-8");
   return patchPath;
 }
 
-function commandForExecution(command: StreamsSandboxCommand, patchPath: string | null) {
+function commandForExecution(command: StreamsSandboxCommand, patchPath: string | null, applyPhase = false) {
   if (command.command === "apply_unified_diff") {
-    return { file: "git", args: ["apply", "--check", patchPath || "PATCH_FILE_MISSING"] };
+    return { file: "git", args: applyPhase ? ["apply", patchPath || "PATCH_FILE_MISSING"] : ["apply", "--check", patchPath || "PATCH_FILE_MISSING"] };
   }
 
   return {
@@ -76,29 +76,40 @@ function commandForExecution(command: StreamsSandboxCommand, patchPath: string |
   };
 }
 
+async function execResolved(command: StreamsSandboxCommand, resolved: { file: string; args: string[] }) {
+  return execFileAsync(resolved.file, resolved.args, {
+    cwd: command.command === "clone_repo" ? WORKSPACE_ROOT : command.cwd,
+    timeout: DEFAULT_TIMEOUT_MS,
+    maxBuffer: MAX_BUFFER,
+    env: {
+      PATH: process.env.PATH || "",
+      NODE_ENV: process.env.NODE_ENV || "production",
+      CI: "true",
+    },
+  });
+}
+
 async function runCommand(command: StreamsSandboxCommand, patchPath: string | null) {
   assertInsideWorkspace(command.cwd);
-  const resolved = commandForExecution(command, patchPath);
   const startedAt = new Date().toISOString();
 
   try {
-    const result = await execFileAsync(resolved.file, resolved.args, {
-      cwd: command.command === "clone_repo" ? WORKSPACE_ROOT : command.cwd,
-      timeout: DEFAULT_TIMEOUT_MS,
-      maxBuffer: MAX_BUFFER,
-      env: {
-        PATH: process.env.PATH || "",
-        NODE_ENV: process.env.NODE_ENV || "production",
-        CI: "true",
-      },
-    });
+    const check = await execResolved(command, commandForExecution(command, patchPath));
+    let stdout = cleanLog(check.stdout);
+    let stderr = cleanLog(check.stderr);
+
+    if (command.command === "apply_unified_diff") {
+      const applied = await execResolved(command, commandForExecution(command, patchPath, true));
+      stdout = cleanLog(`${stdout}\n${applied.stdout}`);
+      stderr = cleanLog(`${stderr}\n${applied.stderr}`);
+    }
 
     return {
       ok: true,
       startedAt,
       completedAt: new Date().toISOString(),
-      stdout: cleanLog(result.stdout),
-      stderr: cleanLog(result.stderr),
+      stdout,
+      stderr,
     };
   } catch (error) {
     const err = error as { stdout?: unknown; stderr?: unknown; message?: string; code?: unknown };
@@ -182,7 +193,7 @@ export async function processRepositoryExecutionJob(
     data: { workspaceDir, commandCount: sandboxBatch.commands.length },
   });
 
-  const patchPath = unifiedDiff ? await writeUnifiedDiff(workspaceDir, unifiedDiff) : null;
+  const patchPath = unifiedDiff ? await writeUnifiedDiff(projectId, unifiedDiff) : null;
   const proof: string[] = ["worker claimed job", "plan validation passed", "sandbox prepared"];
   const unproven: string[] = [];
 
@@ -238,5 +249,5 @@ export async function processRepositoryExecutionJob(
     data: { truthState, proof, unproven },
   });
 
-  return { ok: true, jobId, status: truthState === "PROVEN" ? "completed" : "completed", truthState, proof, unproven };
+  return { ok: true, jobId, status: "completed", truthState, proof, unproven };
 }
