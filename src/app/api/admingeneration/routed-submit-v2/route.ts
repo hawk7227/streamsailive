@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { buildCompiledPrompt, normalizeGenerationMode } from "@/lib/admingeneration/generation-mode";
 import { generateVideo, VideoRuntimeError } from "@/lib/video-runtime/generateVideo";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +17,8 @@ type Payload = {
   imageUrl?: string;
   voiceId?: string;
   model?: string;
+  storyBible?: string;
+  longVideo?: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -85,6 +86,12 @@ async function submitVideo(payload: Payload) {
     model: payload.model || resolved.model,
     duration: payload.duration,
     aspectRatio: payload.aspectRatio,
+    storyBible: typeof payload.storyBible === "string" ? payload.storyBible : undefined,
+    longVideo:
+      payload.longVideo === true ||
+      payload.metadata?.longVideo === true ||
+      String(payload.metadata?.lengthMode || "").includes("long") ||
+      String(payload.metadata?.lengthMode || "") === "movie",
     quality: typeof payload.metadata?.qualityGoal === "string" ? String(payload.metadata.qualityGoal) : undefined,
     imageUrl,
     workspaceId: payload.workspaceId || payload.projectId || "admingeneration",
@@ -98,6 +105,7 @@ async function submitVideo(payload: Payload) {
     target: "video-runtime/generateVideo",
     requestedKind: kind,
     requestedProvider: payload.provider || "auto",
+    longVideo: payload.longVideo === true || payload.metadata?.longVideo === true,
     result,
   }, { status: result.ok ? 200 : 500 });
 }
