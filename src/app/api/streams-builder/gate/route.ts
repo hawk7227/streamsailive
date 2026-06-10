@@ -1,8 +1,11 @@
 import { type NextRequest } from "next/server";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
+import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
 import { evaluateReviewWorkflow } from "@/lib/streams-builder/review-workflow";
 import type { ReviewDecision, ReviewTruthState } from "@/lib/streams-builder/review-types";
+
+const jobs = new StreamsAIJobsRepository();
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,9 +26,11 @@ export async function POST(request: NextRequest) {
       comment?: string;
     }>(request);
 
+    const projectId = body.projectId || scope.defaultProjectId || "project-pending";
+    const sessionId = body.sessionId || "builder-session-pending";
     const result = evaluateReviewWorkflow({
-      projectId: body.projectId || scope.defaultProjectId || "project-pending",
-      sessionId: body.sessionId || "builder-session-pending",
+      projectId,
+      sessionId,
       previewUrl: body.previewUrl || "",
       route: body.route,
       component: body.component,
@@ -39,7 +44,22 @@ export async function POST(request: NextRequest) {
       comment: body.comment,
     });
 
-    return streamsAIJson({ ok: result.ok, result });
+    const gateJob = await jobs.create(scope, {
+      projectId,
+      sessionId,
+      kind: "preview_action",
+      status: result.reviewState === "approved" ? "completed" : result.reviewState === "blocked" ? "failed" : "in_review",
+      inputJson: { gate: result, comment: body.comment || null },
+    });
+
+    await jobs.createEvent(scope, {
+      jobId: String(gateJob.id),
+      eventType: "builder_gate_result",
+      message: result.reviewState,
+      data: { truthState: result.truthState, reviewState: result.reviewState },
+    });
+
+    return streamsAIJson({ ok: result.ok, gateJob, result });
   } catch (error) {
     return streamsAIError(error);
   }
