@@ -140,7 +140,9 @@ export async function processRepositoryExecutionJob(
   const unifiedDiff = rowString(input, "unifiedDiff");
   const commitMessage = rowString(input, "commitMessage");
   const approvalGranted = input.approvalGranted === true;
-  const commands = requestedCommands.length ? requestedCommands : ["clone_repo", "read_full_file", "git_status", "git_diff"];
+  const commands: StreamsRepositoryExecutionCommand[] = requestedCommands.length
+    ? requestedCommands
+    : ["clone_repo", "read_full_file", "git_status", "git_diff"];
 
   await jobs.update(scope, jobId, { status: "running" });
   await jobs.createEvent(scope, {

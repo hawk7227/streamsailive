@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       jobId,
       eventType: "browser.verification.completed",
       message: `Browser verification ${result.truthState}`,
-      data: result,
+      data: { ...result },
     });
 
     return streamsAIJson({ ok: result.ok, jobId, result });
