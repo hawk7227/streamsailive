@@ -8,7 +8,8 @@ export type StreamsCapabilityKind =
   | "voice_generation"
   | "music_generation"
   | "preview_action"
-  | "build_audit";
+  | "build_audit"
+  | "repository_execution";
 
 export type StreamsCapabilityProduct = {
   kind: StreamsCapabilityKind;
@@ -30,6 +31,7 @@ export const STREAMS_CAPABILITY_PRODUCTS: StreamsCapabilityProduct[] = [
   { kind: "music_generation", productId: "voice-captions", displayName: "Music / Song Studio", estimatedCredits: 4, entitlementRequired: true, executionStatus: "blocked" },
   { kind: "preview_action", productId: "streams-ai", displayName: "Preview Action", estimatedCredits: 0, entitlementRequired: true, executionStatus: "implemented_unproven" },
   { kind: "build_audit", productId: "streams-ai", displayName: "Build Audit", estimatedCredits: 0, entitlementRequired: true, executionStatus: "wired" },
+  { kind: "repository_execution", productId: "streams-builder", displayName: "Streams Repository Execution", estimatedCredits: 0, entitlementRequired: true, executionStatus: "implemented_unproven" },
 ];
 
 export function normalizeCapabilityKind(value: unknown): StreamsCapabilityKind {
@@ -50,6 +52,7 @@ export function recommendCapabilityFromText(message = "") {
   if (/image|photo|picture|visual|logo|thumbnail|banner|product photo/.test(text)) return getCapabilityProduct("image_generation");
   if (/voice|caption|audio|tts|dub|transcript/.test(text)) return getCapabilityProduct("voice_generation");
   if (/music|song|soundtrack|jingle/.test(text)) return getCapabilityProduct("music_generation");
-  if (/code|audit|debug|repo|build/.test(text)) return getCapabilityProduct("code_audit");
+  if (/repo|repository|clone|git|commit|pull request|push|unified diff|patch|npm run build/.test(text)) return getCapabilityProduct("repository_execution");
+  if (/code|audit|debug|build/.test(text)) return getCapabilityProduct("code_audit");
   return getCapabilityProduct("chat_tool");
 }
