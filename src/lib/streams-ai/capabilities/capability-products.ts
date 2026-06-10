@@ -31,7 +31,7 @@ export const STREAMS_CAPABILITY_PRODUCTS: StreamsCapabilityProduct[] = [
   { kind: "music_generation", productId: "voice-captions", displayName: "Music / Song Studio", estimatedCredits: 4, entitlementRequired: true, executionStatus: "blocked" },
   { kind: "preview_action", productId: "streams-ai", displayName: "Preview Action", estimatedCredits: 0, entitlementRequired: true, executionStatus: "implemented_unproven" },
   { kind: "build_audit", productId: "streams-ai", displayName: "Build Audit", estimatedCredits: 0, entitlementRequired: true, executionStatus: "wired" },
-  { kind: "repository_execution", productId: "streams-builder", displayName: "Streams Repository Execution", estimatedCredits: 0, entitlementRequired: true, executionStatus: "implemented_unproven" },
+  { kind: "repository_execution", productId: "streams-ai", displayName: "Streams Repository Execution", estimatedCredits: 0, entitlementRequired: true, executionStatus: "implemented_unproven" },
 ];
 
 export function normalizeCapabilityKind(value: unknown): StreamsCapabilityKind {
