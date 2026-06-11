@@ -1,4 +1,5 @@
 import StreamsBuilderControlPanel from "@/components/streams-builder/StreamsBuilderControlPanel";
+import StreamsBuilderDashboard from "@/components/streams-builder/StreamsBuilderDashboard";
 import {
   createStreamsBuilderBridgePayloadFromSearchParams,
   createStreamsBuilderBridgeState,
@@ -104,6 +105,7 @@ export default async function StreamsAIBuilderPage({ searchParams }: PageProps) 
         </div>
 
         <StreamsBuilderControlPanel bridge={bridge} />
+        <StreamsBuilderDashboard mode="dashboard" />
 
         <div className="grid gap-5 lg:grid-cols-3">
           <Card title="Transferred Requirements">
