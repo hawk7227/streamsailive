@@ -11,6 +11,7 @@ import MiniReviewWindow from "./MiniReviewWindow";
 import ProjectPreviewCard from "./ProjectPreviewCard";
 import ProjectSwitcher from "./ProjectSwitcher";
 import ProjectThumbnailRail from "./ProjectThumbnailRail";
+import StreamsBuilderVisualEditorPanel from "./StreamsBuilderVisualEditorPanel";
 
 type DashboardMode = "dashboard" | "projects" | "approval";
 
@@ -116,6 +117,9 @@ export default function StreamsBuilderDashboard({ mode = "dashboard" }: { mode?:
       {projects.length ? (
         <>
           <ProjectThumbnailRail projects={projects} activeProjectId={activeProject?.projectId || null} onSelect={selectProject} />
+          {mode === "dashboard" ? (
+            <StreamsBuilderVisualEditorPanel project={activeProject} mappings={visibleMappings} onActivity={() => loadDashboard(activeProject?.projectId)} />
+          ) : null}
           {mode !== "approval" ? (
             <div className="grid gap-4 lg:grid-cols-3">
               {projects.map((project) => <ProjectPreviewCard key={project.projectId} project={project} selected={activeProject?.projectId === project.projectId} onSelect={selectProject} />)}
