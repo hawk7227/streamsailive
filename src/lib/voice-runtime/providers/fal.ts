@@ -21,6 +21,13 @@ type VoiceProviderStatusResult = {
 };
 
 type VoiceMode = string;
+
+
+type FalVoiceClipSpec = {
+  prompt: string;
+  durationSeconds?: number;
+  [key: string]: unknown;
+};
 type ClipSpec = Record<string, unknown>;
 const SUBMIT_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 10_000;
@@ -47,10 +54,11 @@ function getModelId(model: string | null, mode: VoiceMode): string {
 }
 
 function buildBody(
-  clip: mode: VoiceMode,
+  clip: FalVoiceClipSpec,
+  mode: VoiceMode,
   aspectRatio: string,
 ): Record<string, unknown> {
-  const duration = String(Math.min(Math.max(clip.durationSeconds, 3), 15));
+  const duration = String(Math.min(Math.max(clip.durationSeconds ?? 5, 3), 15));
   const body: Record<string, unknown> = {
     prompt: clip.prompt,
     duration,
@@ -150,6 +158,8 @@ export async function pollFalVideo(
     return { provider: "fal", providerJobId, status: "processing", raw: err instanceof Error ? err.message : String(err) };
   }
 }
+
+
 
 
 
