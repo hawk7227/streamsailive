@@ -1,5 +1,7 @@
-import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
+﻿import { redirect } from "next/navigation";
 
-export default function StreamsBuilderPage() {
-  return <WorkspaceGrid />;
+export const dynamic = "force-dynamic";
+
+export default function StreamsBuilderRedirectPage() {
+  redirect("/streams-ai/streams-builder");
 }
