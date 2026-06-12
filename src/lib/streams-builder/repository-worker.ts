@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -156,7 +156,7 @@ export async function processRepositoryExecutionJob(
     repoFullName,
     branchName,
     baseBranch: rowString(input, "baseBranch") || "main",
-    requestedCommands: commands,
+    requestedCommands: commands as StreamsRepositoryExecutionCommand[],
     targetFiles,
     unifiedDiff,
     commitMessage,
@@ -252,3 +252,4 @@ export async function processRepositoryExecutionJob(
 
   return { ok: true, jobId, status: "completed", truthState, proof, unproven };
 }
+
