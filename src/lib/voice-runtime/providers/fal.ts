@@ -1,16 +1,19 @@
-/**
+﻿/**
  * video-runtime/providers/fal.ts
  * Transport only. Accepts normalized payload, returns normalized result.
  * No model selection. No DB writes. No artifact logic.
  */
 
 import { FAL_API_KEY } from "@/lib/env";
-import type { ClipSpec, VideoProviderSubmitResult, VideoProviderStatusResult, VideoMode } from "../types";
+import type { VideoProviderSubmitResult, VideoProviderStatusResult, VideoMode } from "../types";
 
+
+
+type ClipSpec = Record<string, unknown>;
 const SUBMIT_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 10_000;
 
-// O3 uses "image_url" not "start_image_url" — different param name from v3 standard.
+// O3 uses "image_url" not "start_image_url" â€” different param name from v3 standard.
 // This is a breaking difference confirmed in the person_editing_pipeline_audit.
 const KLING_O3_I2V = "fal-ai/kling-video/o3/standard/image-to-video";
 
@@ -20,7 +23,7 @@ function getModelId(model: string | null, mode: VideoMode): string {
     return mode === "image_to_video" ? "fal-ai/veo3.1/image-to-video" : "fal-ai/veo3.1";
   }
   if (m === "kling-o3") {
-    // O3 T2V not yet confirmed on fal — fall through to v3 standard for T2V
+    // O3 T2V not yet confirmed on fal â€” fall through to v3 standard for T2V
     return mode === "image_to_video"
       ? KLING_O3_I2V
       : "fal-ai/kling-video/v3/standard/text-to-video";
@@ -32,8 +35,7 @@ function getModelId(model: string | null, mode: VideoMode): string {
 }
 
 function buildBody(
-  clip: ClipSpec,
-  mode: VideoMode,
+  clip: mode: VideoMode,
   aspectRatio: string,
 ): Record<string, unknown> {
   const duration = String(Math.min(Math.max(clip.durationSeconds, 3), 15));
@@ -48,7 +50,7 @@ function buildBody(
   if (mode === "image_to_video" && clip.referenceImageUrl) {
     // Kling O3 uses "image_url". Kling v3 standard uses "start_image_url".
     // The model string is not available here (buildBody has no model param).
-    // The caller (submitFalVideo) passes model — thread it through for O3 detection.
+    // The caller (submitFalVideo) passes model â€” thread it through for O3 detection.
     // For now: both params set; fal ignores unknown params safely.
     // TODO: pass model into buildBody and conditionally set one param only.
     body.start_image_url = clip.referenceImageUrl; // kling-v3 standard
@@ -136,3 +138,4 @@ export async function pollFalVideo(
     return { provider: "fal", providerJobId, status: "processing", raw: err instanceof Error ? err.message : String(err) };
   }
 }
+
