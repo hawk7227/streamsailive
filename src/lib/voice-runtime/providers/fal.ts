@@ -5,7 +5,7 @@
  */
 
 import { FAL_API_KEY } from "@/lib/env";
-import type { VideoProviderSubmitResult, VideoProviderStatusResult, VideoMode } from "../types";
+import type { VoiceProviderSubmitResult, VoiceProviderStatusResult, VoiceMode } from "../types";
 
 
 
@@ -17,7 +17,7 @@ const POLL_TIMEOUT_MS = 10_000;
 // This is a breaking difference confirmed in the person_editing_pipeline_audit.
 const KLING_O3_I2V = "fal-ai/kling-video/o3/standard/image-to-video";
 
-function getModelId(model: string | null, mode: VideoMode): string {
+function getModelId(model: string | null, mode: VoiceMode): string {
   const m = model ?? "kling-v3";
   if (m === "veo-3.1") {
     return mode === "image_to_video" ? "fal-ai/veo3.1/image-to-video" : "fal-ai/veo3.1";
@@ -35,7 +35,7 @@ function getModelId(model: string | null, mode: VideoMode): string {
 }
 
 function buildBody(
-  clip: mode: VideoMode,
+  clip: mode: VoiceMode,
   aspectRatio: string,
 ): Record<string, unknown> {
   const duration = String(Math.min(Math.max(clip.durationSeconds, 3), 15));
@@ -62,9 +62,9 @@ function buildBody(
 export async function submitFalVideo(args: {
   clip: ClipSpec;
   model: string | null;
-  mode: VideoMode;
+  mode: VoiceMode;
   aspectRatio: string;
-}): Promise<VideoProviderSubmitResult> {
+}): Promise<VoiceProviderSubmitResult> {
   const apiKey = FAL_API_KEY;
   if (!apiKey) {
     return { accepted: false, provider: "fal", providerJobId: null, status: "failed", raw: "FAL_API_KEY not set" };
@@ -96,7 +96,7 @@ export async function submitFalVideo(args: {
 
 export async function pollFalVideo(
   providerJobId: string,
-): Promise<VideoProviderStatusResult> {
+): Promise<VoiceProviderStatusResult> {
   const apiKey = FAL_API_KEY;
   if (!apiKey) {
     return { provider: "fal", providerJobId, status: "failed", raw: "FAL_API_KEY not set" };
@@ -138,4 +138,5 @@ export async function pollFalVideo(
     return { provider: "fal", providerJobId, status: "processing", raw: err instanceof Error ? err.message : String(err) };
   }
 }
+
 
