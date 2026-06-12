@@ -124,7 +124,7 @@ export default function FinalVideoEditorWorkbench() {
         prompt: analysis?.blueprint?.generation?.providerReadyPrompt || "",
       });
       await refresh();
-      setMessage("Provider edit request saved as blocked_provider_not_wired.");
+      setMessage("Provider edit request queued through the real provider router.");
     } catch (e) { setError(e.message || String(e)); } finally { setBusy(false); }
   }
 
@@ -135,7 +135,7 @@ export default function FinalVideoEditorWorkbench() {
       await post(`/api/admingeneration/editor/projects/${editorId}/stitch-jobs`, { timelineSnapshot: timeline || {} });
       await post(`/api/admingeneration/editor/projects/${editorId}/exports`, { exportType: "mp4", settings: { source: "admingeneration" } });
       await refresh();
-      setMessage("Stitch/export request saved as blocked until render worker is wired.");
+      setMessage("Stitch/export request queued through the real render/stitch backend.");
     } catch (e) { setError(e.message || String(e)); } finally { setBusy(false); }
   }
 
