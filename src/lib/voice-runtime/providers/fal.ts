@@ -5,10 +5,22 @@
  */
 
 import { FAL_API_KEY } from "@/lib/env";
-import type { VoiceProviderSubmitResult, VoiceProviderStatusResult, VoiceMode } from "../types";
+import type { VoiceProviderSubmitResult } from "../types";
 
 
 
+
+
+type VoiceProviderStatusResult = {
+  provider: "fal";
+  providerJobId?: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  outputUrl?: string | null;
+  raw?: unknown;
+  error?: string;
+};
+
+type VoiceMode = string;
 type ClipSpec = Record<string, unknown>;
 const SUBMIT_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 10_000;
@@ -138,5 +150,6 @@ export async function pollFalVideo(
     return { provider: "fal", providerJobId, status: "processing", raw: err instanceof Error ? err.message : String(err) };
   }
 }
+
 
 
