@@ -1,96 +1,174 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-
-const MAIN_BRANCH = "main";
-
-const primarySource = {
-  route: "/pricing",
-  component: "PricingSection",
-  file: "src/components/pricing/PricingSection.tsx",
-  githubPath: "src/components/pricing/PricingSection.tsx",
-};
-
-const visualSource = {
-  route: "/visual-editing",
-  component: "HeroHeadline",
-  file: "src/components/streams-builder/visual/HeroHeadline.tsx",
-  githubPath: "src/components/streams-builder/visual/HeroHeadline.tsx",
-};
+import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 
 export default function WorkspaceGrid() {
-  const [mode, setMode] = useState<"primary" | "visual">("primary");
-  const [headline, setHeadline] = useState("Build Better. Ship Faster.");
-  const source = mode === "primary" ? primarySource : visualSource;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <main style={{ height: "100%", display: "grid", gridTemplateColumns: "220px 1fr 320px", gap: 12, padding: 12, background: "#020713", color: "white", overflow: "hidden" }}>
-      <aside style={panelStyle}>
-        <h2>AI BUILD CHAT</h2>
-        <Message text={mode === "primary" ? "Primary Builder is ready." : "Visual Editing is active."} />
-        <Message text="Main File Write Lock is active." strong />
-        <Message text="Only the file shown in the Source Truth strip can be edited on main." />
+    <main className={`workspace ${sidebarOpen ? "open" : "closed"}`}>
+      <aside className="left">
+        <button className="toggle" type="button" onClick={() => setSidebarOpen((value) => !value)}>
+          {sidebarOpen ? "Close" : "Open"}
+        </button>
+
+        <nav>
+          {["1", "2", "3", "4", "5", "6"].map((item) => (
+            <button type="button" key={item}>{item}</button>
+          ))}
+        </nav>
+
+        {sidebarOpen ? (
+          <section>
+            <h2>Workspaces</h2>
+            <p>Agent 1</p>
+            <p>Agent 2</p>
+            <p>Agent 3</p>
+            <p>Agent 4</p>
+            <p>Agent 5</p>
+            <p>Agent 6</p>
+          </section>
+        ) : null}
       </aside>
 
-      <section style={{ ...panelStyle, display: "grid", gridTemplateRows: "auto 1fr auto", minWidth: 0 }}>
-        <header style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <h2 style={{ marginRight: "auto" }}>{mode === "primary" ? "LIVE PREVIEW" : "VISUAL EDITOR"}</h2>
-          <span>Active Branch</span>
-          <button style={greenButton}>main</button>
-          <button style={purpleButton}>Save Patch</button>
+      <section className="center">
+        <header className="top">
+          <div>
+            <p>STREAMS BUILDER</p>
+            <h1>Six Independent GitHub Workspaces</h1>
+          </div>
+
+          <div className="locks">
+            <span>Active Branch</span>
+            <b>main</b>
+            <strong>Main File Only</strong>
+          </div>
         </header>
-        <section style={{ minHeight: 0, overflow: "auto", border: "1px solid #1e293b", borderRadius: 16, marginTop: 10 }}>
-          {mode === "primary" ? <PrimaryPreview /> : <VisualEditor headline={headline} setHeadline={setHeadline} />}
-        </section>
-        <SourceTruthStrip source={source} />
+
+        <GitHubRepositoryPicker />
       </section>
 
-      <aside style={panelStyle}>
-        <h2>WORKSPACES</h2>
-        <button onClick={() => setMode("primary")} style={mode === "primary" ? purpleButton : darkButton}>Primary Builder</button>
-        <button onClick={() => setMode("visual")} style={mode === "visual" ? purpleButton : darkButton}>Visual Editing</button>
-        <div style={{ marginTop: 16 }}>
-          <h2>VISUAL EDITOR INSPECTOR</h2>
-          <label style={labelStyle}>Text<textarea value={headline} onChange={(event) => setHeadline(event.target.value)} style={textareaStyle} /></label>
-        </div>
+      <aside className="settings">
+        <h2>Settings</h2>
+        <p>Rules moved here to keep the workstations full screen.</p>
+        <p>Each AI agent owns only its selected repo/file context.</p>
+        <p>Agents never cross stations.</p>
       </aside>
+
+      <style jsx>{`
+        .workspace {
+          height: 100%;
+          min-height: 0;
+          display: grid;
+          grid-template-columns: 54px minmax(0,1fr) 168px;
+          gap: 6px;
+          overflow: hidden;
+          background: #020713;
+          color: #fff;
+          padding: 6px;
+        }
+        .workspace.open {
+          grid-template-columns: 190px minmax(0,1fr) 168px;
+        }
+        .left,
+        .center,
+        .settings {
+          min-height: 0;
+          border: 1px solid rgba(148,163,184,.16);
+          border-radius: 14px;
+          background: rgba(15,23,42,.78);
+          overflow: hidden;
+        }
+        .left {
+          padding: 6px;
+        }
+        .toggle {
+          width: 100%;
+          height: 32px;
+          border: 1px solid rgba(148,163,184,.18);
+          border-radius: 8px;
+          background: #7c3aed;
+          color: #fff;
+          font-size: 9px;
+          font-weight: 900;
+        }
+        nav {
+          display: grid;
+          gap: 7px;
+          margin-top: 8px;
+        }
+        nav button {
+          height: 36px;
+          border: 1px solid rgba(148,163,184,.14);
+          border-radius: 10px;
+          background: #020617;
+          color: #fff;
+          font-weight: 900;
+        }
+        .left section {
+          margin-top: 12px;
+          font-size: 12px;
+        }
+        .left h2 {
+          margin: 0 0 8px;
+          font-size: 13px;
+        }
+        .left p {
+          margin: 0 0 7px;
+          color: #cbd5e1;
+        }
+        .center {
+          padding: 8px;
+          display: grid;
+          grid-template-rows: auto minmax(0,1fr);
+        }
+        .top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .top p {
+          margin: 0;
+          color: #6ee7b7;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: .08em;
+        }
+        .top h1 {
+          margin: 2px 0 0;
+          font-size: 18px;
+        }
+        .locks {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 11px;
+        }
+        .locks b,
+        .locks strong {
+          border: 1px solid rgba(16,185,129,.35);
+          border-radius: 8px;
+          padding: 6px 9px;
+          background: rgba(6,78,59,.18);
+          color: #6ee7b7;
+        }
+        .settings {
+          padding: 10px;
+          font-size: 11px;
+          line-height: 1.35;
+        }
+        .settings h2 {
+          margin: 0 0 10px;
+          font-size: 13px;
+        }
+        .settings p {
+          margin: 0 0 8px;
+          color: #cbd5e1;
+        }
+      `}</style>
     </main>
   );
 }
-
-function SourceTruthStrip({ source }: { source: typeof primarySource }) {
-  const rows = [
-    ["Route", source.route],
-    ["Component", source.component],
-    ["File", source.file],
-    ["GitHub Path", source.githubPath],
-    ["Branch", MAIN_BRANCH],
-    ["Write Target", `${MAIN_BRANCH}/${source.file}`],
-    ["Mode", "Main File Only"],
-    ["PR / Branch Writes", "Blocked"],
-  ];
-  return (
-    <footer style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, padding: 10, marginTop: 10, border: "1px solid #10b981", borderRadius: 16, background: "rgba(6,78,59,.18)" }}>
-      {rows.map(([label, value]) => <div key={label} style={{ minWidth: 0, padding: 8, border: "1px solid #1e293b", borderRadius: 12, background: "#020617" }}><div style={{ color: "#6ee7b7", fontSize: 10, fontWeight: 900 }}>{label}</div><div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 900 }}>{value}</div></div>)}
-    </footer>
-  );
-}
-
-function PrimaryPreview() {
-  return <div style={{ padding: 40, textAlign: "center" }}><h1 style={{ fontSize: 42 }}>Build Better.<br /><span style={{ color: "#8b5cf6" }}>Ship Faster.</span></h1><div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginTop: 40 }}><Card title="Workspace" value="Primary Builder" /><Card title="Component" value="PricingSection" /><Card title="Truth" value="/pricing" /></div></div>;
-}
-
-function VisualEditor({ headline, setHeadline }: { headline: string; setHeadline: (value: string) => void }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 220px", gap: 12, padding: 12, minHeight: 440 }}><aside style={miniPanel}><h3>Layers</h3><button style={purpleButton}>Hero Title</button><button style={darkButton}>Hero Copy</button><button style={darkButton}>Primary CTA</button></aside><section style={{ ...miniPanel, display: "grid", placeItems: "center" }}><div style={{ padding: 48, textAlign: "center", width: "85%", background: "#030816", borderRadius: 24 }}><button onClick={() => setHeadline(headline)} style={{ color: "white", background: "transparent", border: 0, fontSize: 44, fontWeight: 900 }}>{headline}</button><p>The intelligent workspace for building, editing, proving, and shipping real software.</p><button style={purpleButton}>Start Editing</button></div></section><aside style={miniPanel}><h3>Quick Edit</h3><textarea value={headline} onChange={(event) => setHeadline(event.target.value)} style={textareaStyle} /><div style={{ marginTop: 12, fontSize: 12 }}>Patch Preview<br />target: src/components/streams-builder/visual/HeroHeadline.tsx</div></aside></div>;
-}
-
-function Message({ text, strong }: { text: string; strong?: boolean }) { return <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: strong ? "#7c3aed" : "#1e293b", fontSize: 12, lineHeight: 1.5 }}>{text}</div>; }
-function Card({ title, value }: { title: string; value: string }) { return <div style={{ border: "1px solid #334155", borderRadius: 20, padding: 24, background: "#020617" }}><h2>{title}</h2><p>{value}</p><button style={purpleButton}>Open</button></div>; }
-
-const panelStyle = { minHeight: 0, overflow: "auto", border: "1px solid #334155", borderRadius: 18, background: "rgba(15,23,42,.72)", padding: 14 } as const;
-const miniPanel = { border: "1px solid #334155", borderRadius: 16, background: "rgba(15,23,42,.72)", padding: 12, minWidth: 0 } as const;
-const purpleButton = { display: "block", border: 0, borderRadius: 12, background: "#7c3aed", color: "white", padding: "10px 14px", fontWeight: 900, marginTop: 8 } as const;
-const greenButton = { border: "1px solid #10b981", borderRadius: 12, background: "rgba(6,78,59,.35)", color: "#a7f3d0", padding: "10px 14px", fontWeight: 900 } as const;
-const darkButton = { display: "block", border: "1px solid #334155", borderRadius: 12, background: "#020617", color: "white", padding: "10px 14px", fontWeight: 900, marginTop: 8 } as const;
-const labelStyle = { display: "grid", gap: 6, fontSize: 12, color: "#94a3b8" } as const;
-const textareaStyle = { minHeight: 120, border: "1px solid #334155", borderRadius: 12, background: "#020617", color: "white", padding: 10 } as const;
