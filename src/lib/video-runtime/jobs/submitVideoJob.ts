@@ -11,6 +11,7 @@ import { updateVideoJob } from "../persistence/updateVideoJob";
 import { submitFalVideo } from "../providers/fal";
 import { submitKlingVideo } from "../providers/kling";
 import { submitRunwayVideo } from "../providers/runway";
+import { submitVeoVideo } from "../providers/veo";
 import type { VideoPlan, VideoProviderSubmitResult } from "../types";
 
 export async function submitVideoJob(args: {
@@ -55,6 +56,8 @@ export async function submitVideoJob(args: {
     submitResult = await submitKlingVideo({ clip, model, mode, aspectRatio });
   } else if (provider === "runway") {
     submitResult = await submitRunwayVideo({ clip, model, mode, aspectRatio });
+  } else if (provider === "veo") {
+    submitResult = await submitVeoVideo({ clip, model, mode, aspectRatio });
   } else {
     await updateVideoJob(jobId, { status: "failed", error: "Unknown provider: " + provider });
     return {

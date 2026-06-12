@@ -5,7 +5,7 @@
  */
 
 import { createHmac } from "crypto";
-import { KLING_API_KEY, KLING_ASSESS_API_KEY } from "@/lib/env";
+import { KLING_API_KEY, KLING_ASSESS_API_KEY, KLING_ACCESS_KEY, KLING_SECRET_KEY } from "@/lib/env";
 import type { ClipSpec, VideoProviderSubmitResult, VideoProviderStatusResult, VideoMode } from "../types";
 
 const SUBMIT_TIMEOUT_MS = 30_000;
@@ -13,9 +13,13 @@ const POLL_TIMEOUT_MS = 10_000;
 const KLING_BASE = "https://api-singapore.klingai.com";
 
 function makeKlingJWT(): string {
-  const ak = KLING_ASSESS_API_KEY;
-  const sk = KLING_API_KEY;
-  if (!ak || !sk) throw new Error("KLING keys not set");
+  // Kling requires an access key + secret key. Support both legacy names and
+  // the clearer Vercel names used elsewhere in this repo.
+  const ak = KLING_ACCESS_KEY || KLING_ASSESS_API_KEY;
+  const sk = KLING_SECRET_KEY || KLING_API_KEY;
+  if (!ak || !sk) {
+    throw new Error("Kling requires KLING_ACCESS_KEY + KLING_SECRET_KEY, or KLING_ASSESS_API_KEY + KLING_API_KEY.");
+  }
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const payload = Buffer.from(JSON.stringify({ iss: ak, exp: now + 1800, nbf: now - 5 })).toString("base64url");
@@ -55,7 +59,7 @@ export async function submitKlingVideo(args: {
 }): Promise<VideoProviderSubmitResult> {
   let token: string;
   try { token = makeKlingJWT(); } catch {
-    return { accepted: false, provider: "kling", providerJobId: null, status: "failed", raw: "KLING keys not set" };
+    return { accepted: false, provider: "kling", providerJobId: null, status: "failed", raw: "Kling requires KLING_ACCESS_KEY + KLING_SECRET_KEY, or KLING_ASSESS_API_KEY + KLING_API_KEY." };
   }
 
   const endpoint = args.mode === "image_to_video"
@@ -91,7 +95,7 @@ export async function pollKlingVideo(
 ): Promise<VideoProviderStatusResult> {
   let token: string;
   try { token = makeKlingJWT(); } catch {
-    return { provider: "kling", providerJobId, status: "failed", raw: "KLING keys not set" };
+    return { provider: "kling", providerJobId, status: "failed", raw: "Kling requires KLING_ACCESS_KEY + KLING_SECRET_KEY, or KLING_ASSESS_API_KEY + KLING_API_KEY." };
   }
 
   const endpoint = generationType === "i2v"

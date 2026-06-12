@@ -32,6 +32,10 @@ export function resolveVideoProvider(req: NormalizedVideoRequest): {
     return { provider: "kling", model: req.model || "kling-v2-6" };
   }
 
+  if (requestedProvider === "veo") {
+    return { provider: "veo", model: req.model || "veo-3" };
+  }
+
   if (requestedProvider === "fal") {
     return { provider: "fal", model: req.model || DEFAULT_MODEL };
   }
