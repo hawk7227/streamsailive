@@ -83,6 +83,7 @@ export const OPENAI_API_KEY_SORA = optionalKey("OPENAI_API_KEY_SORA");
 export const FAL_API_KEY = optionalKey("FAL_API_KEY");
 export const RUNWAY_API_KEY = optionalKey("RUNWAY_API_KEY");
 export const KLING_API_KEY = optionalKey("KLING_API_KEY");
+export const VEO_API_KEY = optionalKey("VEO_API_KEY");
 export const ELEVENLABS_API_KEY = optionalKey("ELEVENLABS_API_KEY");
 export const ANTHROPIC_API_KEY = optionalKey("ANTHROPIC_API_KEY");
 
@@ -111,6 +112,8 @@ export const SUNO_API_KEY = optionalKey("SUNO_API_KEY");
 export const UDIO_API_KEY = optionalKey("UDIO_API_KEY");
 export const VOCAL_EXTRACTOR_URL = optionalKey("VOCAL_EXTRACTOR_URL");
 export const KLING_ASSESS_API_KEY = optionalKey("KLING_ASSESS_API_KEY");
+export const VEO_GENERATION_ENDPOINT = optionalKey("VEO_GENERATION_ENDPOINT");
+export const VEO_STATUS_ENDPOINT = optionalKey("VEO_STATUS_ENDPOINT");
 
 // Video
 export const VIDEO_PROVIDER = optionalKey("VIDEO_PROVIDER");

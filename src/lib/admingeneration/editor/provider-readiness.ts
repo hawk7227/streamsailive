@@ -22,7 +22,7 @@ export function getProviderReadiness(): ProviderReadiness[] {
     {
       id: "fal",
       label: "fal.ai video/image analysis",
-      requiredEnv: ["FAL_KEY"],
+      requiredEnv: ["FAL_API_KEY"],
       routes: ["/api/streams/video/generate"],
     },
     {
@@ -34,13 +34,13 @@ export function getProviderReadiness(): ProviderReadiness[] {
     {
       id: "kling",
       label: "Kling video generation",
-      requiredEnv: ["KLING_API_KEY"],
+      requiredEnv: ["KLING_ACCESS_KEY", "KLING_SECRET_KEY"],
       routes: ["/api/streams/video/generate"],
     },
     {
       id: "veo",
       label: "Veo high-end generation",
-      requiredEnv: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+      requiredEnv: ["VEO_API_KEY"],
       routes: ["/api/streams/video/generate"],
     },
     {
