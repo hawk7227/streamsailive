@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server";
+﻿import { type NextRequest } from "next/server";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       jobId,
       eventType: "browser.verification.completed",
       message: `Browser verification ${result.truthState}`,
-      data: result,
+      data: { result },
     });
 
     return streamsAIJson({ ok: result.ok, jobId, result });
@@ -66,3 +66,4 @@ export async function POST(request: NextRequest) {
     return streamsAIError(error);
   }
 }
+
