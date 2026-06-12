@@ -180,7 +180,7 @@ export async function processRepositoryExecutionJob(
     repoFullName,
     branchName,
     workspaceDir,
-    commands,
+    commands: commands as StreamsRepositoryExecutionCommand[],
     targetFiles,
     commitMessage,
   });
@@ -252,4 +252,5 @@ export async function processRepositoryExecutionJob(
 
   return { ok: true, jobId, status: "completed", truthState, proof, unproven };
 }
+
 
