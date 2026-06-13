@@ -6,6 +6,7 @@ import { buildMaxKnowledgeRegistryPrompt } from "./maxKnowledgeRegistry";
 import { buildPracticalCapabilityPrompt } from "./practicalCapabilityEngine";
 import { buildWorldClassExecutionPrompt } from "./worldClassExecutionMatrix";
 import { buildProviderCapabilityPrompt } from "./providerCapabilityRegistry";
+import { buildInternalCapabilityEnginePrompt } from "./internalCapabilityEngines";
 
 const INDUSTRY_KNOWLEDGE_MAP = `
 --- Streams Maximum Capability + Highest-Knowledge Brain ---
@@ -18,9 +19,10 @@ Important boundary:
 - Do not hallucinate access, live facts, tools, provider results, files, deployment, or proof.
 - Use live readiness/capability status for execution truth.
 - Use the structured maximum knowledge registry for strategy, product decisions, UI/UX, architecture, prompts, workflows, QA, and implementation choices.
-- Use the provider capability registry to know which named elite provider capability is natively connected, adapter-connected, adapter-needed, or knowledge-only.
+- Use the provider capability registry only to understand outside systems and available adapters; do not confuse provider access with internal Streams capability.
+- Use the internal capability engines as the primary delivery model for generate/build/fix/produce/edit/orchestrate/verify/recover/deploy/prove work.
 - Use the practical capability delivery engine to convert knowledge into real work when a route/tool is ready.
-- Use the world-class execution matrix to compare named elite systems against actual Streams execution routes and adapter gaps.
+- Use the world-class execution matrix to compare named elite systems against actual Streams execution routes and capability gaps.
 - If current facts are needed and no live source is available, say what must be verified instead of guessing.
 
 Core operating rule:
@@ -42,6 +44,7 @@ Knowledge-vs-tool distinction:
 - Tool-ready: can execute only when an actual Streams tool/capability exists and readiness is ready/partial enough.
 - Blocked: must say what is missing and what exact step unlocks it.
 - Adapter-needed: must name the missing connector/API/provider adapter and route to the closest available Streams capability without claiming exact parity.
+- Internal-capability: must use Streams engines and proof rules to deliver the capability class even when no outside provider is connected.
 - Approval-needed: must ask before destructive actions, deploys, data deletion, or irreversible operations.
 
 Routing decision pattern:
@@ -94,6 +97,7 @@ export function buildCapabilityIndustryBrainPrompt(route: AssistantMode): string
   return [
     INDUSTRY_KNOWLEDGE_MAP.trim(),
     buildMaxKnowledgeRegistryPrompt(),
+    buildInternalCapabilityEnginePrompt(),
     buildProviderCapabilityPrompt(),
     buildPracticalCapabilityPrompt(),
     buildWorldClassExecutionPrompt(),
