@@ -161,59 +161,39 @@ const CAPABILITIES: CapabilityDefinition[] = [
     id: "gen-image-to-video-runway",
     label: "Image to Video - Runway",
     group: "admingeneration",
-    required: [
-      { label: "Runway key", anyOf: ["RUNWAY_API_KEY"] },
-      { label: "Runway endpoint", anyOf: ["RUNWAY_GENERATION_ENDPOINT", "RUNWAY_EDIT_ENDPOINT"] },
-    ],
-    optional: [{ label: "Runway API version", anyOf: ["RUNWAY_API_VERSION"] }],
+    required: [{ label: "Runway key", anyOf: ["RUNWAY_API_KEY"] }],
   },
   {
     id: "gen-image-to-video-kling",
     label: "Image to Video - Kling",
     group: "admingeneration",
-    required: [
-      { label: "Kling key", anyOf: ["KLING_API_KEY"] },
-      { label: "Kling endpoint", anyOf: ["KLING_GENERATION_ENDPOINT", "KLING_EDIT_ENDPOINT"] },
-    ],
+    required: [{ label: "Kling key", anyOf: ["KLING_API_KEY"] }],
     optional: [{ label: "Kling assess key", anyOf: ["KLING_ASSESS_API_KEY"] }],
   },
   {
     id: "gen-image-to-video-veo",
     label: "Image to Video - Veo",
     group: "admingeneration",
-    required: [
-      { label: "Veo key", anyOf: ["VEO_API_KEY"] },
-      { label: "Veo endpoint", anyOf: ["VEO_GENERATION_ENDPOINT", "VEO_EDIT_ENDPOINT"] },
-    ],
+    required: [{ label: "Veo key", anyOf: ["VEO_API_KEY"] }],
   },
   {
     id: "gen-text-to-video-runway",
     label: "Text to Video - Runway",
     group: "admingeneration",
-    required: [
-      { label: "Runway key", anyOf: ["RUNWAY_API_KEY"] },
-      { label: "Runway endpoint", anyOf: ["RUNWAY_GENERATION_ENDPOINT", "RUNWAY_EDIT_ENDPOINT"] },
-    ],
-    optional: [{ label: "Runway API version", anyOf: ["RUNWAY_API_VERSION"] }],
+    required: [{ label: "Runway key", anyOf: ["RUNWAY_API_KEY"] }],
   },
   {
     id: "gen-text-to-video-kling",
     label: "Text to Video - Kling",
     group: "admingeneration",
-    required: [
-      { label: "Kling key", anyOf: ["KLING_API_KEY"] },
-      { label: "Kling endpoint", anyOf: ["KLING_GENERATION_ENDPOINT", "KLING_EDIT_ENDPOINT"] },
-    ],
+    required: [{ label: "Kling key", anyOf: ["KLING_API_KEY"] }],
     optional: [{ label: "Kling assess key", anyOf: ["KLING_ASSESS_API_KEY"] }],
   },
   {
     id: "gen-text-to-video-veo",
     label: "Text to Video - Veo",
     group: "admingeneration",
-    required: [
-      { label: "Veo key", anyOf: ["VEO_API_KEY"] },
-      { label: "Veo endpoint", anyOf: ["VEO_GENERATION_ENDPOINT", "VEO_EDIT_ENDPOINT"] },
-    ],
+    required: [{ label: "Veo key", anyOf: ["VEO_API_KEY"] }],
   },
   {
     id: "gen-voice-elevenlabs",
