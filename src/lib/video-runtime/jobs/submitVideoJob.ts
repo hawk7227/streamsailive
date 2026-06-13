@@ -12,6 +12,7 @@ import { submitFalVideo } from "../providers/fal";
 import { submitKlingVideo } from "../providers/kling";
 import { submitRunwayVideo } from "../providers/runway";
 import { submitVeoVideo } from "../providers/veo";
+import { isExternalVideoProvider, submitExternalConfiguredVideo } from "../providers/externalConfigured";
 import type { VideoPlan, VideoProviderSubmitResult } from "../types";
 
 export async function submitVideoJob(args: {
@@ -58,6 +59,8 @@ export async function submitVideoJob(args: {
     submitResult = await submitRunwayVideo({ clip, model, mode, aspectRatio });
   } else if (provider === "veo") {
     submitResult = await submitVeoVideo({ clip, model, mode, aspectRatio });
+  } else if (isExternalVideoProvider(provider)) {
+    submitResult = await submitExternalConfiguredVideo({ provider, clip, model, mode, aspectRatio });
   } else {
     await updateVideoJob(jobId, { status: "failed", error: "Unknown provider: " + provider });
     return {
@@ -68,9 +71,10 @@ export async function submitVideoJob(args: {
 
   // Update job with provider response
   await updateVideoJob(jobId, {
-    status: submitResult.accepted ? "processing" : "failed",
-    phase: "poll",
+    status: submitResult.accepted ? (submitResult.status === "completed" ? "completed" : "processing") : "failed",
+    phase: submitResult.status === "completed" ? "finalize" : "poll",
     ...(submitResult.providerJobId ? { providerJobId: submitResult.providerJobId } : {}),
+    ...(submitResult.outputUrl ? { outputUrl: submitResult.outputUrl } : {}),
     responsePayload: submitResult.raw as Record<string, unknown>,
     ...(!submitResult.accepted ? { error: "Provider rejected job submission" } : {}),
   });
