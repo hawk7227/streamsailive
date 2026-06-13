@@ -17,6 +17,7 @@ import { pollFalVideo } from "../providers/fal";
 import { pollKlingVideo } from "../providers/kling";
 import { pollRunwayVideo } from "../providers/runway";
 import { pollVeoVideo } from "../providers/veo";
+import { isExternalVideoProvider, pollExternalConfiguredVideo } from "../providers/externalConfigured";
 import type { VideoJobRow, VideoJobStatus, VideoProviderStatusResult } from "../types";
 
 async function dispatchPoll(job: VideoJobRow): Promise<VideoProviderStatusResult> {
@@ -32,6 +33,7 @@ async function dispatchPoll(job: VideoJobRow): Promise<VideoProviderStatusResult
   }
   if (job.provider === "runway") return pollRunwayVideo(id);
   if (job.provider === "veo") return pollVeoVideo(id);
+  if (isExternalVideoProvider(job.provider)) return pollExternalConfiguredVideo(job.provider, id);
 
   return { provider: job.provider, providerJobId: id, status: "failed", raw: "unknown provider" };
 }
