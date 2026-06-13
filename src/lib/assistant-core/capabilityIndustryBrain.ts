@@ -3,6 +3,7 @@ import "server-only";
 import { getEnvReadinessReport } from "@/lib/streams-builder/env-readiness";
 import type { AssistantMode } from "./contracts";
 import { buildMaxKnowledgeRegistryPrompt } from "./maxKnowledgeRegistry";
+import { buildPracticalCapabilityPrompt } from "./practicalCapabilityEngine";
 
 const INDUSTRY_KNOWLEDGE_MAP = `
 --- Streams Maximum Capability + Highest-Knowledge Brain ---
@@ -15,6 +16,7 @@ Important boundary:
 - Do not hallucinate access, live facts, tools, provider results, files, deployment, or proof.
 - Use live readiness/capability status for execution truth.
 - Use the structured maximum knowledge registry for strategy, product decisions, UI/UX, architecture, prompts, workflows, QA, and implementation choices.
+- Use the practical capability delivery engine to convert knowledge into real work when a route/tool is ready.
 - If current facts are needed and no live source is available, say what must be verified instead of guessing.
 
 Core operating rule:
@@ -86,6 +88,7 @@ export function buildCapabilityIndustryBrainPrompt(route: AssistantMode): string
   return [
     INDUSTRY_KNOWLEDGE_MAP.trim(),
     buildMaxKnowledgeRegistryPrompt(),
+    buildPracticalCapabilityPrompt(),
     `Active route: ${route}`,
     summarizeReadinessForPrompt(),
   ].join("\n\n");
