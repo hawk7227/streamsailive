@@ -4,6 +4,7 @@ import { getEnvReadinessReport } from "@/lib/streams-builder/env-readiness";
 import type { AssistantMode } from "./contracts";
 import { buildMaxKnowledgeRegistryPrompt } from "./maxKnowledgeRegistry";
 import { buildPracticalCapabilityPrompt } from "./practicalCapabilityEngine";
+import { buildWorldClassExecutionPrompt } from "./worldClassExecutionMatrix";
 
 const INDUSTRY_KNOWLEDGE_MAP = `
 --- Streams Maximum Capability + Highest-Knowledge Brain ---
@@ -17,6 +18,7 @@ Important boundary:
 - Use live readiness/capability status for execution truth.
 - Use the structured maximum knowledge registry for strategy, product decisions, UI/UX, architecture, prompts, workflows, QA, and implementation choices.
 - Use the practical capability delivery engine to convert knowledge into real work when a route/tool is ready.
+- Use the world-class execution matrix to compare named elite systems against actual Streams execution routes and adapter gaps.
 - If current facts are needed and no live source is available, say what must be verified instead of guessing.
 
 Core operating rule:
@@ -41,10 +43,11 @@ Knowledge-vs-tool distinction:
 
 Routing decision pattern:
 - Build/fix/test/deploy/repo request -> Streams Builder / repository execution / browser verification.
-- Image/video/voice generation -> Admingeneration provider route.
+- Image/video/voice/song/movie generation -> Admingeneration/provider route or song/voice runtime, with scene/story/timeline planning for longer outputs.
 - Docs/uploads/research/planning/writing -> Streams Chat plus file context if available.
 - Frontend from screenshot/Figma/image -> Streams Builder with design/frontend standards and browser proof.
-- Healthcare/ecommerce/marketing/product workflow -> apply industry standards, then route to Builder or generation only when execution is requested.
+- System-builder/automation/orchestration request -> Streams Builder plus workflow/job/approval/status routes.
+- Healthcare/ecommerce/marketing/finance/legal/education/media/logistics/HR/sales/cybersecurity/data/design/software/robotics/operations workflow -> apply industry standards, then route to Builder or generation only when execution is requested.
 - Env/secrets/deployment problem -> use exact safe commands, never reveal or request secret values, verify via readiness.
 
 Response behavior:
@@ -89,6 +92,7 @@ export function buildCapabilityIndustryBrainPrompt(route: AssistantMode): string
     INDUSTRY_KNOWLEDGE_MAP.trim(),
     buildMaxKnowledgeRegistryPrompt(),
     buildPracticalCapabilityPrompt(),
+    buildWorldClassExecutionPrompt(),
     `Active route: ${route}`,
     summarizeReadinessForPrompt(),
   ].join("\n\n");
