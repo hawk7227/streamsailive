@@ -81,10 +81,8 @@ const CAPABILITIES: CapabilityDefinition[] = [
     id: "chat-core",
     label: "Chat Core",
     group: "chat",
-    required: [
-      { label: "OpenAI model access", anyOf: ["OPENAI_API_KEY"] },
-      { label: "OpenAI model selection", anyOf: ["OPENAI_MODEL"] },
-    ],
+    required: [{ label: "OpenAI model access", anyOf: ["OPENAI_API_KEY"] }],
+    optional: [{ label: "OpenAI model selection", anyOf: ["OPENAI_MODEL"] }],
   },
   {
     id: "chat-uploads",
@@ -119,8 +117,8 @@ const CAPABILITIES: CapabilityDefinition[] = [
     id: "builder-github",
     label: "Builder GitHub Access",
     group: "builder",
-    required: [
-      { label: "GitHub token", anyOf: ["GITHUB_TOKEN", "GH_TOKEN"] },
+    required: [{ label: "GitHub token", anyOf: ["GITHUB_TOKEN", "GH_TOKEN"] }],
+    optional: [
       { label: "GitHub client id", anyOf: ["GITHUB_CLIENT_ID"] },
       { label: "GitHub client secret", anyOf: ["GITHUB_CLIENT_SECRET"] },
       { label: "GitHub callback url", anyOf: ["GITHUB_CALLBACK_URL"] },
@@ -199,7 +197,8 @@ const CAPABILITIES: CapabilityDefinition[] = [
     id: "gen-voice-elevenlabs",
     label: "Voice - ElevenLabs",
     group: "voice",
-    required: [{ label: "ElevenLabs key", anyOf: ["ELEVENLABS_API_KEY"] }],
+    required: [],
+    optional: [{ label: "ElevenLabs key", anyOf: ["ELEVENLABS_API_KEY"] }],
   },
   {
     id: "gen-voice-openai",
