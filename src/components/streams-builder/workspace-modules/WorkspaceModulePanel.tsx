@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+import EnvReadinessMonitor from "../EnvReadinessMonitor";
 
 export type WorkspaceModuleName =
   | "Component Mapping"
@@ -21,6 +23,10 @@ export default function WorkspaceModulePanel({
       </header>
 
       <p>This compact module stays under the workstation and does not replace the main builder screen.</p>
+
+      <div className="monitorSlot">
+        <EnvReadinessMonitor />
+      </div>
 
       <style jsx>{`
         .streamsModulePanel {
@@ -51,6 +57,10 @@ export default function WorkspaceModulePanel({
         p {
           color: #cbd5e1;
           margin: 4px 0 0;
+        }
+
+        .monitorSlot {
+          margin-top: 10px;
         }
       `}</style>
     </section>
