@@ -7,6 +7,7 @@
  */
 
 import type { NormalizedVideoRequest } from "./types";
+import { getDefaultExternalVideoModel, isExternalVideoProvider } from "./providers/externalConfigured";
 
 const FAL_VIDEO_MODELS = new Set(["kling-v3", "veo-3.1"]);
 const DEFAULT_PROVIDER = "fal";
@@ -38,6 +39,13 @@ export function resolveVideoProvider(req: NormalizedVideoRequest): {
 
   if (requestedProvider === "fal") {
     return { provider: "fal", model: req.model || DEFAULT_MODEL };
+  }
+
+  if (isExternalVideoProvider(requestedProvider)) {
+    return {
+      provider: requestedProvider,
+      model: req.model || getDefaultExternalVideoModel(requestedProvider) || requestedProvider,
+    };
   }
 
   // Default
