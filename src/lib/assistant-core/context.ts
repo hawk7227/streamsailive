@@ -21,6 +21,7 @@ import type {
 import { buildFileContext } from "@/lib/files/retrieval";
 import { isMetaCapabilityQuery } from "./metaQuerySignals";
 import { buildCapabilityMetaPrompt } from "./capabilityPrompt";
+import { buildCapabilityIndustryBrainPrompt } from "./capabilityIndustryBrain";
 
 // ── Parallel context deadline ─────────────────────────────────────────────────
 // File retrieval races against this deadline before the OpenAI call starts.
@@ -126,6 +127,13 @@ function buildSystemPromptBase(route: BuildContextInput["route"], userText = "")
   }
 }
 
+function appendCapabilityIndustryBrain(
+  systemPrompt: string,
+  route: BuildContextInput["route"],
+): string {
+  return systemPrompt + "\n\n" + buildCapabilityIndustryBrainPrompt(route);
+}
+
 function appendFileContext(systemPrompt: string, fileContext: string): string {
   if (!fileContext.trim()) return systemPrompt;
   return (
@@ -155,7 +163,10 @@ export async function buildContext(
   const safeContext =
     input.context && typeof input.context === "object" ? input.context : {};
 
-  const basePrompt = buildSystemPromptBase(input.route, input.userText);
+  const basePrompt = appendCapabilityIndustryBrain(
+    buildSystemPromptBase(input.route, input.userText),
+    input.route,
+  );
 
   // Retrieve file context when workspaceId is present.
   //
