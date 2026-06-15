@@ -1,9 +1,11 @@
 "use client";
 
+import BuilderExistingChatMount from "./BuilderExistingChatMount";
+
 export default function BuilderCenterChat() {
   return (
     <section className="builderChatFrame" aria-label="Existing Streams AI mobile chat">
-      <iframe title="Streams AI" src="/streams-ai?builderMode=1" />
+      <BuilderExistingChatMount />
       <style jsx>{`
         .builderChatFrame {
           width: min(100%, 430px);
@@ -16,13 +18,6 @@ export default function BuilderCenterChat() {
           border-radius: 14px;
           background: rgba(15, 23, 42, 0.78);
           box-sizing: border-box;
-        }
-        iframe {
-          display: block;
-          width: 100%;
-          height: 100%;
-          border: 0;
-          background: #020713;
         }
       `}</style>
     </section>
