@@ -2,22 +2,128 @@
 
 ## Purpose
 
-This audit exists before any merge/build work. It is not a future roadmap and it is not a SaaS readiness document.
+This audit exists before any merge/build work. It is not a future roadmap, not a SaaS readiness document, and not a request to rebuild existing systems.
 
 The only question is:
 
 > Can Marcus ask the merged center chat for a task, and can it reach the right existing system/tool/backend while preserving each standalone system?
 
-## Locked audit rules
+## Final locked audit rule
 
-- Do not look for what can be built later.
-- Do not recommend future/SaaS work.
-- Do not rebuild anything that already exists.
-- Do not require runtime proof before planning.
-- If code, route, component, or workflow exists and looks usable enough, count it as usable enough.
-- Treat existing systems mostly as backend tools behind the merged chat.
-- Marcus will test capability after the merge by giving the merged chat real requests.
-- Only identify the smallest missing adapter needed for Marcus to call an existing capability from merged chat.
+```text
+Do not look for what can be built.
+Do not recommend future/SaaS work.
+Do not rebuild anything that already exists.
+Do not require runtime proof before planning.
+If code/route/component/workflow exists and looks usable, count it as usable enough.
+Only identify the smallest missing adapter needed for Marcus to call it from merged chat.
+```
+
+## Updated personal-use audit rule
+
+The audit checks only:
+
+```text
+1. Does the capability already exist somewhere?
+2. Can the merged chat reach it with a minimal request/adapter?
+3. Can the output/status come back to the active workstation?
+4. Does the original standalone page still work?
+```
+
+That is it.
+
+## Audit target
+
+```text
+Can Marcus ask the merged center chat for a task, and can it reach the right existing system/tool/backend while preserving each standalone system?
+```
+
+## What usable enough means
+
+For personal use, a capability is usable enough when:
+
+```text
+A route, component, backend handler, provider path, or existing workflow exists,
+and the merged chat can call it or open it without rebuilding it.
+```
+
+Marcus tests it by giving the merged chat a real request after the merge.
+
+Example:
+
+```text
+Use Workstation 1 and turn this image into a video.
+```
+
+Then the merged chat should:
+
+```text
+know Workstation 1 is active
+know preview target
+send payload to existing admingeneration job route
+show status in monitor
+show output in the workstation or chat preview
+save the conversation
+```
+
+## Backend reachability focus
+
+Instead of auditing full UI polish, audit access paths:
+
+```text
+Chat access:
+Can the center chat send the request?
+
+Builder access:
+Can the active workstation receive context, status, preview, and artifact?
+
+Generation access:
+Can /api/admingeneration/jobs receive a payload?
+
+Provider access:
+Are the keys/endpoints present enough for the provider path?
+
+Upload access:
+Can uploaded files become request assets?
+
+Document access:
+Can uploaded docs be read enough for the assistant to use them?
+```
+
+## No extra building rule
+
+Do not recommend building a new feature if the capability can be reached through:
+
+```text
+existing route
+existing page iframe
+existing API
+existing provider path
+existing upload path
+existing chat behavior
+existing workstation preview/status area
+```
+
+Only recommend a small adapter when the chat cannot reach the existing capability.
+
+## Only allowed missing pieces
+
+Only these can be listed as missing for this personal-use merge:
+
+```text
+1. Center chat iframe embed
+2. Active workstation context
+3. Preview target flag
+4. Chat-to-builder request bridge
+5. Builder-to-existing-route adapter
+6. Artifact/status return object
+```
+
+Anything beyond that is:
+
+```text
+NOT NEEDED FOR PERSONAL USE
+```
 
 ## Allowed status labels
 
@@ -27,19 +133,6 @@ The only question is:
 - `NEEDS LIVE TEST ONLY`
 - `NOT NEEDED FOR PERSONAL USE`
 
-## Only allowed missing pieces
-
-Only these can be listed as missing for this personal-use merge:
-
-1. Center chat iframe embed
-2. Active workstation context
-3. Preview target flag
-4. Chat-to-builder request bridge
-5. Builder-to-existing-route adapter
-6. Artifact/status return object
-
-Anything beyond those is `NOT NEEDED FOR PERSONAL USE`.
-
 ---
 
 # Current system audit
@@ -48,20 +141,20 @@ Anything beyond those is `NOT NEEDED FOR PERSONAL USE`.
 
 ### Needed personal-use capability
 
-- Existing chat
-- Saved conversations
-- Uploads / document reading
-- Assistant behavior
-- Backend tool access enough for Marcus to request work
-- Can be embedded in Builder center as an iPhone-sized iframe
+- Existing center chat behavior.
+- Saved conversations.
+- Uploads / document reading.
+- Assistant behavior.
+- Backend tool access enough for Marcus to request work.
+- Can be embedded in Builder center as an iPhone-sized iframe or mounted Builder-specific wrapper.
 
 ### Existing usable pieces
 
 - `src/app/api/streams-ai/messages/route.ts` supports reading persisted messages for a session with `GET`.
-- The same route supports `POST` messages, creates a session if needed, stores user messages, stores assistant messages, and streams the assistant response.
+- The same route supports `POST` messages, creates a session if needed, stores user messages, stores assistant messages, and streams assistant responses.
 - Message metadata already accepts arbitrary metadata and attachments.
-- Assistant runtime already includes SSE-style events: `activity`, `response`, `tool`, `complete`, and `error`.
-- Chat already has deterministic backend tool detection for listing capabilities, creating/listing tool jobs, listing assets, and looking up provider runs.
+- Assistant runtime already includes event-style outputs such as activity, response, tool, complete, and error.
+- Chat already has backend tool detection for listing capabilities, creating/listing tool jobs, listing assets, and looking up provider runs.
 - Attachments are carried through message metadata and are processed into OpenAI image/file inputs when the assistant builds context.
 
 ### Personal-use status
@@ -70,12 +163,13 @@ Anything beyond those is `NOT NEEDED FOR PERSONAL USE`.
 
 ### Minimum blocker
 
-Merged Builder context is not yet attached to chat messages from the center iframe.
+Merged Builder context is not yet attached to center chat messages.
 
 ### Minimum needed connection
 
-- Add Builder iframe mode query/context.
+- Add Builder iframe mode or Builder-mounted chat mode.
 - Pass `workspaceId`, `workspaceLabel`, `previewTarget`, and optional `activeTool` into chat message metadata.
+- Preserve existing `/streams-ai` standalone behavior.
 - Do not rewrite the chat system.
 
 ### Do not build
@@ -91,21 +185,23 @@ Merged Builder context is not yet attached to chat messages from the center ifra
 
 ### Needed personal-use capability
 
-- Builder workstations
-- Codex-style builder/repair/troubleshoot foundation remains primary
-- Preview/proof/status area
-- Active workstation state
-- Center chat iframe location
-- Ability for chat to target a workstation
-- Ability for workstation to receive status/artifact/output
+- Builder workstations.
+- Codex-style builder/repair/troubleshoot foundation remains primary.
+- Preview/proof/status area.
+- Active workstation state.
+- Center chat iframe or mobile center chat mount.
+- Ability for chat to target a workstation.
+- Ability for workstation to receive status/artifact/output.
 
 ### Existing usable pieces
 
 - `src/components/streams-builder/WorkspaceGrid.tsx` exists and renders the Builder shell.
 - Workstation/module labels already include Primary Builder, Visual Editing, Component Mapping, Approval Center, Browser Verification, Repository Truth, Projects Dashboard, and Truth Panel.
-- Workspace selection state exists through `activeModule`.
+- Workspace selection state exists.
 - `WorkspaceModulePanel` exists as the compact module mount point.
 - Production Builder route is live.
+- `/streams-ai/streams-builder` exists as the nested Builder surface.
+- `/streams-builder` exists as the standalone Builder surface.
 
 ### Personal-use status
 
@@ -113,15 +209,16 @@ Merged Builder context is not yet attached to chat messages from the center ifra
 
 ### Minimum blocker
 
-The current shell needs the center chat iframe and explicit active-workstation/preview-target state.
+The shell needs center chat embed/mount and explicit active-workstation/preview-target state.
 
 ### Minimum needed connection
 
-- Remove/avoid unnecessary left sidebar duplication if the dropdown already owns selection.
-- Add center iPhone-sized chat iframe.
-- Add status/monitor area under iframe.
+- Add center iPhone-sized chat iframe or mounted center chat.
+- Add active workstation indicator/toggle.
+- Add status/monitor area under or near center chat.
 - Track active workstation ID.
 - Track preview target: `builder-preview` or `chat-preview`.
+- Return request status/artifact/output to the active workstation.
 - Do not rebuild Builder automation modules now.
 
 ### Do not build
@@ -138,29 +235,20 @@ The current shell needs the center chat iframe and explicit active-workstation/p
 
 ### Needed personal-use capability
 
-- Generation control room
-- Mode cards
-- Provider routing
-- Analyzer/reference video/edit mode
-- Job submit route
-- Enough backend access for merged chat to request image/video/voice/writer tasks
+- Generation control room.
+- Mode cards.
+- Provider routing.
+- Analyzer/reference video/edit mode.
+- Job submit route.
+- Enough backend access for merged chat to request image/video/voice/writer tasks.
 
 ### Existing usable pieces
 
-- `components/streams/opus-frame/OpusLockedFrame.jsx` defines generation mode cards:
-  - Generate From Scratch
-  - Text to Image
-  - Image to Video
-  - Text to Video
-  - Voice & Captions
-  - Snap Pic Click
-  - Motion Graphics
-  - AI Writers
-  - Idea to Launch
-- The same component submits generation requests to `/api/admingeneration/jobs`.
-- The submit payload already includes `kind`, `provider`, `projectId`, `prompt`, `aspectRatio`, `duration`, and metadata.
-- The component has source/reference link analysis through `/api/admingeneration/intake`.
-- The UI includes provider choices: OpenAI, fal.ai, Runway, Kling, Veo, ElevenLabs.
+- Existing admingeneration routes and editor routes exist.
+- Existing job route `/api/admingeneration/jobs` exists.
+- Existing mode/workflow concepts include Generate From Scratch, Text to Image, Image to Video, Text to Video, Voice & Captions, Snap Pic Click, Motion Graphics, AI Writers, and Idea to Launch.
+- Existing workflows already use provider choices such as OpenAI, fal.ai, Runway, Kling, Veo, and ElevenLabs.
+- Existing source/reference analysis routes exist for admingeneration.
 
 ### Personal-use status
 
@@ -168,7 +256,7 @@ The current shell needs the center chat iframe and explicit active-workstation/p
 
 ### Minimum blocker
 
-The merged chat needs a small route/tool adapter to call the existing job route instead of rebuilding the generation UI.
+The merged chat needs a small route/tool adapter to call existing admingeneration routes instead of rebuilding the generation UI.
 
 ### Minimum needed connection
 
@@ -180,7 +268,6 @@ The merged chat needs a small route/tool adapter to call the existing job route 
 
 - Do not rebuild generation cards inside Builder.
 - Do not create a second provider router.
-- Do not split personal use across multiple Vercel apps unless those apps are only backend services.
 - Do not create a new generation job route unless existing `/api/admingeneration/jobs` cannot accept the needed payload.
 
 ---
@@ -197,12 +284,12 @@ The merged chat needs a small route/tool adapter to call the existing job route 
 ### Existing usable pieces
 
 - `src/app/api/admingeneration/jobs/route.ts` accepts `POST`.
-- It defines generation kinds: `image`, `image-to-video`, `text-to-video`, `voice`, `snap-pick-click`, `motion`, and `launch`.
-- It defines providers: `auto`, `openai`, `fal`, `runway`, `kling`, `veo`, and `elevenlabs`.
-- It enforces `ADMIN_GENERATION_KEY` via `x-admin-generation-key` or bearer auth.
-- It resolves providers by kind and environment variables.
-- It persists job starts/provider runs/assets when Supabase service credentials exist.
-- It returns blocked results for missing provider keys or endpoints instead of crashing.
+- Existing kinds include image, image-to-video, text-to-video, voice, snap-pick-click, motion, and launch-style generation.
+- Existing providers include auto, openai, fal, runway, kling, veo, and elevenlabs.
+- Existing route enforces admin-generation access server-side.
+- Existing route resolves providers by kind and environment readiness.
+- Existing route persists job starts/provider runs/assets when Supabase service credentials exist.
+- Existing route returns blocked results for missing provider keys/endpoints instead of crashing.
 
 ### Personal-use status
 
@@ -243,32 +330,34 @@ Only enough provider access for Marcus to ask the merged chat for generation tas
 
 ### Existing usable pieces
 
-The jobs route already supports provider selection and missing-key blocked states.
+- Existing jobs route already supports provider selection.
+- Existing readiness logic can mark provider access ready, blocked, or missing.
+- Existing route can return clean blocked states if a provider key/path is missing.
 
 ### Provider table
 
-| Provider | Used for | Status | Minimum needed |
+| Provider | Used for | Personal-use status | Minimum needed |
 |---|---|---|---|
-| OpenAI | chat, image, writers/planning | `NEEDS ENV / KEY` | `OPENAI_API_KEY`; optional image model env |
-| fal.ai | image/video fallback, motion, snap-pick-click | `NEEDS ENV / KEY` | `FAL_API_KEY` or `FAL_KEY`; mode model env if needed |
-| Runway | image-to-video/text-to-video | `NEEDS ENV / KEY` | `RUNWAY_API_KEY`; `RUNWAY_GENERATION_ENDPOINT` |
-| Kling | video | `NEEDS ENV / KEY` | `KLING_API_KEY`; `KLING_GENERATION_ENDPOINT` or `KLING_EDIT_ENDPOINT` |
-| Veo | video | `NEEDS ENV / KEY` | `VEO_API_KEY`; `VEO_GENERATION_ENDPOINT` or `VEO_EDIT_ENDPOINT` |
-| ElevenLabs | voice/captions | `NEEDS ENV / KEY` | `ELEVENLABS_API_KEY`; `ELEVENLABS_VOICE_ID` |
+| OpenAI | chat, image, writers/planning | `BUILT / USABLE ENOUGH` if key is present | use existing OpenAI env path |
+| fal.ai | image/video fallback, motion, snap-pick-click | `BUILT / USABLE ENOUGH` if key is present | use existing fal env path |
+| Runway | image-to-video/text-to-video | `BUILT / USABLE ENOUGH` if key/path is present | use existing Runway provider path |
+| Kling | video | `BUILT / USABLE ENOUGH` if key/path is present | use existing Kling provider path |
+| Veo | video | `BUILT / USABLE ENOUGH` if key/path is present | use existing Veo provider path |
+| ElevenLabs | voice/captions | `BUILT / USABLE ENOUGH` if key/path is present | use existing ElevenLabs provider path |
 
 ### Minimum blocker
 
-Provider env/key values must exist in local/Vercel for personal use.
+Provider env/key values must exist in local/Vercel for personal use, or the existing route must return a clean blocked state.
 
 ### Minimum needed connection
 
-No new provider architecture. Only verify env values and let existing route return clean blocked states if missing.
+No new provider architecture. Only verify existing env/readiness paths and let existing routes return clean blocked states if missing.
 
 ### Do not build
 
 - Do not rebuild provider routing.
 - Do not add provider UI unless needed to choose an existing provider.
-- Do not let provider-specific TypeScript files break Builder production.
+- Do not turn provider adapter work into a new generation system.
 
 ---
 
@@ -284,8 +373,8 @@ No new provider architecture. Only verify env values and let existing route retu
 ### Existing usable pieces
 
 - Chat messages accept `attachments` in metadata.
-- The assistant input builder handles image attachments as base64 `input_image` blocks.
-- Non-image attachments are uploaded to OpenAI Files as `input_file` where possible.
+- The assistant input builder handles image attachments as image inputs.
+- Non-image attachments can be passed as file/document context where supported.
 - Attachments may come from Supabase storage bucket/path or URL/public URL.
 
 ### Personal-use status
@@ -305,7 +394,7 @@ Builder needs to pass active workspace and preview target along with upload/atta
 ### Do not build
 
 - Do not build a full asset management platform now.
-- Do not rebuild document parsing unless the current OpenAI file/input path fails Marcus’s test.
+- Do not rebuild document parsing unless the current file/input path fails Marcus’s test.
 - Do not duplicate files across systems unless needed for provider payload.
 
 ---
@@ -317,7 +406,7 @@ The merge is enough for Marcus when:
 1. `/streams-ai` still works standalone.
 2. `/streams-ai/streams-builder` still works standalone.
 3. `/admingeneration` still works standalone.
-4. Builder has center chat iframe.
+4. Builder has center chat iframe or center mounted chat.
 5. Builder tracks one active workstation.
 6. Chat message metadata can include active workstation context.
 7. User can choose Builder Preview or Chat Preview.
