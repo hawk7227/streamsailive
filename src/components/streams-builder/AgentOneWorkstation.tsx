@@ -49,6 +49,15 @@ async function readJson(response: Response) {
   }
 }
 
+function readStoredActiveFile() {
+  try {
+    const raw = window.localStorage.getItem("streams-builder:active-file");
+    return raw ? JSON.parse(raw) as PulledFileDetail : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function AgentOneWorkstation() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [repo, setRepo] = useState("hawk7227/streamsailive");
@@ -75,6 +84,19 @@ export default function AgentOneWorkstation() {
     return files.filter((item) => item.directory === directory);
   }, [directory, files]);
 
+  function openPulledFile(detail: PulledFileDetail) {
+    setRepo(detail.repo);
+    setBranch(detail.branch || "main");
+    setDirectory(detail.folder || "");
+    setFilePath(detail.path);
+    setFileSha(detail.sha || "");
+    setContent(detail.content || "");
+    setRoute(detail.route || "/");
+    setOpenedByTopPull(true);
+    setStatus(`Opened from top Pull: ${detail.path}`);
+    setProofLog((items) => [...items.slice(-12), `Top Pull opened ${detail.repo}@${detail.branch}:${detail.path}`]);
+  }
+
   async function loadRepos() {
     setLoadingRepos(true);
     setError("");
@@ -89,7 +111,7 @@ export default function AgentOneWorkstation() {
       setRepos(nextRepos);
 
       const current = nextRepos.find((item: Repo) => item.fullName === repo) || nextRepos[0];
-      if (current) {
+      if (current && !openedByTopPull) {
         setRepo(current.fullName);
         setBranch(current.defaultBranch || "main");
       }
@@ -118,36 +140,25 @@ export default function AgentOneWorkstation() {
       setFiles(nextFiles);
       setDirectories(nextDirectories);
 
-      const preferred =
-        nextFiles.find((item: TreeFile) => item.path === filePath) ||
-        nextFiles.find((item: TreeFile) => item.path.includes("src/app") && item.path.endsWith("page.tsx")) ||
-        nextFiles.find((item: TreeFile) => item.path.includes("streams-builder")) ||
-        nextFiles[0];
+      if (!openedByTopPull) {
+        const preferred =
+          nextFiles.find((item: TreeFile) => item.path === filePath) ||
+          nextFiles.find((item: TreeFile) => item.path.includes("src/app") && item.path.endsWith("page.tsx")) ||
+          nextFiles.find((item: TreeFile) => item.path.includes("streams-builder")) ||
+          nextFiles[0];
 
-      if (preferred) {
-        setDirectory(preferred.directory || "");
-        setFilePath(preferred.path || "");
+        if (preferred) {
+          setDirectory(preferred.directory || "");
+          setFilePath(preferred.path || "");
+        }
       }
 
-      setStatus(`Tree loaded: ${nextFiles.length} files`);
+      setStatus(openedByTopPull ? `Opened from top Pull: ${filePath}` : `Tree loaded: ${nextFiles.length} files`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load repository files");
     } finally {
       setLoadingTree(false);
     }
-  }
-
-  function openPulledFile(detail: PulledFileDetail) {
-    setRepo(detail.repo);
-    setBranch(detail.branch || "main");
-    setDirectory(detail.folder || "");
-    setFilePath(detail.path);
-    setFileSha(detail.sha || "");
-    setContent(detail.content || "");
-    setRoute(detail.route || "/");
-    setOpenedByTopPull(true);
-    setStatus(`Opened from top Pull: ${detail.path}`);
-    setProofLog((items) => [...items.slice(-12), `Top Pull opened ${detail.repo}@${detail.branch}:${detail.path}`]);
   }
 
   async function pullFile() {
@@ -218,14 +229,16 @@ export default function AgentOneWorkstation() {
   }
 
   useEffect(() => {
+    const stored = readStoredActiveFile();
+    if (stored?.path) openPulledFile(stored);
     void loadRepos();
   }, []);
 
   useEffect(() => {
-    if (repo && branch) {
+    if (repo && branch && !openedByTopPull) {
       void loadTree(repo, branch);
     }
-  }, [repo, branch]);
+  }, [repo, branch, openedByTopPull]);
 
   useEffect(() => {
     function onPulledFile(event: Event) {
