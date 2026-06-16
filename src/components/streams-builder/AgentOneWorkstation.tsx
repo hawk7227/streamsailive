@@ -29,6 +29,16 @@ type FileResult = {
   };
 };
 
+type PulledFileDetail = {
+  repo: string;
+  branch: string;
+  path: string;
+  folder: string;
+  sha: string;
+  content: string;
+  route: string;
+};
+
 async function readJson(response: Response) {
   const text = await response.text();
 
@@ -58,6 +68,7 @@ export default function AgentOneWorkstation() {
   const [pushing, setPushing] = useState(false);
   const [proofLog, setProofLog] = useState<string[]>([]);
   const [chatLog, setChatLog] = useState<string[]>([]);
+  const [openedByTopPull, setOpenedByTopPull] = useState(false);
 
   const visibleFiles = useMemo(() => {
     if (!directory) return files;
@@ -126,6 +137,19 @@ export default function AgentOneWorkstation() {
     }
   }
 
+  function openPulledFile(detail: PulledFileDetail) {
+    setRepo(detail.repo);
+    setBranch(detail.branch || "main");
+    setDirectory(detail.folder || "");
+    setFilePath(detail.path);
+    setFileSha(detail.sha || "");
+    setContent(detail.content || "");
+    setRoute(detail.route || "/");
+    setOpenedByTopPull(true);
+    setStatus(`Opened from top Pull: ${detail.path}`);
+    setProofLog((items) => [...items.slice(-12), `Top Pull opened ${detail.repo}@${detail.branch}:${detail.path}`]);
+  }
+
   async function pullFile() {
     if (!repo || !branch || !filePath) {
       setError("Select repo, branch, and file first.");
@@ -145,6 +169,7 @@ export default function AgentOneWorkstation() {
       setContent(json.content || "");
       setFileSha(json.sha || "");
       setRoute(json.frontendRoute || json.sourceTruth?.route || "/");
+      setOpenedByTopPull(true);
       setStatus(`Pulled ${json.path || filePath}`);
       setProofLog((items) => [...items.slice(-12), `Pulled ${json.path || filePath}`]);
     } catch (err) {
@@ -202,6 +227,17 @@ export default function AgentOneWorkstation() {
     }
   }, [repo, branch]);
 
+  useEffect(() => {
+    function onPulledFile(event: Event) {
+      const detail = (event as CustomEvent<PulledFileDetail>).detail;
+      if (!detail?.path) return;
+      openPulledFile(detail);
+    }
+
+    window.addEventListener("streams-builder:pulled-file", onPulledFile);
+    return () => window.removeEventListener("streams-builder:pulled-file", onPulledFile);
+  }, []);
+
   return (
     <section className="agentOneWorkstation" aria-label="Agent 1 workstation">
       <div className="repoControls" aria-label="Agent 1 GitHub controls">
@@ -223,6 +259,7 @@ export default function AgentOneWorkstation() {
             const selected = repos.find((item) => item.fullName === nextRepo);
             setRepo(nextRepo);
             setBranch(selected?.defaultBranch || "main");
+            setOpenedByTopPull(false);
           }}
         >
           <option value="">repo</option>
@@ -246,6 +283,7 @@ export default function AgentOneWorkstation() {
             setDirectory(nextDirectory);
             const first = files.find((item) => item.directory === nextDirectory);
             setFilePath(first?.path || "");
+            setOpenedByTopPull(false);
           }}
         >
           <option value="">folder</option>
@@ -257,7 +295,10 @@ export default function AgentOneWorkstation() {
         <select
           value={filePath}
           aria-label="File"
-          onChange={(event) => setFilePath(event.target.value)}
+          onChange={(event) => {
+            setFilePath(event.target.value);
+            setOpenedByTopPull(false);
+          }}
         >
           <option value="">file</option>
           {visibleFiles.map((item) => (
@@ -280,17 +321,26 @@ export default function AgentOneWorkstation() {
       ) : null}
 
       <div className="visualMount">
-        <VisualEditingWorkstation
-          stationLabel="Agent 1"
-          route={route}
-          filePath={filePath}
-          repo={repo}
-          branch={branch}
-          content={content}
-          onContentChange={setContent}
-          onProof={(message) => setProofLog((items) => [...items.slice(-12), message])}
-          onChat={(message) => setChatLog((items) => [...items.slice(-8), message])}
-        />
+        {openedByTopPull ? (
+          <textarea
+            className="pulledFileEditor"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            spellCheck={false}
+          />
+        ) : (
+          <VisualEditingWorkstation
+            stationLabel="Agent 1"
+            route={route}
+            filePath={filePath}
+            repo={repo}
+            branch={branch}
+            content={content}
+            onContentChange={setContent}
+            onProof={(message) => setProofLog((items) => [...items.slice(-12), message])}
+            onChat={(message) => setChatLog((items) => [...items.slice(-8), message])}
+          />
+        )}
       </div>
 
       <style jsx>{`
@@ -384,6 +434,23 @@ export default function AgentOneWorkstation() {
           min-width: 0;
           min-height: 0;
           overflow: hidden;
+        }
+
+        .pulledFileEditor {
+          width: 100%;
+          height: 100%;
+          min-width: 0;
+          min-height: 0;
+          border: 0;
+          background: #020617;
+          color: #e5e7eb;
+          padding: 14px;
+          font-size: 12px;
+          line-height: 1.55;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          resize: none;
+          outline: none;
+          box-sizing: border-box;
         }
       `}</style>
     </section>
