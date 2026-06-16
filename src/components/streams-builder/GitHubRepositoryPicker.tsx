@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
@@ -75,7 +75,6 @@ const STATIONS = ["Agent 1", "Agent 2", "Agent 3", "Agent 4"];
 
 async function readJson(response: Response) {
   const text = await response.text();
-
   try {
     return JSON.parse(text);
   } catch {
@@ -85,7 +84,6 @@ async function readJson(response: Response) {
 
 function inferMode(path: string): WorkspaceMode {
   const value = path.toLowerCase();
-
   if (value.includes("visual") || value.includes("editor")) return "Visual Editing";
   if (value.includes("component")) return "Component Mapping";
   if (value.includes("approval")) return "Approval Center";
@@ -93,7 +91,6 @@ function inferMode(path: string): WorkspaceMode {
   if (value.includes("repo") || value.includes("git")) return "Repository Truth";
   if (value.includes("dashboard") || value.includes("project")) return "Projects Dashboard";
   if (value.includes("truth")) return "Truth Panel";
-
   return "Primary Builder";
 }
 
@@ -126,13 +123,10 @@ export default function GitHubRepositoryPicker() {
   async function loadRepos() {
     setLoadingRepos(true);
     setError("");
-
     try {
       const response = await fetch("/api/streams-builder/github/repos", { cache: "no-store" });
       const json = await readJson(response);
-
       if (!json.ok) throw new Error(json.error || "Unable to load GitHub repositories");
-
       setRepos(json.repos || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load GitHub repositories");
@@ -152,7 +146,6 @@ export default function GitHubRepositoryPicker() {
           <p>STREAMS BUILDER WORKSTATIONS</p>
           <h1>4 Equal Workstations · Editor · Browser · Mobile · Advanced · Proof</h1>
         </div>
-
         <button type="button" onClick={loadRepos} disabled={loadingRepos}>
           {loadingRepos ? "Loading" : "Reload Repos"}
         </button>
@@ -176,7 +169,6 @@ export default function GitHubRepositoryPicker() {
           overflow: auto;
           box-sizing: border-box;
         }
-
         .topBar {
           display: flex;
           align-items: center;
@@ -188,7 +180,6 @@ export default function GitHubRepositoryPicker() {
           background: rgba(2, 6, 23, 0.72);
           padding: 8px 10px;
         }
-
         .topBar p {
           margin: 0;
           color: #6ee7b7;
@@ -196,13 +187,11 @@ export default function GitHubRepositoryPicker() {
           font-weight: 900;
           letter-spacing: 0.08em;
         }
-
         .topBar h1 {
           margin: 2px 0 0;
           color: #fff;
           font-size: 16px;
         }
-
         .topBar button {
           border: 1px solid rgba(148, 163, 184, 0.18);
           border-radius: 8px;
@@ -213,12 +202,10 @@ export default function GitHubRepositoryPicker() {
           font-weight: 900;
           cursor: pointer;
         }
-
         .topBar button:disabled {
           opacity: 0.45;
           cursor: not-allowed;
         }
-
         .tokenWarning {
           border: 1px solid rgba(248, 113, 113, 0.35);
           border-radius: 10px;
@@ -227,7 +214,6 @@ export default function GitHubRepositoryPicker() {
           padding: 8px 10px;
           font-size: 10px;
         }
-
         .stationGrid {
           min-height: 0;
           display: grid;
@@ -236,7 +222,6 @@ export default function GitHubRepositoryPicker() {
           gap: 10px;
           overflow: visible;
         }
-
         @media (max-width: 1200px) {
           .stationGrid {
             grid-template-columns: 1fr;
@@ -248,15 +233,7 @@ export default function GitHubRepositoryPicker() {
   );
 }
 
-function Workstation({
-  label,
-  index,
-  repos,
-}: {
-  label: string;
-  index: number;
-  repos: Repo[];
-}) {
+function Workstation({ label, index, repos }: { label: string; index: number; repos: Repo[] }) {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("Visual Editing");
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
@@ -320,7 +297,6 @@ function Workstation({
 
   async function loadTree(nextRepo = repo, nextBranch = branch) {
     if (!nextRepo) return;
-
     setLoadingTree(true);
     setError("");
     setStatus("");
@@ -336,12 +312,10 @@ function Workstation({
       const params = new URLSearchParams({ repo: nextRepo, ref: nextBranch || "main" });
       const response = await fetch(`/api/streams-builder/github/tree?${params.toString()}`, { cache: "no-store" });
       const json = (await readJson(response)) as TreeResponse;
-
       if (!json.ok) throw new Error(json.error || "Unable to load repository files");
 
       const nextFiles = json.files || [];
       const nextDirectories = json.directories || [];
-
       setFiles(nextFiles);
       setDirectories(nextDirectories);
 
@@ -354,9 +328,7 @@ function Workstation({
       if (preferred) {
         setDirectory(preferred.directory);
         setFilePath(preferred.path);
-        // Keep selected workstation mode stable. Do not auto-switch away from Visual Editing.
       }
-
       addProof(`Tree loaded: ${nextFiles.length} files available.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to load repository files";
@@ -372,7 +344,6 @@ function Workstation({
       setError("Select repo and file first.");
       return;
     }
-
     setLoadingFile(true);
     setError("");
     setStatus("");
@@ -384,17 +355,15 @@ function Workstation({
         path: filePath,
         ref: branch || selectedRepo?.defaultBranch || "main",
       });
-
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
       const json = (await readJson(response)) as FileResult;
-
       if (!json.ok) throw new Error(json.error || "Unable to pull selected file");
 
       setFile(json);
       setContent(json.content || "");
       setRouteInput(json.frontendRoute || "/");
-      // Keep selected workstation mode stable after pull. Do not auto-switch away from Visual Editing.
-      setStatus("Pulled into isolated station.");
+      setWorkspaceMode(inferMode(json.path || filePath));
+      setStatus("Pulled into isolated station workspace.");
       addChat(`Pulled ${json.path || filePath}.`);
       addProof(`Source Truth: ${json.sourceTruth?.route || "/"} -> ${json.sourceTruth?.file || filePath}`);
       setFrameKey((value) => value + 1);
@@ -412,7 +381,6 @@ function Workstation({
       setError("Pull a file before pushing.");
       return;
     }
-
     setPushing(true);
     setError("");
     setStatus("");
@@ -433,9 +401,7 @@ function Workstation({
           message: `${label}: ${promptInput || `update ${filePath}`}`,
         }),
       });
-
       const json = await readJson(response);
-
       if (!json.ok) throw new Error(json.error || "Push failed");
 
       setStatus(`Pushed ${json.commitSha || "commit"} to ${branch}.`);
@@ -462,7 +428,6 @@ function Workstation({
     <article className="station">
       <div className="stationControls">
         <b>{label}</b>
-
         <select
           value={workspaceMode}
           onChange={(event) => {
@@ -476,7 +441,6 @@ function Workstation({
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
-
         <select
           value={repo}
           onChange={(event) => {
@@ -491,9 +455,7 @@ function Workstation({
             <option key={item.id} value={item.fullName}>{item.fullName}</option>
           ))}
         </select>
-
         <input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="branch" />
-
         <select
           value={directory}
           onChange={(event) => {
@@ -508,34 +470,35 @@ function Workstation({
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
-
         <select value={filePath} onChange={(event) => setFilePath(event.target.value)}>
           <option value="">file</option>
           {visibleFiles.map((item) => (
             <option key={item.path} value={item.path}>{item.path}</option>
           ))}
         </select>
-
         <button type="button" onClick={pullFile} disabled={loadingFile || !repo || !filePath}>
           {loadingFile ? "Pulling" : "Pull"}
         </button>
-
         <button type="button" onClick={pushFile} disabled={pushing || !file?.sha}>
           {pushing ? "Pushing" : "Push"}
         </button>
-
-        <button type="button" onClick={() => setFullscreen(true)}>
-          Full
-        </button>
+        <button type="button" onClick={() => setFullscreen(true)}>Full</button>
       </div>
 
       <div className="browser">
         <div className="browserViewport">
-          {workspaceMode === "Visual Editing" ? (
+          {file ? (
+            <textarea
+              className="workspaceFileEditor"
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              spellCheck={false}
+            />
+          ) : workspaceMode === "Visual Editing" ? (
             <VisualEditingWorkstation
               stationLabel={label}
               route={activeRoute}
-              filePath={filePath || file?.sourceTruth?.file || ""}
+              filePath={filePath || ""}
               repo={repo}
               branch={branch}
               content={content}
@@ -543,7 +506,7 @@ function Workstation({
               onProof={addProof}
               onChat={addChat}
             />
-          ) : file?.frontendRoute || routeInput !== "/" ? (
+          ) : routeInput !== "/" ? (
             <iframe key={frameKey} title={`${label} browser`} src={activeRoute} />
           ) : (
             <MockLanding label={label} />
@@ -553,7 +516,6 @@ function Workstation({
 
       <details className="stationSettings">
         <summary>Proof / Source Truth / Editor</summary>
-
         <div className="truth">
           <div><span>Repo</span><b>{repo || "none"}</b></div>
           <div><span>Branch</span><b>{branch || "none"}</b></div>
@@ -562,7 +524,6 @@ function Workstation({
           <div><span>Route</span><b>{file?.sourceTruth?.route || routeInput}</b></div>
           <div><span>Isolation</span><b>No crossing contexts</b></div>
         </div>
-
         <div className="logs">
           <section>
             <b>AI Chat</b>
@@ -573,7 +534,6 @@ function Workstation({
             {proofLog.map((item, idx) => <p key={`${item}-${idx}`}>{item}</p>)}
           </section>
         </div>
-
         <textarea className="editor" value={content} onChange={(event) => setContent(event.target.value)} />
       </details>
 
@@ -586,9 +546,7 @@ function Workstation({
         <button type="button" onClick={submitPrompt}>Send</button>
       </div>
 
-      {(error || status) ? (
-        <div className={error ? "error" : "status"}>{error || status}</div>
-      ) : null}
+      {(error || status) ? <div className={error ? "error" : "status"}>{error || status}</div> : null}
 
       <style jsx>{`
         .station {
@@ -601,7 +559,6 @@ function Workstation({
           background: rgba(15, 23, 42, 0.78);
           overflow: hidden;
         }
-
         .stationControls {
           min-width: 0;
           display: grid;
@@ -611,7 +568,6 @@ function Workstation({
           padding: 4px;
           border-bottom: 1px solid rgba(148, 163, 184, 0.12);
         }
-
         .stationControls b {
           min-width: 0;
           color: #fff;
@@ -620,7 +576,6 @@ function Workstation({
           overflow: hidden;
           text-overflow: ellipsis;
         }
-
         select,
         input,
         textarea {
@@ -635,7 +590,6 @@ function Workstation({
           font-size: 7px;
           box-sizing: border-box;
         }
-
         button {
           border: 1px solid rgba(148, 163, 184, 0.18);
           border-radius: 6px;
@@ -648,12 +602,10 @@ function Workstation({
           cursor: pointer;
           white-space: nowrap;
         }
-
         button:disabled {
           opacity: 0.45;
           cursor: not-allowed;
         }
-
         .browser {
           min-height: 0;
           height: 100%;
@@ -665,14 +617,29 @@ function Workstation({
           overflow: hidden;
           background: #020617;
         }
-
         .browserViewport {
           min-height: 0;
           height: 100%;
           overflow: hidden;
           background: #020617;
         }
-
+        .workspaceFileEditor {
+          display: block;
+          width: 100%;
+          height: 100%;
+          min-height: 100%;
+          border: 0;
+          border-radius: 0;
+          background: #020617;
+          color: #e5e7eb;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-size: 12px;
+          line-height: 1.55;
+          padding: 14px;
+          resize: none;
+          outline: none;
+          box-sizing: border-box;
+        }
         iframe {
           border: 0;
           background: #fff;
@@ -682,7 +649,6 @@ function Workstation({
           height: 200%;
           min-height: 0;
         }
-
         .stationSettings {
           border-top: 1px solid rgba(148, 163, 184, 0.12);
           padding: 3px 5px;
@@ -691,25 +657,21 @@ function Workstation({
           max-height: 20px;
           overflow: hidden;
         }
-
         .stationSettings[open] {
           max-height: 260px;
           overflow: auto;
         }
-
         .stationSettings summary {
           cursor: pointer;
           color: #94a3b8;
           font-weight: 900;
         }
-
         .truth {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 5px;
           margin-top: 6px;
         }
-
         .truth div {
           min-width: 0;
           border: 1px solid rgba(16, 185, 129, 0.25);
@@ -717,7 +679,6 @@ function Workstation({
           background: rgba(6, 78, 59, 0.14);
           padding: 5px;
         }
-
         .truth span {
           display: block;
           color: #6ee7b7;
@@ -725,7 +686,6 @@ function Workstation({
           font-weight: 900;
           text-transform: uppercase;
         }
-
         .truth b {
           display: block;
           color: #fff;
@@ -734,44 +694,37 @@ function Workstation({
           overflow: hidden;
           text-overflow: ellipsis;
         }
-
         .logs {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 6px;
           margin-top: 6px;
         }
-
         .logs section {
           border: 1px solid rgba(148, 163, 184, 0.12);
           border-radius: 7px;
           padding: 5px;
           background: rgba(2, 6, 23, 0.6);
         }
-
         .logs p {
           margin: 3px 0 0;
           color: #cbd5e1;
         }
-
         .editor {
           margin-top: 6px;
           height: 110px;
           resize: vertical;
         }
-
         .stationChat {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 42px;
           gap: 4px;
           padding: 0 4px 4px;
         }
-
         .stationChat textarea {
           height: 28px;
           resize: none;
         }
-
         .error,
         .status {
           margin: 0 4px 4px;
@@ -781,13 +734,11 @@ function Workstation({
           max-height: 22px;
           overflow: hidden;
         }
-
         .error {
           border: 1px solid rgba(248, 113, 113, 0.35);
           background: rgba(127, 29, 29, 0.24);
           color: #fecaca;
         }
-
         .status {
           border: 1px solid rgba(16, 185, 129, 0.25);
           background: rgba(6, 78, 59, 0.14);
@@ -810,7 +761,6 @@ function Workstation({
           padding: 10px;
           display: grid;
         }
-
         .exitFull {
           position: fixed;
           right: 18px;
@@ -831,19 +781,16 @@ function MockLanding({ label }: { label: string }) {
         <span>Pricing</span>
         <button type="button">Login</button>
       </nav>
-
       <section>
         <p>{label.toUpperCase()} LIVE BROWSER</p>
         <h1>Build Better.<br />Ship Faster.</h1>
         <span>Mock landing page shown until this station pulls a real frontend route.</span>
       </section>
-
       <div className="cards">
         <article>Hero</article>
         <article>CTA</article>
         <article>Proof</article>
       </div>
-
       <style jsx>{`
         .mockLanding {
           width: 100%;
@@ -860,19 +807,16 @@ function MockLanding({ label }: { label: string }) {
           box-sizing: border-box;
           overflow: hidden;
         }
-
         nav {
           display: flex;
           align-items: center;
           gap: 22px;
           font-size: 13px;
         }
-
         nav b {
           font-size: 24px;
           margin-right: auto;
         }
-
         nav button {
           width: auto;
           height: auto;
@@ -880,13 +824,11 @@ function MockLanding({ label }: { label: string }) {
           border-radius: 999px;
           font-size: 12px;
         }
-
         section {
           display: grid;
           place-items: center;
           text-align: center;
         }
-
         section p {
           color: #6ee7b7;
           font-size: 12px;
@@ -894,24 +836,20 @@ function MockLanding({ label }: { label: string }) {
           letter-spacing: 0.12em;
           margin: 0 0 12px;
         }
-
         h1 {
           font-size: 62px;
           line-height: 0.95;
           margin: 0 0 14px;
         }
-
         section span {
           color: #cbd5e1;
           font-size: 14px;
         }
-
         .cards {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 14px;
         }
-
         .cards article {
           min-height: 88px;
           display: grid;
@@ -925,4 +863,3 @@ function MockLanding({ label }: { label: string }) {
     </div>
   );
 }
-
