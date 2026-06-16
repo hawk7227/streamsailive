@@ -27,7 +27,14 @@ function basename(path: string) {
   return path.split("/").filter(Boolean).pop() || path;
 }
 
+function dirname(path: string) {
+  const parts = path.split("/");
+  parts.pop();
+  return parts.join("/");
+}
+
 function emitPulledFile(detail: { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string }) {
+  window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
   window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
 }
 
@@ -46,7 +53,7 @@ export default function GitHubRepositoryPicker() {
   const folders = useMemo(() => unique(files.map((file) => file.directory)), [files]);
   const folderFiles = useMemo(() => files.filter((file) => file.directory === folder), [files, folder]);
   const selectedFile = useMemo(() => files.find((file) => file.path === filePath), [files, filePath]);
-  const selectedFullPath = folder && selectedFile ? `${folder}/${selectedFile.name || basename(selectedFile.path)}` : filePath;
+  const selectedFullPath = selectedFile?.path || filePath;
   const activeMatchesSelection = Boolean(activeFile?.path && activeFile.path === selectedFullPath);
   const canPush = Boolean(activeMatchesSelection && activeFile?.sha && content !== (activeFile.content || ""));
 
@@ -74,14 +81,21 @@ export default function GitHubRepositoryPicker() {
     setActiveFile(null);
     setContent("");
     try {
+      const previousPath = filePath;
       const params = new URLSearchParams({ repo: nextRepo, ref: nextBranch || "main" });
       const json = await readJson(await fetch(`/api/streams-builder/github/tree?${params.toString()}`, { cache: "no-store" }));
       if (!json.ok) throw new Error(json.error || "Unable to load tree");
       const nextFiles = json.files || [];
       setFiles(nextFiles);
-      const first = nextFiles.find((item: TreeFile) => item.path.includes("streams-builder")) || nextFiles[0];
-      setFolder(first?.directory || "");
-      setFilePath(first?.path || "");
+      const preserved = previousPath ? nextFiles.find((item: TreeFile) => item.path === previousPath) : null;
+      const first = preserved || nextFiles.find((item: TreeFile) => item.path === "src/app/page.tsx") || nextFiles[0];
+      if (first && !previousPath) {
+        setFolder(first.directory || dirname(first.path));
+        setFilePath(first.path);
+      } else if (preserved) {
+        setFolder(preserved.directory || dirname(preserved.path));
+        setFilePath(preserved.path);
+      }
       setStatus(`Tree loaded: ${nextFiles.length} files.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to load tree");
@@ -91,7 +105,7 @@ export default function GitHubRepositoryPicker() {
   }
 
   async function pullFile() {
-    if (!repo || !branch || !folder || !selectedFile || !selectedFullPath) {
+    if (!repo || !branch || !selectedFullPath) {
       setStatus("Select repo, branch, folder, and file first.");
       return;
     }
@@ -100,14 +114,15 @@ export default function GitHubRepositoryPicker() {
       const params = new URLSearchParams({ repo, ref: branch, path: selectedFullPath });
       const json = await readJson(await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" })) as FileResult;
       if (!json.ok) throw new Error(json.error || "Pull failed");
-      if ((json.path || selectedFullPath) !== selectedFullPath) throw new Error("Pull blocked: returned path does not match selected file.");
+      if ((json.path || selectedFullPath) !== selectedFullPath) throw new Error(`Pull blocked: selected ${selectedFullPath}, received ${json.path || "unknown"}.`);
       const nextContent = json.content || "";
-      const nextSha = json.sha || selectedFile.sha || "";
+      const nextSha = json.sha || selectedFile?.sha || "";
+      const nextFolder = selectedFile?.directory || folder || dirname(selectedFullPath);
       const nextRoute = json.frontendRoute || "/";
       setActiveFile(json);
       setContent(nextContent);
-      emitPulledFile({ repo, branch, path: selectedFullPath, folder, sha: nextSha, content: nextContent, route: nextRoute });
-      setStatus(`Pulled into workspace: ${selectedFullPath}`);
+      emitPulledFile({ repo, branch, path: selectedFullPath, folder: nextFolder, sha: nextSha, content: nextContent, route: nextRoute });
+      setStatus(`Pulled into Agent 1: ${selectedFullPath}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Pull failed");
     } finally {
@@ -143,9 +158,9 @@ export default function GitHubRepositoryPicker() {
 
   return (
     <section className="topControlStrip" aria-label="GitHub workspace controls">
-      <label><b>Repo</b><select value={repo} onChange={(event) => { const next = event.target.value; const found = repos.find((item) => item.fullName === next); setRepo(next); setBranch(found?.defaultBranch || "main"); }}><option value="">repo</option>{repos.map((item) => <option key={item.id} value={item.fullName}>{item.fullName}</option>)}</select></label>
+      <label><b>Repo</b><select value={repo} onChange={(event) => { const next = event.target.value; const found = repos.find((item) => item.fullName === next); setRepo(next); setBranch(found?.defaultBranch || "main"); setFilePath(""); setFolder(""); }}><option value="">repo</option>{repos.map((item) => <option key={item.id} value={item.fullName}>{item.fullName}</option>)}</select></label>
       <label><b>Folder</b><select value={folder} onChange={(event) => { const next = event.target.value; const first = files.find((item) => item.directory === next); setFolder(next); setFilePath(first?.path || ""); setActiveFile(null); setContent(""); }}><option value="">folder</option>{folders.map((item) => <option key={item} value={item}>📁 {item}</option>)}</select></label>
-      <label><b>File</b><select value={filePath} onChange={(event) => { setFilePath(event.target.value); setActiveFile(null); setContent(""); }}><option value="">file</option>{folderFiles.map((item) => <option key={item.path} value={item.path}>📄 {item.name} · {item.sha.slice(0, 7)}</option>)}</select></label>
+      <label><b>File</b><select value={filePath} onChange={(event) => { const nextPath = event.target.value; const found = files.find((item) => item.path === nextPath); setFilePath(nextPath); setFolder(found?.directory || dirname(nextPath)); setActiveFile(null); setContent(""); }}><option value="">file</option>{folderFiles.map((item) => <option key={item.path} value={item.path}>📄 {item.name} · {item.sha.slice(0, 7)}</option>)}</select></label>
       <label><b>Branch</b><input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="branch" /></label>
       <label><b>Lock</b><span>{activeMatchesSelection ? "open" : "pull"}</span></label>
       <button type="button" onClick={pullFile} disabled={busy || !filePath}>Pull</button>
