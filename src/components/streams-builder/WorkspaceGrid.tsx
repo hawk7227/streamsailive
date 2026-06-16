@@ -47,15 +47,15 @@ export default function WorkspaceGrid() {
       <WorkstationChromeEnhancer />
       <style jsx>{`
         .streamsBuilderShell{width:100vw;height:100dvh;display:block;background:#020713;color:#fff;padding:0;box-sizing:border-box;overflow:auto;}
-        .centerWorkspace{min-width:0;min-height:100dvh;border:0;border-radius:0;background:#020713;overflow:visible;padding:6px;display:grid;grid-template-rows:auto minmax(calc(100dvh - 68px),auto);gap:6px;box-sizing:border-box;}
-        .topRow{min-height:44px;display:grid;grid-template-columns:minmax(360px,1fr) minmax(460px,1fr);gap:6px;min-width:0;}
-        .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;}
-        label{min-width:0;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:#020617;padding:6px;}
-        label b,.statusDrop b{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;margin-bottom:3px;}
-        select{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;}option{color:#020617;}
-        .workArea{min-width:0;min-height:calc(100dvh - 68px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
-        .workstationShell{min-width:0;min-height:calc(100dvh - 68px);display:grid;grid-template-rows:minmax(calc(100dvh - 108px),auto) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
-        .stationViewport{min-width:0;min-height:calc(100dvh - 108px);overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
+        .centerWorkspace{min-width:0;min-height:100dvh;border:0;border-radius:0;background:#020713;overflow:visible;padding:4px 4px 0;display:grid;grid-template-rows:34px minmax(calc(100dvh - 40px),auto);gap:2px;box-sizing:border-box;}
+        .topRow{height:34px;min-height:34px;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.48fr);gap:12px;min-width:0;align-items:center;overflow:hidden;}
+        .controls{height:34px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0;align-items:center;}
+        label{min-width:0;height:28px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;align-items:end;border:0;border-radius:0;background:transparent;padding:0;border-bottom:1px solid rgba(148,163,184,.34);}
+        label b,.statusDrop b{display:block;color:#6ee7b7;font-size:9px;text-transform:uppercase;margin-bottom:3px;line-height:1;}
+        select{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;padding:0 0 3px;}option{color:#020617;}
+        .workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
+        .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:minmax(calc(100dvh - 80px),auto) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
+        .stationViewport{min-width:0;min-height:calc(100dvh - 80px);overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
         .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
         .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
         .statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px;}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
