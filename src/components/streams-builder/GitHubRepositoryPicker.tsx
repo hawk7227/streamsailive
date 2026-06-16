@@ -27,6 +27,10 @@ function basename(path: string) {
   return path.split("/").filter(Boolean).pop() || path;
 }
 
+function emitPulledFile(detail: { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string }) {
+  window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
+}
+
 export default function GitHubRepositoryPicker() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [repo, setRepo] = useState("");
@@ -97,9 +101,13 @@ export default function GitHubRepositoryPicker() {
       const json = await readJson(await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" })) as FileResult;
       if (!json.ok) throw new Error(json.error || "Pull failed");
       if ((json.path || selectedFullPath) !== selectedFullPath) throw new Error("Pull blocked: returned path does not match selected file.");
+      const nextContent = json.content || "";
+      const nextSha = json.sha || selectedFile.sha || "";
+      const nextRoute = json.frontendRoute || "/";
       setActiveFile(json);
-      setContent(json.content || "");
-      setStatus(`Pulled: ${selectedFullPath}`);
+      setContent(nextContent);
+      emitPulledFile({ repo, branch, path: selectedFullPath, folder, sha: nextSha, content: nextContent, route: nextRoute });
+      setStatus(`Pulled into workspace: ${selectedFullPath}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Pull failed");
     } finally {
