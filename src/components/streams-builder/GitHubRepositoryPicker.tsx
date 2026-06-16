@@ -50,6 +50,24 @@ type FileResult = {
   };
 };
 
+type ActiveWorkFile = {
+  repo: string;
+  branch: string;
+  folder: string;
+  file: string;
+  fullPath: string;
+  route: string;
+  component: string;
+  pulledSha: string;
+  visibleToUser: boolean;
+  lockStatus: "Unlocked" | "Locked";
+  approvalStatus: "Not Approved" | "Approved to Push";
+  writeTarget: string;
+  githubCommit: string | null;
+  deployCommit: string | null;
+  liveCommit: string | null;
+};
+
 type WorkspaceMode =
   | "Primary Builder"
   | "Visual Editing"
@@ -113,6 +131,29 @@ function defaultPromptForMode(mode: WorkspaceMode) {
     default:
       return "Build, validate, save, rollback, and approve only inside this station.";
   }
+}
+
+function basename(path: string) {
+  return path.split("/").filter(Boolean).pop() || path;
+}
+
+function normalizePath(folder: string, fileNameOrPath: string) {
+  if (!folder || !fileNameOrPath) return "";
+  const fileName = basename(fileNameOrPath);
+  return `${folder.replace(/\/$/, "")}/${fileName}`;
+}
+
+function inferComponentName(path: string) {
+  const name = basename(path).replace(/\.(tsx|ts|jsx|js|mdx|css|scss|json)$/i, "");
+  if (name === "page" || name === "layout" || name === "route") {
+    const parts = path.split("/").filter(Boolean);
+    return parts.length > 1 ? parts[parts.length - 2] : name;
+  }
+  return name;
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 export default function GitHubRepositoryPicker() {
@@ -242,6 +283,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
   const [directory, setDirectory] = useState("");
   const [filePath, setFilePath] = useState("");
   const [file, setFile] = useState<FileResult | null>(null);
+  const [activeWorkFile, setActiveWorkFile] = useState<ActiveWorkFile | null>(null);
   const [routeInput, setRouteInput] = useState("/");
   const [frameKey, setFrameKey] = useState(0);
   const [promptInput, setPromptInput] = useState(defaultPromptForMode("Visual Editing"));
@@ -264,12 +306,49 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
     [repos, repo],
   );
 
+  const folderOptions = useMemo(
+    () => uniqueSorted([...directories, ...files.map((item) => item.directory)]),
+    [directories, files],
+  );
+
   const visibleFiles = useMemo(() => {
-    if (!directory) return files;
+    if (!directory) return [];
     return files.filter((item) => item.directory === directory);
   }, [files, directory]);
 
-  const activeRoute = file?.frontendRoute || routeInput || "/";
+  const selectedTreeFile = useMemo(
+    () => files.find((item) => item.path === filePath) || null,
+    [files, filePath],
+  );
+
+  const selectedFileName = selectedTreeFile?.name || basename(filePath);
+  const selectedFullPath = normalizePath(directory, selectedFileName);
+  const visibleOpenedPath = file?.path || "";
+  const activeRoute = activeWorkFile?.route || file?.frontendRoute || routeInput || "/";
+  const activeComponent = activeWorkFile?.component || file?.sourceTruth?.component || inferComponentName(filePath || selectedFullPath);
+  const activeWriteTarget = repo && branch && selectedFullPath ? `${repo}@${branch}:${selectedFullPath}` : "";
+  const lockMatchesVisibleFile = Boolean(
+    activeWorkFile?.visibleToUser &&
+      activeWorkFile.fullPath &&
+      activeWorkFile.fullPath === visibleOpenedPath &&
+      activeWorkFile.fullPath === selectedFullPath &&
+      activeWorkFile.repo === repo &&
+      activeWorkFile.branch === branch,
+  );
+  const contentChanged = Boolean(file?.content !== undefined && content !== (file.content || ""));
+  const canPushSelectedFile = Boolean(
+    repo &&
+      branch &&
+      directory &&
+      selectedFileName &&
+      selectedFullPath &&
+      activeWriteTarget &&
+      file?.sha &&
+      activeWorkFile?.pulledSha &&
+      activeWorkFile.lockStatus === "Unlocked" &&
+      activeWorkFile.writeTarget === activeWriteTarget &&
+      lockMatchesVisibleFile,
+  );
 
   useEffect(() => {
     if (!repo && repos[index]) {
@@ -295,6 +374,13 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
     setProofLog((items) => [...items.slice(-8), `${new Date().toLocaleTimeString()} ${message}`]);
   }
 
+  function clearVisibleFile(nextMessage?: string) {
+    setFile(null);
+    setActiveWorkFile(null);
+    setContent("");
+    if (nextMessage) addProof(nextMessage);
+  }
+
   async function loadTree(nextRepo = repo, nextBranch = branch) {
     if (!nextRepo) return;
     setLoadingTree(true);
@@ -305,6 +391,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
     setDirectory("");
     setFilePath("");
     setFile(null);
+    setActiveWorkFile(null);
     setContent("");
     addProof(`Loading tree for ${nextRepo}@${nextBranch}.`);
 
@@ -315,11 +402,12 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
       if (!json.ok) throw new Error(json.error || "Unable to load repository files");
 
       const nextFiles = json.files || [];
-      const nextDirectories = json.directories || [];
+      const nextDirectories = uniqueSorted([...(json.directories || []), ...nextFiles.map((item) => item.directory)]);
       setFiles(nextFiles);
       setDirectories(nextDirectories);
 
       const preferred =
+        nextFiles.find((item) => item.path === "src/components/streams-builder/GitHubRepositoryPicker.tsx") ||
         nextFiles.find((item) => item.path.includes("src/app") && item.path.endsWith("page.tsx")) ||
         nextFiles.find((item) => item.path.includes("streams-builder")) ||
         nextFiles.find((item) => item.path.includes("components")) ||
@@ -329,7 +417,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
         setDirectory(preferred.directory);
         setFilePath(preferred.path);
       }
-      addProof(`Tree loaded: ${nextFiles.length} files available.`);
+      addProof(`Tree loaded: ${nextFiles.length} files and ${nextDirectories.length} folders available.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to load repository files";
       setError(message);
@@ -340,32 +428,61 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
   }
 
   async function pullFile() {
-    if (!repo || !filePath) {
-      setError("Select repo and file first.");
+    const nextFullPath = normalizePath(directory, selectedFileName);
+    if (!repo || !branch || !directory || !selectedFileName || !nextFullPath) {
+      setError("Select repo, branch, folder, and file first.");
+      return;
+    }
+    if (filePath !== nextFullPath) {
+      setError("Selected folder/file does not resolve to the chosen full path. Reselect the file before pulling.");
       return;
     }
     setLoadingFile(true);
     setError("");
     setStatus("");
-    addProof(`Pull started for ${repo}/${filePath}.`);
+    addProof(`Pull started for ${repo}@${branch}:${nextFullPath}.`);
 
     try {
       const params = new URLSearchParams({
         repo,
-        path: filePath,
+        path: nextFullPath,
         ref: branch || selectedRepo?.defaultBranch || "main",
       });
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
       const json = (await readJson(response)) as FileResult;
       if (!json.ok) throw new Error(json.error || "Unable to pull selected file");
 
+      const pulledPath = json.path || nextFullPath;
+      if (pulledPath !== nextFullPath) {
+        throw new Error(`Pull mismatch blocked. Selected ${nextFullPath}, received ${pulledPath}.`);
+      }
+
+      const nextActiveWorkFile: ActiveWorkFile = {
+        repo,
+        branch: branch || selectedRepo?.defaultBranch || "main",
+        folder: directory,
+        file: selectedFileName,
+        fullPath: pulledPath,
+        route: json.sourceTruth?.route || json.frontendRoute || routeInput || "/",
+        component: json.sourceTruth?.component || inferComponentName(pulledPath),
+        pulledSha: json.sha || "",
+        visibleToUser: true,
+        lockStatus: "Unlocked",
+        approvalStatus: "Not Approved",
+        writeTarget: `${repo}@${branch || selectedRepo?.defaultBranch || "main"}:${pulledPath}`,
+        githubCommit: null,
+        deployCommit: null,
+        liveCommit: null,
+      };
+
       setFile(json);
+      setActiveWorkFile(nextActiveWorkFile);
       setContent(json.content || "");
-      setRouteInput(json.frontendRoute || "/");
-      setWorkspaceMode(inferMode(json.path || filePath));
-      setStatus("Pulled into isolated station workspace.");
-      addChat(`Pulled ${json.path || filePath}.`);
-      addProof(`Source Truth: ${json.sourceTruth?.route || "/"} -> ${json.sourceTruth?.file || filePath}`);
+      setRouteInput(json.frontendRoute || json.sourceTruth?.route || "/");
+      setWorkspaceMode(inferMode(pulledPath));
+      setStatus("Pulled selected file into the big workstation editor and locked AI to this visible file.");
+      addChat(`Pulled visible active file: ${pulledPath}.`);
+      addProof(`ACTIVE WORK FILE: ${nextActiveWorkFile.writeTarget}.`);
       setFrameKey((value) => value + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to pull selected file";
@@ -376,15 +493,31 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
     }
   }
 
+  function approvePush() {
+    if (!lockMatchesVisibleFile || !activeWorkFile) {
+      setError("Cannot approve push until the visible opened file matches the selected activeWorkFile.");
+      return;
+    }
+    setActiveWorkFile({ ...activeWorkFile, approvalStatus: "Approved to Push" });
+    setStatus(`Approved to push only ${activeWorkFile.fullPath}.`);
+    addProof(`Push approval granted for ${activeWorkFile.fullPath} only.`);
+  }
+
   async function pushFile() {
-    if (!repo || !filePath || !file?.sha) {
-      setError("Pull a file before pushing.");
+    if (!activeWorkFile || !canPushSelectedFile) {
+      setError("Push blocked. Pull/open the selected file first and keep the visible active file matched to the selected folder/file.");
+      addProof("Push blocked: activeWorkFile.fullPath does not match the visible opened file.");
+      return;
+    }
+    if (activeWorkFile.approvalStatus !== "Approved to Push") {
+      setError("Push blocked. Approval must be set to Approved to Push for the visible active file.");
+      addProof("Push blocked: approval is not Approved to Push.");
       return;
     }
     setPushing(true);
     setError("");
     setStatus("");
-    addProof(`Push started for ${repo}/${filePath}.`);
+    addProof(`Push started for ${activeWorkFile.writeTarget}.`);
 
     try {
       const response = await fetch("/api/streams-builder/github/push", {
@@ -392,21 +525,38 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         body: JSON.stringify({
-          repo,
-          path: filePath,
-          branch: branch || selectedRepo?.defaultBranch || "main",
-          sha: file.sha,
+          repo: activeWorkFile.repo,
+          path: activeWorkFile.fullPath,
+          branch: activeWorkFile.branch,
+          sha: activeWorkFile.pulledSha,
           content,
           agent: label,
-          message: `${label}: ${promptInput || `update ${filePath}`}`,
+          message: `${label}: ${promptInput || `update ${activeWorkFile.fullPath}`}`,
+          activeWorkFile,
+          expectedOnlyPath: activeWorkFile.fullPath,
         }),
       });
       const json = await readJson(response);
       if (!json.ok) throw new Error(json.error || "Push failed");
 
-      setStatus(`Pushed ${json.commitSha || "commit"} to ${branch}.`);
-      addChat(`Pushed update to ${branch}.`);
-      addProof(`Push complete: ${json.commitSha || "commit"}.`);
+      const commitSha = json.commitSha || json.commit?.sha || null;
+      if (!commitSha) {
+        throw new Error("Push returned without a GitHub commit SHA. Success claim blocked.");
+      }
+      const changedFiles = Array.isArray(json.changedFiles) ? json.changedFiles : [];
+      if (changedFiles.length > 0 && changedFiles.some((changedPath: string) => changedPath !== activeWorkFile.fullPath)) {
+        throw new Error(`Push verification blocked. Unexpected files changed: ${changedFiles.join(", ")}.`);
+      }
+
+      setActiveWorkFile({
+        ...activeWorkFile,
+        githubCommit: commitSha,
+        approvalStatus: "Not Approved",
+        pulledSha: json.contentSha || activeWorkFile.pulledSha,
+      });
+      setStatus(`Pushed ${commitSha} to ${activeWorkFile.branch}. Live/deploy proof still pending.`);
+      addChat(`Pushed only ${activeWorkFile.fullPath} to ${activeWorkFile.branch}.`);
+      addProof(`GitHub commit verified for active file: ${commitSha}. Deploy/live commit not yet verified.`);
       await pullFile();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Push failed";
@@ -420,7 +570,11 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
   function submitPrompt() {
     if (!promptInput.trim()) return;
     addChat(promptInput.trim());
-    addProof(`${workspaceMode} prompt queued for selected file only.`);
+    if (!lockMatchesVisibleFile) {
+      addProof("AI edit blocked until Pull opens the selected file in the main workstation editor.");
+    } else {
+      addProof(`${workspaceMode} prompt queued for activeWorkFile only: ${activeWorkFile?.fullPath}.`);
+    }
     setPromptInput("");
   }
 
@@ -448,6 +602,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
             const selected = repos.find((item) => item.fullName === nextRepo);
             setRepo(nextRepo);
             setBranch(selected?.defaultBranch || "main");
+            clearVisibleFile("Repo changed. Visible active file lock cleared.");
           }}
         >
           <option value="">repo</option>
@@ -455,31 +610,48 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
             <option key={item.id} value={item.fullName}>{item.fullName}</option>
           ))}
         </select>
-        <input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="branch" />
+        <input
+          value={branch}
+          onChange={(event) => {
+            setBranch(event.target.value);
+            clearVisibleFile("Branch changed. Pull again before edit/push.");
+          }}
+          placeholder="branch"
+        />
         <select
           value={directory}
           onChange={(event) => {
             const nextDirectory = event.target.value;
-            setDirectory(nextDirectory);
             const first = files.find((item) => item.directory === nextDirectory);
+            setDirectory(nextDirectory);
             setFilePath(first?.path || "");
+            clearVisibleFile("Folder changed. Pull the selected file before edit/push.");
           }}
         >
           <option value="">folder</option>
-          {directories.map((item) => (
+          {folderOptions.map((item) => (
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
-        <select value={filePath} onChange={(event) => setFilePath(event.target.value)}>
+        <select
+          value={filePath}
+          onChange={(event) => {
+            setFilePath(event.target.value);
+            clearVisibleFile("File changed. Pull must open it before edit/push.");
+          }}
+        >
           <option value="">file</option>
           {visibleFiles.map((item) => (
-            <option key={item.path} value={item.path}>{item.path}</option>
+            <option key={item.path} value={item.path}>{item.name || basename(item.path)}</option>
           ))}
         </select>
-        <button type="button" onClick={pullFile} disabled={loadingFile || !repo || !filePath}>
+        <button type="button" onClick={pullFile} disabled={loadingFile || !repo || !branch || !directory || !filePath}>
           {loadingFile ? "Pulling" : "Pull"}
         </button>
-        <button type="button" onClick={pushFile} disabled={pushing || !file?.sha}>
+        <button type="button" onClick={approvePush} disabled={!lockMatchesVisibleFile || !contentChanged}>
+          Approve
+        </button>
+        <button type="button" onClick={pushFile} disabled={pushing || !canPushSelectedFile || activeWorkFile?.approvalStatus !== "Approved to Push"}>
           {pushing ? "Pushing" : "Push"}
         </button>
         <button type="button" onClick={() => setFullscreen(true)}>Full</button>
@@ -487,22 +659,33 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
 
       <div className="browser">
         <div className="browserViewport">
-          {file ? (
+          {file && lockMatchesVisibleFile ? (
             <textarea
               className="workspaceFileEditor"
               value={content}
-              onChange={(event) => setContent(event.target.value)}
+              onChange={(event) => {
+                setContent(event.target.value);
+                if (activeWorkFile?.approvalStatus === "Approved to Push") {
+                  setActiveWorkFile({ ...activeWorkFile, approvalStatus: "Not Approved" });
+                }
+              }}
               spellCheck={false}
             />
           ) : workspaceMode === "Visual Editing" ? (
             <VisualEditingWorkstation
               stationLabel={label}
               route={activeRoute}
-              filePath={filePath || ""}
+              filePath={lockMatchesVisibleFile ? activeWorkFile?.fullPath || "" : ""}
               repo={repo}
               branch={branch}
-              content={content}
-              onContentChange={setContent}
+              content={lockMatchesVisibleFile ? content : ""}
+              onContentChange={(nextContent) => {
+                if (!lockMatchesVisibleFile) {
+                  addProof("Visual edit blocked: no visible selected activeWorkFile is open.");
+                  return;
+                }
+                setContent(nextContent);
+              }}
               onProof={addProof}
               onChat={addChat}
             />
@@ -514,15 +697,28 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
         </div>
       </div>
 
-      <details className="stationSettings">
+      <details className="stationSettings" open>
         <summary>Proof / Source Truth / Editor</summary>
-        <div className="truth">
-          <div><span>Repo</span><b>{repo || "none"}</b></div>
-          <div><span>Branch</span><b>{branch || "none"}</b></div>
-          <div><span>Mode</span><b>{workspaceMode}</b></div>
-          <div><span>File</span><b>{filePath || "none"}</b></div>
-          <div><span>Route</span><b>{file?.sourceTruth?.route || routeInput}</b></div>
-          <div><span>Isolation</span><b>No crossing contexts</b></div>
+        <div className="truthRows">
+          <div className="truthRow rowOne">
+            <div><span>Route</span><b>{activeRoute || "none"}</b></div>
+            <div><span>Component</span><b>{activeComponent || "none"}</b></div>
+            <div><span>File</span><b>{selectedFileName || "none"}</b></div>
+            <div><span>Branch</span><b>{branch || "none"}</b></div>
+            <div><span>Mode</span><b>{workspaceMode}</b></div>
+          </div>
+          <div className="truthRow rowTwo">
+            <div><span>Repo</span><b>{repo || "none"}</b></div>
+            <div><span>Folder</span><b>{directory || "none"}</b></div>
+            <div><span>Full Path</span><b>{selectedFullPath || "none"}</b></div>
+            <div><span>Write Target</span><b>{activeWorkFile?.writeTarget || activeWriteTarget || "none"}</b></div>
+            <div><span>Last SHA</span><b>{activeWorkFile?.pulledSha || "none"}</b></div>
+            <div><span>Approval</span><b>{activeWorkFile?.approvalStatus || "Not Approved"}</b></div>
+            <div><span>Lock</span><b>{lockMatchesVisibleFile ? activeWorkFile?.lockStatus || "Unlocked" : "Blocked"}</b></div>
+            <div><span>GitHub Commit</span><b>{activeWorkFile?.githubCommit || "none"}</b></div>
+            <div><span>Deploy Commit</span><b>{activeWorkFile?.deployCommit || "none"}</b></div>
+            <div><span>Live Commit</span><b>{activeWorkFile?.liveCommit || "none"}</b></div>
+          </div>
         </div>
         <div className="logs">
           <section>
@@ -534,14 +730,25 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
             {proofLog.map((item, idx) => <p key={`${item}-${idx}`}>{item}</p>)}
           </section>
         </div>
-        <textarea className="editor" value={content} onChange={(event) => setContent(event.target.value)} />
+        <textarea
+          className="editor"
+          value={content}
+          onChange={(event) => {
+            if (!lockMatchesVisibleFile) {
+              addProof("Lower editor edit blocked: selected file is not open as activeWorkFile.");
+              return;
+            }
+            setContent(event.target.value);
+          }}
+          readOnly={!lockMatchesVisibleFile}
+        />
       </details>
 
       <div className="stationChat">
         <textarea
           value={promptInput}
           onChange={(event) => setPromptInput(event.target.value)}
-          placeholder={`${label} AI prompt. This station only controls its selected repo/file.`}
+          placeholder={`${label} AI prompt. This station only controls its selected visible activeWorkFile.`}
         />
         <button type="button" onClick={submitPrompt}>Send</button>
       </div>
@@ -562,7 +769,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
         .stationControls {
           min-width: 0;
           display: grid;
-          grid-template-columns: 0.32fr 0.85fr 1fr 0.4fr 0.9fr 1fr auto auto auto;
+          grid-template-columns: 0.32fr 0.78fr 1fr 0.44fr 0.85fr 0.7fr auto auto auto auto;
           gap: 4px;
           align-items: center;
           padding: 4px;
@@ -658,7 +865,7 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
           overflow: hidden;
         }
         .stationSettings[open] {
-          max-height: 260px;
+          max-height: 278px;
           overflow: auto;
         }
         .stationSettings summary {
@@ -666,27 +873,36 @@ function Workstation({ label, index, repos }: { label: string; index: number; re
           color: #94a3b8;
           font-weight: 900;
         }
-        .truth {
+        .truthRows {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 5px;
           margin-top: 6px;
         }
-        .truth div {
+        .truthRow {
+          display: grid;
+          gap: 4px;
+        }
+        .rowOne {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+        .rowTwo {
+          grid-template-columns: repeat(10, minmax(0, 1fr));
+        }
+        .truthRow div {
           min-width: 0;
           border: 1px solid rgba(16, 185, 129, 0.25);
           border-radius: 7px;
           background: rgba(6, 78, 59, 0.14);
           padding: 5px;
         }
-        .truth span {
+        .truthRow span {
           display: block;
           color: #6ee7b7;
           font-size: 6px;
           font-weight: 900;
           text-transform: uppercase;
         }
-        .truth b {
+        .truthRow b {
           display: block;
           color: #fff;
           font-size: 7px;
