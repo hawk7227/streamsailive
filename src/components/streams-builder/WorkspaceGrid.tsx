@@ -1,12 +1,14 @@
 ﻿"use client";
 
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
+import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 
 export default function WorkspaceGrid() {
   return (
     <main className="streamsBuilderShell">
       <section className="centerWorkspace">
         <GitHubRepositoryPicker />
+        <WorkstationChromeEnhancer />
       </section>
 
       <style jsx>{`
