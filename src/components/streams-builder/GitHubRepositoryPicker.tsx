@@ -36,12 +36,11 @@ export default function GitHubRepositoryPicker() {
   const [filePath, setFilePath] = useState("");
   const [activeFile, setActiveFile] = useState<FileResult | null>(null);
   const [content, setContent] = useState("");
-  const [status, setStatus] = useState("Select repo, folder, file, then Pull.");
+  const [status, setStatus] = useState("Ready");
   const [busy, setBusy] = useState(false);
 
   const folders = useMemo(() => unique(files.map((file) => file.directory)), [files]);
   const folderFiles = useMemo(() => files.filter((file) => file.directory === folder), [files, folder]);
-  const selectedRepo = useMemo(() => repos.find((item) => item.fullName === repo), [repos, repo]);
   const selectedFile = useMemo(() => files.find((file) => file.path === filePath), [files, filePath]);
   const selectedFullPath = folder && selectedFile ? `${folder}/${selectedFile.name || basename(selectedFile.path)}` : filePath;
   const activeMatchesSelection = Boolean(activeFile?.path && activeFile.path === selectedFullPath);
@@ -100,7 +99,7 @@ export default function GitHubRepositoryPicker() {
       if ((json.path || selectedFullPath) !== selectedFullPath) throw new Error("Pull blocked: returned path does not match selected file.");
       setActiveFile(json);
       setContent(json.content || "");
-      setStatus(`Pulled visible active file: ${selectedFullPath}`);
+      setStatus(`Pulled: ${selectedFullPath}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Pull failed");
     } finally {
@@ -110,7 +109,7 @@ export default function GitHubRepositoryPicker() {
 
   async function pushFile() {
     if (!canPush || !activeFile?.sha) {
-      setStatus("Push blocked until pulled file matches visible selected file and content changed.");
+      setStatus("Push blocked until selected file is pulled and changed.");
       return;
     }
     setBusy(true);
@@ -122,7 +121,7 @@ export default function GitHubRepositoryPicker() {
         body: JSON.stringify({ repo, branch, path: selectedFullPath, sha: activeFile.sha, content, agent: "Agent 1", message: `Agent 1: update ${selectedFullPath}` }),
       }));
       if (!json.ok) throw new Error(json.error || "Push failed");
-      setStatus(`Pushed GitHub commit: ${json.commitSha || "commit"}`);
+      setStatus(`Pushed: ${json.commitSha || "commit"}`);
       await pullFile();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Push failed");
@@ -135,25 +134,21 @@ export default function GitHubRepositoryPicker() {
   useEffect(() => { if (repo && branch) void loadTree(repo, branch); }, [repo, branch]);
 
   return (
-    <section className="repoWorkspace">
-      <div className="repoControls">
-        <label><b>Repo</b><select value={repo} onChange={(event) => { const next = event.target.value; const found = repos.find((item) => item.fullName === next); setRepo(next); setBranch(found?.defaultBranch || "main"); }}><option value="">repo</option>{repos.map((item) => <option key={item.id} value={item.fullName}>{item.fullName}</option>)}</select></label>
-        <label><b>Folder</b><select value={folder} onChange={(event) => { const next = event.target.value; const first = files.find((item) => item.directory === next); setFolder(next); setFilePath(first?.path || ""); setActiveFile(null); setContent(""); }}><option value="">folder</option>{folders.map((item) => <option key={item} value={item}>📁 {item}</option>)}</select></label>
-        <label><b>File</b><select value={filePath} onChange={(event) => { setFilePath(event.target.value); setActiveFile(null); setContent(""); }}><option value="">file</option>{folderFiles.map((item) => <option key={item.path} value={item.path}>📄 {item.name} · {item.sha.slice(0, 7)}</option>)}</select></label>
-        <label><b>Branch</b><input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="branch" /></label>
-        <button type="button" onClick={pullFile} disabled={busy || !filePath}>Pull</button>
-        <button type="button" onClick={pushFile} disabled={busy || !canPush}>Push</button>
-      </div>
-      <div className="proofRow"><span>FULL PATH</span><b>{selectedFullPath || "none"}</b><span>WRITE TARGET</span><b>{repo && branch && selectedFullPath ? `${repo}@${branch}:${selectedFullPath}` : "none"}</b><span>LOCK</span><b>{activeMatchesSelection ? "Visible selected file" : "Pull required"}</b></div>
-      <textarea className="fileEditor" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Pulled file opens here." readOnly={!activeMatchesSelection} spellCheck={false} />
-      <p className="status">{status}</p>
+    <section className="topControlStrip" aria-label="GitHub workspace controls">
+      <label><b>Repo</b><select value={repo} onChange={(event) => { const next = event.target.value; const found = repos.find((item) => item.fullName === next); setRepo(next); setBranch(found?.defaultBranch || "main"); }}><option value="">repo</option>{repos.map((item) => <option key={item.id} value={item.fullName}>{item.fullName}</option>)}</select></label>
+      <label><b>Folder</b><select value={folder} onChange={(event) => { const next = event.target.value; const first = files.find((item) => item.directory === next); setFolder(next); setFilePath(first?.path || ""); setActiveFile(null); setContent(""); }}><option value="">folder</option>{folders.map((item) => <option key={item} value={item}>📁 {item}</option>)}</select></label>
+      <label><b>File</b><select value={filePath} onChange={(event) => { setFilePath(event.target.value); setActiveFile(null); setContent(""); }}><option value="">file</option>{folderFiles.map((item) => <option key={item.path} value={item.path}>📄 {item.name} · {item.sha.slice(0, 7)}</option>)}</select></label>
+      <label><b>Branch</b><input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="branch" /></label>
+      <label><b>Lock</b><span>{activeMatchesSelection ? "open" : "pull"}</span></label>
+      <button type="button" onClick={pullFile} disabled={busy || !filePath}>Pull</button>
+      <button type="button" onClick={pushFile} disabled={busy || !canPush}>Push</button>
+      <small>{status}</small>
       <style jsx>{`
-        .repoWorkspace{min-width:0;min-height:0;height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px;overflow:hidden;}
-        .repoControls{display:grid;grid-template-columns:1.2fr 1.2fr 1fr .5fr auto auto;gap:6px;align-items:end;}
-        label{min-width:0;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:#020617;padding:6px;}label b,.proofRow span{display:block;color:#6ee7b7;font-size:9px;font-weight:900;text-transform:uppercase;margin-bottom:3px;}
-        select,input{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;}option{color:#020617;}button{height:36px;border:0;border-radius:9px;background:#7c3aed;color:#fff;font-size:11px;font-weight:900;padding:0 13px;cursor:pointer;}button:disabled{opacity:.45;cursor:not-allowed;}
-        .proofRow{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1.4fr) auto minmax(0,.8fr);gap:6px;align-items:center;border:1px solid rgba(16,185,129,.22);border-radius:10px;background:rgba(6,78,59,.13);padding:6px;}.proofRow b{min-width:0;color:#fff;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .fileEditor{min-width:0;min-height:0;width:100%;height:100%;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:#020617;color:#e5e7eb;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px;line-height:1.5;padding:12px;resize:none;box-sizing:border-box;}.status{margin:0;color:#cbd5e1;font-size:10px;}
+        .topControlStrip{min-width:0;height:34px;display:grid;grid-template-columns:minmax(120px,1.1fr) minmax(140px,1.1fr) minmax(120px,1fr) 88px 70px auto auto minmax(120px,.7fr);gap:10px;align-items:center;overflow:hidden;background:transparent;border:0;padding:0 2px;box-sizing:border-box;}
+        label{min-width:0;height:28px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;align-items:end;border:0;border-radius:0;background:transparent;padding:0;border-bottom:1px solid rgba(148,163,184,.34);}
+        b{color:#6ee7b7;font-size:9px;font-weight:900;text-transform:uppercase;line-height:1;align-self:center;}
+        select,input,span{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;padding:0 0 3px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}option{color:#020617;}span{display:block;color:#cbd5e1;}
+        button{height:28px;border:0;border-radius:7px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;padding:0 12px;cursor:pointer;}button:disabled{opacity:.42;cursor:not-allowed;}small{min-width:0;color:#94a3b8;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
       `}</style>
     </section>
   );
