@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import AgentOneWorkstation from "./AgentOneWorkstation";
+import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
@@ -37,7 +37,7 @@ export default function WorkspaceGrid() {
         <section className="workArea">
           <BuilderCenterChat />
           <section className="workstationShell">
-            <div className="stationViewport"><AgentOneWorkstation /></div>
+            <div className="stationViewport"><AgentOneCodexWorkstation /></div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
             {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>Existing readiness stays under the workstation.</span></p><p><b>Files</b><span>Attached to this workstation.</span></p><p><b>Context</b><span>Current single workstation context.</span></p></div> : null}
