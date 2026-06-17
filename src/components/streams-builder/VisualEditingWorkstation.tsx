@@ -28,7 +28,7 @@ const initialLayers: Layer[] = [
 export default function VisualEditingWorkstation({ stationLabel, route, filePath, repo, branch, content, onContentChange, onProof, onChat }: Props) {
   const [layers, setLayers] = useState<Layer[]>(initialLayers);
   const [selectedId, setSelectedId] = useState(initialLayers[0].id);
-  const [viewMode, setViewMode] = useState<ViewMode>("browser");
+  const [viewMode, setViewMode] = useState<ViewMode>("editor");
   const [routeInput, setRouteInput] = useState(route || "/");
   const [browserUrl, setBrowserUrl] = useState(route || "/");
   const [frameKey, setFrameKey] = useState(0);
@@ -41,7 +41,7 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   useEffect(() => {
     setRouteInput(route || "/");
     setBrowserUrl(route || "/");
-    setViewMode("browser");
+    setViewMode("editor");
     setFrameKey((value) => value + 1);
   }, [route, filePath]);
 
