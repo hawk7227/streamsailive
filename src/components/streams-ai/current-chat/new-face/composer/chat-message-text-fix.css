@@ -1,37 +1,84 @@
-.shell .chatPanel .msg .bubble,
-.shell .chatPanel .msg .bubble p,
-.shell .chatPanel .msg .bubble li,
-.shell .chatPanel .msg .bubble span,
-.shell .chatPanel .msg .bubble strong,
-.shell .chatPanel .msg .bubble em,
-.shell .chatPanel .msg .bubble code {
-  color: #ffffff !important;
-  font-weight: 800;
+.shell .chatPanel .msg .avatar,
+.shell .chatPanel .msg.assistant .avatar {
+  display: none !important;
 }
 
-.shell .chatPanel .msg .bubble {
-  font-size: 17px;
-  line-height: 1.55;
+.shell .chatPanel .msg.assistant {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.shell .chatPanel .msg.assistant .bubble,
+.shell .chatPanel .msg.assistant .bubble p,
+.shell .chatPanel .msg.assistant .bubble li,
+.shell .chatPanel .msg.assistant .bubble span,
+.shell .chatPanel .msg.assistant .bubble strong,
+.shell .chatPanel .msg.assistant .bubble em,
+.shell .chatPanel .msg.assistant .bubble code,
+.shell .chatPanel .msg.user .bubble,
+.shell .chatPanel .msg.user .bubble p,
+.shell .chatPanel .msg.user .bubble li,
+.shell .chatPanel .msg.user .bubble span,
+.shell .chatPanel .msg.user .bubble strong,
+.shell .chatPanel .msg.user .bubble em,
+.shell .chatPanel .msg.user .bubble code {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+.shell .chatPanel .msg.assistant .bubble {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-size: 17px !important;
+  line-height: 1.55 !important;
+}
+
+.streamsComposerRow {
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr) 52px !important;
+  grid-template-rows: 34px 18px !important;
+  grid-template-areas:
+    "tools input send"
+    ". mode send" !important;
 }
 
 .streamsComposerPill {
-  color: var(--text);
-  font-weight: 560;
+  grid-area: mode !important;
+  justify-self: start !important;
+  align-self: start !important;
 }
 
 .streamsComposerMicButton {
-  font-weight: inherit;
+  grid-area: mode !important;
+  justify-self: start !important;
+  align-self: start !important;
+  margin-left: 88px !important;
 }
 
 @media (max-width: 760px) {
-  .shell .chatPanel .msg .bubble {
-    font-size: 15px;
-    line-height: 1.5;
+  .shell .chatPanel .msg.assistant .bubble {
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+  }
+
+  .streamsComposerRow {
+    grid-template-columns: 40px minmax(0, 1fr) 50px !important;
+    grid-template-rows: 33px 18px !important;
+  }
+
+  .streamsComposerMicButton {
+    margin-left: 82px !important;
   }
 }
 
 @media (max-width: 430px) {
-  .shell .chatPanel .msg .bubble {
-    font-size: 14px;
+  .shell .chatPanel .msg.assistant .bubble {
+    font-size: 14px !important;
+  }
+
+  .streamsComposerMicButton {
+    margin-left: 76px !important;
   }
 }
