@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GitHubStyleCodeEditor from "./GitHubStyleCodeEditor";
 import { verifyAgentOneWorkspaceState } from "./agent-one-state-controller";
 
@@ -48,6 +48,7 @@ export default function AgentOneCodexWorkstation() {
   const [logs, setLogs] = useState<string[]>([]);
   const [media, setMedia] = useState<MediaOutput[]>([]);
   const [previewNonce, setPreviewNonce] = useState(0);
+  const summaryRailRef = useRef<HTMLElement | null>(null);
 
   const previewRoute = route || routeFromFile(filePath);
   const previewSrc = `${previewRoute}${previewRoute.includes("?") ? "&" : "?"}agent1Preview=${previewNonce}`;
@@ -70,6 +71,12 @@ export default function AgentOneCodexWorkstation() {
     previewHardCoded: false,
     lastPulledSha: sha,
   }), [repo, branch, filePath, previewRoute, code, logs, sha]);
+
+  useEffect(() => {
+    const rail = summaryRailRef.current;
+    if (!rail) return;
+    rail.scrollTop = rail.scrollHeight;
+  }, [summary, logs, verification.proof.length, status]);
 
   function stamp(message: string) {
     const next = `${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} ${message}`;
@@ -140,23 +147,14 @@ export default function AgentOneCodexWorkstation() {
 
   return (
     <section className="agentOneCodex" aria-label="Agent 1 Codex-style workscreen">
-      <header className="agentTopbar">
-        <b>Agent 1 Active</b>
-        <span>{status}</span>
-        <span>{repo}</span>
-        <span>{branch}</span>
-        <span>{filePath}</span>
-        <button type="button" onClick={() => setSurface("code")}>Code</button>
-        <button type="button" onClick={() => setSurface("frontend")}>Frontend UI</button>
-        <button type="button" onClick={repairPreview}>Repair Preview</button>
-      </header>
       <main className="workscreen">
-        <aside className="summaryRail">
+        <aside ref={summaryRailRef} className="summaryRail" aria-live="polite">
           <p className="meta">Worked in Agent 1 · {repo} · {branch}</p>
           <h3>Summary</h3>
           {summary.length ? <ul>{summary.slice(-8).map((item) => <li key={item}>{item}</li>)}</ul> : <p className="emptySummary">No agent summary yet.</p>}
           <h3>Verification</h3>
           <ul>{verification.proof.slice(0, 6).map((item) => <li key={item}>{item}</li>)}</ul>
+          {logs.length ? <><h3>Agent Log</h3><ul>{logs.slice(-8).map((item) => <li key={item}>{item}</li>)}</ul></> : null}
         </aside>
         <section className="editorSide">
           <nav className="tabs">
@@ -165,7 +163,7 @@ export default function AgentOneCodexWorkstation() {
           <div className="pane">
             {surface === "summary" ? <div className="textPane"><h2>{filePath}</h2><p><b>Route:</b> {previewRoute}</p><p><b>SHA:</b> {sha || "missing"}</p></div> : null}
             {surface === "code" ? <GitHubStyleCodeEditor value={code} onChange={setCode} filePath={filePath} /> : null}
-            {surface === "frontend" ? <iframe title={`Frontend UI preview for ${filePath}`} src={previewSrc} /> : null}
+            {surface === "frontend" ? <div className="frontendScroll"><iframe title={`Frontend UI preview for ${filePath}`} src={previewSrc} /></div> : null}
             {surface === "diff" ? <pre className="diff">{code.split("\n").slice(0, 120).map((line, index) => `${String(index + 1).padStart(4, " ")}  ${line}`).join("\n")}</pre> : null}
             {surface === "logs" ? <div className="logs">{logs.slice(-40).map((item) => <p key={item}>{item}</p>)}</div> : null}
             {surface === "media" ? <div className="media">{media.length ? media.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.kind} · {item.status}</span><p>{item.prompt}</p>{item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open output</a> : <em>Waiting for artifact URL from generation runtime.</em>}</article>) : <p>No image/video output has been routed here yet.</p>}</div> : null}
@@ -173,12 +171,10 @@ export default function AgentOneCodexWorkstation() {
         </section>
       </main>
       <style jsx>{`
-        .agentOneCodex{height:100%;min-height:0;display:grid;grid-template-rows:34px minmax(0,1fr);overflow:hidden;background:#f6f8fa;color:#24292f;}
-        .agentTopbar{min-width:0;display:grid;grid-template-columns:auto auto minmax(120px,.9fr) auto minmax(160px,1.2fr) auto auto auto;gap:6px;align-items:center;border-bottom:1px solid #d8dee4;background:#f6f8fa;padding:4px 8px;box-sizing:border-box;}
-        .agentTopbar b{color:#24292f;font-size:10px;}.agentTopbar span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#57606a;font-size:10px;}.agentTopbar button{height:24px;border:1px solid #d0d7de;border-radius:6px;background:#fff;color:#24292f;font-size:10px;font-weight:700;cursor:pointer;}
+        .agentOneCodex{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden;background:#f6f8fa;color:#24292f;}
         .workscreen{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(240px,.34fr) minmax(0,1fr);overflow:hidden;}
-        .summaryRail{min-width:0;overflow:auto;border-right:1px solid #d8dee4;background:#fff;padding:16px;box-sizing:border-box;}.summaryRail .meta{margin:0 0 16px;color:#57606a;font-size:12px;}.summaryRail h3{margin:14px 0 8px;font-size:18px;}.summaryRail ul{margin:0;padding-left:18px;display:grid;gap:10px;}.summaryRail li{font-size:13px;line-height:1.45;}.emptySummary{font-size:13px;color:#57606a;}
-        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}iframe{display:block;width:100%;min-width:0;height:100%;border:0;background:#fff;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}
+        .summaryRail{min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;border-right:1px solid #d8dee4;background:#fff;padding:16px;box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}.summaryRail::-webkit-scrollbar,.frontendScroll::-webkit-scrollbar{width:5px;height:5px}.summaryRail::-webkit-scrollbar-track,.frontendScroll::-webkit-scrollbar-track{background:transparent}.summaryRail::-webkit-scrollbar-thumb,.frontendScroll::-webkit-scrollbar-thumb{background:#0f172a;border-radius:999px}.summaryRail .meta{margin:0 0 16px;color:#57606a;font-size:12px;}.summaryRail h3{margin:14px 0 8px;font-size:18px;}.summaryRail ul{margin:0;padding-left:18px;display:grid;gap:10px;}.summaryRail li{font-size:13px;line-height:1.45;}.emptySummary{font-size:13px;color:#57606a;}
+        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}.frontendScroll{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:#020617;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}iframe{display:block;width:100%;min-width:0;height:2400px;border:0;background:#fff;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}
       `}</style>
     </section>
   );
