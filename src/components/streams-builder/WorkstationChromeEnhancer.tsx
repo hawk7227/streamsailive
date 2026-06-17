@@ -244,7 +244,12 @@ export default function WorkstationChromeEnhancer() {
 
   return <style jsx global>{`
     .station,.workstationShell{position:relative!important;border-color:var(--ws-border)!important;background:var(--ws-bg)!important;}
-    .wsChrome{height:34px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 6px;background:#020617;border-bottom:1px solid rgba(148,163,184,.18);cursor:move;z-index:20;}
+    .workstationShell{align-content:start!important;grid-auto-flow:row!important;grid-template-rows:34px minmax(0,1fr) auto auto auto!important;}
+    .workstationShell>.wsChrome{grid-row:1!important;}
+    .workstationShell>.stationViewport{grid-row:2!important;align-self:start!important;min-height:0!important;height:calc(100dvh - 82px)!important;}
+    .workstationShell>.stationContext,.workstationShell>.statusToggle,.workstationShell>.statusDrop{display:none!important;}
+    .stationViewport>.agentOneCodex,.stationViewport>.agentOneWorkstation{height:100%!important;min-height:0!important;}
+    .wsChrome{height:34px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 6px;background:#020617;border-bottom:1px solid rgba(148,163,184,.18);cursor:move;z-index:20;box-sizing:border-box;}
     .wsChrome b{font-size:10px;color:#fff}.wsControls{display:flex;gap:4px;align-items:center}.wsControls button{width:24px;height:22px;padding:0}.wsControls input{width:24px;height:20px;padding:0;border:0;background:transparent}
     .agentRuntimeBar{min-height:34px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 7px;background:rgba(6,78,59,.16);border-bottom:1px solid rgba(16,185,129,.26);box-sizing:border-box}.agentRuntimeTitle{min-width:0}.agentRuntimeTitle b{display:block;color:#6ee7b7;font-size:10px}.agentRuntimeTitle span{display:block;color:#cbd5e1;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.agentRuntimeControls{display:flex;gap:4px}.agentRuntimeControls button{height:24px;border:1px solid rgba(148,163,184,.18);border-radius:6px;background:#7c3aed;color:#fff;font-size:8px;font-weight:900;padding:0 7px;white-space:nowrap}.agentRuntimePreview{min-height:320px;background:#fff;border-bottom:1px solid rgba(148,163,184,.18);overflow:auto}.agentRuntimePreview iframe{display:block;width:1366px;min-width:1366px;height:420px;border:0;background:#fff}
     .wsMinimized{max-height:38px!important;min-height:38px!important;overflow:hidden!important}.wsLocked>*:not(.wsChrome):not(.wsHandle){pointer-events:none!important;opacity:.55!important}
