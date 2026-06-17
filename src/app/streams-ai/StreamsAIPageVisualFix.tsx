@@ -38,9 +38,23 @@ export default function StreamsAIPageVisualFix() {
         font-weight: 900 !important;
       }
 
+      .shell.mobile .bottomNav {
+        height: 46px !important;
+        min-height: 46px !important;
+        padding: 4px 6px !important;
+      }
+
+      .shell.mobile .bottomNav button,
+      .shell.mobile .bottomNav a {
+        min-height: 34px !important;
+        height: 34px !important;
+        padding: 4px 7px !important;
+        font-size: 11px !important;
+      }
+
       .shell.mobile .chatScroll {
         padding-top: 92px !important;
-        padding-bottom: calc(172px + var(--keyboard)) !important;
+        padding-bottom: calc(150px + var(--keyboard)) !important;
         justify-content: center !important;
       }
 
@@ -50,7 +64,7 @@ export default function StreamsAIPageVisualFix() {
       }
 
       .shell.mobile .composer {
-        bottom: calc(72px + var(--keyboard)) !important;
+        bottom: calc(70px + var(--keyboard)) !important;
         left: 12px !important;
         right: 12px !important;
         overflow: visible !important;
@@ -86,13 +100,13 @@ export default function StreamsAIPageVisualFix() {
       .streamsComposerPill {
         position: absolute !important;
         left: 50% !important;
-        top: calc(100% + 4px) !important;
+        top: calc(100% + 10px) !important;
         bottom: auto !important;
         transform: translateX(-58%) !important;
         background: transparent !important;
         border: 0 !important;
         box-shadow: none !important;
-        height: 18px !important;
+        height: 16px !important;
         padding: 0 !important;
         z-index: 6 !important;
       }
@@ -100,14 +114,14 @@ export default function StreamsAIPageVisualFix() {
       .streamsComposerMicButton {
         position: absolute !important;
         left: 50% !important;
-        top: calc(100% + 4px) !important;
+        top: calc(100% + 10px) !important;
         bottom: auto !important;
         transform: translateX(54px) !important;
         margin-left: 0 !important;
         background: transparent !important;
         border: 0 !important;
         box-shadow: none !important;
-        height: 18px !important;
+        height: 16px !important;
         padding: 0 !important;
         z-index: 6 !important;
       }
@@ -118,9 +132,23 @@ export default function StreamsAIPageVisualFix() {
           line-height: 1.45 !important;
         }
 
+        .shell.mobile .bottomNav {
+          height: 42px !important;
+          min-height: 42px !important;
+          padding: 3px 5px !important;
+        }
+
+        .shell.mobile .bottomNav button,
+        .shell.mobile .bottomNav a {
+          min-height: 31px !important;
+          height: 31px !important;
+          padding: 3px 6px !important;
+          font-size: 10px !important;
+        }
+
         .shell.mobile .chatScroll {
           padding-top: 86px !important;
-          padding-bottom: calc(162px + var(--keyboard)) !important;
+          padding-bottom: calc(144px + var(--keyboard)) !important;
         }
 
         .shell.mobile .empty h1 {
@@ -134,7 +162,7 @@ export default function StreamsAIPageVisualFix() {
         }
 
         .shell.mobile .composer {
-          bottom: calc(68px + var(--keyboard)) !important;
+          bottom: calc(62px + var(--keyboard)) !important;
         }
 
         .streamsComposer {
@@ -148,12 +176,12 @@ export default function StreamsAIPageVisualFix() {
         }
 
         .streamsComposerPill {
-          top: calc(100% + 3px) !important;
+          top: calc(100% + 8px) !important;
           transform: translateX(-58%) !important;
         }
 
         .streamsComposerMicButton {
-          top: calc(100% + 3px) !important;
+          top: calc(100% + 8px) !important;
           transform: translateX(48px) !important;
         }
       }
