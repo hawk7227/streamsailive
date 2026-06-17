@@ -5,10 +5,13 @@ import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
+import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
 
 const MODULES = [
+  "Primary Builder",
+  "Visual Editing",
   "Component Mapping",
   "Approval Center",
   "Browser Verification",
@@ -21,9 +24,11 @@ type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
 
 export default function WorkspaceGrid() {
-  const [activeModule, setActiveModule] = useState<ModuleName>("Component Mapping");
+  const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
   const [viewMode, setViewMode] = useState<ViewMode>("Single");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [visualEditorContent, setVisualEditorContent] = useState("");
+  const [visualEditorLog, setVisualEditorLog] = useState<string[]>([]);
 
   return (
     <main className="streamsBuilderShell">
@@ -38,10 +43,26 @@ export default function WorkspaceGrid() {
         <section className="workArea">
           <BuilderCenterChat />
           <section className="workstationShell">
-            <div className="stationViewport"><AgentOneCodexWorkstation /></div>
+            <div className="stationViewport">
+              {activeModule === "Visual Editing" ? (
+                <VisualEditingWorkstation
+                  stationLabel="Agent 1"
+                  route="/"
+                  filePath="src/app/page.tsx"
+                  repo="hawk7227/streamsailive"
+                  branch="main"
+                  content={visualEditorContent}
+                  onContentChange={setVisualEditorContent}
+                  onProof={(message) => setVisualEditorLog((items) => [...items.slice(-20), message])}
+                  onChat={(message) => setVisualEditorLog((items) => [...items.slice(-20), message])}
+                />
+              ) : (
+                <AgentOneCodexWorkstation />
+              )}
+            </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>Existing readiness stays under the workstation.</span></p><p><b>Files</b><span>Attached to this workstation.</span></p><p><b>Context</b><span>Current single workstation context.</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Existing readiness stays under the workstation."}</span></p><p><b>Files</b><span>Attached to this workstation.</span></p><p><b>Context</b><span>Current single workstation context.</span></p></div> : null}
           </section>
         </section>
       </section>
