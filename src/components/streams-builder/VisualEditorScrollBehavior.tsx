@@ -3,7 +3,9 @@
 export default function VisualEditorScrollBehavior() {
   return (
     <style jsx global>{`
-      .visualEditor .canvas {
+      .visualEditor .canvas,
+      .visualEditor .canvas.browser,
+      .visualEditor .canvas.mobile {
         overflow: auto !important;
         scrollbar-width: thin;
         scrollbar-color: #334155 rgba(2, 6, 23, 0.28);
@@ -30,40 +32,6 @@ export default function VisualEditorScrollBehavior() {
       .visualEditor .patchBox::-webkit-scrollbar-thumb {
         background: #334155;
         border-radius: 999px;
-      }
-
-      .visualEditor .canvas.browser,
-      .visualEditor .canvas.mobile {
-        overflow: auto !important;
-      }
-
-      .visualEditor .desktopFrame {
-        width: 100% !important;
-        min-width: 0 !important;
-        height: 6000px !important;
-        min-height: 6000px !important;
-      }
-
-      .visualEditor .desktopFrame iframe {
-        width: 100% !important;
-        height: 6000px !important;
-        min-height: 6000px !important;
-      }
-
-      .visualEditor .phoneFrame {
-        height: 1200px !important;
-        min-height: 1200px !important;
-        overflow: auto !important;
-      }
-
-      .visualEditor .phoneFrame iframe {
-        height: 1600px !important;
-        min-height: 1600px !important;
-      }
-
-      .visualEditor .frontView {
-        min-height: 900px !important;
-        overflow: auto !important;
       }
 
       .visualEditor .editorDrawer[open],
