@@ -4,6 +4,7 @@ import { useState } from "react";
 import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
+import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
 
@@ -44,6 +45,7 @@ export default function WorkspaceGrid() {
           </section>
         </section>
       </section>
+      <TopRowWorkstationControls />
       <WorkstationChromeEnhancer />
       <style jsx>{`
         .streamsBuilderShell{width:100vw;height:100dvh;display:block;background:#020713;color:#fff;padding:0;box-sizing:border-box;overflow:auto;}
