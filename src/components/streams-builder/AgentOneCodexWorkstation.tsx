@@ -6,7 +6,8 @@ import { verifyAgentOneWorkspaceState } from "./agent-one-state-controller";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
 type Surface = "summary" | "code" | "frontend" | "diff" | "logs" | "media";
-type MediaOutput = { id?: string; kind?: "image" | "video" | "audio" | "file"; title?: string; prompt?: string; url?: string; status?: string };
+type MediaKind = "image" | "video" | "audio" | "file";
+type MediaOutput = { id?: string; kind?: MediaKind; title?: string; prompt?: string; url?: string; status?: string };
 
 function readStoredActiveFile() {
   try {
@@ -115,7 +116,7 @@ export default function AgentOneCodexWorkstation() {
       stamp(`Agent command: ${prompt}`);
       if (detail?.pulled?.path) mountPulledFile(detail.pulled);
       if (surfaceFromPrompt(prompt) === "media") {
-        const kind = /video|movie/.test(prompt.toLowerCase()) ? "video" : /audio|voice/.test(prompt.toLowerCase()) ? "audio" : "image";
+        const kind: MediaKind = /video|movie/.test(prompt.toLowerCase()) ? "video" : /audio|voice/.test(prompt.toLowerCase()) ? "audio" : "image";
         setMedia((items) => [{ id: `${Date.now()}`, kind, title: `${kind.toUpperCase()} output slot`, prompt, status: "Waiting for real generation artifact URL" }, ...items].slice(0, 12));
       }
     }
