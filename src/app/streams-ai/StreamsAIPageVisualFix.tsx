@@ -40,7 +40,7 @@ export default function StreamsAIPageVisualFix() {
 
       .shell.mobile .chatScroll {
         padding-top: 92px !important;
-        padding-bottom: calc(194px + var(--keyboard)) !important;
+        padding-bottom: calc(172px + var(--keyboard)) !important;
         justify-content: center !important;
       }
 
@@ -50,27 +50,29 @@ export default function StreamsAIPageVisualFix() {
       }
 
       .shell.mobile .composer {
-        bottom: calc(78px + var(--keyboard)) !important;
+        bottom: calc(72px + var(--keyboard)) !important;
         left: 12px !important;
         right: 12px !important;
+        overflow: visible !important;
       }
 
       .streamsComposer {
-        min-height: 112px !important;
-        padding-bottom: 36px !important;
+        min-height: 62px !important;
+        padding: 7px 10px !important;
         overflow: visible !important;
       }
 
       .streamsComposerRow {
         display: grid !important;
         grid-template-columns: 58px minmax(0, 1fr) 72px !important;
-        grid-template-rows: 56px !important;
+        grid-template-rows: 52px !important;
         grid-template-areas: "tools input send" !important;
         align-items: center !important;
       }
 
       .streamsComposerInput {
         grid-area: input !important;
+        align-self: center !important;
       }
 
       .streamsComposerIconButton {
@@ -83,21 +85,31 @@ export default function StreamsAIPageVisualFix() {
 
       .streamsComposerPill {
         position: absolute !important;
-        left: 88px !important;
-        bottom: 8px !important;
+        left: 50% !important;
+        top: calc(100% + 4px) !important;
+        bottom: auto !important;
+        transform: translateX(-58%) !important;
         background: transparent !important;
         border: 0 !important;
         box-shadow: none !important;
+        height: 18px !important;
+        padding: 0 !important;
+        z-index: 6 !important;
       }
 
       .streamsComposerMicButton {
         position: absolute !important;
-        left: 210px !important;
-        bottom: 8px !important;
+        left: 50% !important;
+        top: calc(100% + 4px) !important;
+        bottom: auto !important;
+        transform: translateX(54px) !important;
         margin-left: 0 !important;
         background: transparent !important;
         border: 0 !important;
         box-shadow: none !important;
+        height: 18px !important;
+        padding: 0 !important;
+        z-index: 6 !important;
       }
 
       @media (max-width: 760px) {
@@ -108,7 +120,7 @@ export default function StreamsAIPageVisualFix() {
 
         .shell.mobile .chatScroll {
           padding-top: 86px !important;
-          padding-bottom: calc(188px + var(--keyboard)) !important;
+          padding-bottom: calc(162px + var(--keyboard)) !important;
         }
 
         .shell.mobile .empty h1 {
@@ -121,24 +133,28 @@ export default function StreamsAIPageVisualFix() {
           line-height: 1.35 !important;
         }
 
+        .shell.mobile .composer {
+          bottom: calc(68px + var(--keyboard)) !important;
+        }
+
         .streamsComposer {
-          min-height: 104px !important;
-          padding-bottom: 32px !important;
+          min-height: 58px !important;
+          padding: 6px 8px !important;
         }
 
         .streamsComposerRow {
           grid-template-columns: 42px minmax(0, 1fr) 52px !important;
-          grid-template-rows: 52px !important;
+          grid-template-rows: 48px !important;
         }
 
         .streamsComposerPill {
-          left: 82px !important;
-          bottom: 7px !important;
+          top: calc(100% + 3px) !important;
+          transform: translateX(-58%) !important;
         }
 
         .streamsComposerMicButton {
-          left: 198px !important;
-          bottom: 7px !important;
+          top: calc(100% + 3px) !important;
+          transform: translateX(48px) !important;
         }
       }
     `;
