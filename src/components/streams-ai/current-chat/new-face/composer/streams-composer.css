@@ -1,181 +1,197 @@
 .streamsComposer {
   --bg: #050712;
-  --base: #090b18;
-  --glass: rgba(16, 10, 38, 0.72);
+  --glass: rgba(16, 10, 38, 0.68);
   --magenta: #d946ef;
   --violet: #7c3aed;
   --blue: #2563eb;
   --cyan: #06d9ff;
-  --text: #edebff;
-  --muted: #9ca3af;
+  --text: #ffffff;
+  --muted: rgba(255,255,255,.72);
   position: relative;
   width: 100%;
-  min-height: 88px;
+  min-height: 104px;
   border: 1.5px solid transparent;
-  border-radius: 42px;
+  border-radius: 30px;
   background: linear-gradient(var(--glass), var(--glass)) padding-box, linear-gradient(92deg, var(--magenta), var(--violet) 54%, var(--blue)) border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 0 16px 0 18px;
-  box-shadow: 0 0 28px rgba(217,70,239,.55), 0 18px 60px rgba(0,0,0,.32), inset 0 0 28px rgba(124,58,237,.28);
+  padding: 9px 12px 8px;
+  box-shadow: 0 0 24px rgba(217,70,239,.42), 0 14px 48px rgba(0,0,0,.34), inset 0 0 22px rgba(124,58,237,.2);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
-  backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.25);
 }
 
 .streamsComposer::before,
 .streamsComposer::after {
   content: "";
   position: absolute;
-  inset: -38px -64px;
+  inset: -18px -28px;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(circle at 76% 52%, rgba(217,70,239,.34), transparent 19%), radial-gradient(circle at 50% 54%, rgba(6,217,255,.24), transparent 20%), linear-gradient(90deg, rgba(217,70,239,.34), rgba(37,99,235,.32), rgba(6,217,255,.18), rgba(217,70,239,.28));
-  filter: blur(22px);
-  opacity: .46;
-  transform: translateX(-12px) skewX(-12deg);
+  background: radial-gradient(circle at 76% 52%, rgba(217,70,239,.26), transparent 19%), radial-gradient(circle at 50% 54%, rgba(6,217,255,.18), transparent 20%), linear-gradient(90deg, rgba(217,70,239,.2), rgba(37,99,235,.18), rgba(6,217,255,.12), rgba(217,70,239,.2));
+  filter: blur(18px);
+  opacity: .38;
+  transform: translateX(-8px) skewX(-10deg);
   animation: streamsLiquidDrift 8s ease-in-out infinite alternate;
 }
 
 .streamsComposer::after {
-  inset: 8px 76px 10px 116px;
+  inset: 18px 86px 38px 124px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(37,99,235,.34), rgba(6,217,255,.22), rgba(217,70,239,.28), transparent);
-  filter: blur(18px);
-  opacity: .52;
+  background: linear-gradient(90deg, transparent, rgba(37,99,235,.22), rgba(6,217,255,.15), rgba(217,70,239,.2), transparent);
+  filter: blur(14px);
+  opacity: .38;
   animation: streamsWaveRun 6.8s ease-in-out infinite alternate;
 }
 
 .streamsComposer:focus-within {
-  box-shadow: 0 0 36px rgba(217,70,239,.72), 0 18px 70px rgba(0,0,0,.36), inset 0 0 34px rgba(124,58,237,.34);
-}
-
-.streamsComposer:focus-within::before {
-  animation: streamsThinkingPulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 30px rgba(217,70,239,.58), 0 18px 60px rgba(0,0,0,.38), inset 0 0 28px rgba(124,58,237,.24);
 }
 
 .streamsComposerRow {
   position: relative;
   z-index: 3;
   width: 100%;
-  min-height: 86px;
+  min-height: 82px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 10px;
+  padding-right: 2px;
 }
 
 .streamsComposerRow::before {
   content: "";
   position: absolute;
-  inset: -1px -8px;
+  inset: -1px -3px 36px -3px;
   z-index: -1;
-  border-radius: 38px;
-  background: rgba(5,7,18,.42);
+  border-radius: 26px;
+  background: rgba(5,7,18,.32);
   pointer-events: none;
 }
 
 .streamsComposerInput {
   position: relative;
   z-index: 3;
-  flex: 1;
+  order: 2;
+  flex: 1 1 0;
   min-width: 0;
   border: 0 !important;
   outline: 0 !important;
   box-shadow: none !important;
   background: transparent;
-  color: var(--text);
-  font-size: 25px;
-  line-height: 1.25;
-  font-weight: 430;
-  letter-spacing: -0.03em;
-  text-shadow: 0 0 14px rgba(192,132,252,.18);
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-shadow: 0 0 10px rgba(192,132,252,.16);
 }
 
-.streamsComposerInput::placeholder { color: rgba(237,235,255,.68); }
-.streamsComposer button { position: relative; z-index: 3; font: inherit; }
-.streamsComposerIconButton, .streamsComposerSendButton, .streamsComposerMicButton, .streamsComposerPill { border: 0; cursor: pointer; flex: none; }
+.streamsComposerInput::placeholder {
+  color: rgba(255,255,255,.72);
+  font-weight: 800;
+}
+
+.streamsComposer button {
+  position: relative;
+  z-index: 3;
+  font: inherit;
+}
+
+.streamsComposerIconButton,
+.streamsComposerSendButton,
+.streamsComposerMicButton,
+.streamsComposerPill {
+  border: 0;
+  cursor: pointer;
+  flex: none;
+}
 
 .streamsComposerIconButton {
-  width: 58px;
-  height: 58px;
-  border-radius: 22px;
-  background: rgba(90,40,160,.22);
+  order: 1;
+  width: 46px;
+  height: 46px;
+  border-radius: 17px;
+  background: rgba(90,40,160,.2);
   color: #fff;
-  border: 1px solid rgba(217,70,239,.28);
+  border: 1px solid rgba(217,70,239,.3);
   display: inline-grid;
   place-items: center;
-  font-size: 34px;
+  font-size: 27px;
   font-weight: 300;
-  box-shadow: inset 0 0 18px rgba(217,70,239,.12), 0 0 18px rgba(124,58,237,.18);
+  box-shadow: inset 0 0 14px rgba(217,70,239,.1), 0 0 14px rgba(124,58,237,.14);
 }
-.streamsComposerIconButton:hover { background: rgba(124,58,237,.32); border-color: rgba(217,70,239,.52); }
+.streamsComposerIconButton:hover { background: rgba(124,58,237,.28); border-color: rgba(217,70,239,.5); }
+
+.streamsComposerSendButton {
+  order: 3;
+  width: 58px;
+  height: 58px;
+  border-radius: 21px;
+  background: linear-gradient(135deg, #d946ef 0%, #7c3aed 55%, #06d9ff 100%);
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 800;
+  box-shadow: 0 0 22px rgba(217,70,239,.62), inset 0 1px 16px rgba(255,255,255,.22);
+}
+.streamsComposerSendButton:hover { filter: brightness(1.12); }
+.streamsComposerSendButton:disabled { opacity: .86; cursor: not-allowed; animation: streamsSendPulse 1.2s ease-in-out infinite; }
+
+.streamsComposerPill,
+.streamsComposerMicButton {
+  order: 4;
+  margin-top: -1px;
+  height: 24px;
+  min-width: 0;
+  width: auto;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  border-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 800;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(124,58,237,.18);
+}
+.streamsComposerPill:hover,
+.streamsComposerMicButton:hover {
+  background: transparent !important;
+  color: #fff !important;
+}
+.streamsComposerMicButton {
+  margin-left: 12px;
+  font-size: 14px;
+}
 
 .streamsComposerToolPill {
+  order: 2;
   position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
   gap: 5px;
-  background: rgba(20,16,45,.72);
+  background: rgba(20,16,45,.58);
   color: var(--text);
-  padding: 7px 11px;
+  padding: 6px 10px;
   border-radius: 999px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid rgba(192,132,252,.35);
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid rgba(192,132,252,.25);
   white-space: nowrap;
 }
 .streamsComposerToolPillClose { background: transparent; border: none; color: var(--text); font-size: 14px; cursor: pointer; display: grid; place-items: center; padding: 0; opacity: .78; }
-
-.streamsComposerPill {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(20,16,45,.72);
-  color: var(--text);
-  padding: 0 18px;
-  border-radius: 999px;
-  font-size: 22px;
-  font-weight: 560;
-  border: 1px solid rgba(192,132,252,.35);
-  white-space: nowrap;
-  gap: 6px;
-  height: 56px;
-  min-width: 168px;
-  box-shadow: inset 0 0 18px rgba(124,58,237,.18);
-}
-.streamsComposerPill:hover { background: rgba(39,28,86,.82); color: #fff; }
-
-.streamsComposerMicButton {
-  width: 58px;
-  height: 58px;
-  border-radius: 999px;
-  background: rgba(9,11,24,.58);
-  color: #fff;
-  border: 1px solid rgba(192,132,252,.28);
-  display: inline-grid;
-  place-items: center;
-  font-size: 27px;
-  box-shadow: inset 0 0 18px rgba(124,58,237,.12);
-}
-.streamsComposerMicButton:hover { background: rgba(124,58,237,.2); }
-
-.streamsComposerSendButton {
-  width: 72px;
-  height: 72px;
-  border-radius: 22px;
-  background: linear-gradient(135deg, #d946ef 0%, #7c3aed 55%, #06d9ff 100%);
-  color: #fff;
-  display: inline-grid;
-  place-items: center;
-  font-size: 38px;
-  font-weight: 500;
-  box-shadow: 0 0 26px rgba(217,70,239,.65), inset 0 1px 18px rgba(255,255,255,.22);
-}
-.streamsComposerSendButton:hover { filter: brightness(1.12); box-shadow: 0 0 34px rgba(217,70,239,.78), 0 0 18px rgba(6,217,255,.32), inset 0 1px 18px rgba(255,255,255,.26); }
-.streamsComposerSendButton:disabled { opacity: .92; cursor: not-allowed; animation: streamsSendPulse 1.2s ease-in-out infinite; }
 
 .streamsComposerMenu {
   position: absolute;
@@ -197,7 +213,7 @@
 .streamsComposerMenu > button em { display: block; font-style: normal; color: rgba(237,235,255,.58); font-size: 12px; text-align: right; }
 .streamsProviderHint { padding: 8px 12px; color: rgba(237,235,255,.62); font-size: 12px; line-height: 1.35; }
 
-.streamsComposerAttachments { position: relative; z-index: 3; width: 100%; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid rgba(192,132,252,.16); padding: 10px 0; align-items: flex-end; }
+.streamsComposerAttachments { position: relative; z-index: 3; width: 100%; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid rgba(192,132,252,.16); padding: 8px 0; align-items: flex-end; }
 .streamsComposerAttachmentImage { position: relative; border-radius: 10px; overflow: hidden; width: 64px; height: 64px; flex-shrink: 0; }
 .streamsComposerAttachmentImage img { width: 64px; height: 64px; object-fit: cover; display: block; border-radius: 10px; }
 .streamsComposerAttachmentImage button, .streamsComposerAttachmentFile button { border: 0; cursor: pointer; }
@@ -210,24 +226,73 @@
 .streamsComposerMenu > button:disabled, .streamsComposerMenu > button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .streamsComposerMenu > button:disabled:hover, .streamsComposerMenu > button[aria-disabled="true"]:hover { background: transparent; }
 
-@keyframes streamsLiquidDrift { 0% { transform: translateX(-14px) translateY(2px) skewX(-12deg); opacity: .35; } 50% { transform: translateX(4px) translateY(-4px) skewX(-8deg); opacity: .48; } 100% { transform: translateX(14px) translateY(3px) skewX(-14deg); opacity: .42; } }
-@keyframes streamsWaveRun { 0% { transform: translateX(-18px) scaleX(.94); opacity: .34; } 100% { transform: translateX(18px) scaleX(1.04); opacity: .55; } }
-@keyframes streamsThinkingPulse { 0%,100% { transform: translateX(-8px) scale(1); opacity: .45; filter: blur(22px); } 50% { transform: translateX(8px) scale(1.04); opacity: .75; filter: blur(18px); } }
-@keyframes streamsSendPulse { 0%,100% { box-shadow: 0 0 22px rgba(217,70,239,.56), inset 0 1px 18px rgba(255,255,255,.18); } 50% { box-shadow: 0 0 38px rgba(217,70,239,.82), 0 0 22px rgba(6,217,255,.42), inset 0 1px 22px rgba(255,255,255,.28); } }
+.startWorkspaceActive .startChatSurface{
+  bottom: 150px !important;
+  padding-bottom: 190px !important;
+}
+.startWorkspaceActive .startComposerWrap{
+  bottom: 38px !important;
+  width: min(760px, calc(100% - 28px)) !important;
+  z-index: 60 !important;
+}
+.startWorkspaceActive .startConversationColumn{
+  padding-bottom: 32px !important;
+}
+
+@keyframes streamsLiquidDrift { 0% { transform: translateX(-12px) translateY(2px) skewX(-10deg); opacity: .32; } 50% { transform: translateX(4px) translateY(-4px) skewX(-8deg); opacity: .44; } 100% { transform: translateX(12px) translateY(3px) skewX(-12deg); opacity: .38; } }
+@keyframes streamsWaveRun { 0% { transform: translateX(-14px) scaleX(.96); opacity: .3; } 100% { transform: translateX(14px) scaleX(1.03); opacity: .48; } }
+@keyframes streamsSendPulse { 0%,100% { box-shadow: 0 0 18px rgba(217,70,239,.48), inset 0 1px 16px rgba(255,255,255,.18); } 50% { box-shadow: 0 0 30px rgba(217,70,239,.72), 0 0 18px rgba(6,217,255,.34), inset 0 1px 18px rgba(255,255,255,.24); } }
 
 @media (max-width: 760px) {
-  .streamsComposer { min-height: 66px; padding: 0 9px 0 12px; border-radius: 32px; }
-  .streamsComposerRow { gap: 6px; min-height: 64px; }
-  .streamsComposerRow::before { border-radius: 28px; }
-  .streamsComposerInput { font-size: 17px; letter-spacing: -0.02em; }
-  .streamsComposerPill { max-width: 112px; min-width: 0; font-size: 13px; padding: 0 11px; height: 36px; }
-  .streamsComposerSendButton { width: 52px; height: 52px; border-radius: 999px; font-size: 25px; }
-  .streamsComposerMicButton { width: 40px; height: 40px; font-size: 18px; }
-  .streamsComposerIconButton { width: 42px; height: 42px; border-radius: 16px; font-size: 25px; }
+  .streamsComposer {
+    min-height: 96px;
+    padding: 8px 10px 7px;
+    border-radius: 25px;
+  }
+  .streamsComposerRow {
+    gap: 6px 8px;
+    min-height: 78px;
+  }
+  .streamsComposerRow::before {
+    inset: -1px -2px 34px -2px;
+    border-radius: 22px;
+  }
+  .streamsComposerInput {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .streamsComposerIconButton {
+    width: 42px;
+    height: 42px;
+    border-radius: 16px;
+    font-size: 24px;
+  }
+  .streamsComposerSendButton {
+    width: 48px;
+    height: 48px;
+    border-radius: 18px;
+    font-size: 24px;
+  }
+  .streamsComposerPill,
+  .streamsComposerMicButton {
+    height: 21px;
+    font-size: 12px;
+    padding: 0 1px;
+  }
+  .streamsComposerMicButton { margin-left: 10px; }
 }
 
 @media (max-width: 430px) {
-  .streamsComposerPill { max-width: 102px; font-size: 12px; }
-  .streamsComposerMicButton { width: 38px; height: 38px; }
-  .streamsComposerInput { font-size: 16px; }
+  .streamsComposer {
+    min-height: 94px;
+    border-radius: 23px;
+  }
+  .streamsComposerInput {
+    font-size: 13px;
+  }
+  .streamsComposerPill,
+  .streamsComposerMicButton {
+    font-size: 11px;
+  }
 }
