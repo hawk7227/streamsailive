@@ -3,12 +3,25 @@
 import EnvReadinessMonitor from "../EnvReadinessMonitor";
 
 export type WorkspaceModuleName =
+  | "Primary Builder"
+  | "Visual Editing"
   | "Component Mapping"
   | "Approval Center"
   | "Browser Verification"
   | "Repository Truth"
   | "Projects Dashboard"
   | "Truth Panel";
+
+const MODULE_COPY: Record<WorkspaceModuleName, string> = {
+  "Primary Builder": "Build. Preview. Prove.",
+  "Visual Editing": "Drag. Drop. Style.",
+  "Component Mapping": "Map. Bind. Connect.",
+  "Approval Center": "Review. Approve. Ship.",
+  "Browser Verification": "Test. Verify. Validate.",
+  "Repository Truth": "Truth. Diff. History.",
+  "Projects Dashboard": "Overview. Track. Report.",
+  "Truth Panel": "Proven. Verified. Trusted.",
+};
 
 export default function WorkspaceModulePanel({
   moduleName,
@@ -19,7 +32,7 @@ export default function WorkspaceModulePanel({
     <section className="streamsModulePanel">
       <header>
         <b>{moduleName}</b>
-        <span>Proof-aware module ready.</span>
+        <span>{MODULE_COPY[moduleName]}</span>
       </header>
 
       <p>This compact module stays under the workstation and does not replace the main builder screen.</p>
