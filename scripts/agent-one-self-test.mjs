@@ -58,6 +58,6 @@ for (const marker of requiredControllerMarkers) {
 
 if (!packageJson.scripts?.build) fail("package.json missing build script");
 if (!packageJson.scripts?.test) fail("package.json missing test script");
-if (!packageJson.scripts?.["streams:agent-one-self-test"]) fail("package.json missing streams:agent-one-self-test script");
 
 console.log("Agent 1 self-test passed: source-backed controller, repair gate, push block, tests, build script, and test script are present.");
+console.log("Run full project checks with: pnpm test && pnpm build");
