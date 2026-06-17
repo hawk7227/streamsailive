@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
+import BuilderControlLayers from "./BuilderControlLayers";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
@@ -42,7 +43,10 @@ export default function WorkspaceGrid() {
           </div>
         </div>
         <section className="workArea">
-          <BuilderCenterChat />
+          <section className="operatorColumn">
+            <BuilderCenterChat />
+            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} />
+          </section>
           <section className="workstationShell">
             <div className="stationViewport">
               {activeModule === "Visual Editing" ? (
@@ -79,6 +83,7 @@ export default function WorkspaceGrid() {
         label b,.statusDrop b{display:block;color:#6ee7b7;font-size:9px;text-transform:uppercase;margin-bottom:3px;line-height:1;}
         select{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;padding:0 0 3px;}option{color:#020617;}
         .workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
+        .operatorColumn{min-width:0;display:grid;gap:6px;align-content:start;}
         .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
         .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
         .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
