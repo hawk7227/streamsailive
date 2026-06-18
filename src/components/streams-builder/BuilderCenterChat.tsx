@@ -14,6 +14,13 @@ type FileResult = {
   sourceTruth?: { route?: string; file?: string };
 };
 
+type RuntimeQueueResult = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  queuedJob?: { id?: string | number };
+};
+
 async function readJson(response: Response) {
   const text = await response.text();
   try { return JSON.parse(text); } catch { throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`); }
@@ -41,6 +48,28 @@ function parseAgentOnePrompt(prompt: string) {
   const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || last?.branch || "main";
   const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || last?.path || "src/app/about/page.tsx";
   return { repo, branch, path };
+}
+
+async function queueRuntime(detail: PulledFileDetail, prompt: string) {
+  const response = await fetch("/api/streams-builder/repository-execution", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({
+      projectId: "streams-builder",
+      sessionId: "agent-1",
+      repoFullName: detail.repo,
+      branchName: detail.branch,
+      baseBranch: detail.branch,
+      targetFiles: [detail.path],
+      enqueue: true,
+    }),
+  });
+  const json = (await readJson(response)) as RuntimeQueueResult;
+  if (!response.ok || json.ok === false) throw new Error(json.error || json.message || "Runtime queue failed");
+  const jobId = json.queuedJob?.id ? String(json.queuedJob.id) : "";
+  if (!jobId) return null;
+  return { jobId, prompt, repo: detail.repo, branch: detail.branch, path: detail.path, route: detail.route };
 }
 
 export default function BuilderCenterChat() {
@@ -74,7 +103,18 @@ export default function BuilderCenterChat() {
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
       window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, command, pulled: detail, intent: "pull-file-to-workscreen" } }));
-      setStatus(`Agent 1 completed pull-to-workscreen: ${detail.path} → ${detail.route}`);
+
+      try {
+        const runtime = await queueRuntime(detail, prompt);
+        if (runtime?.jobId) {
+          window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: runtime }));
+          setStatus(`Agent 1 queued runtime events: ${runtime.jobId}`);
+        } else {
+          setStatus(`Agent 1 completed pull-to-workscreen: ${detail.path} → ${detail.route}`);
+        }
+      } catch (runtimeError) {
+        setStatus(runtimeError instanceof Error ? `Agent 1 pulled source truth; runtime events blocked: ${runtimeError.message}` : "Agent 1 pulled source truth; runtime events blocked.");
+      }
     } catch (err) {
       setStatus(err instanceof Error ? `Agent 1 blocked: ${err.message}` : "Agent 1 blocked: unknown command failure");
     } finally {
