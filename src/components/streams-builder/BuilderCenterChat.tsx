@@ -56,11 +56,22 @@ function readLastActiveFile() {
   }
 }
 
+function readTopRowSourceTruth() {
+  const strip = document.querySelector(".topControlStrip");
+  const selects = strip?.querySelectorAll("select");
+  const inputs = strip?.querySelectorAll("input");
+  const repo = selects?.[0] instanceof HTMLSelectElement ? selects[0].value : "";
+  const path = selects?.[2] instanceof HTMLSelectElement ? selects[2].value : "";
+  const branch = inputs?.[0] instanceof HTMLInputElement ? inputs[0].value : "";
+  return { repo, branch, path };
+}
+
 function parseAgentOnePrompt(prompt: string) {
+  const live = readTopRowSourceTruth();
   const last = readLastActiveFile();
-  const repo = prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || last?.repo || "hawk7227/streamsailive";
-  const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || last?.branch || "main";
-  const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || last?.path || "src/app/about/page.tsx";
+  const repo = prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || live.repo || last?.repo || "hawk7227/streamsailive";
+  const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || live.branch || last?.branch || "main";
+  const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || live.path || last?.path || "src/app/about/page.tsx";
   return { repo, branch, path };
 }
 
@@ -127,7 +138,7 @@ export default function BuilderCenterChat() {
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
       window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, command, pulled: detail, intent: "pull-file-to-workscreen" } }));
-      setStatus(`Agent 1 pulled source truth: ${detail.path}. Queueing runtime events...`);
+      setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing runtime events...`);
 
       try {
         const runtime = await queueRuntime(detail, prompt);
