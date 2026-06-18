@@ -52,7 +52,7 @@ function parseAgentOnePrompt(prompt: string) {
 
 async function queueRuntime(detail: PulledFileDetail, prompt: string) {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 6000);
+  const timer = window.setTimeout(() => controller.abort(), 1000);
   try {
     const response = await fetch("/api/streams-builder/repository-execution", {
       method: "POST",
