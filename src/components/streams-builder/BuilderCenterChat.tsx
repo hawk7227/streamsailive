@@ -89,7 +89,6 @@ async function queueRuntime(detail: PulledFileDetail, prompt: string) {
       cache: "no-store",
       signal: controller.signal,
       body: JSON.stringify({
-        projectId: "streams-builder",
         sessionId: "agent-1",
         repoFullName: detail.repo,
         branchName: detail.branch,
