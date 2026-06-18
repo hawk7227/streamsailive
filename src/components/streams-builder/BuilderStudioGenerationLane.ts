@@ -18,6 +18,8 @@ type StudioStatusResult = {
 };
 
 const MAX_STUDIO_PROMPT_LENGTH = 2400;
+const STUDIO_POLL_INTERVAL_SECONDS = 3;
+const STUDIO_MAX_POLLS = 100;
 
 async function readJson(response: Response) {
   const text = await response.text();
@@ -26,6 +28,19 @@ async function readJson(response: Response) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function formatCountdown(totalSeconds: number) {
+  const seconds = Math.max(0, Math.ceil(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function countdownForAttempt(attempt: number) {
+  const totalSeconds = STUDIO_MAX_POLLS * STUDIO_POLL_INTERVAL_SECONDS;
+  const elapsedSeconds = attempt * STUDIO_POLL_INTERVAL_SECONDS;
+  return formatCountdown(totalSeconds - elapsedSeconds);
 }
 
 function readLastActiveFile() {
@@ -85,6 +100,7 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
   const lastActive = readLastActiveFile();
   const activeDetail = lastActive?.path ? lastActive as PulledFileDetail : undefined;
   const request = studioRequest(value);
+  const maxWait = formatCountdown(STUDIO_MAX_POLLS * STUDIO_POLL_INTERVAL_SECONDS);
 
   sendAgentLog(`${request.label} submitting.`, "generation-submitting", activeDetail);
   onStatus(`${request.label}: submitting durable Studio job...`);
@@ -101,24 +117,25 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
   if (!jobId) throw new Error(`${request.label} did not return a jobId.`);
 
   sendAgentLog(`${request.label} job submitted: ${jobId}`, "generation-queued", activeDetail);
-  sendMediaProgress({ id: jobId, title: `${request.label} job`, prompt: request.prompt, status: `Real provider job submitted · ${jobId}` });
-  onStatus(`${request.label}: job ${jobId} submitted. Polling for artifact...`);
+  sendMediaProgress({ id: jobId, title: `${request.label} job`, prompt: request.prompt, status: `Real provider job submitted · countdown ${maxWait} · job ${jobId}` });
+  onStatus(`${request.label}: job ${jobId} submitted. Countdown ${maxWait}.`);
 
-  for (let attempt = 1; attempt <= 100; attempt += 1) {
-    await sleep(3000);
+  for (let attempt = 1; attempt <= STUDIO_MAX_POLLS; attempt += 1) {
+    await sleep(STUDIO_POLL_INTERVAL_SECONDS * 1000);
     const statusResponse = await fetch(`/api/studio/jobs/${encodeURIComponent(jobId)}/status`, { cache: "no-store" });
     const statusJson = (await readJson(statusResponse)) as StudioStatusResult;
     if (!statusResponse.ok || statusJson.ok === false || statusJson.blocked) throw new Error(statusJson.error || `${request.label} status failed`);
 
     const state = statusJson.status || "provider_running";
-    const runningStatus = `Generating on provider · ${state} · poll ${attempt}/100 · job ${jobId}`;
-    sendAgentLog(`${request.label} ${state} · poll ${attempt}/100`, "generation-running", activeDetail);
+    const remaining = countdownForAttempt(attempt);
+    const runningStatus = `Generating on provider · ${state} · countdown ${remaining} · poll ${attempt}/${STUDIO_MAX_POLLS} · job ${jobId}`;
+    sendAgentLog(`${request.label} ${state} · ${remaining} remaining · poll ${attempt}/${STUDIO_MAX_POLLS}`, "generation-running", activeDetail);
     sendMediaProgress({ id: jobId, title: `${request.label} job`, prompt: request.prompt, status: runningStatus });
-    onStatus(`${request.label}: ${state} · poll ${attempt}/100`);
+    onStatus(`${request.label}: ${state} · countdown ${remaining} · poll ${attempt}/${STUDIO_MAX_POLLS}`);
 
     const artifactUrl = statusJson.artifactUrl || statusJson.asset?.public_url || "";
     if (state === "completed" && artifactUrl) {
-      sendMediaProgress({ id: jobId, title: "Studio video output", prompt: request.prompt, url: artifactUrl, status: `Ready · job ${jobId}` });
+      sendMediaProgress({ id: jobId, title: "Studio video output", prompt: request.prompt, url: artifactUrl, status: `Ready · completed before countdown expired · job ${jobId}` });
       sendAgentLog(`${request.label} completed and routed to Agent 1 Media tab.`, "generation-completed", activeDetail);
       onStatus(`${request.label}: completed and routed to Agent 1 Media tab.`);
       return;
@@ -127,5 +144,5 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
     if (state === "failed" || state === "blocked") throw new Error(statusJson.job?.error_message || statusJson.error || `${request.label} ${state}`);
   }
 
-  throw new Error(`${request.label} timed out waiting for completed video artifact.`);
+  throw new Error(`${request.label} timed out after countdown expired waiting for completed video artifact.`);
 }
