@@ -66,8 +66,27 @@ function extractFirstUrl(value: string) {
   return value.match(/https?:\/\/\S+/i)?.[0]?.replace(/[),.;]+$/, "") || "";
 }
 
+function isStreamsPromo(value: string) {
+  return /streams\s*ai|streamsai|build\. create\. operate|business operator|builder/i.test(value);
+}
+
+function compileStudioVideoPrompt(value: string) {
+  if (!isStreamsPromo(value) && value.length <= MAX_STUDIO_PROMPT_LENGTH) return value.replace(/\s+/g, " ").trim();
+
+  return [
+    "Premium cinematic SaaS commercial for Streams AI, realistic high-end startup brand style.",
+    "Show a confident modern male founder/operator in a sleek creative tech studio, speaking naturally to camera, polished but not cheesy.",
+    "Intercut elegant product-style visuals: AI chat interface, Builder workstations, live preview, code editor, project dashboard, media generation cards, approval/proof flow, and automation systems.",
+    "Camera language: smooth push-ins, soft parallax, shallow depth of field, realistic office lighting, clean reflections, premium glass and dark-mode tech environment.",
+    "Mood: trustworthy, powerful, modern, focused, high quality, not stock footage, not generic corporate filler.",
+    "Visual story: one person explains how Streams AI helps users build, create, automate, and launch from one intelligent system.",
+    "Avoid: blurry face, distorted hands, cheap stock-video look, random logos, unreadable UI text, cartoon style, exaggerated acting, warped screens.",
+    "Audio note for this visual pass: create footage that feels ready for later voiceover and music, but do not rely on generated speech or on-screen captions in this clip.",
+  ].join(" ");
+}
+
 function trimStudioPrompt(value: string) {
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = compileStudioVideoPrompt(value).replace(/\s+/g, " ").trim();
   if (normalized.length <= MAX_STUDIO_PROMPT_LENGTH) return normalized;
   return `${normalized.slice(0, MAX_STUDIO_PROMPT_LENGTH - 90)}\n\n[Prompt shortened by Builder to fit provider input limits.]`;
 }
@@ -82,8 +101,8 @@ function studioRequest(value: string) {
     payload: {
       prompt,
       imageUrl: imageUrl || undefined,
-      durationSeconds: 5,
-      duration: 5,
+      durationSeconds: 10,
+      duration: 10,
       aspectRatio: "16:9",
       quality: "pro",
       workspaceId: "streams-builder",
@@ -102,8 +121,8 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
   const request = studioRequest(value);
   const maxWait = formatCountdown(STUDIO_MAX_POLLS * STUDIO_POLL_INTERVAL_SECONDS);
 
-  sendAgentLog(`${request.label} submitting.`, "generation-submitting", activeDetail);
-  onStatus(`${request.label}: submitting durable Studio job...`);
+  sendAgentLog(`${request.label} submitting compiled visual prompt.`, "generation-submitting", activeDetail);
+  onStatus(`${request.label}: submitting compiled visual prompt...`);
 
   const createResponse = await fetch(request.path, {
     method: "POST",
@@ -117,7 +136,7 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
   if (!jobId) throw new Error(`${request.label} did not return a jobId.`);
 
   sendAgentLog(`${request.label} job submitted: ${jobId}`, "generation-queued", activeDetail);
-  sendMediaProgress({ id: jobId, title: `${request.label} job`, prompt: request.prompt, status: `Real provider job submitted · countdown ${maxWait} · job ${jobId}` });
+  sendMediaProgress({ id: jobId, title: `${request.label} job`, prompt: request.prompt, status: `Real provider job submitted · compiled prompt · countdown ${maxWait} · job ${jobId}` });
   onStatus(`${request.label}: job ${jobId} submitted. Countdown ${maxWait}.`);
 
   for (let attempt = 1; attempt <= STUDIO_MAX_POLLS; attempt += 1) {
@@ -135,7 +154,7 @@ export async function runStudioVideoLane(value: string, onStatus: (message: stri
 
     const artifactUrl = statusJson.artifactUrl || statusJson.asset?.public_url || "";
     if (state === "completed" && artifactUrl) {
-      sendMediaProgress({ id: jobId, title: "Studio video output", prompt: request.prompt, url: artifactUrl, status: `Ready · completed before countdown expired · job ${jobId}` });
+      sendMediaProgress({ id: jobId, title: "Studio video output", prompt: request.prompt, url: artifactUrl, status: `Ready · visual pass only · job ${jobId}` });
       sendAgentLog(`${request.label} completed and routed to Agent 1 Media tab.`, "generation-completed", activeDetail);
       onStatus(`${request.label}: completed and routed to Agent 1 Media tab.`);
       return;
