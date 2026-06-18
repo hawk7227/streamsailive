@@ -9,6 +9,8 @@ type Surface = "summary" | "code" | "frontend" | "diff" | "logs" | "media";
 type MediaKind = "image" | "video" | "audio" | "file";
 type MediaOutput = { id?: string; kind?: MediaKind; title?: string; prompt?: string; url?: string; status?: string };
 type HighlightRange = { filePath?: string; startLine: number; endLine?: number; label?: string } | null;
+type RuntimeJobDetail = { jobId: string; repo?: string; branch?: string; path?: string; route?: string; prompt?: string };
+type RuntimeEvent = { id?: string | number; eventType?: string; event_type?: string; message?: string | null; createdAt?: string; created_at?: string; data?: Record<string, unknown> };
 
 function readStoredActiveFile() {
   try {
@@ -36,6 +38,16 @@ function surfaceFromPrompt(prompt?: string): Surface {
   return "summary";
 }
 
+function eventLabel(event: RuntimeEvent) {
+  const type = event.eventType || event.event_type || "runtime.event";
+  const message = event.message || "runtime event received";
+  return `${type}: ${message}`;
+}
+
+function eventKey(event: RuntimeEvent) {
+  return String(event.id || `${event.eventType || event.event_type}:${event.message || ""}:${event.createdAt || event.created_at || ""}`);
+}
+
 export default function AgentOneCodexWorkstation() {
   const [repo, setRepo] = useState("hawk7227/streamsailive");
   const [branch, setBranch] = useState("main");
@@ -50,7 +62,9 @@ export default function AgentOneCodexWorkstation() {
   const [media, setMedia] = useState<MediaOutput[]>([]);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [highlightRange, setHighlightRange] = useState<HighlightRange>(null);
+  const [runtimeJobId, setRuntimeJobId] = useState("");
   const summaryRailRef = useRef<HTMLElement | null>(null);
+  const seenRuntimeEventsRef = useRef<Set<string>>(new Set());
 
   const previewRoute = route || routeFromFile(filePath);
   const previewSrc = `${previewRoute}${previewRoute.includes("?") ? "&" : "?"}agent1Preview=${previewNonce}`;
@@ -79,6 +93,46 @@ export default function AgentOneCodexWorkstation() {
     if (!rail) return;
     rail.scrollTop = rail.scrollHeight;
   }, [summary, logs, verification.proof.length, status]);
+
+  useEffect(() => {
+    if (!runtimeJobId) return;
+    let stopped = false;
+
+    async function pollRuntimeJob() {
+      try {
+        const response = await fetch(`/api/streams-ai/jobs?jobId=${encodeURIComponent(runtimeJobId)}`, { cache: "no-store" });
+        const json = await response.json().catch(() => null) as { ok?: boolean; job?: { status?: string }; events?: RuntimeEvent[]; error?: string } | null;
+        if (!response.ok || !json?.ok) throw new Error(json?.error || `Runtime events request failed: ${response.status}`);
+        if (stopped) return;
+
+        const nextEvents = Array.isArray(json.events) ? json.events : [];
+        const newLines: string[] = [];
+        for (const event of nextEvents) {
+          const key = eventKey(event);
+          if (seenRuntimeEventsRef.current.has(key)) continue;
+          seenRuntimeEventsRef.current.add(key);
+          newLines.push(eventLabel(event));
+        }
+
+        if (newLines.length) {
+          setLogs((items) => [...items.slice(-30), ...newLines].slice(-40));
+          setSummary((items) => [...items.slice(-8), `Runtime job ${runtimeJobId}: ${newLines[newLines.length - 1]}`]);
+          setStatus(json.job?.status ? `Runtime ${json.job.status}` : "Runtime running");
+        }
+      } catch (error) {
+        if (stopped) return;
+        const message = error instanceof Error ? error.message : "Runtime events unavailable";
+        setStatus(`Runtime events blocked: ${message}`);
+      }
+    }
+
+    void pollRuntimeJob();
+    const timer = window.setInterval(() => void pollRuntimeJob(), 2500);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [runtimeJobId]);
 
   function stamp(message: string) {
     const next = `${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} ${message}`;
@@ -142,6 +196,16 @@ export default function AgentOneCodexWorkstation() {
       stamp(`Code focus: ${detail.filePath || filePath}:${detail.startLine}-${detail.endLine || detail.startLine}`);
     }
 
+    function onRuntimeJob(event: Event) {
+      const detail = (event as CustomEvent<RuntimeJobDetail>).detail;
+      if (!detail?.jobId) return;
+      seenRuntimeEventsRef.current = new Set();
+      setRuntimeJobId(detail.jobId);
+      setStatus("Runtime queued");
+      setSummary((items) => [...items.slice(-8), `Runtime job queued: ${detail.jobId}`]);
+      stamp(`Runtime job queued: ${detail.jobId}`);
+    }
+
     function onMediaOutput(event: Event) {
       const detail = (event as CustomEvent<MediaOutput>).detail;
       setSurface("media");
@@ -152,11 +216,13 @@ export default function AgentOneCodexWorkstation() {
     window.addEventListener("streams-builder:pulled-file", onPulledFile);
     window.addEventListener("streams-builder:agent-one-command", onAgentCommand);
     window.addEventListener("streams-builder:highlight-lines", onHighlightLines);
+    window.addEventListener("streams-builder:runtime-job", onRuntimeJob);
     window.addEventListener("streams-builder:media-output", onMediaOutput);
     return () => {
       window.removeEventListener("streams-builder:pulled-file", onPulledFile);
       window.removeEventListener("streams-builder:agent-one-command", onAgentCommand);
       window.removeEventListener("streams-builder:highlight-lines", onHighlightLines);
+      window.removeEventListener("streams-builder:runtime-job", onRuntimeJob);
       window.removeEventListener("streams-builder:media-output", onMediaOutput);
     };
   }, [filePath]);
