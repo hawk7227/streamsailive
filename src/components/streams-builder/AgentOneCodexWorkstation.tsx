@@ -48,6 +48,29 @@ function eventKey(event: RuntimeEvent) {
   return String(event.id || `${event.eventType || event.event_type}:${event.message || ""}:${event.createdAt || event.created_at || ""}`);
 }
 
+function VideoArtifactPreview({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [ready, setReady] = useState(false);
+
+  function showFirstAvailableFrame() {
+    const video = videoRef.current;
+    setReady(true);
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    try {
+      video.currentTime = Math.min(0.12, Math.max(0, video.duration - 0.05));
+    } catch {
+      // Some provider URLs do not allow seeking before enough data is buffered.
+    }
+  }
+
+  return (
+    <div className="videoThumb">
+      <video ref={videoRef} src={src} controls playsInline preload="auto" onLoadedMetadata={showFirstAvailableFrame} onLoadedData={() => setReady(true)} />
+      <span className="thumbBadge">{ready ? "First available frame thumbnail" : "Loading first frame thumbnail"}</span>
+    </div>
+  );
+}
+
 export default function AgentOneCodexWorkstation() {
   const [repo, setRepo] = useState("hawk7227/streamsailive");
   const [branch, setBranch] = useState("main");
@@ -255,7 +278,7 @@ export default function AgentOneCodexWorkstation() {
             {surface === "frontend" ? <div className="frontendScroll"><iframe title={`Frontend UI preview for ${filePath}`} src={previewSrc} /></div> : null}
             {surface === "diff" ? <pre className="diff">{code.split("\n").slice(0, 120).map((line, index) => `${String(index + 1).padStart(4, " ")}  ${line}`).join("\n")}</pre> : null}
             {surface === "logs" ? <div className="logs">{logs.slice(-40).map((item) => <p key={item}>{item}</p>)}</div> : null}
-            {surface === "media" ? <div className="media">{media.length ? media.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.kind} · {item.status}</span><p>{item.prompt}</p>{!item.url && item.kind === "video" ? <div className="generationLive"><i />Real video provider job is running. Waiting for artifact URL.</div> : null}{item.url && item.kind === "video" ? <video src={item.url} controls playsInline preload="metadata" /> : null}{item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open output</a> : <em>Generation still running in Studio runtime.</em>}</article>) : <p>No image/video output has been routed here yet.</p>}</div> : null}
+            {surface === "media" ? <div className="media">{media.length ? media.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.kind} · {item.status}</span><p>{item.prompt}</p>{!item.url && item.kind === "video" ? <div className="generationLive"><i />Real video provider job is running. First-frame thumbnail appears when the artifact URL is available.</div> : null}{item.url && item.kind === "video" ? <VideoArtifactPreview src={item.url} /> : null}{item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open output</a> : <em>Generation still running in Studio runtime.</em>}</article>) : <p>No image/video output has been routed here yet.</p>}</div> : null}
           </div>
         </section>
       </main>
@@ -263,7 +286,7 @@ export default function AgentOneCodexWorkstation() {
         .agentOneCodex{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden;background:#f6f8fa;color:#24292f;}
         .workscreen{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(240px,.34fr) minmax(0,1fr);overflow:hidden;}
         .summaryRail{min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;border-right:1px solid #d8dee4;background:#fff;padding:16px;box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}.summaryRail::-webkit-scrollbar,.frontendScroll::-webkit-scrollbar{width:5px;height:5px}.summaryRail::-webkit-scrollbar-track,.frontendScroll::-webkit-scrollbar-track{background:transparent}.summaryRail::-webkit-scrollbar-thumb,.frontendScroll::-webkit-scrollbar-thumb{background:#0f172a;border-radius:999px}.summaryRail .meta{margin:0 0 16px;color:#57606a;font-size:12px;}.summaryRail h3{margin:14px 0 8px;font-size:18px;}.summaryRail ul{margin:0;padding-left:18px;display:grid;gap:10px;}.summaryRail li{font-size:13px;line-height:1.45;}.emptySummary{font-size:13px;color:#57606a;}
-        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}.frontendScroll{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:#020617;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}iframe{display:block;width:100%;min-width:0;height:6000px;border:0;background:#fff;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}.media video{display:block;width:100%;max-height:360px;border-radius:10px;background:#020617;margin:8px 0;}.generationLive{display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px;border:1px solid #54aeff;border-radius:10px;background:#ddf4ff;color:#0969da;font-size:12px;font-weight:800;}.generationLive i{width:8px;height:8px;border-radius:999px;background:#1a7f37;box-shadow:0 0 0 4px rgba(26,127,55,.14);}
+        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}.frontendScroll{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:#020617;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}iframe{display:block;width:100%;min-width:0;height:6000px;border:0;background:#fff;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}.media video{display:block;width:100%;max-height:360px;border-radius:10px;background:#020617;margin:0;object-fit:cover;}.videoThumb{position:relative;margin:8px 0;border-radius:10px;overflow:hidden;background:#020617;border:1px solid #d8dee4;}.thumbBadge{position:absolute;left:8px;bottom:8px;display:inline-block!important;width:auto;color:#fff!important;background:rgba(2,6,23,.76);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:4px 8px;font-size:10px!important;font-weight:900;}.generationLive{display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px;border:1px solid #54aeff;border-radius:10px;background:#ddf4ff;color:#0969da;font-size:12px;font-weight:800;}.generationLive i{width:8px;height:8px;border-radius:999px;background:#1a7f37;box-shadow:0 0 0 4px rgba(26,127,55,.14);}
       `}</style>
     </section>
   );
