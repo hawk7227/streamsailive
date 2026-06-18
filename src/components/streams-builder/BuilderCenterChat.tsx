@@ -66,6 +66,10 @@ function readTopRowSourceTruth() {
   return { repo, branch, path };
 }
 
+function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail) {
+  window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } }));
+}
+
 function parseAgentOnePrompt(prompt: string) {
   const live = readTopRowSourceTruth();
   const last = readLastActiveFile();
@@ -138,21 +142,31 @@ export default function BuilderCenterChat() {
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
       window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, command, pulled: detail, intent: "pull-file-to-workscreen" } }));
+      const queueingMessage = `Runtime bridge queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
+      sendAgentLog(queueingMessage, "runtime-queueing", detail);
       setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing runtime events...`);
 
       try {
         const runtime = await queueRuntime(detail, prompt);
         if (runtime?.jobId) {
           window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: runtime }));
+          const queuedMessage = `Runtime bridge queued job ${runtime.jobId} for ${detail.repo}@${detail.branch}:${detail.path}`;
+          sendAgentLog(queuedMessage, "runtime-queued", detail);
           setStatus(`Agent 1 queued runtime events: ${runtime.jobId}`);
         } else {
+          const completedMessage = `Runtime bridge returned no job id after source truth pull for ${detail.path}`;
+          sendAgentLog(completedMessage, "runtime-no-job", detail);
           setStatus(`Agent 1 completed pull-to-workscreen: ${detail.path} → ${detail.route}`);
         }
       } catch (runtimeError) {
-        setStatus(runtimeError instanceof Error ? `Agent 1 pulled source truth; runtime events blocked: ${runtimeError.message}` : "Agent 1 pulled source truth; runtime events blocked.");
+        const message = runtimeError instanceof Error ? runtimeError.message : "unknown runtime bridge failure";
+        sendAgentLog(`Runtime bridge blocked: ${message}`, "runtime-blocked", detail);
+        setStatus(`Agent 1 pulled source truth; runtime events blocked: ${message}`);
       }
     } catch (err) {
-      setStatus(err instanceof Error ? `Agent 1 blocked: ${err.message}` : "Agent 1 blocked: unknown command failure");
+      const message = err instanceof Error ? err.message : "unknown command failure";
+      sendAgentLog(`Agent 1 blocked before runtime: ${message}`, "agent-blocked");
+      setStatus(`Agent 1 blocked: ${message}`);
     } finally {
       setRunning(false);
     }
