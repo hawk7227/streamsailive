@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
 
@@ -24,6 +25,19 @@ type RuntimeQueueResult = {
 async function readJson(response: Response) {
   const text = await response.text();
   try { return JSON.parse(text); } catch { throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`); }
+}
+
+async function runtimeHeaders() {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // The runtime route will return the exact auth error if no session is available.
+  }
+  return headers;
 }
 
 function routeFromFile(path: string) {
@@ -52,11 +66,11 @@ function parseAgentOnePrompt(prompt: string) {
 
 async function queueRuntime(detail: PulledFileDetail, prompt: string) {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 1000);
+  const timer = window.setTimeout(() => controller.abort(), 3000);
   try {
     const response = await fetch("/api/streams-builder/repository-execution", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await runtimeHeaders(),
       cache: "no-store",
       signal: controller.signal,
       body: JSON.stringify({
