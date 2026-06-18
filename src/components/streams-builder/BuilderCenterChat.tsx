@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
 
@@ -119,8 +120,14 @@ export default function BuilderCenterChat() {
     event?.preventDefault();
     if (!prompt.trim() || running) return;
     setRunning(true);
-    setStatus("Agent 1 running: interpreting prompt, pulling source truth, rebuilding workscreen...");
+    setStatus("Agent 1 running: interpreting prompt...");
     try {
+      if (isStudioVideoRequest(prompt)) {
+        await runStudioVideoLane(prompt, setStatus);
+        return;
+      }
+
+      setStatus("Agent 1 running: interpreting prompt, pulling source truth, rebuilding workscreen...");
       const command = parseAgentOnePrompt(prompt);
       const params = new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path });
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
