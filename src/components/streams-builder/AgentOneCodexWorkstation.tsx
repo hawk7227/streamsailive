@@ -8,6 +8,7 @@ type PulledFileDetail = { repo: string; branch: string; path: string; folder: st
 type Surface = "summary" | "code" | "frontend" | "diff" | "logs" | "media";
 type MediaKind = "image" | "video" | "audio" | "file";
 type MediaOutput = { id?: string; kind?: MediaKind; title?: string; prompt?: string; url?: string; status?: string };
+type HighlightRange = { filePath?: string; startLine: number; endLine?: number; label?: string } | null;
 
 function readStoredActiveFile() {
   try {
@@ -48,6 +49,7 @@ export default function AgentOneCodexWorkstation() {
   const [logs, setLogs] = useState<string[]>([]);
   const [media, setMedia] = useState<MediaOutput[]>([]);
   const [previewNonce, setPreviewNonce] = useState(0);
+  const [highlightRange, setHighlightRange] = useState<HighlightRange>(null);
   const summaryRailRef = useRef<HTMLElement | null>(null);
 
   const previewRoute = route || routeFromFile(filePath);
@@ -90,6 +92,7 @@ export default function AgentOneCodexWorkstation() {
     setRoute(detail.route || routeFromFile(detail.path));
     setSha(detail.sha || "");
     setCode(detail.content || "");
+    setHighlightRange(null);
     setSurface("code");
     setStatus("Verified");
     setSummary((items) => [...items.slice(-8), `Mounted ${detail.path} from ${detail.repo}@${detail.branch} into the GitHub-style code editor.`]);
@@ -128,6 +131,17 @@ export default function AgentOneCodexWorkstation() {
       }
     }
 
+    function onHighlightLines(event: Event) {
+      const detail = (event as CustomEvent<HighlightRange>).detail;
+      if (!detail?.startLine) return;
+      if (detail.filePath && detail.filePath !== filePath) return;
+      setHighlightRange(detail);
+      setSurface("code");
+      setStatus("Running");
+      setSummary((items) => [...items.slice(-8), `Agent highlighted ${detail.filePath || filePath} lines ${detail.startLine}-${detail.endLine || detail.startLine}.`]);
+      stamp(`Code focus: ${detail.filePath || filePath}:${detail.startLine}-${detail.endLine || detail.startLine}`);
+    }
+
     function onMediaOutput(event: Event) {
       const detail = (event as CustomEvent<MediaOutput>).detail;
       setSurface("media");
@@ -137,13 +151,15 @@ export default function AgentOneCodexWorkstation() {
 
     window.addEventListener("streams-builder:pulled-file", onPulledFile);
     window.addEventListener("streams-builder:agent-one-command", onAgentCommand);
+    window.addEventListener("streams-builder:highlight-lines", onHighlightLines);
     window.addEventListener("streams-builder:media-output", onMediaOutput);
     return () => {
       window.removeEventListener("streams-builder:pulled-file", onPulledFile);
       window.removeEventListener("streams-builder:agent-one-command", onAgentCommand);
+      window.removeEventListener("streams-builder:highlight-lines", onHighlightLines);
       window.removeEventListener("streams-builder:media-output", onMediaOutput);
     };
-  }, []);
+  }, [filePath]);
 
   return (
     <section className="agentOneCodex" aria-label="Agent 1 Codex-style workscreen">
@@ -162,7 +178,7 @@ export default function AgentOneCodexWorkstation() {
           </nav>
           <div className="pane">
             {surface === "summary" ? <div className="textPane"><h2>{filePath}</h2><p><b>Route:</b> {previewRoute}</p><p><b>SHA:</b> {sha || "missing"}</p></div> : null}
-            {surface === "code" ? <GitHubStyleCodeEditor value={code} onChange={setCode} filePath={filePath} /> : null}
+            {surface === "code" ? <GitHubStyleCodeEditor value={code} onChange={setCode} filePath={filePath} highlightStartLine={highlightRange?.startLine} highlightEndLine={highlightRange?.endLine} /> : null}
             {surface === "frontend" ? <div className="frontendScroll"><iframe title={`Frontend UI preview for ${filePath}`} src={previewSrc} /></div> : null}
             {surface === "diff" ? <pre className="diff">{code.split("\n").slice(0, 120).map((line, index) => `${String(index + 1).padStart(4, " ")}  ${line}`).join("\n")}</pre> : null}
             {surface === "logs" ? <div className="logs">{logs.slice(-40).map((item) => <p key={item}>{item}</p>)}</div> : null}
