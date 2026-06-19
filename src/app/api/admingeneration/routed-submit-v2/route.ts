@@ -49,6 +49,17 @@ function resolveRuntimeProvider(provider?: string) {
   return { provider: "fal", model: "kling-v3" };
 }
 
+function resolveQualityTarget(payload: Payload) {
+  const fromMetadata =
+    typeof payload.metadata?.qualityGoal === "string" ? String(payload.metadata.qualityGoal) : "";
+  const fromOutput =
+    typeof (payload.metadata?.finalDirectorSetup as any)?.fields?.qualityGoal === "string"
+      ? String((payload.metadata?.finalDirectorSetup as any)?.fields?.qualityGoal)
+      : "";
+  const joined = [fromMetadata, fromOutput].filter(Boolean).join(" · ");
+  return joined || "4K 2160p premium commercial master output";
+}
+
 async function submitImageOrVoice(request: Request, payload: Payload) {
   const adminKey = process.env.ADMIN_GENERATION_KEY?.trim();
   if (!adminKey) return jsonError("ADMIN_GENERATION_KEY is not configured.", 500);
@@ -78,6 +89,7 @@ async function submitVideo(payload: Payload) {
   const imageUrl = String(payload.imageUrl || payload.sourceImageUrl || "").trim() || undefined;
   const resolved = resolveRuntimeProvider(payload.provider);
   const type = kind === "image-to-video" || (kind === "motion" && imageUrl) ? "i2v" : "video";
+  const qualityTarget = resolveQualityTarget(payload);
 
   const result = await generateVideo({
     type,
@@ -92,7 +104,7 @@ async function submitVideo(payload: Payload) {
       payload.metadata?.longVideo === true ||
       String(payload.metadata?.lengthMode || "").includes("long") ||
       String(payload.metadata?.lengthMode || "") === "movie",
-    quality: typeof payload.metadata?.qualityGoal === "string" ? String(payload.metadata.qualityGoal) : undefined,
+    quality: qualityTarget,
     imageUrl,
     workspaceId: payload.workspaceId || payload.projectId || "admingeneration",
     realismMode: "premium_commercial",
@@ -105,6 +117,8 @@ async function submitVideo(payload: Payload) {
     target: "video-runtime/generateVideo",
     requestedKind: kind,
     requestedProvider: payload.provider || "auto",
+    requestedQuality: qualityTarget,
+    requestedResolution: "4K 2160p",
     longVideo: payload.longVideo === true || payload.metadata?.longVideo === true,
     result,
   }, { status: result.ok ? 200 : 500 });
