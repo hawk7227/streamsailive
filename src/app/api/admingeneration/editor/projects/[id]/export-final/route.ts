@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { composeFinalExport } from "@/lib/admingeneration/editor/compose-final-export";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,19 +25,41 @@ export async function POST(request: Request, context: Params) {
     return NextResponse.json({ ok: false, error: project.error?.message || "Editor project not found" }, { status: 404 });
   }
 
+  const compose = await composeFinalExport({
+    projectId: id,
+    timelineSnapshot: body.timelineSnapshot || body.settings?.timelineSnapshot || {},
+    outputUrl: body.outputUrl || null,
+    outputAssetId: body.outputAssetId || null,
+    videoUrls: body.videoUrls || body.settings?.videoUrls || [],
+    voiceoverUrl: body.voiceoverUrl || body.settings?.voiceoverUrl || null,
+    musicUrl: body.musicUrl || body.settings?.musicUrl || null,
+    sfxUrls: body.sfxUrls || body.settings?.sfxUrls || [],
+    subtitleText: body.subtitleText || body.settings?.subtitleText || null,
+  });
+
+  const hasRealOutput = compose.ok && compose.outputUrl;
+  const outputUrl = hasRealOutput ? compose.outputUrl : body.outputUrl || null;
+  const outputAssetId = body.outputAssetId || null;
+  const blockedReason = hasRealOutput
+    ? null
+    : compose.ok
+      ? null
+      : compose.reason || "Attach a real render worker or supply real outputUrl/outputAssetId.";
+
   const stitch = await supabase.schema("streams").from("video_editor_stitch_jobs").insert({
     editor_project_id: id,
     active_version_id: body.versionId || project.data.active_version_id || null,
-    status: body.outputUrl || body.outputAssetId ? "completed_external_output_supplied" : "blocked_ffmpeg_worker_required",
+    status: hasRealOutput || outputAssetId ? "completed" : "blocked_ffmpeg_worker_required",
     timeline_snapshot: body.timelineSnapshot || {},
-    output_asset_id: body.outputAssetId || null,
-    error: body.outputUrl || body.outputAssetId ? null : "FFmpeg render/stitch worker is not wired for this request. No fake export created.",
+    output_asset_id: outputAssetId,
+    error: hasRealOutput || outputAssetId ? null : blockedReason,
     metadata: {
       source: "export-final-route",
-      outputUrl: body.outputUrl || null,
-      blockedReason: body.outputUrl || body.outputAssetId ? null : "Attach a real render worker or supply real outputUrl/outputAssetId.",
+      outputUrl,
+      compose: compose.ok ? compose.metadata : compose.metadata || null,
+      blockedReason,
     },
-    completed_at: body.outputUrl || body.outputAssetId ? new Date().toISOString() : null,
+    completed_at: hasRealOutput || outputAssetId ? new Date().toISOString() : null,
   }).select("*").single();
 
   if (stitch.error || !stitch.data) {
@@ -48,16 +71,17 @@ export async function POST(request: Request, context: Params) {
     stitch_job_id: stitch.data.id,
     version_id: body.versionId || project.data.active_version_id || null,
     export_type: body.exportType || "mp4",
-    status: body.outputUrl || body.outputAssetId ? "completed" : "blocked_render_worker_required",
-    output_url: body.outputUrl || null,
-    output_asset_id: body.outputAssetId || null,
+    status: hasRealOutput || outputAssetId ? "completed" : "blocked_render_worker_required",
+    output_url: outputUrl,
+    output_asset_id: outputAssetId,
     settings: body.settings || {},
-    error: body.outputUrl || body.outputAssetId ? null : "Render/export worker is not wired for this request. No fake download created.",
+    error: hasRealOutput || outputAssetId ? null : blockedReason,
     metadata: {
       source: "export-final-route",
-      blockedReason: body.outputUrl || body.outputAssetId ? null : "Real render output required before completion.",
+      compose: compose.ok ? compose.metadata : compose.metadata || null,
+      blockedReason,
     },
-    completed_at: body.outputUrl || body.outputAssetId ? new Date().toISOString() : null,
+    completed_at: hasRealOutput || outputAssetId ? new Date().toISOString() : null,
   }).select("*").single();
 
   if (exportInsert.error || !exportInsert.data) {
@@ -69,7 +93,9 @@ export async function POST(request: Request, context: Params) {
     route: "admingeneration-editor-export-final",
     editorProjectId: id,
     status: exportInsert.data.status,
+    outputUrl,
     stitchJob: stitch.data,
     exportRequest: exportInsert.data,
+    compose,
   });
 }
