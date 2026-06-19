@@ -29,6 +29,34 @@ export type FieldOption = {
   hint?: string;
 };
 
+export type SelfReferenceCaptureStep = {
+  id: string;
+  title: string;
+  instruction: string;
+  referenceType: string;
+};
+
+export const SELF_REFERENCE_CAPTURE_STEPS: SelfReferenceCaptureStep[] = [
+  {
+    id: "face-close-up",
+    title: "Face close-up",
+    instruction: "Look directly at the camera. Keep your full face visible, evenly lit, sharp, and unobstructed.",
+    referenceType: "face-close-up",
+  },
+  {
+    id: "mid-shot-speaker",
+    title: "Mid-shot speaker",
+    instruction: "Frame from chest or waist up. Keep mouth and hands visible enough for speaker motion and possible lip-sync.",
+    referenceType: "mid-shot-speaker",
+  },
+  {
+    id: "gesture-sample",
+    title: "Natural gesture sample",
+    instruction: "Speak naturally and use one simple open-hand gesture. Avoid fast hand movement and keep framing stable.",
+    referenceType: "full-body-action-pose",
+  },
+];
+
 export const GENERATION_SETUP_TYPES: GenerationSetupType[] = [
   {
     id: "talking-head-founder-presenter",
