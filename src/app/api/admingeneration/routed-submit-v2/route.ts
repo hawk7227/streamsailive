@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { generateVideo, VideoRuntimeError } from "@/lib/video-runtime/generateVideo";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,16 @@ async function readResponse(response: Response) {
 }
 
 function isVideoKind(kind: string) {
-  return kind === "image-to-video" || kind === "text-to-video" || kind === "motion";
+  const normalizedKind = String(kind || "").trim().toLowerCase().replaceAll("_", "-");
+  return (
+    normalizedKind === "image-to-video" ||
+    normalizedKind === "text-to-video" ||
+    normalizedKind === "i2v" ||
+    normalizedKind === "t2v" ||
+    normalizedKind === "video" ||
+    normalizedKind === "motion" ||
+    normalizedKind.includes("video")
+  );
 }
 
 function resolveRuntimeProvider(provider?: string) {
@@ -78,11 +87,11 @@ async function submitImageOrVoice(request: Request, payload: Payload) {
 }
 
 async function submitVideo(payload: Payload) {
-  const kind = String(payload.kind || "").trim();
+  const kind = String(payload.kind || "").trim().toLowerCase().replaceAll("_", "-");
   const prompt = String(payload.prompt || "").trim();
   const imageUrl = String(payload.imageUrl || payload.sourceImageUrl || "").trim() || undefined;
   const resolved = resolveRuntimeProvider(payload.provider);
-  const type = kind === "image-to-video" || (kind === "motion" && imageUrl) ? "i2v" : "video";
+  const type = imageUrl || kind === "image-to-video" || kind === "i2v" ? "i2v" : "video";
   const qualityTarget = resolveQualityTarget(payload);
 
   const result = await generateVideo({
@@ -137,13 +146,13 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as Payload | null;
   if (!payload || typeof payload !== "object") return jsonError("Invalid routed submit request body.", 400);
 
-  const kind = String(payload.kind || "").trim();
+  const kind = String(payload.kind || "").trim().toLowerCase().replaceAll("_", "-");
   const prompt = String(payload.prompt || "").trim();
   if (!kind) return jsonError("kind is required.", 400);
   if (!prompt) return jsonError("prompt is required.", 400);
 
   try {
-    if (isVideoKind(kind)) return await submitVideo(payload);
+    if (payload.imageUrl || payload.sourceImageUrl || isVideoKind(kind)) return await submitVideo(payload);
     return await submitImageOrVoice(request, payload);
   } catch (error) {
     if (error instanceof VideoRuntimeError) {
@@ -152,3 +161,4 @@ export async function POST(request: Request) {
     return jsonError("Routed submit failed.", 500, { message: error instanceof Error ? error.message : String(error) });
   }
 }
+
