@@ -46,18 +46,12 @@ function resolveRuntimeProvider(provider?: string) {
   if (selected === "runway") return { provider: "runway", model: "gen4_turbo" };
   if (selected === "kling") return { provider: "kling", model: "kling-v2-6" };
   if (selected === "veo") return { provider: "fal", model: "veo-3.1" };
-  return { provider: "fal", model: "kling-v3" };
+  return { provider: "fal", model: "kling-v2.1-pro" };
 }
 
 function resolveQualityTarget(payload: Payload) {
-  const fromMetadata =
-    typeof payload.metadata?.qualityGoal === "string" ? String(payload.metadata.qualityGoal) : "";
-  const fromOutput =
-    typeof (payload.metadata?.finalDirectorSetup as any)?.fields?.qualityGoal === "string"
-      ? String((payload.metadata?.finalDirectorSetup as any)?.fields?.qualityGoal)
-      : "";
-  const joined = [fromMetadata, fromOutput].filter(Boolean).join(" · ");
-  return joined || "4K 2160p premium commercial master output";
+  const fromMetadata = typeof payload.metadata?.qualityGoal === "string" ? String(payload.metadata.qualityGoal) : "";
+  return fromMetadata || "4K 2160p premium commercial master output";
 }
 
 async function submitImageOrVoice(request: Request, payload: Payload) {
@@ -111,17 +105,32 @@ async function submitVideo(payload: Payload) {
     conversationId: typeof payload.metadata?.conversationId === "string" ? String(payload.metadata.conversationId) : undefined,
   });
 
+  if (!result.ok) {
+    return NextResponse.json({
+      ok: false,
+      error: "Video runtime failed before provider output was created.",
+      route: "admingeneration-routed-submit-v2",
+      target: "video-runtime/generateVideo",
+      requestedKind: kind,
+      requestedProvider: payload.provider || "auto",
+      requestedModel: payload.model || resolved.model,
+      requestedQuality: qualityTarget,
+      result,
+    }, { status: 500 });
+  }
+
   return NextResponse.json({
-    ok: result.ok,
+    ok: true,
     route: "admingeneration-routed-submit-v2",
     target: "video-runtime/generateVideo",
     requestedKind: kind,
     requestedProvider: payload.provider || "auto",
+    requestedModel: payload.model || resolved.model,
     requestedQuality: qualityTarget,
     requestedResolution: "4K 2160p",
     longVideo: payload.longVideo === true || payload.metadata?.longVideo === true,
     result,
-  }, { status: result.ok ? 200 : 500 });
+  });
 }
 
 export async function POST(request: Request) {
