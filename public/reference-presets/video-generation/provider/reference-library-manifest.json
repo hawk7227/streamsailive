@@ -1,0 +1,40 @@
+{
+  "context-workstation-use-case-frame": [
+    "/reference-presets/video-generation/provider/context-workstation-use-case-frame-02.jpg",
+    "/reference-presets/video-generation/provider/context-workstation-use-case-frame-01.jpg"
+  ],
+  "mask-friendly-clean-source": [
+    "/reference-presets/video-generation/provider/mask-friendly-clean-source-02.jpg",
+    "/reference-presets/video-generation/provider/mask-friendly-clean-source-01.jpg"
+  ],
+  "tail-end-frame": [
+    "/reference-presets/video-generation/provider/tail-end-frame-02.jpg",
+    "/reference-presets/video-generation/provider/tail-end-frame-01.jpg"
+  ],
+  "multi-image-consistency-set": [
+    "/reference-presets/video-generation/provider/multi-image-consistency-context-01.jpg",
+    "/reference-presets/video-generation/provider/multi-image-consistency-side-action-01.jpg",
+    "/reference-presets/video-generation/provider/multi-image-consistency-three-quarter-01.jpg",
+    "/reference-presets/video-generation/provider/multi-image-consistency-front-01.jpg"
+  ],
+  "composition-negative-space-frame": [
+    "/reference-presets/video-generation/provider/composition-negative-space-frame-02.jpg",
+    "/reference-presets/video-generation/provider/composition-negative-space-frame-01.jpg"
+  ],
+  "lighting-mood-frame": [
+    "/reference-presets/video-generation/provider/lighting-mood-frame-03.jpg",
+    "/reference-presets/video-generation/provider/lighting-mood-frame-02.jpg",
+    "/reference-presets/video-generation/provider/lighting-mood-frame-01.jpg"
+  ],
+  "establishing-environment": [
+    "/reference-presets/video-generation/provider/establishing-environment-03.jpg",
+    "/reference-presets/video-generation/provider/establishing-environment-02.jpg"
+  ],
+  "product-object-hero": [
+    "/reference-presets/video-generation/provider/product-object-hero-02.jpg",
+    "/reference-presets/video-generation/provider/product-object-hero-01.jpg"
+  ],
+  "full-body-action-pose": [
+    "/reference-presets/video-generation/provider/full-body-action-pose-02.jpg"
+  ]
+}
