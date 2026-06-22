@@ -37,49 +37,6 @@ export default function StreamsComposer({
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const id = "streams-chat-plain-bold-white-text-fix";
-    const existing = document.getElementById(id);
-    if (existing) existing.remove();
-    const style = document.createElement("style");
-    style.id = id;
-    style.textContent = `
-      .shell .chatPanel .msg .bubble,
-      .shell .chatPanel .msg.user .bubble,
-      .shell .chatPanel .msg.assistant .bubble {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        color: #ffffff !important;
-        font-size: 17px !important;
-        font-weight: 800 !important;
-        line-height: 1.55 !important;
-        padding: 4px 0 !important;
-        border-radius: 0 !important;
-      }
-      .shell .chatPanel .msg .bubble *,
-      .shell .chatPanel .msg.user .bubble *,
-      .shell .chatPanel .msg.assistant .bubble * {
-        color: #ffffff !important;
-        font-weight: 800 !important;
-      }
-      .shell .chatPanel .msg.user,
-      .shell .chatPanel .msg.assistant {
-        max-width: 980px !important;
-      }
-      @media (max-width: 760px) {
-        .shell .chatPanel .msg .bubble,
-        .shell .chatPanel .msg.user .bubble,
-        .shell .chatPanel .msg.assistant .bubble {
-          font-size: 15px !important;
-          line-height: 1.5 !important;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
 
     fetch("/api/streams-ai/search/status", { method: "GET" })
