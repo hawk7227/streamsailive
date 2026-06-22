@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 const THINKING_TEXT = "✦ Thinking…";
 const STILL_WORKING_TEXT = "✦ Still working…";
-const STALL_NOTICE_MS = 8500;
+const STALL_NOTICE_MS = 3500;
 
 function tuneScrollTargets() {
   document.querySelectorAll<HTMLElement>(".chatScroll").forEach((node) => {
