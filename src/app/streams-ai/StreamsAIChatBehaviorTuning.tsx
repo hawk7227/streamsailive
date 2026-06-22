@@ -4,7 +4,9 @@ import { useEffect } from "react";
 
 const THINKING_TEXT = "✦ Thinking…";
 const STILL_WORKING_TEXT = "✦ Still working…";
+const FALLBACK_TEXT = "The live assistant is taking longer than expected. The message is saved; retry if this does not continue shortly.";
 const STALL_NOTICE_MS = 3500;
+const FALLBACK_NOTICE_MS = 9000;
 
 function tuneScrollTargets() {
   document.querySelectorAll<HTMLElement>(".chatScroll").forEach((node) => {
@@ -19,11 +21,12 @@ function tuneThinkingPlaceholders() {
 
   assistantBubbles.forEach((bubble) => {
     const text = bubble.textContent?.trim() || "";
-    const isThinking = text === THINKING_TEXT || text === STILL_WORKING_TEXT;
+    const isWaitingState = text === THINKING_TEXT || text === STILL_WORKING_TEXT;
 
-    if (!isThinking) {
+    if (!isWaitingState) {
       delete bubble.dataset.streamsThinkingSince;
       delete bubble.dataset.streamsStallTimer;
+      delete bubble.dataset.streamsFallbackTimer;
       return;
     }
 
@@ -31,17 +34,29 @@ function tuneThinkingPlaceholders() {
       bubble.dataset.streamsThinkingSince = String(Date.now());
     }
 
-    if (bubble.dataset.streamsStallTimer) return;
+    if (!bubble.dataset.streamsStallTimer) {
+      const stallTimer = window.setTimeout(() => {
+        const currentText = bubble.textContent?.trim() || "";
+        if (currentText === THINKING_TEXT) {
+          bubble.textContent = STILL_WORKING_TEXT;
+        }
+        delete bubble.dataset.streamsStallTimer;
+      }, STALL_NOTICE_MS);
 
-    const timer = window.setTimeout(() => {
-      const currentText = bubble.textContent?.trim() || "";
-      if (currentText === THINKING_TEXT) {
-        bubble.textContent = STILL_WORKING_TEXT;
-      }
-      delete bubble.dataset.streamsStallTimer;
-    }, STALL_NOTICE_MS);
+      bubble.dataset.streamsStallTimer = String(stallTimer);
+    }
 
-    bubble.dataset.streamsStallTimer = String(timer);
+    if (!bubble.dataset.streamsFallbackTimer) {
+      const fallbackTimer = window.setTimeout(() => {
+        const currentText = bubble.textContent?.trim() || "";
+        if (currentText === THINKING_TEXT || currentText === STILL_WORKING_TEXT) {
+          bubble.textContent = FALLBACK_TEXT;
+        }
+        delete bubble.dataset.streamsFallbackTimer;
+      }, FALLBACK_NOTICE_MS);
+
+      bubble.dataset.streamsFallbackTimer = String(fallbackTimer);
+    }
   });
 }
 
