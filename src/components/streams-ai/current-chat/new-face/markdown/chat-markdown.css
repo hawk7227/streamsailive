@@ -1,19 +1,25 @@
 .chatMarkdown {
-  color: #1c1c1c;
-  font-size: 16px;
-  line-height: 1.65;
+  color: inherit;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
+  word-break: normal;
+  text-rendering: optimizeLegibility;
 }
 
 .chatMarkdown p {
-  margin: 0 0 14px;
+  margin: 0 0 13px;
 }
 
 .chatMarkdown p:last-child {
   margin-bottom: 0;
 }
 
-.chatMarkdown strong {
+.chatMarkdown strong,
+.chatMarkdown b {
   font-weight: 650;
   color: inherit;
 }
@@ -22,120 +28,245 @@
   font-style: italic;
 }
 
+.chatMarkdown h1,
+.chatMarkdown h2,
+.chatMarkdown h3,
+.chatMarkdown h4 {
+  color: inherit;
+  letter-spacing: -0.025em;
+}
+
 .chatMarkdown h1 {
-  font-size: 28px;
+  font-size: 22px;
   line-height: 1.22;
-  margin: 28px 0 12px;
-  font-weight: 700;
+  margin: 22px 0 10px;
+  font-weight: 680;
 }
 
 .chatMarkdown h2 {
-  font-size: 22px;
+  font-size: 19px;
   line-height: 1.28;
-  margin: 24px 0 10px;
-  font-weight: 700;
+  margin: 20px 0 9px;
+  font-weight: 680;
 }
 
 .chatMarkdown h3 {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.35;
-  margin: 20px 0 8px;
-  font-weight: 700;
+  margin: 17px 0 7px;
+  font-weight: 660;
+}
+
+.chatMarkdown h4 {
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 14px 0 6px;
+  font-weight: 650;
+}
+
+.chatMarkdown h1:first-child,
+.chatMarkdown h2:first-child,
+.chatMarkdown h3:first-child,
+.chatMarkdown h4:first-child {
+  margin-top: 0;
 }
 
 .chatMarkdown ul,
 .chatMarkdown ol {
-  margin: 10px 0 14px 24px;
-  padding: 0;
+  margin: 8px 0 14px 0;
+  padding-left: 22px;
 }
 
 .chatMarkdown li {
   margin: 6px 0;
-  padding-left: 2px;
+  padding-left: 3px;
+}
+
+.chatMarkdown li > p {
+  margin: 0 0 7px;
+}
+
+.chatMarkdown li > ul,
+.chatMarkdown li > ol {
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.chatMarkdown blockquote {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 3px solid rgba(96, 165, 250, 0.5);
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.08);
+  color: inherit;
 }
 
 .chatMarkdown a {
-  color: #0f5bff;
+  color: #7dd3fc;
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.chatMarkdown hr {
+  border: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  margin: 18px 0;
 }
 
 .chatInlineCode {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
-  background: #f2f2f2;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 7px;
   padding: 1px 5px;
   white-space: break-spaces;
 }
 
 .chatCodeBlock {
   max-width: 100%;
-  margin: 14px 0;
-  border: 1px solid #e5e5e5;
-  border-radius: 18px;
+  margin: 14px 0 16px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
   overflow: hidden;
-  background: #f7f7f7;
+  background: rgba(2, 6, 23, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .chatCodeHeader {
-  height: 42px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
-  border-bottom: 1px solid #e5e5e5;
-  color: #555;
-  font-size: 13px;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  color: rgba(238, 246, 255, 0.72);
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(15, 23, 42, 0.74);
+}
+
+.chatCodeHeader span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chatCodeHeader button {
-  border: 0;
-  background: transparent;
-  color: #333;
-  font-size: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eef6ff;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1;
   cursor: pointer;
 }
 
 .chatCodePre {
   margin: 0;
-  padding: 16px 18px;
+  padding: 14px 16px;
   overflow-x: auto;
   white-space: pre;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
   line-height: 1.55;
+  color: #e5edf9;
+}
+
+.chatCodePre code {
+  font-family: inherit;
 }
 
 .chatTableWrap {
   max-width: 100%;
   overflow-x: auto;
-  margin: 14px 0;
-  border: 1px solid #e5e5e5;
+  margin: 14px 0 16px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 14px;
+  background: rgba(2, 6, 23, 0.34);
 }
 
 .chatTableWrap table {
   width: 100%;
   min-width: 520px;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .chatTableWrap th,
 .chatTableWrap td {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   padding: 10px 12px;
   text-align: left;
   vertical-align: top;
 }
 
-.chatTableWrap th {
-  background: #f7f7f7;
-  font-weight: 650;
+.chatTableWrap tr:last-child td {
+  border-bottom: 0;
 }
 
+.chatTableWrap th {
+  background: rgba(15, 23, 42, 0.72);
+  font-weight: 650;
+  color: #eef6ff;
+}
+
+.chatTableWrap td {
+  color: inherit;
+}
+
+.chatMarkdown img,
+.chatMarkdown video {
+  max-width: 100%;
+  border-radius: 14px;
+}
+
+@media (min-width: 761px) {
+  .chatMarkdown {
+    font-size: 16px;
+    line-height: 1.62;
+  }
+
+  .chatMarkdown h1 {
+    font-size: 26px;
+  }
+
+  .chatMarkdown h2 {
+    font-size: 22px;
+  }
+
+  .chatMarkdown h3 {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .chatMarkdown {
+    font-size: 15px;
+    line-height: 1.58;
+  }
+
+  .chatMarkdown ul,
+  .chatMarkdown ol {
+    padding-left: 20px;
+  }
+
+  .chatCodePre {
+    padding: 13px 14px;
+    font-size: 12.5px;
+  }
+
+  .chatTableWrap table {
+    min-width: 480px;
+  }
+}
 
 /* ChatGPT-style user bubble fit */
-.startUserBubble{width:fit-content!important;max-width:min(680px,82%)!important;}
+.startUserBubble {
+  width: fit-content !important;
+  max-width: min(680px, 82%) !important;
+}
