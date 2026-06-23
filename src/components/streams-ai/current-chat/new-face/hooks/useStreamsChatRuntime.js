@@ -31,8 +31,8 @@ import {
 } from "../../runtime/streamsAssetStore";
 
 const CHAT_STATUS_FALLBACK = "Thinking…";
-const CHAT_STREAM_FLUSH_MS = 55;
-const CHAT_STREAM_CHUNK_SIZE = 10;
+const CHAT_STREAM_FLUSH_MS = 38;
+const CHAT_STREAM_CHUNK_SIZE = 18;
 
 function getSessionIdFromUrl() {
   if (typeof window === "undefined") return "";
