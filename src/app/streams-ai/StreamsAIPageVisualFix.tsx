@@ -389,12 +389,20 @@ export default function StreamsAIPageVisualFix() {
     document.head.appendChild(style);
 
     let frame = 0;
+    let followupFrame = 0;
     const scrollLatest = () => {
       const node = document.querySelector<HTMLElement>(".startChatSurface");
       if (!node) return;
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(followupFrame);
+
+      const scrollToBottom = () => {
+        node.scrollTop = node.scrollHeight;
+      };
+
       frame = requestAnimationFrame(() => {
-        node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+        scrollToBottom();
+        followupFrame = requestAnimationFrame(scrollToBottom);
       });
     };
 
@@ -414,6 +422,7 @@ export default function StreamsAIPageVisualFix() {
 
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(followupFrame);
       pageObserver.disconnect();
       style.remove();
     };
