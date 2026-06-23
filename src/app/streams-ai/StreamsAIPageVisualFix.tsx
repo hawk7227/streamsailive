@@ -423,6 +423,10 @@ export default function StreamsAIPageVisualFix() {
     let jumpButton: HTMLButtonElement | null = null;
     let pinnedToBottom = true;
 
+    const getActiveScrollNode = () => {
+      return document.querySelector<HTMLElement>(".startChatSurface") || document.querySelector<HTMLElement>(".chatScroll");
+    };
+
     const isNearBottom = (node: HTMLElement) => {
       return node.scrollHeight - node.scrollTop - node.clientHeight <= 88;
     };
@@ -437,7 +441,7 @@ export default function StreamsAIPageVisualFix() {
     };
 
     const jumpToLatest = () => {
-      const node = currentNode || document.querySelector<HTMLElement>(".startChatSurface");
+      const node = currentNode || getActiveScrollNode();
       if (!node) return;
       pinnedToBottom = true;
       jumpButton?.classList.remove("isVisible");
@@ -450,7 +454,7 @@ export default function StreamsAIPageVisualFix() {
     };
 
     const scrollLatest = () => {
-      const node = document.querySelector<HTMLElement>(".startChatSurface");
+      const node = getActiveScrollNode();
       if (!node) return;
       currentNode = node;
 
@@ -486,7 +490,7 @@ export default function StreamsAIPageVisualFix() {
     };
 
     const attachAutoScroll = () => {
-      const node = document.querySelector<HTMLElement>(".startChatSurface");
+      const node = getActiveScrollNode();
       if (!node) return;
 
       currentNode = node;
