@@ -377,6 +377,35 @@ export default function StreamsAIPageVisualFix() {
         font-weight: 400 !important;
       }
 
+      .streamsJumpLatestButton {
+        position: fixed !important;
+        left: 50% !important;
+        bottom: calc(118px + env(safe-area-inset-bottom, 0px)) !important;
+        transform: translateX(-50%) translateY(8px) !important;
+        z-index: 70 !important;
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 999px !important;
+        border: 1px solid rgba(148, 163, 184, 0.24) !important;
+        background: rgba(15, 23, 42, 0.92) !important;
+        color: #ffffff !important;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24) !important;
+        display: grid !important;
+        place-items: center !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 140ms ease, transform 140ms ease !important;
+      }
+
+      .streamsJumpLatestButton.isVisible {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        transform: translateX(-50%) translateY(0) !important;
+      }
+
       @media (min-width: 761px) {
         .shell .chatPanel .msg .bubble,
         .shell .chatPanel .msg.assistant .bubble,
@@ -390,29 +419,93 @@ export default function StreamsAIPageVisualFix() {
 
     let frame = 0;
     let followupFrame = 0;
+    let currentNode: HTMLElement | null = null;
+    let jumpButton: HTMLButtonElement | null = null;
+    let pinnedToBottom = true;
+
+    const isNearBottom = (node: HTMLElement) => {
+      return node.scrollHeight - node.scrollTop - node.clientHeight <= 88;
+    };
+
+    const updateJumpButton = (node: HTMLElement) => {
+      pinnedToBottom = isNearBottom(node);
+      jumpButton?.classList.toggle("isVisible", !pinnedToBottom);
+    };
+
+    const scrollToBottom = (node: HTMLElement) => {
+      node.scrollTop = node.scrollHeight;
+    };
+
+    const jumpToLatest = () => {
+      const node = currentNode || document.querySelector<HTMLElement>(".startChatSurface");
+      if (!node) return;
+      pinnedToBottom = true;
+      jumpButton?.classList.remove("isVisible");
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(followupFrame);
+      frame = requestAnimationFrame(() => {
+        scrollToBottom(node);
+        followupFrame = requestAnimationFrame(() => scrollToBottom(node));
+      });
+    };
+
     const scrollLatest = () => {
       const node = document.querySelector<HTMLElement>(".startChatSurface");
       if (!node) return;
+      currentNode = node;
+
+      if (!pinnedToBottom && !isNearBottom(node)) {
+        updateJumpButton(node);
+        return;
+      }
+
       cancelAnimationFrame(frame);
       cancelAnimationFrame(followupFrame);
 
-      const scrollToBottom = () => {
-        node.scrollTop = node.scrollHeight;
-      };
-
       frame = requestAnimationFrame(() => {
-        scrollToBottom();
-        followupFrame = requestAnimationFrame(scrollToBottom);
+        scrollToBottom(node);
+        followupFrame = requestAnimationFrame(() => scrollToBottom(node));
       });
+    };
+
+    let attachedNode: HTMLElement | null = null;
+    const handleScroll = () => {
+      if (attachedNode) updateJumpButton(attachedNode);
+    };
+
+    const ensureJumpButton = () => {
+      if (jumpButton) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "streamsJumpLatestButton";
+      button.setAttribute("aria-label", "Jump to latest response");
+      button.textContent = "↓";
+      button.addEventListener("click", jumpToLatest);
+      document.body.appendChild(button);
+      jumpButton = button;
     };
 
     const attachAutoScroll = () => {
       const node = document.querySelector<HTMLElement>(".startChatSurface");
-      if (!node || node.dataset.streamsVisualAutoscroll === "1") return;
-      node.dataset.streamsVisualAutoscroll = "1";
-      const observer = new MutationObserver(scrollLatest);
-      observer.observe(node, { childList: true, subtree: true, characterData: true });
-      node.dataset.streamsVisualAutoscrollObserver = "1";
+      if (!node) return;
+
+      currentNode = node;
+      ensureJumpButton();
+
+      if (attachedNode !== node) {
+        attachedNode?.removeEventListener("scroll", handleScroll);
+        attachedNode = node;
+        attachedNode.addEventListener("scroll", handleScroll, { passive: true });
+      }
+
+      if (node.dataset.streamsVisualAutoscroll !== "1") {
+        node.dataset.streamsVisualAutoscroll = "1";
+        const observer = new MutationObserver(scrollLatest);
+        observer.observe(node, { childList: true, subtree: true, characterData: true });
+        node.dataset.streamsVisualAutoscrollObserver = "1";
+      }
+
+      updateJumpButton(node);
       scrollLatest();
     };
 
@@ -423,6 +516,9 @@ export default function StreamsAIPageVisualFix() {
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(followupFrame);
+      attachedNode?.removeEventListener("scroll", handleScroll);
+      jumpButton?.removeEventListener("click", jumpToLatest);
+      jumpButton?.remove();
       pageObserver.disconnect();
       style.remove();
     };
