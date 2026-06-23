@@ -160,6 +160,76 @@ export default function StreamsAIPageVisualFix() {
         word-break: break-word !important;
       }
 
+      .startWorkspaceActive .startAssistantBody .chatMarkdown {
+        color: #eef6ff !important;
+        font-size: 16px !important;
+        line-height: 1.62 !important;
+        font-weight: 400 !important;
+        letter-spacing: -0.01em !important;
+        text-shadow: none !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown :is(strong, b) {
+        font-weight: 760 !important;
+        color: #ffffff !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown :is(h1, h2, h3, h4) {
+        color: #ffffff !important;
+        font-weight: 760 !important;
+        line-height: 1.25 !important;
+        margin: 18px 0 9px !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown p {
+        margin: 0 0 13px !important;
+        line-height: 1.62 !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown :is(ul, ol) {
+        margin: 8px 0 15px 0 !important;
+        padding-left: 22px !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown li {
+        margin: 7px 0 !important;
+        line-height: 1.58 !important;
+        padding-left: 3px !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown .chatInlineCode {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+        font-weight: 600 !important;
+        background: rgba(148, 163, 184, 0.16) !important;
+        border: 1px solid rgba(148, 163, 184, 0.28) !important;
+        border-radius: 7px !important;
+        padding: 1px 5px !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown .chatCodeBlock {
+        max-width: 100% !important;
+        margin: 14px 0 16px !important;
+        border: 1px solid rgba(148, 163, 184, 0.24) !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        background: rgba(2, 6, 23, 0.78) !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown .chatCodePre {
+        margin: 0 !important;
+        padding: 14px 16px !important;
+        overflow-x: auto !important;
+        white-space: pre !important;
+        color: #e5edf9 !important;
+        font-size: 13px !important;
+        line-height: 1.55 !important;
+      }
+
+      .startWorkspaceActive .startAssistantBody .chatMarkdown .chatTableWrap {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+      }
+
       .shell.mobile .composer {
         position: fixed !important;
         left: 12px !important;
@@ -317,7 +387,36 @@ export default function StreamsAIPageVisualFix() {
       }
     `;
     document.head.appendChild(style);
-    return () => style.remove();
+
+    let frame = 0;
+    const scrollLatest = () => {
+      const node = document.querySelector<HTMLElement>(".startChatSurface");
+      if (!node) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+      });
+    };
+
+    const attachAutoScroll = () => {
+      const node = document.querySelector<HTMLElement>(".startChatSurface");
+      if (!node || node.dataset.streamsVisualAutoscroll === "1") return;
+      node.dataset.streamsVisualAutoscroll = "1";
+      const observer = new MutationObserver(scrollLatest);
+      observer.observe(node, { childList: true, subtree: true, characterData: true });
+      node.dataset.streamsVisualAutoscrollObserver = "1";
+      scrollLatest();
+    };
+
+    attachAutoScroll();
+    const pageObserver = new MutationObserver(attachAutoScroll);
+    pageObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      pageObserver.disconnect();
+      style.remove();
+    };
   }, []);
 
   return null;
