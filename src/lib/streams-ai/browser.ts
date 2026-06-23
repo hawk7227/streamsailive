@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
+async function streamsAIBrowserLock<T>(_name: string, _acquireTimeout: number, fn: () => Promise<T>): Promise<T> {
+  return fn();
+}
+
 export function createStreamsAIBrowserClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -13,6 +17,7 @@ export function createStreamsAIBrowserClient() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      lock: streamsAIBrowserLock,
     },
     global: { headers: { "x-streams-ai-client": "browser" } },
   });
