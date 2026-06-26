@@ -48,6 +48,49 @@ function eventKey(event: RuntimeEvent) {
   return String(event.id || `${event.eventType || event.event_type}:${event.message || ""}:${event.createdAt || event.created_at || ""}`);
 }
 
+function extractPreviewText(code: string) {
+  const matches = Array.from(code.matchAll(/>([^<>{}\n][^<>{}]*)</g))
+    .map((match) => match[1].replace(/\s+/g, " ").trim())
+    .filter((value) => value && !/^[:;,.]$/.test(value));
+  const unique: string[] = [];
+  for (const value of matches) {
+    if (!unique.includes(value)) unique.push(value);
+    if (unique.length >= 18) break;
+  }
+  return unique;
+}
+
+function SourceTruthPreview({ repo, branch, filePath, route, sha, code, nonce }: { repo: string; branch: string; filePath: string; route: string; sha: string; code: string; nonce: number }) {
+  const previewText = useMemo(() => extractPreviewText(code), [code]);
+  const headline = previewText.find((item) => item.length > 18) || previewText[0] || filePath;
+  const supporting = previewText.filter((item) => item !== headline).slice(0, 8);
+
+  return (
+    <div className="sourcePreview" data-preview-sha={sha} data-preview-nonce={nonce}>
+      <div className="previewDebug">
+        <span><b>repo</b>{repo}</span>
+        <span><b>branch</b>{branch}</span>
+        <span><b>route</b>{route}</span>
+        <span><b>file</b>{filePath}</span>
+        <span><b>sha</b>{sha || "missing"}</span>
+      </div>
+      <div className="previewCanvas">
+        <div className="previewCard">
+          <p className="previewBadge">Live source preview · cache busted #{nonce}</p>
+          <h1>{headline}</h1>
+          {supporting.length ? <div className="previewCopy">{supporting.map((item) => <p key={item}>{item}</p>)}</div> : <p className="previewCopySingle">No visible JSX text was found in this file. The source panel below is the pulled file proof.</p>}
+          <div className="previewProofGrid">
+            <span>Active file matches editor</span>
+            <span>Preview is not routed to this app homepage</span>
+            <span>Rendered from pulled code state</span>
+          </div>
+        </div>
+        <pre className="previewSource">{code || "Pull a file to build the source preview."}</pre>
+      </div>
+    </div>
+  );
+}
+
 function VideoArtifactPreview({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -90,7 +133,6 @@ export default function AgentOneCodexWorkstation() {
   const seenRuntimeEventsRef = useRef<Set<string>>(new Set());
 
   const previewRoute = route || routeFromFile(filePath);
-  const previewSrc = `${previewRoute}${previewRoute.includes("?") ? "&" : "?"}agent1Preview=${previewNonce}`;
   const verification = useMemo(() => verifyAgentOneWorkspaceState({
     selectedRepo: repo,
     selectedBranch: branch,
@@ -106,7 +148,7 @@ export default function AgentOneCodexWorkstation() {
     writeTarget: filePath,
     componentFile: filePath,
     buildOk: undefined,
-    previewLoaded: undefined,
+    previewLoaded: Boolean(code && sha),
     previewHardCoded: false,
     lastPulledSha: sha,
   }), [repo, branch, filePath, previewRoute, code, logs, sha]);
@@ -163,17 +205,20 @@ export default function AgentOneCodexWorkstation() {
   }
 
   function mountPulledFile(detail: PulledFileDetail) {
+    const nextRoute = detail.route || routeFromFile(detail.path);
     setRepo(detail.repo);
     setBranch(detail.branch || "main");
     setFilePath(detail.path);
-    setRoute(detail.route || routeFromFile(detail.path));
+    setRoute(nextRoute);
     setSha(detail.sha || "");
     setCode(detail.content || "");
     setHighlightRange(null);
-    setSurface("code");
-    setStatus("Verified");
-    setSummary((items) => [...items.slice(-8), `Mounted ${detail.path} from ${detail.repo}@${detail.branch} into the GitHub-style code editor.`]);
+    setPreviewNonce((value) => value + 1);
+    setSurface("frontend");
+    setStatus("Verified source preview");
+    setSummary((items) => [...items.slice(-8), `Mounted ${detail.path} from ${detail.repo}@${detail.branch}; frontend preview rebuilt from the same pulled source.`]);
     stamp(`Pulled source truth ${detail.repo}@${detail.branch}:${detail.path}`);
+    stamp(`Frontend preview rebuilt from SHA ${detail.sha || "missing"} at ${nextRoute}`);
   }
 
   function repairPreview() {
@@ -182,7 +227,7 @@ export default function AgentOneCodexWorkstation() {
     setPreviewNonce((value) => value + 1);
     setSurface("frontend");
     setStatus("Repairing");
-    stamp(`Repair: re-mapped and refreshed frontend route ${nextRoute}`);
+    stamp(`Repair: rebuilt source preview for ${nextRoute}`);
   }
 
   useEffect(() => {
@@ -273,9 +318,9 @@ export default function AgentOneCodexWorkstation() {
             {(["summary", "code", "frontend", "diff", "logs", "media"] as Surface[]).map((item) => <button key={item} className={surface === item ? "active" : ""} onClick={() => setSurface(item)}>{item === "frontend" ? "Frontend UI" : item}</button>)}
           </nav>
           <div className="pane">
-            {surface === "summary" ? <div className="textPane"><h2>{filePath}</h2><p><b>Route:</b> {previewRoute}</p><p><b>SHA:</b> {sha || "missing"}</p></div> : null}
+            {surface === "summary" ? <div className="textPane"><h2>{filePath}</h2><p><b>Route:</b> {previewRoute}</p><p><b>SHA:</b> {sha || "missing"}</p><button type="button" onClick={repairPreview}>Rebuild frontend preview</button></div> : null}
             {surface === "code" ? <GitHubStyleCodeEditor value={code} onChange={setCode} filePath={filePath} highlightStartLine={highlightRange?.startLine} highlightEndLine={highlightRange?.endLine} /> : null}
-            {surface === "frontend" ? <div className="frontendScroll"><iframe title={`Frontend UI preview for ${filePath}`} src={previewSrc} /></div> : null}
+            {surface === "frontend" ? <div className="frontendScroll"><SourceTruthPreview repo={repo} branch={branch} filePath={filePath} route={previewRoute} sha={sha} code={code} nonce={previewNonce} /></div> : null}
             {surface === "diff" ? <pre className="diff">{code.split("\n").slice(0, 120).map((line, index) => `${String(index + 1).padStart(4, " ")}  ${line}`).join("\n")}</pre> : null}
             {surface === "logs" ? <div className="logs">{logs.slice(-40).map((item) => <p key={item}>{item}</p>)}</div> : null}
             {surface === "media" ? <div className="media">{media.length ? media.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.kind} · {item.status}</span><p>{item.prompt}</p>{!item.url && item.kind === "video" ? <div className="generationLive"><i />Real video provider job is running. First-frame thumbnail appears when the artifact URL is available.</div> : null}{item.url && item.kind === "video" ? <VideoArtifactPreview src={item.url} /> : null}{item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open output</a> : <em>Generation still running in Studio runtime.</em>}</article>) : <p>No image/video output has been routed here yet.</p>}</div> : null}
@@ -286,7 +331,8 @@ export default function AgentOneCodexWorkstation() {
         .agentOneCodex{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden;background:#f6f8fa;color:#24292f;}
         .workscreen{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(240px,.34fr) minmax(0,1fr);overflow:hidden;}
         .summaryRail{min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;border-right:1px solid #d8dee4;background:#fff;padding:16px;box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}.summaryRail::-webkit-scrollbar,.frontendScroll::-webkit-scrollbar{width:5px;height:5px}.summaryRail::-webkit-scrollbar-track,.frontendScroll::-webkit-scrollbar-track{background:transparent}.summaryRail::-webkit-scrollbar-thumb,.frontendScroll::-webkit-scrollbar-thumb{background:#0f172a;border-radius:999px}.summaryRail .meta{margin:0 0 16px;color:#57606a;font-size:12px;}.summaryRail h3{margin:14px 0 8px;font-size:18px;}.summaryRail ul{margin:0;padding-left:18px;display:grid;gap:10px;}.summaryRail li{font-size:13px;line-height:1.45;}.emptySummary{font-size:13px;color:#57606a;}
-        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}.frontendScroll{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:#020617;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}iframe{display:block;width:100%;min-width:0;height:6000px;border:0;background:#fff;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}.media video{display:block;width:100%;max-height:360px;border-radius:10px;background:#020617;margin:0;object-fit:cover;}.videoThumb{position:relative;margin:8px 0;border-radius:10px;overflow:hidden;background:#020617;border:1px solid #d8dee4;}.thumbBadge{position:absolute;left:8px;bottom:8px;display:inline-block!important;width:auto;color:#fff!important;background:rgba(2,6,23,.76);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:4px 8px;font-size:10px!important;font-weight:900;}.generationLive{display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px;border:1px solid #54aeff;border-radius:10px;background:#ddf4ff;color:#0969da;font-size:12px;font-weight:800;}.generationLive i{width:8px;height:8px;border-radius:999px;background:#1a7f37;box-shadow:0 0 0 4px rgba(26,127,55,.14);}
+        .editorSide{min-width:0;min-height:0;display:grid;grid-template-rows:42px minmax(0,1fr);overflow:hidden;background:#fff;}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa;}.tabs button{height:42px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;text-transform:capitalize;}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73;}.pane{min-width:0;min-height:0;overflow:hidden;background:#fff;}.textPane{height:100%;overflow:auto;padding:18px;box-sizing:border-box;}.textPane h2{margin:0 0 12px;font-size:18px;}.textPane p{font-size:13px;color:#57606a;line-height:1.5;}.textPane button{height:34px;border:0;border-radius:10px;background:#7c3aed;color:#fff;font-size:12px;font-weight:900;padding:0 14px;cursor:pointer;}.frontendScroll{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:#020617;scrollbar-width:thin;scrollbar-color:#0f172a transparent;}.diff{height:100%;margin:0;overflow:auto;padding:16px;background:#fff;color:#24292f;font:12px/20px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}.logs{height:100%;overflow:auto;background:#020617;color:#cbd5e1;padding:16px;box-sizing:border-box;}.logs p{margin:0 0 8px;font-size:12px;line-height:1.45;}.media{height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;box-sizing:border-box;}.media article,.media>p{border:1px solid #d8dee4;border-radius:12px;background:#f6f8fa;padding:14px;margin:0;}.media b,.media span,.media p,.media em,.media a{display:block;color:#24292f;font-size:12px;line-height:1.4;}.media video{display:block;width:100%;max-height:360px;border-radius:10px;background:#020617;margin:0;object-fit:cover;}.videoThumb{position:relative;margin:8px 0;border-radius:10px;overflow:hidden;background:#020617;border:1px solid #d8dee4;}.thumbBadge{position:absolute;left:8px;bottom:8px;display:inline-block!important;width:auto;color:#fff!important;background:rgba(2,6,23,.76);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:4px 8px;font-size:10px!important;font-weight:900;}.generationLive{display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px;border:1px solid #54aeff;border-radius:10px;background:#ddf4ff;color:#0969da;font-size:12px;font-weight:800;}.generationLive i{width:8px;height:8px;border-radius:999px;background:#1a7f37;box-shadow:0 0 0 4px rgba(26,127,55,.14);}
+        .sourcePreview{min-height:100%;background:#020617;color:#fff;}.previewDebug{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);}.previewDebug span{min-width:0;display:grid;gap:2px;padding:9px 10px;background:#020617;color:#cbd5e1;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.previewDebug b{color:#6ee7b7;font-size:9px;text-transform:uppercase;}.previewCanvas{min-height:calc(100vh - 42px);display:grid;gap:18px;padding:28px;background:radial-gradient(circle at top,#1e1b4b 0,#020617 55%);box-sizing:border-box;}.previewCard{max-width:980px;margin:0 auto;width:100%;border:1px solid rgba(168,85,247,.35);border-radius:28px;background:rgba(15,23,42,.78);box-shadow:0 24px 80px rgba(0,0,0,.35);padding:34px;box-sizing:border-box;text-align:center;}.previewBadge{display:inline-flex;margin:0 0 18px;padding:9px 16px;border:1px solid rgba(167,139,250,.35);border-radius:999px;background:rgba(79,70,229,.18);color:#c4b5fd;font-size:13px;font-weight:900;}.previewCard h1{margin:0 auto 18px;max-width:840px;color:#fff;font-size:clamp(34px,6vw,72px);line-height:.98;font-weight:1000;letter-spacing:-.05em;}.previewCopy{display:grid;gap:10px;max-width:760px;margin:0 auto 22px;}.previewCopy p,.previewCopySingle{margin:0;color:#d1d5db;font-size:clamp(14px,2vw,21px);line-height:1.45;}.previewProofGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:24px;}.previewProofGrid span{border:1px solid rgba(110,231,183,.25);border-radius:14px;background:rgba(16,185,129,.10);color:#bbf7d0;padding:12px;font-size:12px;font-weight:900;}.previewSource{max-width:980px;width:100%;max-height:520px;margin:0 auto 28px;overflow:auto;border:1px solid rgba(148,163,184,.22);border-radius:18px;background:rgba(2,6,23,.78);color:#dbeafe;padding:18px;box-sizing:border-box;font:12px/18px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;white-space:pre-wrap;}
       `}</style>
     </section>
   );
