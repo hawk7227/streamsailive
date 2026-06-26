@@ -15,6 +15,7 @@ type Props = {
   latestProof: string;
   activeFile: PulledFileDetail;
   connection: BuilderChatConnection;
+  summaryItems?: string[];
 };
 
 const bridgeEvents = [
@@ -26,9 +27,10 @@ const bridgeEvents = [
   "USER_APPROVAL_REQUIRED_BEFORE_PUSH",
 ] as const;
 
-export default function BuilderControlLayers({ activeModule, viewMode, latestProof, activeFile, connection }: Props) {
+export default function BuilderControlLayers({ activeModule, viewMode, latestProof, activeFile, connection, summaryItems = [] }: Props) {
   const contract = getWorkstationContract(activeModule);
   const connectedHere = connection.connected && connection.activeWorkstationName === contract.name;
+  const timeline = summaryItems.length ? summaryItems.slice(-8) : [latestProof || "Waiting for live workstation proof event."];
   return (
     <section className="builderControlLayers" aria-label="Builder control and connection layers">
       <header>
@@ -41,6 +43,11 @@ export default function BuilderControlLayers({ activeModule, viewMode, latestPro
         <p><b>View Mode</b><span>{viewMode}</span></p>
         <p><b>Active Source</b><span>{activeFile.path ? `${activeFile.repo}@${activeFile.branch}:${activeFile.path}` : "No active file loaded"}</span></p>
         <p><b>Latest Proof</b><span>{latestProof || "Waiting for live workstation proof event."}</span></p>
+      </div>
+
+      <div className="summaryLane">
+        <b>Live Agent Summary Timeline</b>
+        {timeline.map((item, index) => <span key={`${item}-${index}`}>{index + 1}. {item}</span>)}
       </div>
 
       <div className="sectionBlock">
@@ -81,10 +88,11 @@ export default function BuilderControlLayers({ activeModule, viewMode, latestPro
       <style jsx>{`
         .builderControlLayers{min-width:0;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);padding:7px;display:grid;gap:7px;box-sizing:border-box;overflow:hidden;}
         header{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(148,163,184,.12);padding-bottom:6px;}
-        header b{color:#6ee7b7;font-size:9px;letter-spacing:.08em;}header span,.activeCard span,.sectionBlock span,.capabilityGrid span,.capabilityGrid em,.bridgeRow span,.previewRow span{color:#cbd5e1;font-size:9px;line-height:1.35;overflow-wrap:anywhere;}
+        header b{color:#6ee7b7;font-size:9px;letter-spacing:.08em;}header span,.activeCard span,.summaryLane span,.sectionBlock span,.capabilityGrid span,.capabilityGrid em,.bridgeRow span,.previewRow span{color:#cbd5e1;font-size:9px;line-height:1.35;overflow-wrap:anywhere;}
         .activeCard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
-        p,article,.sectionBlock,.bridgeRow,.previewRow{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(2,6,23,.68);padding:6px;}
-        p b,article b,.sectionBlock b,.bridgeRow b,.previewRow b{display:block;color:#fff;font-size:9px;margin-bottom:4px;}.sectionBlock{display:grid;gap:3px;}
+        p,article,.summaryLane,.sectionBlock,.bridgeRow,.previewRow{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(2,6,23,.68);padding:6px;}
+        p b,article b,.summaryLane b,.sectionBlock b,.bridgeRow b,.previewRow b{display:block;color:#fff;font-size:9px;margin-bottom:4px;}.sectionBlock,.summaryLane{display:grid;gap:3px;}
+        .summaryLane{border-color:rgba(34,211,238,.22);background:rgba(8,47,73,.2);max-height:138px;overflow:auto;}
         .capabilityGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:210px;overflow:auto;}.capabilityGrid article{display:grid;gap:3px;}.capabilityGrid em{font-style:normal;color:#93c5fd;}
         .bridgeRow,.previewRow{background:rgba(6,78,59,.14);border-color:rgba(16,185,129,.18);}
       `}</style>
