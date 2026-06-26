@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
+import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
@@ -87,7 +87,7 @@ export default function WorkspaceGrid() {
                   onChat={(message) => setVisualEditorLog((items) => [...items.slice(-20), message])}
                 />
               ) : (
-                <AgentOneCodexWorkstation />
+                <LiveFrontendWorkstation activeFile={activeFile} />
               )}
             </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
