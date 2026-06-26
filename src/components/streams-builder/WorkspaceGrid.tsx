@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import VisualEditorPage from "../../app/visual-editor/page";
 import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
+import SelectedRepoVisualEditor from "./SelectedRepoVisualEditor";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
@@ -75,16 +75,14 @@ export default function WorkspaceGrid() {
           <section className="workstationShell">
             <div className="stationViewport">
               {activeModule === "Visual Editing" ? (
-                <section className="realVisualEditorMount" aria-label="Recovered real visual editor foundation">
-                  <VisualEditorPage />
-                </section>
+                <SelectedRepoVisualEditor activeFile={activeFile} />
               ) : (
                 <LiveFrontendWorkstation activeFile={activeFile} />
               )}
             </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Recovered real /visual-editor foundation mounted. Fake overlay workstation bypassed." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Context</b><span>{activeFile.repo ? `${activeFile.repo}@${activeFile.branch}` : "Waiting for source selection."}</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Selected repo visual editor mounted from the current Pull source truth." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Context</b><span>{activeFile.repo ? `${activeFile.repo}@${activeFile.branch}` : "Waiting for source selection."}</span></p></div> : null}
           </section>
         </section>
       </section>
@@ -102,8 +100,7 @@ export default function WorkspaceGrid() {
         .workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
         .operatorColumn{min-width:0;display:grid;gap:6px;align-content:start;}
         .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
-        .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.realVisualEditorMount{height:100%;min-height:0;overflow:hidden;background:var(--color-background-primary,#050915);}
-        .stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
+        .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
         .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
         .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
         .statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px;}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
