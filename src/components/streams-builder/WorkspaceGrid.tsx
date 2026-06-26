@@ -25,8 +25,10 @@ const MODULES = [
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
+type BuilderChatConnection = { connected: boolean; activeWorkstationId: string; activeWorkstationName: string; sessionId: string };
 
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
+const EMPTY_CONNECTION: BuilderChatConnection = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
 
 function readActiveFile() {
   if (typeof window === "undefined") return EMPTY_FILE;
@@ -44,6 +46,7 @@ export default function WorkspaceGrid() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [activeFile, setActiveFile] = useState<PulledFileDetail>(EMPTY_FILE);
   const [visualEditorLog, setVisualEditorLog] = useState<string[]>([]);
+  const [chatConnection, setChatConnection] = useState<BuilderChatConnection>(EMPTY_CONNECTION);
 
   useEffect(() => {
     setActiveFile(readActiveFile());
@@ -57,6 +60,8 @@ export default function WorkspaceGrid() {
     return () => window.removeEventListener("streams-builder:pulled-file", onPulledFile);
   }, []);
 
+  const connectedHere = chatConnection.connected && chatConnection.activeWorkstationName === activeModule;
+
   return (
     <main className="streamsBuilderShell">
       <section className="centerWorkspace">
@@ -69,10 +74,13 @@ export default function WorkspaceGrid() {
         </div>
         <section className="workArea">
           <section className="operatorColumn">
-            <BuilderCenterChat />
+            <BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} />
             <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} />
           </section>
-          <section className="workstationShell">
+          <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
+            <div className="connectionRibbon">
+              {chatConnection.connected ? (connectedHere ? `iPhone chat connected to ${activeModule}` : `iPhone chat connected to ${chatConnection.activeWorkstationName}. Switch connection before controlling ${activeModule}.`) : "iPhone chat is standalone. Connect it to one workstation when needed."}
+            </div>
             <div className="stationViewport">
               {activeModule === "Visual Editing" ? (
                 <SelectedRepoVisualEditor activeFile={activeFile} />
@@ -82,7 +90,7 @@ export default function WorkspaceGrid() {
             </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Selected repo visual editor mounted from the current Pull source truth." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Context</b><span>{activeFile.repo ? `${activeFile.repo}@${activeFile.branch}` : "Waiting for source selection."}</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Selected repo visual editor mounted from the current Pull source truth." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
           </section>
         </section>
       </section>
@@ -100,6 +108,8 @@ export default function WorkspaceGrid() {
         .workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
         .operatorColumn{min-width:0;display:grid;gap:6px;align-content:start;}
         .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
+        .workstationShell.connected{border-color:rgba(110,231,183,.58);box-shadow:0 0 0 1px rgba(110,231,183,.12),0 0 26px rgba(16,185,129,.12);}
+        .connectionRibbon{min-width:0;padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.86);color:#cbd5e1;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.workstationShell.connected .connectionRibbon{color:#6ee7b7;background:rgba(6,78,59,.28);}
         .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
         .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
         .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
