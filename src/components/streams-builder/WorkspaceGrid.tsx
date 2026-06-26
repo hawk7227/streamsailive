@@ -53,7 +53,7 @@ export default function WorkspaceGrid() {
       const detail = (event as CustomEvent<PulledFileDetail>).detail;
       if (!detail?.path) return;
       setActiveFile(detail);
-      setVisualEditorLog((items) => [...items.slice(-20), `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`]);
+      setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`]);
     }
     function onSummaryEvent(event: Event) {
       const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail;
@@ -83,7 +83,7 @@ export default function WorkspaceGrid() {
         <section className="workArea">
           <section className="operatorColumn">
             <BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} />
-            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} />
+            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} summaryItems={visualEditorLog} />
           </section>
           <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
             <div className="connectionRibbon">
