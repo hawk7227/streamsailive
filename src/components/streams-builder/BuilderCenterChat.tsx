@@ -1,10 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
+type BuilderChatConnection = { connected: boolean; activeWorkstationId: string; activeWorkstationName: string; sessionId: string };
+
+type Props = {
+  activeModule: string;
+  connection: BuilderChatConnection;
+  onConnectionChange: (next: BuilderChatConnection) => void;
+};
 
 type FileResult = {
   ok: boolean;
@@ -39,6 +46,10 @@ async function runtimeHeaders() {
     // The runtime route will return the exact auth error if no session is available.
   }
   return headers;
+}
+
+function workstationId(name: string) {
+  return String(name || "workstation").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workstation";
 }
 
 function routeFromFile(path: string) {
@@ -111,24 +122,47 @@ async function queueRuntime(detail: PulledFileDetail, prompt: string) {
   }
 }
 
-export default function BuilderCenterChat() {
+export default function BuilderCenterChat({ activeModule, connection, onConnectionChange }: Props) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [prompt, setPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen. Fix the pull-to-workscreen issue.");
-  const [status, setStatus] = useState("Agent 1 command bridge ready");
+  const [status, setStatus] = useState("iPhone chat bridge ready");
   const [running, setRunning] = useState(false);
 
-  async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    if (!prompt.trim() || running) return;
+  function pushConnectionState(next = connection) {
+    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-connection-state", connection: next }, window.location.origin);
+  }
+
+  function connectToActiveWorkstation() {
+    const next = { connected: true, activeWorkstationId: workstationId(activeModule), activeWorkstationName: activeModule, sessionId: "agent-1" };
+    onConnectionChange(next);
+    setStatus(`iPhone chat connected to ${activeModule}.`);
+    window.setTimeout(() => pushConnectionState(next), 50);
+  }
+
+  function disconnectWorkstation() {
+    const next = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
+    onConnectionChange(next);
+    setStatus("iPhone chat disconnected. Standalone Streams AI mode preserved.");
+    window.setTimeout(() => pushConnectionState(next), 50);
+  }
+
+  async function runAgentOneText(nextPrompt: string, source: "local-form" | "iphone-chat" = "local-form") {
+    const cleanPrompt = String(nextPrompt || "").trim();
+    if (!cleanPrompt || running) return;
+    if (source === "iphone-chat" && (!connection.connected || !connection.activeWorkstationId)) {
+      setStatus("iPhone chat is standalone. Connect it to one workstation before routing commands.");
+      return;
+    }
     setRunning(true);
-    setStatus("Agent 1 running: interpreting prompt...");
+    setStatus(source === "iphone-chat" ? `iPhone chat command routed to ${connection.activeWorkstationName}.` : "Agent 1 running: interpreting prompt...");
     try {
-      if (isStudioVideoRequest(prompt)) {
-        await runStudioVideoLane(prompt, setStatus);
+      if (isStudioVideoRequest(cleanPrompt)) {
+        await runStudioVideoLane(cleanPrompt, setStatus);
         return;
       }
 
       setStatus("Agent 1 running: interpreting prompt, pulling source truth, rebuilding workscreen...");
-      const command = parseAgentOnePrompt(prompt);
+      const command = parseAgentOnePrompt(cleanPrompt);
       const params = new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path });
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
       const json = (await readJson(response)) as FileResult;
@@ -147,13 +181,14 @@ export default function BuilderCenterChat() {
 
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
-      window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, command, pulled: detail, intent: "pull-file-to-workscreen" } }));
+      window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt: cleanPrompt, command, pulled: detail, intent: source === "iphone-chat" ? "iphone-chat-to-workstation" : "pull-file-to-workscreen", workstation: connection } }));
       const queueingMessage = `Runtime bridge queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
       sendAgentLog(queueingMessage, "runtime-queueing", detail);
       setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing runtime events...`);
+      frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-status", status: `Pulled ${detail.repo}:${detail.path}`, connection }, window.location.origin);
 
       try {
-        const runtime = await queueRuntime(detail, prompt);
+        const runtime = await queueRuntime(detail, cleanPrompt);
         if (runtime?.jobId) {
           window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: runtime }));
           const queuedMessage = `Runtime bridge queued job ${runtime.jobId} for ${detail.repo}@${detail.branch}:${detail.path}`;
@@ -178,41 +213,60 @@ export default function BuilderCenterChat() {
     }
   }
 
+  async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    await runAgentOneText(prompt, "local-form");
+  }
+
+  useEffect(() => {
+    pushConnectionState(connection);
+  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName]);
+
+  useEffect(() => {
+    function onFrameMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data || {};
+      if (data.type === "streams-builder-frame-ready") pushConnectionState(connection);
+      if (data.type === "streams-builder-chat-command") {
+        if (!connection.connected || data.connection?.activeWorkstationId !== connection.activeWorkstationId) {
+          setStatus("Blocked iPhone command: no active workstation connection or stale connection.");
+          return;
+        }
+        void runAgentOneText(data.message, "iphone-chat");
+      }
+    }
+    window.addEventListener("message", onFrameMessage);
+    return () => window.removeEventListener("message", onFrameMessage);
+  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName, running]);
+
   return (
     <section className="builderChatFrame" aria-label="Existing Streams AI mobile chat">
-      <iframe title="Streams AI" src="/streams-ai?builderMode=1" />
-      <form className="agentOneCommandBar" onSubmit={runAgentOnePrompt} aria-label="Agent 1 Codex-style command prompt">
-        <label>
-          <b>Agent 1 chat command</b>
-          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Agent 1, pull src/app/about/page.tsx and show it on the workscreen" />
-        </label>
-        <button type="submit" disabled={running}>{running ? "Agent running" : "Start Agent 1"}</button>
+      <iframe ref={frameRef} title="Streams AI" src="/streams-ai?builderMode=1" onLoad={() => pushConnectionState(connection)} />
+      <section className="connectionBar" aria-label="iPhone chat workstation connection">
+        <div className="connectionStatus">
+          <b>iPhone chat connection</b>
+          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone Streams AI mode"}</span>
+        </div>
+        <div className="connectionActions">
+          {connection.connected ? <button type="button" onClick={disconnectWorkstation}>Disconnect</button> : <button type="button" onClick={connectToActiveWorkstation}>Connect {activeModule}</button>}
+          {connection.connected && connection.activeWorkstationName !== activeModule ? <button type="button" onClick={connectToActiveWorkstation}>Switch to {activeModule}</button> : null}
+        </div>
         <p>{status}</p>
-      </form>
+        <details className="fallbackCommand">
+          <summary>Manual bridge fallback</summary>
+          <form onSubmit={runAgentOnePrompt} aria-label="Agent 1 fallback command prompt">
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Agent 1, pull src/app/page.tsx and show it on the workscreen" />
+            <button type="submit" disabled={running}>{running ? "Agent running" : "Run fallback"}</button>
+          </form>
+        </details>
+      </section>
       <style jsx>{`
-        .builderChatFrame {
-          width: min(100%, 430px);
-          max-width: 430px;
-          min-width: 320px;
-          height: min(932px, calc(100dvh - 24px));
-          min-height: 640px;
-          overflow: hidden;
-          border: 1px solid rgba(148, 163, 184, 0.16);
-          border-radius: 14px;
-          background: rgba(15, 23, 42, 0.78);
-          box-sizing: border-box;
-          display:grid;
-          grid-template-rows:minmax(0,1fr) auto;
-        }
-        iframe {
-          display: block;
-          width: 100%;
-          height: 100%;
-          border: 0;
-          background: #020713;
-        }
-        .agentOneCommandBar{display:grid;gap:6px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box;}
-        label{display:grid;gap:4px;min-width:0;}b{color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em;}textarea{width:100%;height:58px;resize:none;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:10px;line-height:1.35;outline:none;box-sizing:border-box;}button{height:30px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;cursor:pointer;}button:disabled{opacity:.55;cursor:not-allowed;}p{margin:0;color:#cbd5e1;font-size:9px;line-height:1.35;}
+        .builderChatFrame{width:min(100%,430px);max-width:430px;min-width:320px;height:min(932px,calc(100dvh - 24px));min-height:640px;overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;}
+        iframe{display:block;width:100%;height:100%;border:0;background:#020713;}
+        .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box;}
+        .connectionStatus{display:grid;gap:2px;}.connectionStatus b{color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em;}.connectionStatus span{color:#fff;font-size:11px;font-weight:800;}
+        .connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}.connectionActions button,.fallbackCommand button{height:30px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;cursor:pointer;}.connectionActions button:first-child{background:#065f46;color:#6ee7b7;}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed;}
+        p{margin:0;color:#cbd5e1;font-size:9px;line-height:1.35;}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617;}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;}.fallbackCommand form{display:grid;gap:6px;margin-top:6px;}textarea{width:100%;height:54px;resize:none;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:10px;line-height:1.35;outline:none;box-sizing:border-box;}
       `}</style>
     </section>
   );
