@@ -10,6 +10,7 @@ import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
+import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemContract";
 
 const MODULES = [
   "Primary Builder",
@@ -24,8 +25,6 @@ const MODULES = [
 
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
-type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
-type BuilderChatConnection = { connected: boolean; activeWorkstationId: string; activeWorkstationName: string; sessionId: string };
 
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
 const EMPTY_CONNECTION: BuilderChatConnection = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
@@ -56,8 +55,17 @@ export default function WorkspaceGrid() {
       setActiveFile(detail);
       setVisualEditorLog((items) => [...items.slice(-20), `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`]);
     }
+    function onSummaryEvent(event: Event) {
+      const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail;
+      if (!detail?.message) return;
+      setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]);
+    }
     window.addEventListener("streams-builder:pulled-file", onPulledFile);
-    return () => window.removeEventListener("streams-builder:pulled-file", onPulledFile);
+    window.addEventListener("streams-builder-summary-event", onSummaryEvent);
+    return () => {
+      window.removeEventListener("streams-builder:pulled-file", onPulledFile);
+      window.removeEventListener("streams-builder-summary-event", onSummaryEvent);
+    };
   }, []);
 
   const connectedHere = chatConnection.connected && chatConnection.activeWorkstationName === activeModule;
@@ -75,7 +83,7 @@ export default function WorkspaceGrid() {
         <section className="workArea">
           <section className="operatorColumn">
             <BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} />
-            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} />
+            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} />
           </section>
           <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
             <div className="connectionRibbon">
