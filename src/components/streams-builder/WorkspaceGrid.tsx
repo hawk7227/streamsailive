@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AgentOneCodexWorkstation from "./AgentOneCodexWorkstation";
 import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
@@ -24,13 +24,38 @@ const MODULES = [
 
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
+type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
+
+const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
+
+function readActiveFile() {
+  if (typeof window === "undefined") return EMPTY_FILE;
+  try {
+    const raw = window.localStorage.getItem("streams-builder:active-file");
+    return raw ? JSON.parse(raw) as PulledFileDetail : EMPTY_FILE;
+  } catch {
+    return EMPTY_FILE;
+  }
+}
 
 export default function WorkspaceGrid() {
   const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
   const [viewMode, setViewMode] = useState<ViewMode>("Single");
   const [statusOpen, setStatusOpen] = useState(false);
-  const [visualEditorContent, setVisualEditorContent] = useState("");
+  const [activeFile, setActiveFile] = useState<PulledFileDetail>(EMPTY_FILE);
   const [visualEditorLog, setVisualEditorLog] = useState<string[]>([]);
+
+  useEffect(() => {
+    setActiveFile(readActiveFile());
+    function onPulledFile(event: Event) {
+      const detail = (event as CustomEvent<PulledFileDetail>).detail;
+      if (!detail?.path) return;
+      setActiveFile(detail);
+      setVisualEditorLog((items) => [...items.slice(-20), `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`]);
+    }
+    window.addEventListener("streams-builder:pulled-file", onPulledFile);
+    return () => window.removeEventListener("streams-builder:pulled-file", onPulledFile);
+  }, []);
 
   return (
     <main className="streamsBuilderShell">
@@ -52,12 +77,12 @@ export default function WorkspaceGrid() {
               {activeModule === "Visual Editing" ? (
                 <VisualEditingWorkstation
                   stationLabel="Agent 1"
-                  route="/"
-                  filePath="src/app/page.tsx"
-                  repo="hawk7227/streamsailive"
-                  branch="main"
-                  content={visualEditorContent}
-                  onContentChange={setVisualEditorContent}
+                  route={activeFile.route || "/"}
+                  filePath={activeFile.path}
+                  repo={activeFile.repo}
+                  branch={activeFile.branch}
+                  content={activeFile.content}
+                  onContentChange={(next) => setActiveFile((current) => ({ ...current, content: next }))}
                   onProof={(message) => setVisualEditorLog((items) => [...items.slice(-20), message])}
                   onChat={(message) => setVisualEditorLog((items) => [...items.slice(-20), message])}
                 />
@@ -67,7 +92,7 @@ export default function WorkspaceGrid() {
             </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Existing readiness stays under the workstation."}</span></p><p><b>Files</b><span>Attached to this workstation.</span></p><p><b>Context</b><span>Current single workstation context.</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Context</b><span>{activeFile.repo ? `${activeFile.repo}@${activeFile.branch}` : "Waiting for source selection."}</span></p></div> : null}
           </section>
         </section>
       </section>
