@@ -19,6 +19,13 @@ function shouldEnforceCredits() {
   return process.env.STREAMS_AI_ENFORCE_CREDITS === "true";
 }
 
+function normalizeJobRow<T extends Record<string, unknown> | null>(row: T): T {
+  if (!row) return row;
+  const inputJson = (row.input_json && typeof row.input_json === "object" ? row.input_json : {}) as Record<string, unknown>;
+  const nextMetadata = row.metadata && typeof row.metadata === "object" ? row.metadata : inputJson.metadata;
+  return { ...row, metadata: nextMetadata } as T;
+}
+
 export class StreamsAIJobsRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
@@ -37,7 +44,7 @@ export class StreamsAIJobsRepository {
 
     const { data, error } = await query;
     if (error) throw new Error(`Failed to list STREAMS AI jobs: ${error.message}`);
-    return data || [];
+    return (data || []).map((row) => normalizeJobRow(row));
   }
 
   async create(scope: StreamsAIScope, input: CreateJobInput = {}) {
@@ -90,15 +97,23 @@ export class StreamsAIJobsRepository {
       data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate, creditsEnforced: shouldEnforceCredits() },
     });
 
-    return data;
+    return normalizeJobRow(data);
   }
 
   async update(scope: StreamsAIScope, jobId: string, input: UpdateJobInput) {
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) patch.status = input.status;
-    if (input.inputJson !== undefined) patch.input_json = input.inputJson;
     if (input.creditEstimate !== undefined) patch.credit_estimate = input.creditEstimate;
-    if (input.metadata !== undefined) patch.metadata = input.metadata;
+
+    if (input.inputJson !== undefined || input.metadata !== undefined) {
+      const current = await this.get(scope, jobId);
+      const currentInputJson = (current?.input_json && typeof current.input_json === "object" ? current.input_json : {}) as Record<string, unknown>;
+      patch.input_json = {
+        ...currentInputJson,
+        ...(input.inputJson || {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+      };
+    }
 
     const { data, error } = await this.db()
       .from(streamsAITables.jobs)
@@ -110,7 +125,7 @@ export class StreamsAIJobsRepository {
       .single();
 
     if (error) throw new Error(`Failed to update STREAMS AI job: ${error.message}`);
-    return data;
+    return normalizeJobRow(data);
   }
 
   async get(scope: StreamsAIScope, jobId: string) {
@@ -123,7 +138,7 @@ export class StreamsAIJobsRepository {
       .maybeSingle();
 
     if (error) throw new Error(`Failed to read STREAMS AI job: ${error.message}`);
-    return data;
+    return normalizeJobRow(data);
   }
 
   async events(scope: StreamsAIScope, jobId: string) {
