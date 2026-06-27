@@ -12,8 +12,8 @@ const jobs = new StreamsAIJobsRepository();
 
 function defaultRepositoryCommands(targetFiles?: string[]): StreamsRepositoryExecutionCommand[] {
   return targetFiles?.length
-    ? ["clone_repo", "read_full_file", "git_status", "git_diff"]
-    : ["clone_repo", "git_status", "git_diff"];
+    ? ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff"]
+    : ["clone_repo", "npm_run_build", "git_status", "git_diff"];
 }
 
 export async function POST(request: NextRequest) {
@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
       commitMessage?: string;
       approvalGranted?: boolean;
       enqueue?: boolean;
+      autonomousRepair?: boolean;
+      maxRepairAttempts?: number;
+      maxFilesTouched?: number;
+      runBuildAfterPatch?: boolean;
+      requireApprovalBeforePush?: boolean;
+      repairUnifiedDiffs?: string[];
     }>(request);
 
     const requestedCommands = body.requestedCommands || defaultRepositoryCommands(body.targetFiles);
@@ -47,6 +53,11 @@ export async function POST(request: NextRequest) {
       targetFiles: body.targetFiles,
       unifiedDiff: body.unifiedDiff,
       commitMessage: body.commitMessage,
+      autonomousRepair: body.autonomousRepair === true,
+      maxRepairAttempts: body.maxRepairAttempts,
+      maxFilesTouched: body.maxFilesTouched,
+      runBuildAfterPatch: body.runBuildAfterPatch,
+      requireApprovalBeforePush: body.requireApprovalBeforePush,
     });
 
     const sandboxBatch =
@@ -80,6 +91,12 @@ export async function POST(request: NextRequest) {
               unifiedDiff: body.unifiedDiff || "",
               commitMessage: body.commitMessage || "",
               approvalGranted: body.approvalGranted === true,
+              autonomousRepair: body.autonomousRepair === true,
+              maxRepairAttempts: plan.codexRepair.maxRepairAttempts,
+              maxFilesTouched: plan.codexRepair.maxFilesTouched,
+              runBuildAfterPatch: plan.codexRepair.runBuildAfterPatch,
+              requireApprovalBeforePush: plan.codexRepair.requireApprovalBeforePush,
+              repairUnifiedDiffs: body.repairUnifiedDiffs || [],
               plan,
               sandboxBatch,
             },
