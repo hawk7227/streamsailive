@@ -119,7 +119,7 @@ function updateStyle(content: string, target: VisualTarget, style: Record<string
 
 export function applyVisualOperationToSource(content: string, operation: VisualEditOperation): VisualPatchMapperResult {
   let next = content;
-  let summary = operation.type;
+  let summary: string = operation.type;
 
   if (operation.type === "text.update") {
     next = replaceFirstNeedle(content, operation.target, operation.value);
