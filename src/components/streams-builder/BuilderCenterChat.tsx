@@ -110,6 +110,12 @@ async function queueRuntime(detail: PulledFileDetail, prompt: string) {
         branchName: detail.branch,
         baseBranch: detail.branch,
         targetFiles: [detail.path],
+        requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff"],
+        autonomousRepair: true,
+        maxRepairAttempts: 3,
+        maxFilesTouched: 4,
+        runBuildAfterPatch: true,
+        requireApprovalBeforePush: true,
         enqueue: true,
       }),
     });
@@ -186,7 +192,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         return;
       }
 
-      setStatus("Agent 1 running: interpreting prompt, pulling source truth, rebuilding workscreen...");
+      setStatus("Agent 1 running: interpreting prompt, pulling source truth, queueing Codex repair loop...");
       const command = parseAgentOnePrompt(cleanPrompt);
       const params = new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path });
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
@@ -206,32 +212,34 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
 
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
-      window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt: cleanPrompt, command, pulled: detail, intent: source === "iphone-chat" ? "iphone-chat-to-workstation" : "pull-file-to-workscreen", workstation: connection } }));
-      const queueingMessage = `Runtime bridge queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
-      sendAgentLog(queueingMessage, "runtime-queueing", detail);
-      setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing runtime events...`);
+      window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt: cleanPrompt, command, pulled: detail, intent: source === "iphone-chat" ? "iphone-chat-to-codex-workstation" : "pull-file-to-codex-workscreen", workstation: connection } }));
+      const queueingMessage = `Codex repair loop queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
+      sendAgentLog(queueingMessage, "codex-runtime-queueing", detail);
+      publishSummary("codex", queueingMessage);
+      setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing Codex repair loop...`);
       frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-status", status: `Pulled ${detail.repo}:${detail.path}`, connection }, window.location.origin);
 
       try {
         const runtime = await queueRuntime(detail, cleanPrompt);
         if (runtime?.jobId) {
           window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: runtime }));
-          const queuedMessage = `Runtime bridge queued job ${runtime.jobId} for ${detail.repo}@${detail.branch}:${detail.path}`;
-          sendAgentLog(queuedMessage, "runtime-queued", detail);
-          setStatus(`Agent 1 queued runtime events: ${runtime.jobId}`);
+          const queuedMessage = `Codex repair loop queued job ${runtime.jobId} for ${detail.repo}@${detail.branch}:${detail.path}`;
+          sendAgentLog(queuedMessage, "codex-runtime-queued", detail);
+          publishSummary("codex", queuedMessage);
+          setStatus(`Agent 1 queued Codex repair loop: ${runtime.jobId}`);
         } else {
-          const completedMessage = `Runtime bridge returned no job id after source truth pull for ${detail.path}`;
-          sendAgentLog(completedMessage, "runtime-no-job", detail);
+          const completedMessage = `Codex route returned no job id after source truth pull for ${detail.path}`;
+          sendAgentLog(completedMessage, "codex-no-job", detail);
           setStatus(`Agent 1 completed pull-to-workscreen: ${detail.path} → ${detail.route}`);
         }
       } catch (runtimeError) {
         const message = runtimeError instanceof Error ? runtimeError.message : "unknown runtime bridge failure";
-        sendAgentLog(`Runtime bridge blocked: ${message}`, "runtime-blocked", detail);
-        setStatus(`Agent 1 pulled source truth; runtime events blocked: ${message}`);
+        sendAgentLog(`Codex repair loop blocked: ${message}`, "codex-runtime-blocked", detail);
+        setStatus(`Agent 1 pulled source truth; Codex repair loop blocked: ${message}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown command failure";
-      sendAgentLog(`Agent 1 blocked before runtime: ${message}`, "agent-blocked");
+      sendAgentLog(`Agent 1 blocked before Codex loop: ${message}`, "agent-blocked");
       setStatus(`Agent 1 blocked: ${message}`);
     } finally {
       setRunning(false);
