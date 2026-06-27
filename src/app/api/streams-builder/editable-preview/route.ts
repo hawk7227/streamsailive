@@ -37,6 +37,10 @@ function injectEditableBridge(html: string, target: URL) {
   function absoluteSrc(value) {
     try { return new URL(value || '', document.baseURI).toString(); } catch { return value || ''; }
   }
+  function visibleRect(el) {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 8 && rect.height > 8 ? rect : null;
+  }
   function isEditableTextElement(el) {
     if (!el || SKIP.has(el.tagName)) return false;
     const text = textOf(el);
@@ -53,6 +57,18 @@ function injectEditableBridge(html: string, target: URL) {
     const style = getComputedStyle(el);
     const bg = style.backgroundImage || '';
     return bg && bg !== 'none' && /url\\(/.test(bg);
+  }
+  function isEditableContainerElement(el) {
+    if (!el || SKIP.has(el.tagName)) return false;
+    if (el.dataset.streamsEditableKind) return false;
+    const rect = visibleRect(el);
+    if (!rect || rect.width < 120 || rect.height < 80) return false;
+    const style = getComputedStyle(el);
+    const hasFrame = style.borderWidth !== '0px' || style.borderColor !== 'rgba(0, 0, 0, 0)' || Number.parseFloat(style.borderRadius || '0') > 0;
+    const hasBackground = style.backgroundColor !== 'rgba(0, 0, 0, 0)' || (style.backgroundImage && style.backgroundImage !== 'none');
+    const hasMedia = Boolean(el.querySelector('img,[style*="background-image"]'));
+    const looksLikeCard = /card|panel|visit|hero|section|grid|col|frame|box/i.test(el.className || '') || ['ARTICLE','SECTION','MAIN','HEADER','FOOTER'].includes(el.tagName);
+    return Boolean((hasFrame || hasBackground || hasMedia || looksLikeCard) && textOf(el).length > 2);
   }
   function bgUrl(el) {
     const match = (getComputedStyle(el).backgroundImage || '').match(/url\\(["']?([^"')]+)["']?\\)/);
@@ -84,7 +100,7 @@ function injectEditableBridge(html: string, target: URL) {
       id: el.dataset.streamsEditableId,
       kind,
       selector: cssPath(el),
-      text: kind === 'text' ? textOf(el) : '',
+      text: kind === 'text' ? textOf(el) : textOf(el).slice(0, 160),
       original: el.dataset.streamsOriginalText || el.dataset.streamsOriginalSrc || '',
       src: kind === 'image' ? (el.tagName === 'IMG' ? absoluteSrc(el.getAttribute('src')) : absoluteSrc(bgUrl(el))) : '',
       inlineStyle: el.getAttribute('style') || '',
@@ -97,14 +113,14 @@ function injectEditableBridge(html: string, target: URL) {
     if (toolbar) return toolbar;
     toolbar = document.createElement('div');
     toolbar.className = 'streams-edit-toolbar';
-    toolbar.innerHTML = '<button data-act="replace">Replace image</button><button data-act="delete">Delete</button><button data-act="rotate">Rotate</button><button data-act="front">Front</button><button data-act="done">Done</button>';
+    toolbar.innerHTML = '<button data-act="replace">Replace image</button><button data-act="remove">Remove</button><button data-act="rotate">Rotate</button><button data-act="front">Front</button><button data-act="done">Done</button>';
     document.body.appendChild(toolbar);
     toolbar.addEventListener('click', event => {
       const button = event.target.closest('button');
       if (!button || !selected) return;
       const act = button.dataset.act;
       if (act === 'replace') replaceImage(selected);
-      if (act === 'delete') deleteSelected(selected);
+      if (act === 'remove') removeSelected(selected);
       if (act === 'rotate') rotateSelected(selected);
       if (act === 'front') { selected.style.zIndex = String((Number(selected.style.zIndex) || 10) + 1); post('streams-editable-style', payloadFor(selected)); }
       if (act === 'done') deselect();
@@ -132,10 +148,10 @@ function injectEditableBridge(html: string, target: URL) {
     moveToolbar(el);
     post('streams-editable-select', payloadFor(el));
   }
-  function deleteSelected(el) {
+  function removeSelected(el) {
     const payload = payloadFor(el);
     el.style.display = 'none';
-    post('streams-editable-delete', payload);
+    post('streams-editable-remove', payload);
     deselect();
   }
   function rotateSelected(el) {
@@ -184,8 +200,7 @@ function injectEditableBridge(html: string, target: URL) {
     el.addEventListener('pointerdown', event => {
       if (el.dataset.streamsTransformMode !== 'true') return;
       if (event.target && event.target.closest && event.target.closest('.streams-edit-toolbar')) return;
-      const rect = el.getBoundingClientRect();
-      dragState = { el, x: event.clientX, y: event.clientY, left: parseFloat(el.style.left || '0') || 0, top: parseFloat(el.style.top || '0') || 0, rect };
+      dragState = { el, x: event.clientX, y: event.clientY, left: parseFloat(el.style.left || '0') || 0, top: parseFloat(el.style.top || '0') || 0 };
       el.setPointerCapture && el.setPointerCapture(event.pointerId);
     });
   }
@@ -213,11 +228,7 @@ function injectEditableBridge(html: string, target: URL) {
       el.setAttribute('contenteditable', 'true');
       el.setAttribute('spellcheck', 'false');
       makeResizableAndMovable(el);
-      el.addEventListener('click', event => {
-        event.stopPropagation();
-        el.focus();
-        selectElement(el);
-      });
+      el.addEventListener('click', event => { event.stopPropagation(); el.focus(); selectElement(el); });
       el.addEventListener('input', () => post('streams-editable-input', payloadFor(el)));
       el.addEventListener('blur', () => post('streams-editable-commit', payloadFor(el)));
     });
@@ -231,9 +242,19 @@ function injectEditableBridge(html: string, target: URL) {
       makeResizableAndMovable(el);
       el.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); selectElement(el); });
     });
+    const containerNodes = Array.from(document.body.querySelectorAll('main,section,article,header,footer,div'));
+    containerNodes.forEach((el, index) => {
+      if (!isEditableContainerElement(el)) return;
+      el.dataset.streamsEditable = 'true';
+      el.dataset.streamsEditableKind = 'container';
+      el.dataset.streamsEditableId = 'container-' + index;
+      el.dataset.streamsOriginalText = textOf(el).slice(0, 180);
+      makeResizableAndMovable(el);
+      el.addEventListener('dblclick', event => { event.preventDefault(); event.stopPropagation(); selectElement(el); });
+    });
   }
   const style = document.createElement('style');
-  style.textContent = '[data-streams-editable="true"]{outline:1px solid transparent;outline-offset:2px}[data-streams-editable-kind="text"]{cursor:text}[data-streams-editable-kind="image"]{cursor:pointer}[data-streams-editable="true"]:hover,[data-streams-selected="true"]{outline:2px solid #f97316!important;box-shadow:0 0 0 1px rgba(249,115,22,.45),0 0 18px rgba(249,115,22,.24)!important}[data-streams-editable="true"]:focus{outline:2px solid #f97316!important;background:rgba(249,115,22,.08)!important}.streams-edit-toolbar{position:absolute;z-index:2147483647;display:none;gap:6px;align-items:center;padding:6px;border:1px solid rgba(249,115,22,.7);border-radius:10px;background:rgba(2,6,23,.96);box-shadow:0 12px 32px rgba(0,0,0,.35)}.streams-edit-toolbar button{height:28px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:#7c3aed;color:#fff;font:700 11px system-ui;padding:0 8px;cursor:pointer}';
+  style.textContent = '[data-streams-editable="true"]{outline:1px solid transparent;outline-offset:2px}[data-streams-editable-kind="text"]{cursor:text}[data-streams-editable-kind="image"],[data-streams-editable-kind="container"]{cursor:pointer}[data-streams-editable="true"]:hover,[data-streams-selected="true"]{outline:2px solid #f97316!important;box-shadow:0 0 0 1px rgba(249,115,22,.45),0 0 18px rgba(249,115,22,.24)!important}[data-streams-editable="true"]:focus{outline:2px solid #f97316!important;background:rgba(249,115,22,.08)!important}.streams-edit-toolbar{position:absolute;z-index:2147483647;display:none;gap:6px;align-items:center;padding:6px;border:1px solid rgba(249,115,22,.7);border-radius:10px;background:rgba(2,6,23,.96);box-shadow:0 12px 32px rgba(0,0,0,.35)}.streams-edit-toolbar button{height:28px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:#7c3aed;color:#fff;font:700 11px system-ui;padding:0 8px;cursor:pointer}';
   document.head.appendChild(style);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markEditable); else markEditable();
 })();
