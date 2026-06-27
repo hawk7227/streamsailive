@@ -1,6 +1,7 @@
 "use client";
 
 import EnvReadinessMonitor from "../EnvReadinessMonitor";
+import CodexDiffApprovalPanel from "./CodexDiffApprovalPanel";
 import VisualEditorBuildGroupsPanel from "./VisualEditorBuildGroupsPanel";
 
 export type WorkspaceModuleName =
@@ -28,6 +29,10 @@ function shouldShowVisualEditorBuildGroups(moduleName: WorkspaceModuleName) {
   return moduleName === "Visual Editing" || moduleName === "Component Mapping" || moduleName === "Approval Center";
 }
 
+function shouldShowApprovalGate(moduleName: WorkspaceModuleName) {
+  return moduleName === "Visual Editing" || moduleName === "Approval Center" || moduleName === "Repository Truth" || moduleName === "Truth Panel";
+}
+
 export default function WorkspaceModulePanel({
   moduleName,
 }: {
@@ -43,6 +48,7 @@ export default function WorkspaceModulePanel({
       <p>This compact module stays under the workstation and does not replace the main builder screen.</p>
 
       {shouldShowVisualEditorBuildGroups(moduleName) ? <VisualEditorBuildGroupsPanel /> : null}
+      {shouldShowApprovalGate(moduleName) ? <CodexDiffApprovalPanel /> : null}
 
       <div className="monitorSlot">
         <EnvReadinessMonitor />
