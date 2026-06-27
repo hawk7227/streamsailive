@@ -52,11 +52,24 @@ function workstationId(name: string) {
   return String(name || "workstation").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workstation";
 }
 
+function workstationNameFromId(id: string, fallback: string) {
+  if (id === "visual-editing") return "Visual Editing";
+  if (id === "approval-center") return "Approval Center";
+  if (id === "browser-verification") return "Browser Verification";
+  if (id === "repository-truth") return "Repository Truth";
+  if (id === "primary-builder") return "Primary Builder";
+  return fallback || "Primary Builder";
+}
+
 function routeFromFile(path: string) {
   if (!path.startsWith("src/app/")) return "/";
   if (!path.endsWith("/page.tsx") && !path.endsWith("/page.jsx")) return "/";
   const route = path.replace(/^src\/app/, "").replace(/\/page\.(tsx|jsx)$/, "").replace(/\/\([^)]*\)/g, "");
   return route || "/";
+}
+
+function routeFromPrompt(prompt: string, fallback: string) {
+  return prompt.match(/route\s+(\/[^\s]+)/i)?.[1] || fallback || "/";
 }
 
 function readLastActiveFile() {
@@ -109,6 +122,8 @@ async function queueRuntime(detail: PulledFileDetail, prompt: string) {
         repoFullName: detail.repo,
         branchName: detail.branch,
         baseBranch: detail.branch,
+        route: detail.route,
+        userPrompt: prompt,
         targetFiles: [detail.path],
         requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff"],
         autonomousRepair: true,
@@ -200,6 +215,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       if (!json.ok) throw new Error(json.error || "Agent 1 could not pull the requested file.");
 
       const pulledPath = json.path || command.path;
+      const route = routeFromPrompt(cleanPrompt, json.frontendRoute || json.sourceTruth?.route || routeFromFile(pulledPath));
       const detail: PulledFileDetail = {
         repo: command.repo,
         branch: command.branch,
@@ -207,7 +223,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         folder: pulledPath.split("/").slice(0, -1).join("/"),
         sha: json.sha || "",
         content: json.content || "",
-        route: json.frontendRoute || json.sourceTruth?.route || routeFromFile(pulledPath),
+        route,
       };
 
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
@@ -277,12 +293,21 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         }
       }
       if (data.type === "streams-builder-chat-command") {
-        if (!connection.connected || data.connection?.activeWorkstationId !== connection.activeWorkstationId) {
-          setStatus("Blocked iPhone command: no active workstation connection or stale connection.");
-          return;
+        const incoming = (data.connection || {}) as Partial<BuilderChatConnection>;
+        const next = {
+          connected: true,
+          activeWorkstationId: incoming.activeWorkstationId || connection.activeWorkstationId || workstationId(activeModule),
+          activeWorkstationName: incoming.activeWorkstationName || workstationNameFromId(incoming.activeWorkstationId || connection.activeWorkstationId || workstationId(activeModule), activeModule),
+          sessionId: incoming.sessionId || "agent-1",
+        };
+        if (!connection.connected || connection.activeWorkstationId !== next.activeWorkstationId) {
+          onConnectionChange(next);
+          setBridgeProof("auto connected");
+          pushConnectionState(next);
+          publishSummary("bridge", `iPhone chat auto-connected to ${next.activeWorkstationName}.`);
         }
-        publishSummary("iphone-command", `iPhone chat command reached ${connection.activeWorkstationName}: ${String(data.message || "").slice(0, 80)}`);
-        void runAgentOneText(data.message, "iphone-chat");
+        publishSummary("iphone-command", `iPhone chat command reached ${next.activeWorkstationName}: ${String(data.message || "").slice(0, 80)}`);
+        void runAgentOneText(data.message, "local-form");
       }
     }
     window.addEventListener("message", onFrameMessage);
