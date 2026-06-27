@@ -15,6 +15,15 @@ export interface BrowserVerificationRequest {
   actions: BrowserVerificationAction[];
 }
 
+export interface BrowserScreenshotArtifact {
+  id: string;
+  kind: "browser_screenshot";
+  viewport: { width: number; height: number };
+  mimeType: "image/png";
+  dataUrl: string;
+  capturedAt: string;
+}
+
 export interface BrowserVerificationResult {
   ok: boolean;
   truthState: BrowserVerificationTruthState;
@@ -26,6 +35,7 @@ export interface BrowserVerificationResult {
   errors: string[];
   consoleMessages: string[];
   networkFailures: string[];
+  screenshot?: BrowserScreenshotArtifact;
 }
 
 function isSafeUrl(value: string) {
@@ -42,6 +52,17 @@ function isSafeUrl(value: string) {
 
 function isSafeSelector(value: string) {
   return value.length > 0 && value.length <= 300 && !/[<>]/.test(value);
+}
+
+function createScreenshotArtifact(buffer: Buffer, viewport: { width: number; height: number }): BrowserScreenshotArtifact {
+  return {
+    id: `browser-shot-${Date.now()}`,
+    kind: "browser_screenshot",
+    viewport,
+    mimeType: "image/png",
+    dataUrl: `data:image/png;base64,${buffer.toString("base64")}`,
+    capturedAt: new Date().toISOString(),
+  };
 }
 
 export function validateBrowserVerificationRequest(request: BrowserVerificationRequest) {
@@ -106,7 +127,8 @@ export async function runBrowserVerification(request: BrowserVerificationRequest
   const browser = await chromium.launch({ headless: true });
 
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const viewport = { width: 1440, height: 1000 };
+    const page = await browser.newPage({ viewport });
     page.on("console", (message) => {
       if (["error", "warning"].includes(message.type())) consoleMessages.push(`${message.type()}: ${message.text()}`.slice(0, 500));
     });
@@ -143,6 +165,8 @@ export async function runBrowserVerification(request: BrowserVerificationRequest
 
     const finalUrl = page.url();
     const title = await page.title();
+    const screenshot = createScreenshotArtifact(await page.screenshot({ fullPage: true, type: "png" }), viewport);
+    proof.push(`captured screenshot artifact ${screenshot.id}`);
     if (consoleMessages.length > 0) unproven.push("console warnings/errors require review");
     if (networkFailures.length > 0) unproven.push("network failures require review");
     const truthState: BrowserVerificationTruthState = runErrors.length > 0 ? "FAILED" : unproven.length > 0 ? "UNPROVEN" : "PROVEN";
@@ -158,6 +182,7 @@ export async function runBrowserVerification(request: BrowserVerificationRequest
       errors: runErrors,
       consoleMessages,
       networkFailures,
+      screenshot,
     };
   } catch (error) {
     return {
