@@ -4,6 +4,13 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import type { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
+import {
+  createCodexRepairPolicy,
+  createOpenAICodexRepairDiffGenerator,
+  createStaticRepairDiffGenerator,
+  runCodexRepairLoop,
+  type CodexRepairCommandResult,
+} from "./codex-repair-loop";
 import { createRepositoryExecutionPlan, type StreamsRepositoryExecutionCommand } from "./repository-execution";
 import { createSandboxCommandBatch, type StreamsSandboxCommand } from "./sandbox-commands";
 
@@ -36,6 +43,15 @@ function cleanLog(value: unknown) {
 function rowString(row: Record<string, unknown>, key: string) {
   const value = row[key];
   return typeof value === "string" ? value : "";
+}
+
+function rowBoolean(row: Record<string, unknown>, key: string) {
+  return row[key] === true;
+}
+
+function rowNumber(row: Record<string, unknown>, key: string, fallback: number) {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function rowStringArray(row: Record<string, unknown>, key: string): string[] {
@@ -89,7 +105,7 @@ async function execResolved(command: StreamsSandboxCommand, resolved: { file: st
   });
 }
 
-async function runCommand(command: StreamsSandboxCommand, patchPath: string | null) {
+async function runCommand(command: StreamsSandboxCommand, patchPath: string | null): Promise<CodexRepairCommandResult & { startedAt: string; completedAt: string; code?: unknown }> {
   assertInsideWorkspace(command.cwd);
   const startedAt = new Date().toISOString();
 
@@ -124,6 +140,17 @@ async function runCommand(command: StreamsSandboxCommand, patchPath: string | nu
   }
 }
 
+function repairApplyCommand(command: StreamsSandboxCommand, attempt: number): StreamsSandboxCommand {
+  return {
+    ...command,
+    id: `repair-${attempt}-apply-unified-diff`,
+    command: "apply_unified_diff",
+    args: ["git", "apply", "--check", "PATCH_FILE_THEN_APPLY"],
+    requiresApproval: false,
+    proofLabel: `Codex repair attempt ${attempt} patch applied.`,
+  };
+}
+
 export async function processRepositoryExecutionJob(
   scope: StreamsAIScope,
   row: Record<string, unknown>,
@@ -140,6 +167,8 @@ export async function processRepositoryExecutionJob(
   const unifiedDiff = rowString(input, "unifiedDiff");
   const commitMessage = rowString(input, "commitMessage");
   const approvalGranted = input.approvalGranted === true;
+  const autonomousRepair = rowBoolean(input, "autonomousRepair");
+  const repairUnifiedDiffs = rowStringArray(input, "repairUnifiedDiffs");
   const commands = requestedCommands.length ? requestedCommands : ["clone_repo", "read_full_file", "git_status", "git_diff"];
 
   await jobs.update(scope, jobId, { status: "running" });
@@ -147,7 +176,7 @@ export async function processRepositoryExecutionJob(
     jobId,
     eventType: "repository.worker.claimed",
     message: "Repository execution worker claimed job",
-    data: { projectId, sessionId, repoFullName, branchName, commands },
+    data: { projectId, sessionId, repoFullName, branchName, commands, autonomousRepair },
   });
 
   const plan = createRepositoryExecutionPlan({
@@ -160,6 +189,11 @@ export async function processRepositoryExecutionJob(
     targetFiles,
     unifiedDiff,
     commitMessage,
+    autonomousRepair,
+    maxRepairAttempts: rowNumber(input, "maxRepairAttempts", 3),
+    maxFilesTouched: rowNumber(input, "maxFilesTouched", 4),
+    runBuildAfterPatch: input.runBuildAfterPatch !== false,
+    requireApprovalBeforePush: input.requireApprovalBeforePush !== false,
   });
 
   if (plan.blockedReasons.length > 0) {
@@ -194,7 +228,7 @@ export async function processRepositoryExecutionJob(
     data: { workspaceDir, commandCount: sandboxBatch.commands.length },
   });
 
-  const patchPath = unifiedDiff ? await writeUnifiedDiff(projectId, unifiedDiff) : null;
+  let patchPath = unifiedDiff ? await writeUnifiedDiff(projectId, unifiedDiff) : null;
   const proof: string[] = ["worker claimed job", "plan validation passed", "sandbox prepared"];
   const unproven: string[] = [];
 
@@ -226,6 +260,64 @@ export async function processRepositoryExecutionJob(
     });
 
     if (!result.ok) {
+      if (autonomousRepair) {
+        await jobs.createEvent(scope, {
+          jobId,
+          eventType: "repository.codex.loop.started",
+          message: "Codex loop started after command failure",
+          data: { commandId: command.id, command: command.command, maxRepairAttempts: plan.codexRepair.maxRepairAttempts },
+        });
+
+        const staticGenerator = createStaticRepairDiffGenerator(repairUnifiedDiffs);
+        const openAIGenerator = createOpenAICodexRepairDiffGenerator();
+        const repairResult = await runCodexRepairLoop({
+          failedCommand: command.command,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          targetFiles,
+          policy: createCodexRepairPolicy({
+            autonomousRepair,
+            maxAttempts: plan.codexRepair.maxRepairAttempts,
+            maxFilesTouched: plan.codexRepair.maxFilesTouched,
+            runBuildAfterPatch: plan.codexRepair.runBuildAfterPatch,
+            requireApprovalBeforePush: plan.codexRepair.requireApprovalBeforePush,
+          }),
+          generatePatch: async (repairInput) => (await staticGenerator(repairInput)) || (await openAIGenerator(repairInput)),
+          applyPatch: async (patch, attempt) => {
+            patchPath = await writeUnifiedDiff(`${projectId}-repair-${attempt}`, patch);
+            return runCommand(repairApplyCommand(command, attempt), patchPath);
+          },
+          rerunCommand: async () => runCommand(command, patchPath),
+          emit: async (attempt) => {
+            await jobs.createEvent(scope, {
+              jobId,
+              eventType: `repository.codex.${attempt.status}`,
+              message: attempt.message,
+              data: attempt,
+            });
+          },
+        });
+
+        proof.push(...repairResult.proof);
+        unproven.push(...repairResult.unproven);
+
+        if (repairResult.repaired) {
+          proof.push(`Codex repair loop fixed ${command.command}`);
+          continue;
+        }
+
+        await jobs.update(scope, jobId, { status: "failed", metadata: { truthState: "FAILED", failedCommandId: command.id, codexRepair: repairResult } });
+        return {
+          ok: false,
+          jobId,
+          status: "failed",
+          truthState: "FAILED",
+          proof,
+          unproven: [...unproven, "remaining command batch", "browser verification", "workflow proof"],
+          failedCommandId: command.id,
+        };
+      }
+
       await jobs.update(scope, jobId, { status: "failed", metadata: { truthState: "FAILED", failedCommandId: command.id } });
       return {
         ok: false,
@@ -252,5 +344,3 @@ export async function processRepositoryExecutionJob(
 
   return { ok: true, jobId, status: "completed", truthState, proof, unproven };
 }
-
-
