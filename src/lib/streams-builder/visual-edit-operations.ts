@@ -30,6 +30,12 @@ export type VisualRect = {
 };
 
 export type VisualComputedStyles = {
+  width?: string;
+  height?: string;
+  minWidth?: string;
+  minHeight?: string;
+  maxWidth?: string;
+  maxHeight?: string;
   backgroundColor?: string;
   color?: string;
   borderColor?: string;
