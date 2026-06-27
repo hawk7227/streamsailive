@@ -5,8 +5,8 @@ import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
-import SelectedRepoVisualEditor from "./SelectedRepoVisualEditor";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
+import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
@@ -91,14 +91,24 @@ export default function WorkspaceGrid() {
             </div>
             <div className="stationViewport">
               {activeModule === "Visual Editing" ? (
-                <SelectedRepoVisualEditor activeFile={activeFile} />
+                <VisualEditingWorkstation
+                  stationLabel="Agent 1"
+                  route={activeFile.route || "/"}
+                  filePath={activeFile.path}
+                  repo={activeFile.repo}
+                  branch={activeFile.branch}
+                  content={activeFile.content}
+                  onContentChange={(next) => setActiveFile((current) => ({ ...current, content: next }))}
+                  onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
+                  onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
+                />
               ) : (
                 <LiveFrontendWorkstation activeFile={activeFile} />
               )}
             </div>
             <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Selected repo visual editor mounted from the current Pull source truth." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Original visual editor workstation restored." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
           </section>
         </section>
       </section>
