@@ -7,6 +7,18 @@ import {
 } from "../codex-repair-loop";
 import { createRepositoryExecutionPlan } from "../repository-execution";
 
+function repairDiff(before = "old", after = "new") {
+  return [
+    "diff --git a/src/app/page.tsx b/src/app/page.tsx",
+    "--- a/src/app/page.tsx",
+    "+++ b/src/app/page.tsx",
+    "@@ -1 +1 @@",
+    `-${before}`,
+    `+${after}`,
+    "",
+  ].join("\n");
+}
+
 describe("Codex repair loop core", () => {
   it("classifies common build failures", () => {
     expect(classifyCodexFailure("", "Cannot find module '@/missing'")).toBe("module-resolution");
@@ -28,7 +40,7 @@ describe("Codex repair loop core", () => {
       stderr: "Type error: Property title does not exist",
       targetFiles: ["src/app/page.tsx"],
       policy: createCodexRepairPolicy({ autonomousRepair: true, maxAttempts: 3 }),
-      generatePatch: async ({ attempt }) => attempt === 1 ? "diff --git a/src/app/page.tsx b/src/app/page.tsx\n--- a/src/app/page.tsx\n+++ b/src/app/page.tsx\n@@ -1 +1 @@\n-old\n+new\n" : null,
+      generatePatch: async ({ attempt }) => attempt === 1 ? repairDiff("old", "new") : null,
       applyPatch: async () => ({ ok: true, stdout: "patch applied", stderr: "" }),
       rerunCommand: async () => ({ ok: true, stdout: "build passed", stderr: "" }),
       emit: async (event) => { events.push(event.status); },
@@ -48,7 +60,7 @@ describe("Codex repair loop core", () => {
       stderr: "Build failed",
       targetFiles: ["src/app/page.tsx"],
       policy: createCodexRepairPolicy({ autonomousRepair: true, maxAttempts: 2 }),
-      generatePatch: async ({ attempt }) => `diff --git a/src/app/page.tsx b/src/app/page.tsx\n--- a/src/app/page.tsx\n+++ b/src/app/page.tsx\n@@ -1 +1 @@\n-old${attempt}\n+new${attempt}\n`,
+      generatePatch: async ({ attempt }) => repairDiff(`old${attempt}`, `new${attempt}`),
       applyPatch: async () => ({ ok: true }),
       rerunCommand: async () => ({ ok: false, stderr: "still failing" }),
     });
