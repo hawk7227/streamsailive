@@ -26,7 +26,8 @@ describe("resolveVisualEditIntent", () => {
     expect(result.matched).toBe(true);
     expect(result.scope).toBe("usage_site");
     expect(result.safePatchTarget).toContain("local JSX usage");
-    expect(result.enrichedPrompt).toContain("Do not edit or delete reusable component files");
+    expect(result.safePatchTarget).toContain("do not edit the reusable component definition");
+    expect(result.enrichedPrompt).toContain("preserve the reusable component file");
     expect(result.enrichedPrompt).toContain("patch the usage site, not the reusable component file");
   });
 
