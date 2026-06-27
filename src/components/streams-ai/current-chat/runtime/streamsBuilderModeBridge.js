@@ -31,6 +31,39 @@ function defaultConnection() {
   return { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
 }
 
+function endpointPath(input) {
+  const raw = typeof input === "string" ? input : input?.url || "";
+  try { return new URL(raw, window.location.origin).pathname; } catch { return raw; }
+}
+
+function isChatPostEndpoint(pathname) {
+  return [
+    "/api/streams-ai/messages",
+    "/api/ai-assistant",
+    "/api/streams/chat",
+    "/api/copilot-chat",
+    "/api/copilot/chat",
+    "/api/streams-ai/group-chat",
+  ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+function messageFromBody(body) {
+  return String(body?.message || body?.input || body?.prompt || body?.text || body?.content || body?.query || "").trim();
+}
+
+function isBuilderCommand(message) {
+  return /\b(agent\s*1|codex|visual editing|workstation|streams builder|repo\s+[\w.-]+\/[\w.-]+|autonomousrepair|build\/typecheck|approval required|pull real source|queue.*repair)\b/i.test(message);
+}
+
+function inferConnection(message, current) {
+  const lower = String(message || "").toLowerCase();
+  if (current?.connected && current?.activeWorkstationId) return current;
+  if (lower.includes("visual editing")) return { connected: true, activeWorkstationId: "visual-editing", activeWorkstationName: "Visual Editing", sessionId: "agent-1" };
+  if (lower.includes("approval")) return { connected: true, activeWorkstationId: "approval-center", activeWorkstationName: "Approval Center", sessionId: "agent-1" };
+  if (lower.includes("browser")) return { connected: true, activeWorkstationId: "browser-verification", activeWorkstationName: "Browser Verification", sessionId: "agent-1" };
+  return { connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId: "agent-1" };
+}
+
 export function installStreamsBuilderModeBridge() {
   if (typeof window === "undefined") return () => {};
   if (!isBuilderMode()) return () => {};
@@ -59,21 +92,26 @@ export function installStreamsBuilderModeBridge() {
   window.parent?.postMessage({ type: "streams-builder-frame-ready" }, window.location.origin);
 
   window.fetch = async (input, init = {}) => {
-    const url = typeof input === "string" ? input : input?.url || "";
+    const pathname = endpointPath(input);
     const method = String(init?.method || "GET").toUpperCase();
 
-    if (method === "POST" && url === "/api/streams-ai/messages" && connection?.connected && connection?.activeWorkstationId) {
+    if (method === "POST" && isChatPostEndpoint(pathname)) {
       const body = parseChatBody(init);
-      const message = String(body?.message || body?.input || body?.prompt || body?.text || body?.content || "").trim();
-      if (message) {
+      const message = messageFromBody(body);
+      const shouldRoute = message && (connection?.connected && connection?.activeWorkstationId || isBuilderCommand(message));
+      if (shouldRoute) {
+        const routedConnection = inferConnection(message, connection);
+        connection = routedConnection;
+        window.__streamsBuilderConnection = routedConnection;
         window.parent?.postMessage({
           type: "streams-builder-chat-command",
           message,
-          connection,
+          connection: routedConnection,
           source: "iphone-chat",
+          autoConnected: true,
           at: new Date().toISOString(),
         }, window.location.origin);
-        return makeSseResponse(`Connected to ${connection.activeWorkstationName || "workstation"}. I sent your command to that workstation so you can see the work happen in the editor/preview instead of copying and pasting.`);
+        return makeSseResponse(`Connected to ${routedConnection.activeWorkstationName || "workstation"}. I sent your command to the workstation and started the real source pull / Codex queue path. Watch the workstation proof timeline for progress.`);
       }
     }
 
