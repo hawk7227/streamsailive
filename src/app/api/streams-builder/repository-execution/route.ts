@@ -1,7 +1,8 @@
-import { type NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
+import { processBestRepositoryExecutionJob } from "@/lib/streams-builder/repository-worker-best";
 import {
   createRepositoryExecutionPlan,
   type StreamsRepositoryExecutionCommand,
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       commitMessage?: string;
       approvalGranted?: boolean;
       enqueue?: boolean;
+      autoRunWorker?: boolean;
       autonomousRepair?: boolean;
       maxRepairAttempts?: number;
       maxFilesTouched?: number;
@@ -113,6 +115,27 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
+    if (queuedJob && body.autoRunWorker !== false) {
+      after(async () => {
+        try {
+          await jobs.createEvent(scope, {
+            jobId: String(queuedJob.id),
+            eventType: "repository.worker.autorun.scheduled",
+            message: "Repository worker auto-run scheduled after queueing",
+            data: { source: "repository-execution-route" },
+          });
+          await processBestRepositoryExecutionJob(scope, queuedJob as Record<string, unknown>, jobs);
+        } catch (error) {
+          await jobs.createEvent(scope, {
+            jobId: String(queuedJob.id),
+            eventType: "repository.worker.autorun.failed",
+            message: error instanceof Error ? error.message : "Repository worker auto-run failed",
+            data: { source: "repository-execution-route" },
+          });
+        }
+      });
+    }
+
     return streamsAIJson({
       ok: plan.blockedReasons.length === 0,
       mode: queuedJob ? "repository_execution_queued" : "repository_execution_plan",
@@ -130,6 +153,7 @@ export async function POST(request: NextRequest) {
       plan,
       sandboxBatch,
       queuedJob,
+      autoRunWorker: Boolean(queuedJob && body.autoRunWorker !== false),
     });
   } catch (error) {
     return streamsAIError(error);
