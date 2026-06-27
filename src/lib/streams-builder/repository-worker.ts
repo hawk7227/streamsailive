@@ -1,4 +1,4 @@
-﻿import { execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -74,6 +74,10 @@ function assertInsideWorkspace(cwd: string) {
   }
 }
 
+function isRepairableCommand(command: StreamsRepositoryExecutionCommand) {
+  return command === "npm_run_build" || command === "apply_unified_diff";
+}
+
 async function writeUnifiedDiff(projectId: string, unifiedDiff: string) {
   const patchPath = join(WORKSPACE_ROOT, `${projectId.replace(/[^A-Za-z0-9_.-]+/g, "-")}.patch.diff`);
   await mkdir(WORKSPACE_ROOT, { recursive: true });
@@ -98,6 +102,7 @@ async function execResolved(command: StreamsSandboxCommand, resolved: { file: st
     timeout: DEFAULT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER,
     env: {
+      ...process.env,
       PATH: process.env.PATH || "",
       NODE_ENV: process.env.NODE_ENV || "production",
       CI: "true",
@@ -120,23 +125,10 @@ async function runCommand(command: StreamsSandboxCommand, patchPath: string | nu
       stderr = cleanLog(`${stderr}\n${applied.stderr}`);
     }
 
-    return {
-      ok: true,
-      startedAt,
-      completedAt: new Date().toISOString(),
-      stdout,
-      stderr,
-    };
+    return { ok: true, startedAt, completedAt: new Date().toISOString(), stdout, stderr };
   } catch (error) {
     const err = error as { stdout?: unknown; stderr?: unknown; message?: string; code?: unknown };
-    return {
-      ok: false,
-      startedAt,
-      completedAt: new Date().toISOString(),
-      stdout: cleanLog(err.stdout),
-      stderr: cleanLog(err.stderr || err.message),
-      code: err.code,
-    };
+    return { ok: false, startedAt, completedAt: new Date().toISOString(), stdout: cleanLog(err.stdout), stderr: cleanLog(err.stderr || err.message), code: err.code };
   }
 }
 
@@ -148,6 +140,38 @@ function repairApplyCommand(command: StreamsSandboxCommand, attempt: number): St
     args: ["git", "apply", "--check", "PATCH_FILE_THEN_APPLY"],
     requiresApproval: false,
     proofLabel: `Codex repair attempt ${attempt} patch applied.`,
+  };
+}
+
+async function failJob(input: {
+  scope: StreamsAIScope;
+  jobs: StreamsAIJobsRepository;
+  jobId: string;
+  command: StreamsSandboxCommand;
+  result: CodexRepairCommandResult;
+  proof: string[];
+  unproven: string[];
+  reason: string;
+}): Promise<RepositoryWorkerResult> {
+  await input.jobs.update(input.scope, input.jobId, {
+    status: "failed",
+    metadata: {
+      truthState: "FAILED",
+      failedCommandId: input.command.id,
+      failedCommand: input.command.command,
+      failureReason: input.reason,
+      stdout: input.result.stdout || "",
+      stderr: input.result.stderr || "",
+    },
+  });
+  return {
+    ok: false,
+    jobId: input.jobId,
+    status: "failed",
+    truthState: "FAILED",
+    proof: input.proof,
+    unproven: [...input.unproven, input.reason, "remaining command batch", "browser verification", "workflow proof"],
+    failedCommandId: input.command.id,
   };
 }
 
@@ -172,12 +196,7 @@ export async function processRepositoryExecutionJob(
   const commands = requestedCommands.length ? requestedCommands : ["clone_repo", "read_full_file", "git_status", "git_diff"];
 
   await jobs.update(scope, jobId, { status: "running" });
-  await jobs.createEvent(scope, {
-    jobId,
-    eventType: "repository.worker.claimed",
-    message: "Repository execution worker claimed job",
-    data: { projectId, sessionId, repoFullName, branchName, commands, autonomousRepair },
-  });
+  await jobs.createEvent(scope, { jobId, eventType: "repository.worker.claimed", message: "Repository execution worker claimed job", data: { projectId, sessionId, repoFullName, branchName, commands, autonomousRepair } });
 
   const plan = createRepositoryExecutionPlan({
     projectId,
@@ -198,35 +217,16 @@ export async function processRepositoryExecutionJob(
 
   if (plan.blockedReasons.length > 0) {
     await jobs.update(scope, jobId, { status: "failed", metadata: { truthState: "FAILED", blockedReasons: plan.blockedReasons } });
-    await jobs.createEvent(scope, {
-      jobId,
-      eventType: "repository.worker.blocked",
-      message: "Repository execution blocked by validation",
-      data: { blockedReasons: plan.blockedReasons, plan },
-    });
+    await jobs.createEvent(scope, { jobId, eventType: "repository.worker.blocked", message: "Repository execution blocked by validation", data: { blockedReasons: plan.blockedReasons, plan } });
     return { ok: false, jobId, status: "blocked", truthState: "FAILED", proof: ["worker claimed job", "plan validation executed"], unproven: ["sandbox execution"], blockedReasons: plan.blockedReasons };
   }
 
   const workspaceDir = workspacePath(projectId);
-  const sandboxBatch = createSandboxCommandBatch({
-    projectId,
-    sessionId,
-    repoFullName,
-    branchName,
-    workspaceDir,
-    commands: commands as StreamsRepositoryExecutionCommand[],
-    targetFiles,
-    commitMessage,
-  });
+  const sandboxBatch = createSandboxCommandBatch({ projectId, sessionId, repoFullName, branchName, workspaceDir, commands: commands as StreamsRepositoryExecutionCommand[], targetFiles, commitMessage });
 
   await rm(workspaceDir, { recursive: true, force: true });
   await mkdir(WORKSPACE_ROOT, { recursive: true });
-  await jobs.createEvent(scope, {
-    jobId,
-    eventType: "repository.sandbox.prepared",
-    message: "Repository sandbox prepared",
-    data: { workspaceDir, commandCount: sandboxBatch.commands.length },
-  });
+  await jobs.createEvent(scope, { jobId, eventType: "repository.sandbox.prepared", message: "Repository sandbox prepared", data: { workspaceDir, commandCount: sandboxBatch.commands.length } });
 
   let patchPath = unifiedDiff ? await writeUnifiedDiff(projectId, unifiedDiff) : null;
   const proof: string[] = ["worker claimed job", "plan validation passed", "sandbox prepared"];
@@ -235,38 +235,28 @@ export async function processRepositoryExecutionJob(
   for (const command of sandboxBatch.commands) {
     if (command.requiresApproval && !approvalGranted) {
       unproven.push(`${command.command} skipped because approval was not granted`);
-      await jobs.createEvent(scope, {
-        jobId,
-        eventType: "repository.command.skipped",
-        message: "Approval-gated command skipped",
-        data: { commandId: command.id, command: command.command, reason: "approval_required" },
-      });
+      await jobs.createEvent(scope, { jobId, eventType: "repository.command.skipped", message: "Approval-gated command skipped", data: { commandId: command.id, command: command.command, reason: "approval_required" } });
       continue;
     }
 
-    await jobs.createEvent(scope, {
-      jobId,
-      eventType: "repository.command.started",
-      message: `Starting ${command.command}`,
-      data: { commandId: command.id, command: command.command, args: command.args, cwd: command.cwd },
-    });
+    await jobs.createEvent(scope, { jobId, eventType: "repository.command.started", message: `Starting ${command.command}`, data: { commandId: command.id, command: command.command, args: command.args, cwd: command.cwd } });
 
     const result = await runCommand(command, patchPath);
-    await jobs.createEvent(scope, {
-      jobId,
-      eventType: result.ok ? "repository.command.completed" : "repository.command.failed",
-      message: result.ok ? `Completed ${command.command}` : `Failed ${command.command}`,
-      data: { commandId: command.id, command: command.command, ...result },
-    });
+    await jobs.createEvent(scope, { jobId, eventType: result.ok ? "repository.command.completed" : "repository.command.failed", message: result.ok ? `Completed ${command.command}` : `Failed ${command.command}`, data: { commandId: command.id, command: command.command, ...result } });
 
     if (!result.ok) {
-      if (autonomousRepair) {
+      if (!isRepairableCommand(command.command)) {
         await jobs.createEvent(scope, {
           jobId,
-          eventType: "repository.codex.loop.started",
-          message: "Codex loop started after command failure",
-          data: { commandId: command.id, command: command.command, maxRepairAttempts: plan.codexRepair.maxRepairAttempts },
+          eventType: "repository.codex.repair.skipped",
+          message: `${command.command} failed before repairable build/test stage. Repair loop skipped because this is infrastructure/source access, not code repair.",
+          data: { commandId: command.id, command: command.command, stdout: result.stdout, stderr: result.stderr },
         });
+        return failJob({ scope, jobs, jobId, command, result, proof, unproven, reason: `${command.command} failed before repairable build/test stage` });
+      }
+
+      if (autonomousRepair) {
+        await jobs.createEvent(scope, { jobId, eventType: "repository.codex.loop.started", message: "Codex loop started after repairable command failure", data: { commandId: command.id, command: command.command, maxRepairAttempts: plan.codexRepair.maxRepairAttempts } });
 
         const staticGenerator = createStaticRepairDiffGenerator(repairUnifiedDiffs);
         const openAIGenerator = createOpenAICodexRepairDiffGenerator();
@@ -275,13 +265,7 @@ export async function processRepositoryExecutionJob(
           stdout: result.stdout,
           stderr: result.stderr,
           targetFiles,
-          policy: createCodexRepairPolicy({
-            autonomousRepair,
-            maxAttempts: plan.codexRepair.maxRepairAttempts,
-            maxFilesTouched: plan.codexRepair.maxFilesTouched,
-            runBuildAfterPatch: plan.codexRepair.runBuildAfterPatch,
-            requireApprovalBeforePush: plan.codexRepair.requireApprovalBeforePush,
-          }),
+          policy: createCodexRepairPolicy({ autonomousRepair, maxAttempts: plan.codexRepair.maxRepairAttempts, maxFilesTouched: plan.codexRepair.maxFilesTouched, runBuildAfterPatch: plan.codexRepair.runBuildAfterPatch, requireApprovalBeforePush: plan.codexRepair.requireApprovalBeforePush }),
           generatePatch: async (repairInput) => (await staticGenerator(repairInput)) || (await openAIGenerator(repairInput)),
           applyPatch: async (patch, attempt) => {
             patchPath = await writeUnifiedDiff(`${projectId}-repair-${attempt}`, patch);
@@ -289,12 +273,7 @@ export async function processRepositoryExecutionJob(
           },
           rerunCommand: async () => runCommand(command, patchPath),
           emit: async (attempt) => {
-            await jobs.createEvent(scope, {
-              jobId,
-              eventType: `repository.codex.${attempt.status}`,
-              message: attempt.message,
-              data: attempt,
-            });
+            await jobs.createEvent(scope, { jobId, eventType: `repository.codex.${attempt.status}`, message: attempt.message, data: attempt });
           },
         });
 
@@ -307,27 +286,10 @@ export async function processRepositoryExecutionJob(
         }
 
         await jobs.update(scope, jobId, { status: "failed", metadata: { truthState: "FAILED", failedCommandId: command.id, codexRepair: repairResult } });
-        return {
-          ok: false,
-          jobId,
-          status: "failed",
-          truthState: "FAILED",
-          proof,
-          unproven: [...unproven, "remaining command batch", "browser verification", "workflow proof"],
-          failedCommandId: command.id,
-        };
+        return { ok: false, jobId, status: "failed", truthState: "FAILED", proof, unproven: [...unproven, "remaining command batch", "browser verification", "workflow proof"], failedCommandId: command.id };
       }
 
-      await jobs.update(scope, jobId, { status: "failed", metadata: { truthState: "FAILED", failedCommandId: command.id } });
-      return {
-        ok: false,
-        jobId,
-        status: "failed",
-        truthState: "FAILED",
-        proof,
-        unproven: [...unproven, "remaining command batch", "browser verification", "workflow proof"],
-        failedCommandId: command.id,
-      };
+      return failJob({ scope, jobs, jobId, command, result, proof, unproven, reason: `${command.command} failed and autonomous repair was not enabled` });
     }
 
     proof.push(command.proofLabel);
@@ -335,12 +297,7 @@ export async function processRepositoryExecutionJob(
 
   const truthState: RepositoryWorkerTruthState = unproven.length > 0 ? "UNPROVEN" : "PROVEN";
   await jobs.update(scope, jobId, { status: truthState === "PROVEN" ? "completed" : "in_review", metadata: { truthState, proof, unproven } });
-  await jobs.createEvent(scope, {
-    jobId,
-    eventType: "repository.worker.completed",
-    message: truthState === "PROVEN" ? "Repository execution worker completed" : "Repository execution worker completed with unproven items",
-    data: { truthState, proof, unproven },
-  });
+  await jobs.createEvent(scope, { jobId, eventType: "repository.worker.completed", message: truthState === "PROVEN" ? "Repository execution worker completed" : "Repository execution worker completed with unproven items", data: { truthState, proof, unproven } });
 
   return { ok: true, jobId, status: "completed", truthState, proof, unproven };
 }
