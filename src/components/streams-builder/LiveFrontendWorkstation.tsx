@@ -208,8 +208,8 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
       seenRuntimeEventsRef.current = new Set();
       setRuntimeJobId(detail.jobId);
       setRuntimeStatus(`runtime queued: ${detail.jobId}`);
-      setTab("logs");
       addProof(`Codex worker job queued: ${detail.jobId}`, "worker", "success");
+      addProof("Logs are available from the Logs tab; frontend preview remains full width until the user opens a tab.", "workstation", "info");
       if (detail.route) addProof(`Preview route for verification: ${detail.route}`, "browser", "info");
     }
 
