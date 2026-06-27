@@ -249,7 +249,7 @@ export async function processRepositoryExecutionJob(
         await jobs.createEvent(scope, {
           jobId,
           eventType: "repository.codex.repair.skipped",
-          message: `${command.command} failed before repairable build/test stage. Repair loop skipped because this is infrastructure/source access, not code repair.",
+          message: `${command.command} failed before repairable build/test stage. Repair loop skipped because this is infrastructure/source access, not code repair.`,
           data: { commandId: command.id, command: command.command, stdout: result.stdout, stderr: result.stderr },
         });
         return failJob({ scope, jobs, jobId, command, result, proof, unproven, reason: `${command.command} failed before repairable build/test stage` });
