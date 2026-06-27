@@ -8,6 +8,7 @@ import {
   type StreamsRepositoryExecutionCommand,
 } from "@/lib/streams-builder/repository-execution";
 import { createSandboxCommandBatch } from "@/lib/streams-builder/sandbox-commands";
+import { resolveVisualEditIntent } from "@/lib/streams-builder/visual-edit-intent-resolver";
 
 const jobs = new StreamsAIJobsRepository();
 
@@ -19,6 +20,11 @@ function defaultRepositoryCommands(targetFiles?: string[]): StreamsRepositoryExe
 
 function looksLikeUuid(value?: string | null) {
   return Boolean(value && value.length === 36 && value.includes("-") && value.split("-").length === 5);
+}
+
+function cleanRoute(value?: string | null) {
+  const route = (value || "/").trim().replace(/[.,;:!?]+$/g, "");
+  return route.startsWith("/") ? route : `/${route}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -47,7 +53,20 @@ export async function POST(request: NextRequest) {
       repairUnifiedDiffs?: string[];
     }>(request);
 
-    const requestedCommands = body.requestedCommands || defaultRepositoryCommands(body.targetFiles);
+    const visualIntent = resolveVisualEditIntent(body.userPrompt || "", {
+      repo: body.repoFullName,
+      branch: body.branchName,
+      path: body.targetFiles?.[0],
+      route: body.route,
+    });
+    const resolvedRepo = visualIntent.repo || body.repoFullName || "";
+    const resolvedBranch = visualIntent.branch || body.branchName;
+    const resolvedBaseBranch = visualIntent.branch || body.baseBranch;
+    const resolvedRoute = cleanRoute(visualIntent.route || body.route || "/");
+    const resolvedTargetFiles = visualIntent.path ? [visualIntent.path] : body.targetFiles;
+    const resolvedPrompt = visualIntent.enrichedPrompt || body.userPrompt || "";
+
+    const requestedCommands = body.requestedCommands || defaultRepositoryCommands(resolvedTargetFiles);
     const projectId = body.projectId || scope.defaultProjectId || "project-pending";
     const sessionId = body.sessionId || "builder-session-pending";
     const dbProjectId = looksLikeUuid(projectId) ? projectId : null;
@@ -56,11 +75,11 @@ export async function POST(request: NextRequest) {
     const plan = createRepositoryExecutionPlan({
       projectId,
       sessionId,
-      repoFullName: body.repoFullName || "",
-      branchName: body.branchName,
-      baseBranch: body.baseBranch,
+      repoFullName: resolvedRepo,
+      branchName: resolvedBranch,
+      baseBranch: resolvedBaseBranch,
       requestedCommands,
-      targetFiles: body.targetFiles,
+      targetFiles: resolvedTargetFiles,
       unifiedDiff: body.unifiedDiff,
       commitMessage: body.commitMessage,
       autonomousRepair: body.autonomousRepair === true,
@@ -78,7 +97,7 @@ export async function POST(request: NextRequest) {
             repoFullName: plan.repoFullName,
             branchName: plan.branchName,
             commands: requestedCommands,
-            targetFiles: body.targetFiles,
+            targetFiles: resolvedTargetFiles,
             commitMessage: body.commitMessage,
           })
         : null;
@@ -96,10 +115,10 @@ export async function POST(request: NextRequest) {
               repoFullName: plan.repoFullName,
               branchName: plan.branchName,
               baseBranch: plan.baseBranch,
-              route: body.route || "/",
-              userPrompt: body.userPrompt || "",
+              route: resolvedRoute,
+              userPrompt: resolvedPrompt,
               requestedCommands,
-              targetFiles: body.targetFiles || [],
+              targetFiles: resolvedTargetFiles || [],
               unifiedDiff: body.unifiedDiff || "",
               commitMessage: body.commitMessage || "",
               approvalGranted: body.approvalGranted === true,
@@ -109,6 +128,7 @@ export async function POST(request: NextRequest) {
               runBuildAfterPatch: plan.codexRepair.runBuildAfterPatch,
               requireApprovalBeforePush: plan.codexRepair.requireApprovalBeforePush,
               repairUnifiedDiffs: body.repairUnifiedDiffs || [],
+              visualIntent,
               plan,
               sandboxBatch,
             },
@@ -120,9 +140,9 @@ export async function POST(request: NextRequest) {
         try {
           await jobs.createEvent(scope, {
             jobId: String(queuedJob.id),
-            eventType: "repository.worker.autorun.scheduled",
-            message: "Repository worker auto-run scheduled after queueing",
-            data: { source: "repository-execution-route" },
+            eventType: visualIntent.matched ? "repository.visual_intent.resolved" : "repository.worker.autorun.scheduled",
+            message: visualIntent.matched ? visualIntent.reason : "Repository worker auto-run scheduled after queueing",
+            data: visualIntent.matched ? { visualIntent } : { source: "repository-execution-route" },
           });
           await processBestRepositoryExecutionJob(scope, queuedJob as Record<string, unknown>, jobs);
         } catch (error) {
@@ -150,6 +170,7 @@ export async function POST(request: NextRequest) {
         userId: scope.userId,
         workspaceId: scope.workspaceId,
       },
+      visualIntent,
       plan,
       sandboxBatch,
       queuedJob,
