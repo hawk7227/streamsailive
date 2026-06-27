@@ -64,9 +64,6 @@ function extractEditableItems(content: string, filePath: string): EditableItem[]
   const literalMatches = Array.from(content.matchAll(/(?:aria-label|title|placeholder|alt|children)?\s*=?\s*["'`]([^"'`{}<>]{2,140})["'`]/g)).map((m) => cleanText(m[1]));
   const jsxTextMatches = Array.from(content.matchAll(/>([^<>{}\n][^<>{}]*)</g)).map((m) => cleanText(m[1]));
   const all = Array.from(new Set([...jsxTextMatches, ...literalMatches])).filter(isUiText).slice(0, 32);
-  if (!all.length) {
-    return [{ id: "source-file", label: "Source file", selector: "source", file: filePath, text: "No direct editable text was found in this file. Pull/open imported child components to edit their internal content." }];
-  }
   return all.map((text, index) => ({ id: `item-${index}`, label: labelForText(text, index), selector: "visual text", file: filePath, text }));
 }
 
@@ -77,8 +74,8 @@ function defaultStyle(text: string): EditStyle {
 
 function overlayPosition(item: EditableItem, index: number) {
   const text = item.text.toLowerCase();
-  if (text.includes("instant") || text.includes("medical")) return { x: 8, y: 7, width: 82, height: 84, fontSize: 44 };
-  if (text.includes("healthcare")) return { x: 18, y: 44, width: 66, height: 34, fontSize: 22 };
+  if (text.includes("instant") || text.includes("medical")) return { x: 7, y: 7, width: 86, height: 74, fontSize: 44 };
+  if (text.includes("healthcare")) return { x: 16, y: 45, width: 68, height: 32, fontSize: 22 };
   if (text.includes("lamonica") || text.includes("provider")) return { x: 28, y: 31, width: 48, height: 28, fontSize: 18 };
   if (text.includes("private") || text.includes("personal")) return { x: 36, y: 39, width: 34, height: 26, fontSize: 14 };
   if (text.includes("visit")) return { x: index % 2 ? 58 : 14, y: 58 + (index % 3) * 7, width: 34, height: 28, fontSize: 16 };
@@ -94,16 +91,15 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   const [drawerOpen, setDrawerOpen] = useState(false);
   const editableItems = useMemo(() => extractEditableItems(content || "", filePath || "src/app/page.tsx"), [content, filePath]);
   const [selectedId, setSelectedId] = useState("");
-  const selected = editableItems.find((item) => item.id === selectedId) || editableItems[0];
-  const [style, setStyle] = useState<EditStyle>(defaultStyle(selected?.text || ""));
+  const selected = editableItems.find((item) => item.id === selectedId);
+  const [style, setStyle] = useState<EditStyle>(defaultStyle(""));
   const ready = Boolean(repo && filePath);
   const liveUrl = browserUrl || defaultUrl;
 
   useEffect(() => {
     setBrowserUrl(defaultUrl);
-    const first = editableItems[0];
-    setSelectedId(first?.id || "");
-    setStyle(defaultStyle(first?.text || ""));
+    setSelectedId("");
+    setStyle(defaultStyle(""));
     setFrameKey((value) => value + 1);
     setDrawerOpen(false);
     onProof(`Visual editor mounted actual frontend: ${repo || "no repo"}@${branch || "no branch"}:${sourceRoute}`);
@@ -145,9 +141,8 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
 
   function resetEditor() {
     setBrowserUrl(defaultUrl);
-    const first = editableItems[0];
-    setSelectedId(first?.id || "");
-    setStyle(defaultStyle(first?.text || ""));
+    setSelectedId("");
+    setStyle(defaultStyle(""));
     setFrameKey((value) => value + 1);
     setDrawerOpen(false);
     onProof("Reset visual editor to source truth.");
@@ -156,7 +151,7 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   return (
     <section className="visualEditor">
       <header className="top">
-        <div><b>VISUAL EDITOR</b><span>{stationLabel} · Editor mode lets you click editable text directly on the screen</span></div>
+        <div><b>VISUAL EDITOR</b><span>{stationLabel} · click in the preview to select, edit, then apply</span></div>
         <div className="routeBar"><button type="button" onClick={refreshPreview}>↻</button><input value={liveUrl} onChange={(event) => setBrowserUrl(event.target.value)} /><button type="button" onClick={refreshPreview}>Open</button></div>
       </header>
 
@@ -172,30 +167,31 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
                   <button
                     key={item.id}
                     type="button"
+                    aria-label={`Select ${item.label}: ${item.text}`}
                     className={active ? "screenTarget active" : "screenTarget"}
-                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, width: `${pos.width}%`, minHeight: `${pos.height}px`, fontSize: `${pos.fontSize}px`, color: pos.color, background: active ? "rgba(255,128,0,.1)" : "rgba(2,6,23,.04)", borderRadius: `${pos.radius}px`, opacity: pos.opacity }}
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, width: `${pos.width}%`, minHeight: `${pos.height}px`, borderRadius: `${pos.radius}px`, opacity: active ? 1 : 0 }}
                     onClick={() => selectItem(item, index)}
-                  >
-                    {active ? style.text : item.text}
-                  </button>
+                  />
                 );
               })}
-              <div className="inlineEditor" style={{ left: `${Math.min(style.x, 70)}%`, top: `${Math.min(style.y + 10, 82)}%` }}>
-                <b>{selected?.label || "Selected item"}</b>
-                <input value={style.text} onChange={(event) => updateStyle({ text: event.target.value })} autoFocus />
-                <div><button type="button" onClick={savePatch}>Apply</button><button type="button" onClick={() => setDrawerOpen(true)}>More</button></div>
-              </div>
+              {selected ? (
+                <div className="inlineEditor" style={{ left: `${Math.min(style.x, 70)}%`, top: `${Math.min(style.y + 10, 82)}%` }}>
+                  <b>{selected.label}</b>
+                  <input value={style.text} onChange={(event) => updateStyle({ text: event.target.value })} autoFocus />
+                  <div><button type="button" onClick={savePatch}>Apply</button><button type="button" onClick={() => setDrawerOpen(true)}>More</button></div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>
       </main>
 
-      <footer className="sourceActionStrip"><div><span>Route</span><b>{sourceRoute}</b></div><div><span>Selected</span><b>{selected?.label || "none"}</b></div><div><span>File</span><b>{filePath || "no file"}</b></div><div><span>Branch</span><b>{branch || "no branch"}</b></div><div><span>Mode</span><b>{viewMode}</b></div><button type="button" className={viewMode === "editor" ? "active" : ""} onClick={() => switchMode("editor")}>Editor</button><button type="button" className={viewMode === "browser" ? "active" : ""} onClick={() => switchMode("browser")}>Browser</button><button type="button" className={viewMode === "mobile" ? "active" : ""} onClick={() => switchMode("mobile")}>Mobile</button><button type="button" className={viewMode === "advanced" ? "active" : ""} onClick={() => switchMode("advanced")}>Advanced</button><button type="button" onClick={savePatch}>Save</button><button type="button" onClick={resetEditor}>Reset</button></footer>
+      <footer className="sourceActionStrip"><div><span>Route</span><b>{sourceRoute}</b></div><div><span>Selected</span><b>{selected?.label || "Click preview"}</b></div><div><span>File</span><b>{filePath || "no file"}</b></div><div><span>Branch</span><b>{branch || "no branch"}</b></div><div><span>Mode</span><b>{viewMode}</b></div><button type="button" className={viewMode === "editor" ? "active" : ""} onClick={() => switchMode("editor")}>Editor</button><button type="button" className={viewMode === "browser" ? "active" : ""} onClick={() => switchMode("browser")}>Browser</button><button type="button" className={viewMode === "mobile" ? "active" : ""} onClick={() => switchMode("mobile")}>Mobile</button><button type="button" className={viewMode === "advanced" ? "active" : ""} onClick={() => switchMode("advanced")}>Advanced</button><button type="button" onClick={savePatch} disabled={!selected}>Save</button><button type="button" onClick={resetEditor}>Reset</button></footer>
 
       <details className="editorDrawer" open={drawerOpen || viewMode === "advanced"} onToggle={(event) => setDrawerOpen(event.currentTarget.open)}><summary>Advanced style / source controls</summary><section className="drawerGrid"><label className="wide">Text<textarea value={style.text} onChange={(event) => updateStyle({ text: event.target.value })} /></label><label>Font size<input type="number" value={style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) || 12 })} /></label><label>Text color<input type="color" value={style.color} onChange={(event) => updateStyle({ color: event.target.value })} /></label><label>Background<input value={style.background} onChange={(event) => updateStyle({ background: event.target.value })} /></label><label>Width<input type="number" value={style.width} onChange={(event) => updateStyle({ width: Number(event.target.value) || 40 })} /></label><label>Move X<input type="number" value={style.x} onChange={(event) => updateStyle({ x: Number(event.target.value) || 0 })} /></label><label>Move Y<input type="number" value={style.y} onChange={(event) => updateStyle({ y: Number(event.target.value) || 0 })} /></label><section className="patchBox"><b>Patch Preview</b><p>from: {selected?.text || "none"}</p><p>to: {style.text || "none"}</p><p>file: {filePath || "none"}</p></section></section></details>
 
       <style jsx>{`
-        .visualEditor{width:100%;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:#020617;color:#fff;overflow:hidden}.top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(148,163,184,.18);background:#0f172a}.top b{display:block;font-size:13px}.top span{display:block;color:#93c5fd;font-size:11px}.routeBar{display:grid;grid-template-columns:40px minmax(260px,1fr) 80px;gap:8px;width:min(680px,56vw)}.routeBar input{height:38px;border-radius:999px;border:1px solid rgba(148,163,184,.22);background:#020617;color:#fff;padding:0 14px}button{border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#7c3aed;color:#fff;height:36px;padding:0 12px;font-size:11px;font-weight:900;cursor:pointer}button.active{background:#065f46;color:#6ee7b7;border-color:#34d399}.canvas{position:relative;min-height:0;overflow:hidden;background:#020617}.desktopFrame{position:relative;height:calc(100% - 18px);margin:10px;border:1px solid rgba(124,58,237,.5);border-radius:16px;overflow:auto;background:#fff}.phoneFrame{position:relative;width:430px;height:min(760px,calc(100% - 30px));margin:12px auto;border:12px solid #111827;border-radius:36px;overflow:auto;background:#fff}.desktopFrame iframe,.phoneFrame iframe{display:block;width:100%;height:1800px;min-height:100%;border:0;background:#fff;pointer-events:auto}.canvas.editor iframe{pointer-events:none}.editOverlay{position:absolute;inset:0;z-index:5;pointer-events:auto}.screenTarget{position:absolute;display:grid;place-items:center;text-align:center;border:1px solid transparent;background:transparent;color:#fff;font-family:Georgia,serif;font-weight:900;text-shadow:0 2px 8px rgba(0,0,0,.7);padding:0 8px;line-height:1.05;overflow:hidden}.screenTarget:hover,.screenTarget.active{border:2px solid #f97316;box-shadow:0 0 0 1px rgba(249,115,22,.45),0 0 18px rgba(249,115,22,.24)}.inlineEditor{position:absolute;z-index:9;width:310px;display:grid;gap:6px;padding:8px;border:1px solid rgba(249,115,22,.75);border-radius:10px;background:rgba(2,6,23,.95);box-shadow:0 20px 40px rgba(0,0,0,.38)}.inlineEditor b{color:#fb923c;font-size:10px;text-transform:uppercase}.inlineEditor input{height:34px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#020617;color:#fff;padding:0 10px}.inlineEditor div{display:flex;gap:6px}.inlineEditor button{height:28px}.emptyFrame{height:100%;display:grid;place-content:center;text-align:center;color:#0f172a}.sourceActionStrip{display:grid;grid-template-columns:repeat(5,minmax(96px,1fr)) repeat(6,auto);gap:8px;align-items:center;padding:8px;background:#020617;border-top:1px solid rgba(148,163,184,.18)}.sourceActionStrip div{min-width:0;border:1px solid rgba(20,184,166,.3);border-radius:12px;background:rgba(8,47,73,.34);padding:8px}.sourceActionStrip span{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.sourceActionStrip b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:12px}.editorDrawer{max-height:300px;overflow:auto;border-top:1px solid rgba(148,163,184,.18);background:#020617}.editorDrawer summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:900}.drawerGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.drawerGrid label,.patchBox{border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.9);padding:10px;color:#cbd5e1;font-size:11px}.drawerGrid input,.drawerGrid textarea{width:100%;margin-top:6px;border:1px solid rgba(148,163,184,.2);border-radius:8px;background:#020617;color:#fff;padding:8px;box-sizing:border-box}.wide{grid-column:span 2}.patchBox p{margin:4px 0;color:#94a3b8;font-size:11px;overflow-wrap:anywhere}
+        .visualEditor{width:100%;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:#020617;color:#fff;overflow:hidden}.top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(148,163,184,.18);background:#0f172a}.top b{display:block;font-size:13px}.top span{display:block;color:#93c5fd;font-size:11px}.routeBar{display:grid;grid-template-columns:40px minmax(260px,1fr) 80px;gap:8px;width:min(680px,56vw)}.routeBar input{height:38px;border-radius:999px;border:1px solid rgba(148,163,184,.22);background:#020617;color:#fff;padding:0 14px}button{border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#7c3aed;color:#fff;height:36px;padding:0 12px;font-size:11px;font-weight:900;cursor:pointer}button.active{background:#065f46;color:#6ee7b7;border-color:#34d399}button:disabled{opacity:.45;cursor:not-allowed}.canvas{position:relative;min-height:0;overflow:hidden;background:#020617}.desktopFrame{position:relative;height:calc(100% - 18px);margin:10px;border:1px solid rgba(124,58,237,.5);border-radius:16px;overflow:auto;background:#fff}.phoneFrame{position:relative;width:430px;height:min(760px,calc(100% - 30px));margin:12px auto;border:12px solid #111827;border-radius:36px;overflow:auto;background:#fff}.desktopFrame iframe,.phoneFrame iframe{display:block;width:100%;height:1800px;min-height:100%;border:0;background:#fff;pointer-events:auto}.canvas.editor iframe{pointer-events:none}.editOverlay{position:absolute;inset:0;z-index:5;pointer-events:auto}.screenTarget{position:absolute;border:1px solid transparent;background:transparent;color:transparent;padding:0;overflow:hidden}.screenTarget:hover,.screenTarget.active{opacity:1!important;border:2px solid #f97316;box-shadow:0 0 0 1px rgba(249,115,22,.45),0 0 18px rgba(249,115,22,.24);background:rgba(249,115,22,.06)}.inlineEditor{position:absolute;z-index:9;width:310px;display:grid;gap:6px;padding:8px;border:1px solid rgba(249,115,22,.75);border-radius:10px;background:rgba(2,6,23,.95);box-shadow:0 20px 40px rgba(0,0,0,.38)}.inlineEditor b{color:#fb923c;font-size:10px;text-transform:uppercase}.inlineEditor input{height:34px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#020617;color:#fff;padding:0 10px}.inlineEditor div{display:flex;gap:6px}.inlineEditor button{height:28px}.emptyFrame{height:100%;display:grid;place-content:center;text-align:center;color:#0f172a}.sourceActionStrip{display:grid;grid-template-columns:repeat(5,minmax(96px,1fr)) repeat(6,auto);gap:8px;align-items:center;padding:8px;background:#020617;border-top:1px solid rgba(148,163,184,.18)}.sourceActionStrip div{min-width:0;border:1px solid rgba(20,184,166,.3);border-radius:12px;background:rgba(8,47,73,.34);padding:8px}.sourceActionStrip span{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.sourceActionStrip b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:12px}.editorDrawer{max-height:300px;overflow:auto;border-top:1px solid rgba(148,163,184,.18);background:#020617}.editorDrawer summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:900}.drawerGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.drawerGrid label,.patchBox{border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.9);padding:10px;color:#cbd5e1;font-size:11px}.drawerGrid input,.drawerGrid textarea{width:100%;margin-top:6px;border:1px solid rgba(148,163,184,.2);border-radius:8px;background:#020617;color:#fff;padding:8px;box-sizing:border-box}.wide{grid-column:span 2}.patchBox p{margin:4px 0;color:#94a3b8;font-size:11px;overflow-wrap:anywhere}
       `}</style>
     </section>
   );
