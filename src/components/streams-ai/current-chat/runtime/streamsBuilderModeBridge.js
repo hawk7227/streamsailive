@@ -22,6 +22,10 @@ function parseChatBody(init) {
   try { return init?.body && typeof init.body === "string" ? JSON.parse(init.body) : {}; } catch { return {}; }
 }
 
+function cloneInitWithBody(init, nextBody) {
+  return { ...init, body: nextBody };
+}
+
 function isBuilderMode() {
   if (typeof window === "undefined") return false;
   try { return new URLSearchParams(window.location.search).get("builderMode") === "1"; } catch { return false; }
@@ -49,6 +53,18 @@ function isChatPostEndpoint(pathname) {
 
 function messageFromBody(body) {
   return String(body?.message || body?.input || body?.prompt || body?.text || body?.content || body?.query || "").trim();
+}
+
+function writeMessageToBody(body, message) {
+  const next = { ...(body || {}) };
+  if ("message" in next) next.message = message;
+  else if ("input" in next) next.input = message;
+  else if ("prompt" in next) next.prompt = message;
+  else if ("text" in next) next.text = message;
+  else if ("content" in next) next.content = message;
+  else if ("query" in next) next.query = message;
+  else next.message = message;
+  return next;
 }
 
 function isVisualEditCommand(message) {
@@ -93,6 +109,17 @@ function inferConnection(message, current) {
   if (lower.includes("approval")) return { connected: true, activeWorkstationId: "approval-center", activeWorkstationName: "Approval Center", sessionId: "agent-1" };
   if (lower.includes("browser")) return { connected: true, activeWorkstationId: "browser-verification", activeWorkstationName: "Browser Verification", sessionId: "agent-1" };
   return { connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId: "agent-1" };
+}
+
+function fallbackStatus(message, routedConnection) {
+  if (isVisualEditCommand(message)) {
+    return [
+      `Routed to ${routedConnection.activeWorkstationName || "workstation"}.`,
+      "I treated this as a visual edit and sent the workstation the source-mapping context.",
+      "The chat model response was unavailable, so check Logs for visualIntent/source-truth details.",
+    ].join(" ");
+  }
+  return `Routed to ${routedConnection.activeWorkstationName || "workstation"}. The chat model response was unavailable, so check Logs for source-pull and job status.`;
 }
 
 export function installStreamsBuilderModeBridge() {
@@ -144,10 +171,16 @@ export function installStreamsBuilderModeBridge() {
           autoConnected: true,
           at: new Date().toISOString(),
         }, window.location.origin);
-        const status = isVisualEditCommand(message)
-          ? `Connected to ${routedConnection.activeWorkstationName || "workstation"}. I resolved this as a visual edit, mapped it to source truth, and sent the safe patch plan to the workstation.`
-          : `Connected to ${routedConnection.activeWorkstationName || "workstation"}. I sent your command to the workstation and started the real source pull / Codex queue path. Watch the workstation proof timeline for progress.`;
-        return makeSseResponse(status);
+
+        try {
+          const enrichedBody = writeMessageToBody(body, routedMessage);
+          const response = await originalFetch(input, cloneInitWithBody(init, JSON.stringify(enrichedBody)));
+          if (response?.ok) return response;
+        } catch {
+          // Fallback below keeps routing usable when the normal chat endpoint is unavailable.
+        }
+
+        return makeSseResponse(fallbackStatus(message, routedConnection));
       }
     }
 
