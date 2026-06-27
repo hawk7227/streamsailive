@@ -11,18 +11,31 @@ function safeTarget(raw: string | null) {
   }
 }
 
+function stripClientRuntime(html: string) {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<link\b[^>]*rel=["']?preload["']?[^>]*as=["']?script["']?[^>]*>/gi, "")
+    .replace(/<link\b[^>]*as=["']?script["']?[^>]*rel=["']?preload["']?[^>]*>/gi, "")
+    .replace(/\snonce=(['"])[\s\S]*?\1/gi, "");
+}
+
 function injectEditableBridge(html: string, target: URL) {
   const baseTag = `<base href="${target.origin}/">`;
   const script = `
 <script>
 (() => {
   const SKIP = new Set(['SCRIPT','STYLE','NOSCRIPT','SVG','PATH','META','LINK','HEAD','TITLE']);
+  function textOf(el) {
+    return (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+  }
   function isEditableTextElement(el) {
     if (!el || SKIP.has(el.tagName)) return false;
-    const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    const text = textOf(el);
     if (!text || text.length < 2 || text.length > 180) return false;
+    if (/^(Home|FAQ|How It Works|About Your Provider)$/i.test(text) && el.tagName === 'DIV') return false;
     const children = Array.from(el.children || []).filter(child => !SKIP.has(child.tagName));
-    const childText = children.map(child => (child.innerText || child.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' ');
+    const childText = children.map(textOf).filter(Boolean).join(' ');
     if (children.length && childText && childText.length >= text.length * 0.72) return false;
     return /[A-Za-z0-9]/.test(text);
   }
@@ -46,12 +59,12 @@ function injectEditableBridge(html: string, target: URL) {
     window.parent && window.parent.postMessage({ type, payload, source: 'streams-editable-preview' }, window.location.origin);
   }
   function markEditable() {
-    const nodes = Array.from(document.body.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,b,strong,em,a,button,label,li,small,div'));
+    const nodes = Array.from(document.body.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,b,strong,em,a,button,label,li,small'));
     nodes.forEach((el, index) => {
       if (!isEditableTextElement(el)) return;
       el.dataset.streamsEditable = 'true';
       el.dataset.streamsEditableId = 'editable-' + index;
-      el.dataset.streamsOriginalText = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      el.dataset.streamsOriginalText = textOf(el);
       el.setAttribute('contenteditable', 'true');
       el.setAttribute('spellcheck', 'false');
       el.addEventListener('click', (event) => {
@@ -59,13 +72,13 @@ function injectEditableBridge(html: string, target: URL) {
         el.focus();
         document.querySelectorAll('[data-streams-selected="true"]').forEach(node => node.removeAttribute('data-streams-selected'));
         el.dataset.streamsSelected = 'true';
-        post('streams-editable-select', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: el.innerText || el.textContent || '', original: el.dataset.streamsOriginalText || '' });
+        post('streams-editable-select', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: textOf(el), original: el.dataset.streamsOriginalText || '' });
       });
       el.addEventListener('input', () => {
-        post('streams-editable-input', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: el.innerText || el.textContent || '', original: el.dataset.streamsOriginalText || '' });
+        post('streams-editable-input', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: textOf(el), original: el.dataset.streamsOriginalText || '' });
       });
       el.addEventListener('blur', () => {
-        post('streams-editable-commit', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: el.innerText || el.textContent || '', original: el.dataset.streamsOriginalText || '' });
+        post('streams-editable-commit', { id: el.dataset.streamsEditableId, selector: cssPath(el), text: textOf(el), original: el.dataset.streamsOriginalText || '' });
       });
     });
   }
@@ -75,7 +88,7 @@ function injectEditableBridge(html: string, target: URL) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markEditable); else markEditable();
 })();
 </script>`;
-  let next = html;
+  let next = stripClientRuntime(html);
   if (!/<base\s/i.test(next)) next = next.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
   if (/<\/body>/i.test(next)) return next.replace(/<\/body>/i, `${script}</body>`);
   return `${next}${script}`;
