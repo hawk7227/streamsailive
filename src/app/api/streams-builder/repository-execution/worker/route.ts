@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "@/lib/streams-ai/server";
 import { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
-import { processRepositoryExecutionJob } from "@/lib/streams-builder/repository-worker";
+import { processBestRepositoryExecutionJob } from "@/lib/streams-builder/repository-worker-best";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const jobs = new StreamsAIJobsRepository();
-const WORKER_NAME = "streams-builder-repository-execution-worker";
+const WORKER_NAME = "streams-builder-best-repository-worker";
 const BATCH_LIMIT = 1;
 
 function isAuthorized(request: NextRequest) {
@@ -59,10 +59,10 @@ export async function POST(request: NextRequest) {
       await jobs.createEvent(scope, {
         jobId,
         eventType: "repository.worker.dispatch",
-        message: "Repository execution worker dispatching job",
+        message: "Best-builder repository worker dispatching job",
         data: { worker: WORKER_NAME },
       });
-      results.push(await processRepositoryExecutionJob(scope, row, jobs));
+      results.push(await processBestRepositoryExecutionJob(scope, row, jobs));
     }
 
     return NextResponse.json({
@@ -70,11 +70,11 @@ export async function POST(request: NextRequest) {
       worker: WORKER_NAME,
       claimed: rows.length,
       results,
-      proof: rows.length ? ["worker authorized", "repository_execution batch fetched", "job processor invoked"] : ["worker authorized", "no repository_execution jobs queued"],
-      unproven: ["browser verification", "approval workflow", "production deployment proof"],
+      proof: rows.length ? ["worker authorized", "repository_execution batch fetched", "best-builder job processor invoked"] : ["worker authorized", "no repository_execution jobs queued"],
+      unproven: rows.length ? ["browser screenshot artifact requires browser verification job completion", "approval workflow requires user review"] : [],
     });
   } catch (error) {
-    console.error("[streams-builder-repository-worker]", error);
+    console.error("[streams-builder-best-repository-worker]", error);
     return NextResponse.json(
       { ok: false, worker: WORKER_NAME, error: error instanceof Error ? error.message : "Unknown repository worker error" },
       { status: 500 },
