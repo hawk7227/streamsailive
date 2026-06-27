@@ -16,6 +16,10 @@ function defaultRepositoryCommands(targetFiles?: string[]): StreamsRepositoryExe
     : ["clone_repo", "npm_run_build", "git_status", "git_diff"];
 }
 
+function looksLikeUuid(value?: string | null) {
+  return Boolean(value && value.length === 36 && value.includes("-") && value.split("-").length === 5);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
@@ -25,6 +29,8 @@ export async function POST(request: NextRequest) {
       repoFullName?: string;
       branchName?: string;
       baseBranch?: string;
+      route?: string;
+      userPrompt?: string;
       requestedCommands?: StreamsRepositoryExecutionCommand[];
       targetFiles?: string[];
       unifiedDiff?: string;
@@ -42,6 +48,8 @@ export async function POST(request: NextRequest) {
     const requestedCommands = body.requestedCommands || defaultRepositoryCommands(body.targetFiles);
     const projectId = body.projectId || scope.defaultProjectId || "project-pending";
     const sessionId = body.sessionId || "builder-session-pending";
+    const dbProjectId = looksLikeUuid(projectId) ? projectId : null;
+    const dbSessionId = looksLikeUuid(body.sessionId) ? body.sessionId || null : null;
 
     const plan = createRepositoryExecutionPlan({
       projectId,
@@ -76,8 +84,8 @@ export async function POST(request: NextRequest) {
     const queuedJob =
       body.enqueue === true && plan.blockedReasons.length === 0
         ? await jobs.create(scope, {
-            projectId,
-            sessionId,
+            projectId: dbProjectId,
+            sessionId: dbSessionId,
             kind: "repository_execution",
             status: "queued",
             inputJson: {
@@ -86,6 +94,8 @@ export async function POST(request: NextRequest) {
               repoFullName: plan.repoFullName,
               branchName: plan.branchName,
               baseBranch: plan.baseBranch,
+              route: body.route || "/",
+              userPrompt: body.userPrompt || "",
               requestedCommands,
               targetFiles: body.targetFiles || [],
               unifiedDiff: body.unifiedDiff || "",
