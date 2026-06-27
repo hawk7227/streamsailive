@@ -82,6 +82,10 @@ function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail)
   window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } }));
 }
 
+function publishSummary(phase: string, message: string) {
+  window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase, message } }));
+}
+
 function parseAgentOnePrompt(prompt: string) {
   const live = readTopRowSourceTruth();
   const last = readLastActiveFile();
@@ -126,24 +130,45 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [prompt, setPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen. Fix the pull-to-workscreen issue.");
   const [status, setStatus] = useState("iPhone chat bridge ready");
+  const [bridgeProof, setBridgeProof] = useState("not tested");
+  const [lastPingId, setLastPingId] = useState("");
   const [running, setRunning] = useState(false);
 
-  function pushConnectionState(next = connection) {
-    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-connection-state", connection: next }, window.location.origin);
+  function pushConnectionState(next = connection, pingId = "") {
+    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-connection-state", connection: next, pingId }, window.location.origin);
   }
 
   function connectToActiveWorkstation() {
     const next = { connected: true, activeWorkstationId: workstationId(activeModule), activeWorkstationName: activeModule, sessionId: "agent-1" };
     onConnectionChange(next);
     setStatus(`iPhone chat connected to ${activeModule}.`);
+    publishSummary("bridge", `iPhone chat connected to ${activeModule}.`);
     window.setTimeout(() => pushConnectionState(next), 50);
   }
 
   function disconnectWorkstation() {
     const next = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
     onConnectionChange(next);
+    setBridgeProof("not tested");
     setStatus("iPhone chat disconnected. Standalone Streams AI mode preserved.");
+    publishSummary("bridge", "iPhone chat disconnected. Standalone mode preserved.");
     window.setTimeout(() => pushConnectionState(next), 50);
+  }
+
+  function testBridge() {
+    if (!connection.connected || !connection.activeWorkstationId) {
+      setBridgeProof("blocked");
+      setStatus("Bridge test blocked: connect the iPhone chat to a workstation first.");
+      return;
+    }
+    const pingId = `bridge-${Date.now()}`;
+    setLastPingId(pingId);
+    setBridgeProof("testing");
+    setStatus(`Testing iPhone chat ↔ ${connection.activeWorkstationName} bridge...`);
+    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-bridge-ping", pingId, connection }, window.location.origin);
+    window.setTimeout(() => {
+      setBridgeProof((current) => current === "testing" ? "timeout" : current);
+    }, 1800);
   }
 
   async function runAgentOneText(nextPrompt: string, source: "local-form" | "iphone-chat" = "local-form") {
@@ -226,18 +251,35 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
     function onFrameMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
-      if (data.type === "streams-builder-frame-ready") pushConnectionState(connection);
+      if (data.type === "streams-builder-frame-ready") {
+        setBridgeProof("frame ready");
+        pushConnectionState(connection);
+      }
+      if (data.type === "streams-builder-bridge-pong") {
+        const targetMatches = data.connection?.activeWorkstationId === connection.activeWorkstationId;
+        const pingMatches = !lastPingId || !data.pingId || data.pingId === lastPingId || data.pingId === "connection-state";
+        if (data.connected && targetMatches && pingMatches) {
+          setBridgeProof("passed");
+          const message = `Bridge proof passed: iPhone chat can see ${connection.activeWorkstationName} and workstation can see the iPhone chat.`;
+          setStatus(message);
+          publishSummary("bridge-proof", message);
+        } else {
+          setBridgeProof("failed");
+          setStatus("Bridge proof failed: stale or mismatched workstation connection.");
+        }
+      }
       if (data.type === "streams-builder-chat-command") {
         if (!connection.connected || data.connection?.activeWorkstationId !== connection.activeWorkstationId) {
           setStatus("Blocked iPhone command: no active workstation connection or stale connection.");
           return;
         }
+        publishSummary("iphone-command", `iPhone chat command reached ${connection.activeWorkstationName}: ${String(data.message || "").slice(0, 80)}`);
         void runAgentOneText(data.message, "iphone-chat");
       }
     }
     window.addEventListener("message", onFrameMessage);
     return () => window.removeEventListener("message", onFrameMessage);
-  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName, running]);
+  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName, lastPingId, running]);
 
   return (
     <section className="builderChatFrame" aria-label="Existing Streams AI mobile chat">
@@ -245,11 +287,11 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       <section className="connectionBar" aria-label="iPhone chat workstation connection">
         <div className="connectionStatus">
           <b>iPhone chat connection</b>
-          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone Streams AI mode"}</span>
+          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName} · bridge ${bridgeProof}` : "Standalone Streams AI mode"}</span>
         </div>
         <div className="connectionActions">
           {connection.connected ? <button type="button" onClick={disconnectWorkstation}>Disconnect</button> : <button type="button" onClick={connectToActiveWorkstation}>Connect {activeModule}</button>}
-          {connection.connected && connection.activeWorkstationName !== activeModule ? <button type="button" onClick={connectToActiveWorkstation}>Switch to {activeModule}</button> : null}
+          {connection.connected && connection.activeWorkstationName !== activeModule ? <button type="button" onClick={connectToActiveWorkstation}>Switch to {activeModule}</button> : <button type="button" onClick={testBridge} disabled={!connection.connected}>Test Bridge</button>}
         </div>
         <p>{status}</p>
         <details className="fallbackCommand">
