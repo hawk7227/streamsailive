@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildConnectionContext, getWorkstationContract } from "../builderSystemContract";
+import { buildConnectionContext, getWorkstationContract } from "@/components/streams-builder/builderSystemContract";
 
 const repoRoot = process.cwd();
 
@@ -61,7 +61,7 @@ describe("iPhone chat to workstation bridge contract", () => {
     expect(proofBridge).toContain("iphone-chat-frame");
   });
 
-  it("routes iPhone chat commands only through an active workstation connection", () => {
+  it("routes iPhone chat commands only through an active workstation connection and into Codex queueing", () => {
     const builderChat = readRepoFile("src/components/streams-builder/BuilderCenterChat.tsx");
     const modeBridge = readRepoFile("src/components/streams-ai/current-chat/runtime/streamsBuilderModeBridge.js");
 
@@ -69,7 +69,8 @@ describe("iPhone chat to workstation bridge contract", () => {
     expect(modeBridge).toContain("connection?.connected");
     expect(modeBridge).toContain("connection?.activeWorkstationId");
 
-    expect(builderChat).toContain("iphone-chat-to-workstation");
+    expect(builderChat).toContain("iphone-chat-to-codex-workstation");
+    expect(builderChat).toContain("autonomousRepair: true");
     expect(builderChat).toContain("Blocked iPhone command: no active workstation connection or stale connection.");
     expect(builderChat).toContain("streams-builder-summary-event");
   });
