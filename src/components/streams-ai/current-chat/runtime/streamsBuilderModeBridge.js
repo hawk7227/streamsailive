@@ -86,13 +86,16 @@ function inferVisualEditContext(message) {
     : "use the active source-truth repo, branch, route, and page file";
   return [
     "",
-    "SYSTEM BUILDER UNDERSTANDING CONTEXT:",
-    "Resolve the user's visual language before queueing Codex.",
-    "Map the visible target to route, source file, component usage, reusable component risk, and smallest safe patch.",
+    "SYSTEM BUILDER EXECUTION CONTEXT:",
+    "You are inside the Streams Builder. Do not answer as an advisor giving generic instructions. Act as the builder agent that is resolving, routing, and executing the request.",
+    "Do not say things like 'identify the file', 'for example', 'PatientLanding.jsx', 'you would modify', or 'verify locally' unless the real source target is unknown.",
+    "Use resolved source-truth language: visualIntent, repo, branch, route, sourceFile, scope, safePatchTarget, doNotTouch, proofRequired, currentStatus.",
+    "Resolve the user's visual language before queueing Codex. Map the visible target to route, source file, component usage, reusable component risk, and smallest safe patch.",
     "For one rendered instance, patch the page/section usage site. Do not edit or delete reusable component files globally unless the user explicitly asks for a global component change.",
     "Preserve unrelated layout, booking/payment/intake/provider/overlay logic, shared components, and all other sections.",
     `Source target hint: ${target}.`,
     "If the user mentions cards below/under a doctor/provider/hero/Healthcare That Feels Personal Again section, treat it as a page-level rendered instance and remove the local JSX usage only.",
+    "User-facing response should be operational and specific, for example: 'Resolved visual edit target: repo ..., file ..., scope usage_site. I sent this safe patch plan to Visual Editing. Check Logs for job/proof.'",
     "Stop at diff/approval. Do not commit. Do not push.",
   ].join("\n");
 }
