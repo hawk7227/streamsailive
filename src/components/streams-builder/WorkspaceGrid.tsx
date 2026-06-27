@@ -8,6 +8,7 @@ import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
+import VisualOperationDock from "./VisualOperationDock";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
 import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemContract";
@@ -106,7 +107,17 @@ export default function WorkspaceGrid() {
                 <LiveFrontendWorkstation activeFile={activeFile} />
               )}
             </div>
-            <div className="stationContext"><WorkspaceModulePanel moduleName={activeModule} /></div>
+            <div className="stationContext">
+              {activeModule === "Visual Editing" ? (
+                <VisualOperationDock
+                  activeFile={activeFile}
+                  onContentChange={(next) => setActiveFile((current) => ({ ...current, content: next }))}
+                  onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
+                />
+              ) : (
+                <WorkspaceModulePanel moduleName={activeModule} />
+              )}
+            </div>
             <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
             {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Original visual editor workstation restored." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
           </section>
@@ -128,7 +139,7 @@ export default function WorkspaceGrid() {
         .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
         .workstationShell.connected{border-color:rgba(110,231,183,.58);box-shadow:0 0 0 1px rgba(110,231,183,.12),0 0 26px rgba(16,185,129,.12);}
         .connectionRibbon{min-width:0;padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.86);color:#cbd5e1;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.workstationShell.connected .connectionRibbon{color:#6ee7b7;background:rgba(6,78,59,.28);}
-        .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:none;overflow:visible;border-top:1px solid rgba(148,163,184,.12);}
+        .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:430px;overflow:auto;border-top:1px solid rgba(148,163,184,.12);}
         .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
         .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
         .statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px;}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
