@@ -26,7 +26,8 @@ describe("resolveVisualEditIntent", () => {
     expect(result.matched).toBe(true);
     expect(result.scope).toBe("usage_site");
     expect(result.safePatchTarget).toContain("local JSX usage");
-    expect(result.enrichedPrompt).toContain("Do not edit or delete reusable component files globally");
+    expect(result.enrichedPrompt).toContain("Do not edit or delete reusable component files");
+    expect(result.enrichedPrompt).toContain("patch the usage site, not the reusable component file");
   });
 
   it("does not match non-visual general chat", () => {
