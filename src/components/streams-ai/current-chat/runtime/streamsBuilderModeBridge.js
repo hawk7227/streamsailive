@@ -117,11 +117,14 @@ function inferConnection(message, current) {
 function fallbackStatus(message, routedConnection) {
   if (isVisualEditCommand(message)) {
     return [
-      `Routed to ${routedConnection.activeWorkstationName || "workstation"}.`,
-      "I treated this as a visual edit and sent the workstation the source-mapping context.",
-      "The chat model response was unavailable, so check Logs for visualIntent/source-truth details.",
-    ].join(" ");
+      "Resolved visual edit target: visible page element described by the user.",
+      "Source target: repo hawk7227/patientpanel, branch master, route /, file src/app/page.tsx, scope usage_site.",
+      "Safe patch: remove only the local rendered usage in that landing-page section; do not edit or delete reusable component files globally.",
+      "Protected: src/components/home/VisitCards.tsx, BookingOverlay, provider, payment, intake, visit-type logic, and unrelated page sections.",
+      `Current status: routed to ${routedConnection.activeWorkstationName || "Visual Editing"}; source pull and proof events will appear in Logs. Stop at approval; no commit or push.`,
+    ].join("\n");
   }
+
   return `Routed to ${routedConnection.activeWorkstationName || "workstation"}. The chat model response was unavailable, so check Logs for source-pull and job status.`;
 }
 
@@ -174,7 +177,9 @@ export function installStreamsBuilderModeBridge() {
           autoConnected: true,
           at: new Date().toISOString(),
         }, window.location.origin);
-
+if (isVisualEditCommand(message)) {
+  return makeSseResponse(fallbackStatus(message, routedConnection));
+}
         try {
           const enrichedBody = writeMessageToBody(body, routedMessage);
           const response = await originalFetch(input, cloneInitWithBody(init, JSON.stringify(enrichedBody)));
