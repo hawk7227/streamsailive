@@ -2,14 +2,17 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+const projectRoot = __dirname
+
 export default defineConfig({
+  root: projectRoot,
   plugins: [react()],
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: [path.resolve(projectRoot, 'src/test/setup.ts')],
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(projectRoot, 'src'),
     },
     // Stub required env vars so env.ts validate() does not throw during unit tests.
     // These are test-only values — no real credentials, no real endpoints.
@@ -21,10 +24,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(projectRoot, 'src'),
       // 'server-only' is a Next.js compile-time guard — not a real package.
       // In vitest/jsdom it fails to resolve. Mock it as an empty module.
-      'server-only': path.resolve(__dirname, './src/test/__mocks__/server-only.ts'),
+      'server-only': path.resolve(projectRoot, 'src/test/__mocks__/server-only.ts'),
     },
   },
 })
