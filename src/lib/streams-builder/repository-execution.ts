@@ -35,6 +35,11 @@ export interface StreamsRepositoryExecutionRequest {
   targetFiles?: string[];
   unifiedDiff?: string;
   commitMessage?: string;
+  autonomousRepair?: boolean;
+  maxRepairAttempts?: number;
+  maxFilesTouched?: number;
+  runBuildAfterPatch?: boolean;
+  requireApprovalBeforePush?: boolean;
 }
 
 export interface StreamsRepositoryExecutionStep {
@@ -57,6 +62,13 @@ export interface StreamsRepositoryExecutionPlan {
   truthState: StreamsBuilderTruthState;
   steps: StreamsRepositoryExecutionStep[];
   blockedReasons: string[];
+  codexRepair: {
+    autonomousRepair: boolean;
+    maxRepairAttempts: number;
+    maxFilesTouched: number;
+    runBuildAfterPatch: boolean;
+    requireApprovalBeforePush: boolean;
+  };
 }
 
 const ALLOWED_COMMANDS: StreamsRepositoryExecutionCommand[] = [
@@ -167,12 +179,19 @@ function isSafeFilePath(value: string): boolean {
   return value.length > 0 && !value.startsWith("/") && !value.includes("..") && !value.includes("\\");
 }
 
+function repairNumber(value: number | undefined, fallback: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.floor(value || fallback), min), max);
+}
+
 export function createRepositoryExecutionPlan(
   request: StreamsRepositoryExecutionRequest,
 ): StreamsRepositoryExecutionPlan {
   const blockedReasons: string[] = [];
   const baseBranch = request.baseBranch?.trim() || "main";
   const branchName = request.branchName?.trim() || `streams-builder/${request.projectId}`;
+  const maxRepairAttempts = repairNumber(request.maxRepairAttempts, 3, 0, 5);
+  const maxFilesTouched = repairNumber(request.maxFilesTouched, 4, 1, 12);
 
   if (!request.projectId.trim()) blockedReasons.push("projectId is required.");
   if (!request.sessionId.trim()) blockedReasons.push("sessionId is required.");
@@ -183,6 +202,10 @@ export function createRepositoryExecutionPlan(
   const targetFiles = request.targetFiles ?? [];
   for (const file of targetFiles) {
     if (!isSafeFilePath(file)) blockedReasons.push(`Unsafe file path: ${file}`);
+  }
+
+  if (request.autonomousRepair === true && targetFiles.length > maxFilesTouched) {
+    blockedReasons.push(`autonomousRepair targetFiles exceeds maxFilesTouched (${maxFilesTouched}).`);
   }
 
   const cloneIndex = request.requestedCommands.indexOf("clone_repo");
@@ -228,5 +251,12 @@ export function createRepositoryExecutionPlan(
     truthState: blockedReasons.length > 0 ? "FAILED" : "UNPROVEN",
     steps,
     blockedReasons,
+    codexRepair: {
+      autonomousRepair: request.autonomousRepair === true,
+      maxRepairAttempts,
+      maxFilesTouched,
+      runBuildAfterPatch: request.runBuildAfterPatch !== false,
+      requireApprovalBeforePush: request.requireApprovalBeforePush !== false,
+    },
   };
 }
