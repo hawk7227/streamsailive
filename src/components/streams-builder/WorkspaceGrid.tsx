@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
@@ -27,6 +27,19 @@ const MODULES = [
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
 
+type WorkspaceEventDetail = {
+  phase: string;
+  message: string;
+  source?: string;
+  repo?: string;
+  branch?: string;
+  filePath?: string;
+  route?: string;
+  patchState?: string;
+  draftDirty?: boolean;
+  saved?: boolean;
+};
+
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
 const EMPTY_CONNECTION: BuilderChatConnection = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
 
@@ -40,6 +53,32 @@ function readActiveFile() {
   }
 }
 
+function compactText(value: string) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function controlName(element: HTMLElement) {
+  const text = compactText(element.innerText || element.textContent || "");
+  const aria = compactText(element.getAttribute("aria-label") || "");
+  const title = compactText(element.getAttribute("title") || "");
+  const data = compactText(element.getAttribute("data-label") || element.getAttribute("data-testid") || "");
+  const id = compactText(element.id || "");
+  return (text || aria || title || data || id || element.tagName.toLowerCase()).slice(0, 120);
+}
+
+function fieldName(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+  const label = element.closest("label")?.querySelector("b")?.textContent || element.closest("label")?.textContent || "";
+  return compactText(element.getAttribute("aria-label") || element.name || element.id || label || element.placeholder || element.tagName.toLowerCase()).slice(0, 120);
+}
+
+function safeFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+  if (element instanceof HTMLSelectElement) return compactText(element.value).slice(0, 120);
+  if (element instanceof HTMLTextAreaElement) return `${element.value.length} chars`;
+  if (element.type === "password") return "[redacted]";
+  if (element.type === "file") return `${element.files?.length || 0} file(s)`;
+  return compactText(element.value).slice(0, 120) || `${element.value.length} chars`;
+}
+
 export default function WorkspaceGrid() {
   const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
   const [viewMode, setViewMode] = useState<ViewMode>("Single");
@@ -47,25 +86,100 @@ export default function WorkspaceGrid() {
   const [activeFile, setActiveFile] = useState<PulledFileDetail>(EMPTY_FILE);
   const [visualEditorLog, setVisualEditorLog] = useState<string[]>([]);
   const [chatConnection, setChatConnection] = useState<BuilderChatConnection>(EMPTY_CONNECTION);
+  const lastManualEventRef = useRef("");
+  const inputTimerRef = useRef<number | null>(null);
+
+  function emitWorkspaceEvent(detail: WorkspaceEventDetail) {
+    const eventDetail = {
+      source: "workspace-grid",
+      repo: activeFile.repo,
+      branch: activeFile.branch,
+      filePath: activeFile.path,
+      route: activeFile.route,
+      activeModule,
+      viewMode,
+      at: new Date().toISOString(),
+      ...detail,
+    };
+    const key = `${eventDetail.phase}:${eventDetail.message}`;
+    if (key === lastManualEventRef.current) return;
+    lastManualEventRef.current = key;
+    setVisualEditorLog((items) => [...items.slice(-40), `${eventDetail.phase}: ${eventDetail.message}`]);
+    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: eventDetail }));
+    window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: eventDetail }));
+  }
+
+  function handleModuleChange(next: ModuleName) {
+    setActiveModule(next);
+    emitWorkspaceEvent({ phase: "workspace-selection", message: `User switched workstation to ${next}.` });
+  }
+
+  function handleViewModeChange(next: ViewMode) {
+    setViewMode(next);
+    emitWorkspaceEvent({ phase: "workspace-selection", message: `User changed workspace view mode to ${next}.` });
+  }
+
+  function handleStatusToggle() {
+    const next = !statusOpen;
+    setStatusOpen(next);
+    emitWorkspaceEvent({ phase: "workspace-toggle", message: `${next ? "Opened" : "Closed"} Status / Readiness / Files / Context panel.` });
+  }
+
+  function handleContentChange(next: string) {
+    setActiveFile((current) => ({ ...current, content: next }));
+    emitWorkspaceEvent({ phase: "workspace-content-change", message: `Active file draft changed manually in ${activeFile.path || "the open file"}.`, draftDirty: true, saved: false, patchState: "not_generated" });
+  }
 
   useEffect(() => {
     setActiveFile(readActiveFile());
+    emitWorkspaceEvent({ phase: "workspace-audit-ready", message: `Workspace audit bridge is tracking manual selections, options, clicks, inputs, file pulls, editor changes, preview actions, save/patch/push states, and chat connection actions.` });
     function onPulledFile(event: Event) {
       const detail = (event as CustomEvent<PulledFileDetail>).detail;
       if (!detail?.path) return;
       setActiveFile(detail);
-      setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`]);
+      const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`;
+      setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]);
+      window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } }));
     }
     function onSummaryEvent(event: Event) {
       const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail;
       if (!detail?.message) return;
       setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]);
     }
+    function onManualClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target || target.closest("iframe")) return;
+      const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']");
+      if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return;
+      emitWorkspaceEvent({ phase: "manual-workspace-click", message: `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.` });
+    }
+    function onManualChange(event: Event) {
+      const target = event.target as HTMLElement | null;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
+      emitWorkspaceEvent({ phase: "manual-workspace-change", message: `User changed ${fieldName(target)} to ${safeFieldValue(target)}.` });
+    }
+    function onManualInput(event: Event) {
+      const target = event.target as HTMLElement | null;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
+      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
+      inputTimerRef.current = window.setTimeout(() => {
+        emitWorkspaceEvent({ phase: "manual-workspace-input", message: `User typed in ${fieldName(target)} (${safeFieldValue(target)}).` });
+      }, 900);
+    }
     window.addEventListener("streams-builder:pulled-file", onPulledFile);
     window.addEventListener("streams-builder-summary-event", onSummaryEvent);
+    document.addEventListener("click", onManualClick, true);
+    document.addEventListener("change", onManualChange, true);
+    document.addEventListener("input", onManualInput, true);
     return () => {
       window.removeEventListener("streams-builder:pulled-file", onPulledFile);
       window.removeEventListener("streams-builder-summary-event", onSummaryEvent);
+      document.removeEventListener("click", onManualClick, true);
+      document.removeEventListener("change", onManualChange, true);
+      document.removeEventListener("input", onManualInput, true);
+      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
     };
   }, []);
 
@@ -77,8 +191,8 @@ export default function WorkspaceGrid() {
         <div className="topRow">
           <GitHubRepositoryPicker />
           <div className="controls">
-            <label><b>Workstation</b><select value={activeModule} onChange={(event) => setActiveModule(event.target.value as ModuleName)}>{MODULES.map((name) => <option key={name}>{name}</option>)}</select></label>
-            <label><b>View Mode</b><select value={viewMode} onChange={(event) => setViewMode(event.target.value as ViewMode)}><option>Single</option><option>Multi</option><option>Focus</option><option>Stack</option></select></label>
+            <label><b>Workstation</b><select value={activeModule} onChange={(event) => handleModuleChange(event.target.value as ModuleName)}>{MODULES.map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label><b>View Mode</b><select value={viewMode} onChange={(event) => handleViewModeChange(event.target.value as ViewMode)}><option>Single</option><option>Multi</option><option>Focus</option><option>Stack</option></select></label>
           </div>
         </div>
         <section className="workArea">
@@ -99,7 +213,7 @@ export default function WorkspaceGrid() {
                   repo={activeFile.repo}
                   branch={activeFile.branch}
                   content={activeFile.content}
-                  onContentChange={(next) => setActiveFile((current) => ({ ...current, content: next }))}
+                  onContentChange={handleContentChange}
                   onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
                   onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
                 />
@@ -111,14 +225,14 @@ export default function WorkspaceGrid() {
               {activeModule === "Visual Editing" ? (
                 <VisualOperationDock
                   activeFile={activeFile}
-                  onContentChange={(next) => setActiveFile((current) => ({ ...current, content: next }))}
+                  onContentChange={handleContentChange}
                   onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
                 />
               ) : (
                 <WorkspaceModulePanel moduleName={activeModule} />
               )}
             </div>
-            <button className="statusToggle" type="button" onClick={() => setStatusOpen((value) => !value)}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
+            <button className="statusToggle" type="button" onClick={handleStatusToggle}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
             {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Original visual editor workstation restored." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
           </section>
         </section>
