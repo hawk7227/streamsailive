@@ -157,7 +157,7 @@ function inferVisualEditContext(message) {
     "Resolve the user's visual language before queueing Codex. Map the visible target to route, source file, component usage, reusable component risk, and smallest safe patch.",
     "For one rendered instance, patch the page/section usage site. Do not edit or delete reusable component files globally unless the user explicitly asks for a global component change.",
     "Preserve unrelated layout, booking/payment/intake/provider/overlay logic, shared components, and all other sections.",
-    `Source target hint: ${target}.",
+    `Source target hint: ${target}.`,
     "If the user mentions cards below/under a doctor/provider/hero/Healthcare That Feels Personal Again section, treat it as a page-level rendered instance and remove the local JSX usage only.",
     "User-facing response should be operational and specific, for example: 'Resolved visual edit target: repo ..., file ..., scope usage_site. I sent this safe patch plan to Visual Editing. Check Logs for job/proof.'",
     "Stop at diff/approval. Do not commit. Do not push.",
