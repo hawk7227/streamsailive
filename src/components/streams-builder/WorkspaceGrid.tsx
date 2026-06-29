@@ -144,6 +144,17 @@ export default function WorkspaceGrid() {
         .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
         .statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px;}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
       `}</style>
+      <style jsx global>{`
+        .liveWorkstation .content.full{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
+        .liveWorkstation .content.full>.frameWrap{width:calc(100% - 20px)!important;max-width:none!important;justify-self:stretch!important;}
+        .liveWorkstation .codePreviewSplit,.visualEditor .splitMode{display:grid!important;grid-template-columns:minmax(520px,1fr) minmax(520px,1fr)!important;grid-auto-flow:column!important;align-items:stretch!important;gap:10px!important;overflow:auto!important;}
+        .liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:520px!important;width:auto!important;height:100%!important;min-height:0!important;}
+        .liveWorkstation .previewPane,.visualEditor .splitPreview{display:grid!important;grid-template-rows:auto minmax(0,1fr)!important;}
+        .liveWorkstation .frameWrap.embedded,.visualEditor .desktopFrame.embedded{width:100%!important;max-width:none!important;height:100%!important;min-height:0!important;margin:0!important;display:block!important;overflow:auto!important;background:#fff!important;}
+        .liveWorkstation .frameWrap iframe,.visualEditor .desktopFrame iframe{width:100%!important;min-width:100%!important;max-width:none!important;}
+        .liveWorkstation .codePane,.visualEditor .codePanel{display:grid!important;min-height:0!important;overflow:hidden!important;}
+        @media(max-width:900px){.liveWorkstation .codePreviewSplit,.visualEditor .splitMode{grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important;}.liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:0!important;min-height:520px!important;}}
+      `}</style>
     </main>
   );
 }
