@@ -39,12 +39,35 @@ function previewIframe() {
   return document.querySelector<HTMLIFrameElement>(".visualEditor .canvas.editor iframe, .visualEditor .canvas.browser iframe, .visualEditor .splitPreview iframe");
 }
 
+function snapshotPreviewScroll(doc: Document) {
+  const root = doc.scrollingElement || doc.documentElement;
+  const items: Array<{ el: Element; top: number; left: number }> = [];
+  if (root) items.push({ el: root, top: root.scrollTop, left: root.scrollLeft });
+  doc.querySelectorAll("*").forEach((node) => {
+    const el = node as HTMLElement;
+    if ((el.scrollTop || el.scrollLeft) && el !== root) items.push({ el, top: el.scrollTop, left: el.scrollLeft });
+  });
+  return items;
+}
+
+function restorePreviewScroll(items: Array<{ el: Element; top: number; left: number }>) {
+  items.forEach((item) => {
+    try {
+      (item.el as HTMLElement).scrollTop = item.top;
+      (item.el as HTMLElement).scrollLeft = item.left;
+    } catch {
+      // ignore detached nodes
+    }
+  });
+}
+
 function highlightPreviewText(text?: string) {
   const needle = clean(text);
   if (!needle || needle.length < 2) return;
   try {
     const doc = previewIframe()?.contentDocument;
     if (!doc?.body) return;
+    const scrollSnapshot = snapshotPreviewScroll(doc);
     doc.querySelectorAll("[data-streams-code-selected='true']").forEach((node) => (node as HTMLElement).removeAttribute("data-streams-code-selected"));
     let style = doc.getElementById("streams-code-selected-style");
     if (!style) {
@@ -56,9 +79,13 @@ function highlightPreviewText(text?: string) {
     const lower = needle.toLowerCase();
     const nodes = Array.from(doc.body.querySelectorAll<HTMLElement>("[data-streams-editable='true'],h1,h2,h3,h4,h5,h6,p,span,b,strong,a,button,label,li,small,img,section,article,div"));
     const found = nodes.find((el) => clean(el.innerText || el.textContent).toLowerCase().includes(lower) || String(el.getAttribute("src") || "").includes(needle));
-    if (!found) return;
+    if (!found) {
+      restorePreviewScroll(scrollSnapshot);
+      return;
+    }
     found.dataset.streamsCodeSelected = "true";
-    found.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    restorePreviewScroll(scrollSnapshot);
+    requestAnimationFrame(() => restorePreviewScroll(scrollSnapshot));
   } catch {
     // Preview frame not ready yet.
   }
@@ -142,8 +169,8 @@ export default function VisualEditorCodeDock() {
       const data = event.data || {};
       if (data.source !== "streams-editable-preview") return;
       const query = bestQuery(data.payload || {});
-      if (query) window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "search", query } }));
-      if (data.type === "streams-editable-select") emit("visual-selection", `Selected preview element: ${query || "element"}. Code editor is searching and highlighting the source.`, { selectedText: query });
+      if (query) window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "locate", query } }));
+      if (data.type === "streams-editable-select") emit("visual-selection", `Selected preview element: ${query || "element"}. Code editor is locating the source without opening Find/Search.`, { selectedText: query });
       if (data.type === "streams-editable-input") emit("visual-input", `Unsaved visual typing detected: ${query || "text edit"}. Save Draft is required before review.`, { selectedText: query });
       if (String(data.type || "").includes("commit") || String(data.type || "").includes("remove") || String(data.type || "").includes("style") || String(data.type || "").includes("replace")) emit("visual-edit", "Unsaved visual change detected. Save Draft is required before review.", { selectedText: query });
     }
@@ -152,7 +179,7 @@ export default function VisualEditorCodeDock() {
       const selection = (event as CustomEvent<{ selection?: CodeSelection | null }>).detail?.selection;
       if (!selection?.text) return;
       highlightPreviewText(selection.text);
-      emit("code-selection", `Selected code lines ${selection.startLine}-${selection.endLine}. Matching preview element is highlighted when found.`, { selectedText: selection.text.slice(0, 160) });
+      emit("code-selection", `Selected code lines ${selection.startLine}-${selection.endLine}. Matching preview element is highlighted without scrolling the preview.`, { selectedText: selection.text.slice(0, 160) });
     }
 
     attachButton();
