@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import RuntimeCodeEditor from "./RuntimeCodeEditor";
 
 type PulledFileDetail = {
   repo: string;
@@ -16,7 +17,7 @@ type Props = {
   activeFile: PulledFileDetail;
 };
 
-type Mode = "editor" | "browser" | "mobile" | "advanced";
+type Mode = "editor" | "browser" | "mobile" | "advanced" | "code" | "split";
 type Tab = "frontend" | "code" | "diff" | "logs" | "media";
 
 type Action = {
@@ -28,6 +29,7 @@ type Action = {
 type RuntimeJobDetail = { jobId: string; repo?: string; branch?: string; path?: string; route?: string; prompt?: string };
 type RuntimeEvent = { id?: string | number; eventType?: string; event_type?: string; message?: string | null; createdAt?: string; created_at?: string; data?: Record<string, unknown> };
 type LiveProofLine = { id: string; message: string; at: string; source: string; level: "info" | "success" | "warning" | "error" };
+type CodeSelection = { startLine: number; startColumn: number; endLine: number; endColumn: number; text: string };
 
 function normalizeRoute(value: string) {
   const trimmed = (value || "/").trim();
@@ -74,7 +76,7 @@ function nowTime() {
 
 function tabLabel(tab: Tab) {
   if (tab === "frontend") return "Frontend UI";
-  if (tab === "code") return "Code";
+  if (tab === "code") return "Code Editor";
   if (tab === "diff") return "Diff";
   if (tab === "logs") return "Logs";
   return "Media";
@@ -92,11 +94,18 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
   const [runtimeJobId, setRuntimeJobId] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState("waiting for Codex job");
   const [liveProof, setLiveProof] = useState<LiveProofLine[]>([]);
+  const [codeDraft, setCodeDraft] = useState(activeFile.content || "");
+  const [selection, setSelection] = useState<CodeSelection | null>(null);
   const seenRuntimeEventsRef = useRef<Set<string>>(new Set());
 
-  const modeLabel = mode === "editor" ? "Live Editor" : mode === "browser" ? "Click-through Browser" : mode === "mobile" ? "Mobile Preview" : "Advanced Tools";
-  const sourceLines = useMemo(() => (activeFile.content || "").split("\n"), [activeFile.content]);
-  const sidePanelOpen = tab !== "frontend";
+  const modeLabel = mode === "editor" ? "Live Editor" : mode === "browser" ? "Click-through Browser" : mode === "mobile" ? "Mobile Preview" : mode === "advanced" ? "Advanced Tools" : mode === "code" ? "Code Editor" : "Code + Frontend";
+  const sourceLines = useMemo(() => (codeDraft || activeFile.content || "").split("\n"), [codeDraft, activeFile.content]);
+  const sidePanelOpen = tab !== "frontend" && mode !== "code" && mode !== "split";
+
+  useEffect(() => {
+    setCodeDraft(activeFile.content || "");
+    setSelection(null);
+  }, [activeFile.repo, activeFile.branch, activeFile.path, activeFile.sha, activeFile.content]);
 
   function addProof(message: string, source = "workstation", level: LiveProofLine["level"] = "info") {
     const line = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, message, at: nowTime(), source, level };
@@ -112,6 +121,8 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
     setMode(next);
     if (next === "advanced") setDrawerOpen(true);
     if (next === "mobile") setFrameKey((value) => value + 1);
+    if (next === "code") setTab("code");
+    if (next === "split") setTab("frontend");
     record(`switch-mode-${next}`);
   }
 
@@ -224,25 +235,34 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
   }, []);
 
   function renderSidePanel() {
-    if (tab === "code") return <pre>{sourceLines.join("\n") || "No source loaded."}</pre>;
+    if (tab === "code") return <RuntimeCodeEditor value={codeDraft} filePath={activeFile.path || "no-file-selected"} sha={activeFile.sha} onChange={setCodeDraft} onSelectionChange={setSelection} />;
     if (tab === "diff") return <pre>{sourceLines.slice(0, 160).map((line, index) => `${String(index + 1).padStart(4, " ")}  ${line}`).join("\n") || "No diff yet. Generate or queue a Codex job."}</pre>;
     if (tab === "media") return <div className="sideEmpty">Media artifacts and browser screenshots will appear here when a job produces them.</div>;
     return <div className="proofList">{liveProof.length ? liveProof.slice(-32).map((item) => <p key={item.id} className={item.level}><span>{item.at}</span><b>{item.source}</b>{item.message}</p>) : <p className="info">Waiting for Agent 1 proof events.</p>}</div>;
+  }
+
+  function renderPreviewFrame(className = mode === "mobile" ? "phoneWrap" : "frameWrap") {
+    return <section className={className}>{ready ? <iframe key={`${frameKey}-${liveUrl}-${mode}`} title="Live frontend preview" src={liveUrl} /> : <div className="empty"><h2>Pull a source file first</h2><p>The actual frontend browser view will appear here after Pull.</p></div>}</section>;
+  }
+
+  function renderMainContent() {
+    if (mode === "code") {
+      return <section className="codeOnly"><RuntimeCodeEditor value={codeDraft} filePath={activeFile.path || "no-file-selected"} sha={activeFile.sha} onChange={setCodeDraft} onSelectionChange={setSelection} /></section>;
+    }
+    if (mode === "split") {
+      return <section className="codePreviewSplit"><section className="codePane"><RuntimeCodeEditor value={codeDraft} filePath={activeFile.path || "no-file-selected"} sha={activeFile.sha} onChange={setCodeDraft} onSelectionChange={setSelection} /></section><section className="previewPane"><div className="paneTitle"><b>Actual frontend preview</b><span>{ready ? liveUrl : "waiting for pull"}</span></div>{renderPreviewFrame("frameWrap embedded")}</section></section>;
+    }
+    return <section className={sidePanelOpen ? "content split" : "content full"}>{sidePanelOpen ? <aside className="sidePanel"><header><b>{tabLabel(tab)}</b><button type="button" onClick={() => setTab("frontend")}>Close</button></header>{renderSidePanel()}</aside> : null}{renderPreviewFrame()}</section>;
   }
 
   return (
     <section className="liveWorkstation" aria-label="Live frontend workstation preview">
       <main className="previewSide">
         <nav className="tabs">
-          {(["frontend", "code", "diff", "logs", "media"] as Tab[]).map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{tabLabel(item)}</button>)}
+          {(["frontend", "code", "diff", "logs", "media"] as Tab[]).map((item) => <button key={item} type="button" className={tab === item || (item === "code" && (mode === "code" || mode === "split")) ? "active" : ""} onClick={() => item === "code" ? switchMode("split") : setTab(item)}>{tabLabel(item)}</button>)}
         </nav>
         <div className="debug"><span>repo <b>{activeFile.repo || "not selected"}</b></span><span>branch <b>{activeFile.branch || "not selected"}</b></span><span>route <b>{route}</b></span><span>file <b>{activeFile.path || "not selected"}</b></span><span>live url <b>{ready ? liveUrl : "not mounted"}</b></span></div>
-        <section className={sidePanelOpen ? "content split" : "content full"}>
-          {sidePanelOpen ? <aside className="sidePanel"><header><b>{tabLabel(tab)}</b><button type="button" onClick={() => setTab("frontend")}>Close</button></header>{renderSidePanel()}</aside> : null}
-          <section className={mode === "mobile" ? "phoneWrap" : "frameWrap"}>
-            {ready ? <iframe key={`${frameKey}-${liveUrl}-${mode}`} title="Live frontend preview" src={liveUrl} /> : <div className="empty"><h2>Pull a source file first</h2><p>The actual frontend browser view will appear here after Pull.</p></div>}
-          </section>
-        </section>
+        {renderMainContent()}
         <footer className="toolStrip">
           <div><span>Route</span><b>{route}</b></div>
           <div><span>Component</span><b>Live Page</b></div>
@@ -252,6 +272,7 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
           <button type="button" className={mode === "editor" ? "active" : ""} onClick={() => switchMode("editor")}>Editor</button>
           <button type="button" className={mode === "browser" ? "active" : ""} onClick={() => switchMode("browser")}>Browser</button>
           <button type="button" className={mode === "mobile" ? "active" : ""} onClick={() => switchMode("mobile")}>Mobile</button>
+          <button type="button" className={mode === "split" ? "active" : ""} onClick={() => switchMode("split")}>Code Editor</button>
           <button type="button" className={mode === "advanced" ? "active" : ""} onClick={() => switchMode("advanced")}>Advanced</button>
           <button type="button" onClick={refresh}>Refresh</button>
           <button type="button" onClick={saveProof}>Proof</button>
@@ -264,14 +285,14 @@ export default function LiveFrontendWorkstation({ activeFile }: Props) {
             <article><b>Source Truth</b><p>{activeFile.repo || "No repo"}</p><p>{activeFile.branch || "No branch"}</p><p>{activeFile.path || "No file"}</p><p>{activeFile.sha || "missing sha"}</p></article>
             <article><b>Preview</b><p>{ready ? liveUrl : "Waiting for source pull"}</p><p>Browser mode is click-through.</p><p>Frame has inner scroll for full page review.</p></article>
             <article><b>Codex Runtime</b><p>{runtimeStatus}</p><p>{runtimeJobId || "No runtime job yet"}</p><p>Worker events poll every 2.5 seconds after queue.</p></article>
-            <article><b>Status</b><p>{ready ? "Ready" : "Waiting"}</p><p>{modeLabel}</p></article>
+            <article><b>Status</b><p>{ready ? "Ready" : "Waiting"}</p><p>{modeLabel}</p><p>{selection ? `Selected lines ${selection.startLine}-${selection.endLine}` : "No code selection"}</p></article>
             <article className="wide"><b>Live Proof Events</b>{liveProof.length ? liveProof.slice(-12).map((item) => <p key={item.id}>{item.at} · {item.source} · {item.message}</p>) : <p>No proof events yet.</p>}</article>
             <article className="wide"><b>Browser Actions</b>{actions.length ? actions.slice(-8).map((item) => <p key={`${item.action}-${item.at}`}>{item.action} · {item.target}</p>) : <p>No actions yet.</p>}</article>
           </section>
         </details>
       </main>
       <style jsx>{`
-        .liveWorkstation{height:100%;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);overflow:hidden;background:#020617;color:#24292f}.previewSide{min-width:0;min-height:0;display:grid;grid-template-rows:44px auto minmax(0,1fr) auto auto;overflow:hidden;background:#020617}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa}.tabs button{height:44px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 20px;font-size:13px;font-weight:800;cursor:pointer}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73}.debug{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#111827;border-bottom:1px solid rgba(168,85,247,.45)}.debug span{min-width:0;display:block;padding:9px 12px;background:#020617;color:#94a3b8;font-size:10px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.debug b{display:block;color:#fff;text-transform:none;font-size:12px}.content{min-width:0;min-height:0;overflow:hidden;background:#020617}.content.full{display:grid;grid-template-columns:minmax(0,1fr)}.content.split{display:grid;grid-template-columns:minmax(320px,390px) minmax(0,1fr);gap:8px;padding:8px;box-sizing:border-box}.sidePanel{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid rgba(148,163,184,.22);border-radius:14px;background:#0f172a;color:#cbd5e1}.sidePanel header{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid rgba(148,163,184,.18)}.sidePanel header b{color:#fff;font-size:12px}.sidePanel header button{height:26px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#020617;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.sidePanel pre{min-height:0;overflow:auto;margin:0;padding:12px;font:11px/17px ui-monospace,SFMono-Regular,Consolas,monospace;color:#dbeafe;white-space:pre-wrap}.sideEmpty{padding:14px;color:#cbd5e1;font-size:12px;line-height:1.4}.proofList{min-height:0;overflow:auto;padding:10px;display:grid;gap:8px}.proofList p{margin:0;border-left:4px solid #64748b;border-radius:8px;background:#020617;padding:8px;color:#cbd5e1;font-size:11px;line-height:1.35}.proofList p span{display:block;color:#94a3b8;font-size:10px}.proofList p b{display:inline-block;margin-right:6px;color:#fff;text-transform:uppercase;font-size:9px}.proofList p.success{border-left-color:#22c55e;background:#052e1a}.proofList p.warning{border-left-color:#f59e0b;background:#3b2504}.proofList p.error{border-left-color:#ef4444;background:#3b0b0b}.frameWrap{min-width:0;min-height:0;margin:10px;border:1px solid rgba(124,58,237,.45);border-radius:16px;overflow:auto;background:#fff}.content.split .frameWrap{margin:0}.phoneWrap{width:430px;min-height:0;margin:10px auto;border:12px solid #111827;border-radius:34px;overflow:auto;background:#fff}.frameWrap iframe,.phoneWrap iframe{display:block;width:100%;height:2200px;min-height:100%;border:0;background:#fff}.empty{height:100%;display:grid;place-content:center;text-align:center;color:#0f172a}.empty h2{margin:0 0 8px;font-size:28px}.empty p{margin:0;color:#475569}.toolStrip{display:grid;grid-template-columns:repeat(5,minmax(96px,1fr)) repeat(8,auto);gap:8px;align-items:center;padding:8px;background:#020617;border-top:1px solid rgba(148,163,184,.18)}.toolStrip div{min-width:0;border:1px solid rgba(20,184,166,.3);border-radius:12px;background:rgba(8,47,73,.34);padding:8px}.toolStrip span{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.toolStrip b{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:12px}.toolStrip button{height:36px;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#7c3aed;color:#fff;padding:0 12px;font-size:11px;font-weight:900;cursor:pointer}.toolStrip button.active{border-color:rgba(110,231,183,.7);background:rgba(6,78,59,.7);color:#6ee7b7}.toolDrawer{max-height:320px;overflow:auto;border-top:1px solid rgba(148,163,184,.18);background:#020617;color:#fff}.toolDrawer summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:900}.drawerGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.drawerGrid article{border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.9);padding:10px;color:#cbd5e1;font-size:11px}.drawerGrid b{display:block;color:#fff;margin-bottom:6px}.drawerGrid p{margin:4px 0;color:#94a3b8;font-size:11px;overflow-wrap:anywhere}.wide{grid-column:span 2}
+        .liveWorkstation{height:100%;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);overflow:hidden;background:#020617;color:#24292f}.previewSide{min-width:0;min-height:0;display:grid;grid-template-rows:44px auto minmax(0,1fr) auto auto;overflow:hidden;background:#020617}.tabs{display:flex;min-width:0;overflow:auto;border-bottom:1px solid #d8dee4;background:#f6f8fa}.tabs button{height:44px;border:0;border-right:1px solid #d8dee4;background:transparent;color:#57606a;padding:0 20px;font-size:13px;font-weight:800;cursor:pointer}.tabs button.active{background:#fff;color:#24292f;box-shadow:inset 0 -2px 0 #fd8c73}.debug{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#111827;border-bottom:1px solid rgba(168,85,247,.45)}.debug span{min-width:0;display:block;padding:9px 12px;background:#020617;color:#94a3b8;font-size:10px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.debug b{display:block;color:#fff;text-transform:none;font-size:12px}.content{min-width:0;min-height:0;overflow:hidden;background:#020617}.content.full{display:grid;grid-template-columns:minmax(0,1fr)}.content.split{display:grid;grid-template-columns:minmax(520px,0.85fr) minmax(520px,1fr);gap:8px;padding:8px;box-sizing:border-box}.sidePanel{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid rgba(148,163,184,.22);border-radius:14px;background:#0f172a;color:#cbd5e1}.sidePanel header{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid rgba(148,163,184,.18)}.sidePanel header b{color:#fff;font-size:12px}.sidePanel header button{height:26px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#020617;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.sidePanel pre{min-height:0;overflow:auto;margin:0;padding:12px;font:11px/17px ui-monospace,SFMono-Regular,Consolas,monospace;color:#dbeafe;white-space:pre-wrap}.sideEmpty{padding:14px;color:#cbd5e1;font-size:12px;line-height:1.4}.proofList{min-height:0;overflow:auto;padding:10px;display:grid;gap:8px}.proofList p{margin:0;border-left:4px solid #64748b;border-radius:8px;background:#020617;padding:8px;color:#cbd5e1;font-size:11px;line-height:1.35}.proofList p span{display:block;color:#94a3b8;font-size:10px}.proofList p b{display:inline-block;margin-right:6px;color:#fff;text-transform:uppercase;font-size:9px}.proofList p.success{border-left-color:#22c55e;background:#052e1a}.proofList p.warning{border-left-color:#f59e0b;background:#3b2504}.proofList p.error{border-left-color:#ef4444;background:#3b0b0b}.frameWrap{min-width:0;min-height:0;margin:10px;border:1px solid rgba(124,58,237,.45);border-radius:16px;overflow:auto;background:#fff}.content.split .frameWrap,.frameWrap.embedded{margin:0}.phoneWrap{width:430px;min-height:0;margin:10px auto;border:12px solid #111827;border-radius:34px;overflow:auto;background:#fff}.frameWrap iframe,.phoneWrap iframe{display:block;width:100%;height:2200px;min-height:100%;border:0;background:#fff}.empty{height:100%;display:grid;place-content:center;text-align:center;color:#0f172a}.empty h2{margin:0 0 8px;font-size:28px}.empty p{margin:0;color:#475569}.codeOnly{min-width:0;min-height:0;overflow:hidden;padding:8px;background:#020617}.codePreviewSplit{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(520px,.95fr) minmax(520px,1fr);gap:10px;padding:10px;background:#020617;overflow:hidden}.codePane,.previewPane{min-width:0;min-height:0;display:grid;overflow:hidden}.previewPane{grid-template-rows:auto minmax(0,1fr);border:1px solid rgba(124,58,237,.45);border-radius:14px;background:#020617}.paneTitle{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.18);background:#020617;color:#fff;font-size:11px}.paneTitle span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd}.toolStrip{display:grid;grid-template-columns:repeat(5,minmax(96px,1fr)) repeat(9,auto);gap:8px;align-items:center;padding:8px;background:#020617;border-top:1px solid rgba(148,163,184,.18)}.toolStrip div{min-width:0;border:1px solid rgba(20,184,166,.3);border-radius:12px;background:rgba(8,47,73,.34);padding:8px}.toolStrip span{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.toolStrip b{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:12px}.toolStrip button{height:36px;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#7c3aed;color:#fff;padding:0 12px;font-size:11px;font-weight:900;cursor:pointer}.toolStrip button.active{border-color:rgba(110,231,183,.7);background:rgba(6,78,59,.7);color:#6ee7b7}.toolDrawer{max-height:320px;overflow:auto;border-top:1px solid rgba(148,163,184,.18);background:#020617;color:#fff}.toolDrawer summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:900}.drawerGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.drawerGrid article{border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.9);padding:10px;color:#cbd5e1;font-size:11px}.drawerGrid b{display:block;color:#fff;margin-bottom:6px}.drawerGrid p{margin:4px 0;color:#94a3b8;font-size:11px;overflow-wrap:anywhere}.wide{grid-column:span 2}@media(max-width:1180px){.codePreviewSplit,.content.split{grid-template-columns:minmax(0,1fr)}.codePane{min-height:520px}.previewPane{min-height:520px}.toolStrip{grid-template-columns:repeat(2,minmax(0,1fr));}.debug{grid-template-columns:repeat(2,minmax(0,1fr));}}
       `}</style>
     </section>
   );
