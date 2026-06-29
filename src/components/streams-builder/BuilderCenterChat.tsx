@@ -30,6 +30,26 @@ type RuntimeQueueResult = {
   queuedJob?: { id?: string | number };
 };
 
+type BuilderContextEvent = {
+  id?: string;
+  at?: string;
+  phase?: string;
+  source?: string;
+  repo?: string;
+  repository?: string;
+  branch?: string;
+  filePath?: string;
+  path?: string;
+  route?: string;
+  patchState?: string;
+  draftDirty?: boolean;
+  saved?: boolean;
+  message?: string;
+};
+
+const BUILDER_CONTEXT_KEY = "streams-builder:chat-context-events";
+const MAX_BUILDER_CONTEXT_EVENTS = 80;
+
 async function readJson(response: Response) {
   const text = await response.text();
   try { return JSON.parse(text); } catch { throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`); }
@@ -99,6 +119,53 @@ function publishSummary(phase: string, message: string) {
   window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase, message } }));
 }
 
+function readBuilderContextEvents() {
+  try {
+    const raw = window.localStorage.getItem(BUILDER_CONTEXT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(-MAX_BUILDER_CONTEXT_EVENTS) as BuilderContextEvent[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBuilderContextEvents(events: BuilderContextEvent[]) {
+  try {
+    window.localStorage.setItem(BUILDER_CONTEXT_KEY, JSON.stringify(events.slice(-MAX_BUILDER_CONTEXT_EVENTS)));
+  } catch {
+    // Context persistence is best-effort; the UI still runs without storage.
+  }
+}
+
+function normalizeBuilderContextEvent(detail: BuilderContextEvent): BuilderContextEvent | null {
+  const message = String(detail?.message || "").trim();
+  if (!message) return null;
+  return {
+    id: detail.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    at: detail.at || new Date().toISOString(),
+    phase: detail.phase || "builder-event",
+    source: detail.source || "builder-workspace",
+    repo: detail.repo || detail.repository || "",
+    branch: detail.branch || "",
+    filePath: detail.filePath || detail.path || "",
+    route: detail.route || "",
+    patchState: detail.patchState || "",
+    draftDirty: Boolean(detail.draftDirty),
+    saved: detail.saved,
+    message,
+  };
+}
+
+function rememberBuilderContextEvent(detail: BuilderContextEvent) {
+  const normalized = normalizeBuilderContextEvent(detail);
+  if (!normalized) return null;
+  const current = readBuilderContextEvents();
+  const last = current[current.length - 1];
+  if (last?.phase === normalized.phase && last?.message === normalized.message) return normalized;
+  writeBuilderContextEvents([...current, normalized]);
+  return normalized;
+}
+
 function parseAgentOnePrompt(prompt: string) {
   const live = readTopRowSourceTruth();
   const last = readLastActiveFile();
@@ -157,6 +224,12 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
 
   function pushConnectionState(next = connection, pingId = "") {
     frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-connection-state", connection: next, pingId }, window.location.origin);
+  }
+
+  function pushBuilderContext(detail: BuilderContextEvent) {
+    const stored = rememberBuilderContextEvent(detail);
+    if (!stored) return;
+    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail: stored }, window.location.origin);
   }
 
   function connectToActiveWorkstation() {
@@ -228,6 +301,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
 
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
+      pushBuilderContext({ phase: "file-pulled", source: "agent-one", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message: `Agent 1 pulled source truth for ${detail.repo}@${detail.branch}:${detail.path}.` });
       window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt: cleanPrompt, command, pulled: detail, intent: source === "iphone-chat" ? "iphone-chat-to-codex-workstation" : "pull-file-to-codex-workscreen", workstation: connection } }));
       const queueingMessage = `Codex repair loop queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
       sendAgentLog(queueingMessage, "codex-runtime-queueing", detail);
@@ -272,12 +346,28 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
   }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName]);
 
   useEffect(() => {
+    function onBuilderContextEvent(event: Event) {
+      const detail = (event as CustomEvent<BuilderContextEvent>).detail || {};
+      const stored = rememberBuilderContextEvent(detail);
+      if (!stored) return;
+      frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail: stored }, window.location.origin);
+    }
+    window.addEventListener("streams-builder-summary-event", onBuilderContextEvent as EventListener);
+    window.addEventListener("streams-builder:chat-context-event", onBuilderContextEvent as EventListener);
+    return () => {
+      window.removeEventListener("streams-builder-summary-event", onBuilderContextEvent as EventListener);
+      window.removeEventListener("streams-builder:chat-context-event", onBuilderContextEvent as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
     function onFrameMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
       if (data.type === "streams-builder-frame-ready") {
         setBridgeProof("frame ready");
         pushConnectionState(connection);
+        readBuilderContextEvents().slice(-24).forEach((detail) => frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail }, window.location.origin));
       }
       if (data.type === "streams-builder-bridge-pong") {
         const targetMatches = data.connection?.activeWorkstationId === connection.activeWorkstationId;
@@ -294,6 +384,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       }
       if (data.type === "streams-builder-chat-command") {
         const incoming = (data.connection || {}) as Partial<BuilderChatConnection>;
+        if (Array.isArray(data.builderContext)) data.builderContext.forEach((item: BuilderContextEvent) => rememberBuilderContextEvent(item));
         const next = {
           connected: true,
           activeWorkstationId: incoming.activeWorkstationId || connection.activeWorkstationId || workstationId(activeModule),
@@ -306,7 +397,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
           pushConnectionState(next);
           publishSummary("bridge", `iPhone chat auto-connected to ${next.activeWorkstationName}.`);
         }
-        publishSummary("iphone-command", `iPhone chat command reached ${next.activeWorkstationName}: ${String(data.message || "").slice(0, 80)}`);
+        publishSummary("iphone-command", `iPhone chat command reached ${next.activeWorkstationName}: ${String(data.originalMessage || data.message || "").slice(0, 80)}`);
         void runAgentOneText(data.message, "local-form");
       }
     }
