@@ -13,71 +13,17 @@ import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
 import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemContract";
 
-const MODULES = [
-  "Primary Builder",
-  "Visual Editing",
-  "Component Mapping",
-  "Approval Center",
-  "Browser Verification",
-  "Repository Truth",
-  "Projects Dashboard",
-  "Truth Panel",
-] as const;
-
+const MODULES = ["Primary Builder", "Visual Editing", "Component Mapping", "Approval Center", "Browser Verification", "Repository Truth", "Projects Dashboard", "Truth Panel"] as const;
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
-
-type WorkspaceEventDetail = {
-  phase: string;
-  message: string;
-  source?: string;
-  repo?: string;
-  branch?: string;
-  filePath?: string;
-  route?: string;
-  patchState?: string;
-  draftDirty?: boolean;
-  saved?: boolean;
-};
-
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
 const EMPTY_CONNECTION: BuilderChatConnection = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
 
-function readActiveFile() {
-  if (typeof window === "undefined") return EMPTY_FILE;
-  try {
-    const raw = window.localStorage.getItem("streams-builder:active-file");
-    return raw ? JSON.parse(raw) as PulledFileDetail : EMPTY_FILE;
-  } catch {
-    return EMPTY_FILE;
-  }
-}
-
-function compactText(value: string) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function controlName(element: HTMLElement) {
-  const text = compactText(element.innerText || element.textContent || "");
-  const aria = compactText(element.getAttribute("aria-label") || "");
-  const title = compactText(element.getAttribute("title") || "");
-  const data = compactText(element.getAttribute("data-label") || element.getAttribute("data-testid") || "");
-  const id = compactText(element.id || "");
-  return (text || aria || title || data || id || element.tagName.toLowerCase()).slice(0, 120);
-}
-
-function fieldName(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
-  const label = element.closest("label")?.querySelector("b")?.textContent || element.closest("label")?.textContent || "";
-  return compactText(element.getAttribute("aria-label") || element.name || element.id || label || element.placeholder || element.tagName.toLowerCase()).slice(0, 120);
-}
-
-function safeFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
-  if (element instanceof HTMLSelectElement) return compactText(element.value).slice(0, 120);
-  if (element instanceof HTMLTextAreaElement) return `${element.value.length} chars`;
-  if (element.type === "password") return "[redacted]";
-  if (element.type === "file") return `${element.files?.length || 0} file(s)`;
-  return compactText(element.value).slice(0, 120) || `${element.value.length} chars`;
-}
+function readActiveFile() { try { const raw = window.localStorage.getItem("streams-builder:active-file"); return raw ? JSON.parse(raw) as PulledFileDetail : EMPTY_FILE; } catch { return EMPTY_FILE; } }
+function compact(value: string) { return String(value || "").replace(/\s+/g, " ").trim(); }
+function controlName(element: HTMLElement) { return compact(element.innerText || element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || element.id || element.tagName.toLowerCase()).slice(0, 120); }
+function fieldName(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const label = element.closest("label")?.querySelector("b")?.textContent || element.closest("label")?.textContent || ""; const placeholder = element instanceof HTMLSelectElement ? "" : element.placeholder; return compact(element.getAttribute("aria-label") || element.name || element.id || label || placeholder || element.tagName.toLowerCase()).slice(0, 120); }
+function safeFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { if (element instanceof HTMLSelectElement) return compact(element.value).slice(0, 120); if (element instanceof HTMLTextAreaElement) return `${element.value.length} chars`; if (element.type === "password") return "[redacted]"; if (element.type === "file") return `${element.files?.length || 0} file(s)`; return compact(element.value).slice(0, 120) || `${element.value.length} chars`; }
 
 export default function WorkspaceGrid() {
   const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
@@ -89,187 +35,43 @@ export default function WorkspaceGrid() {
   const lastManualEventRef = useRef("");
   const inputTimerRef = useRef<number | null>(null);
 
-  function emitWorkspaceEvent(detail: WorkspaceEventDetail) {
-    const eventDetail = {
-      source: "workspace-grid",
-      repo: activeFile.repo,
-      branch: activeFile.branch,
-      filePath: activeFile.path,
-      route: activeFile.route,
-      activeModule,
-      viewMode,
-      at: new Date().toISOString(),
-      ...detail,
-    };
-    const key = `${eventDetail.phase}:${eventDetail.message}`;
+  function emit(phase: string, message: string, extra: Record<string, unknown> = {}) {
+    const detail = { source: "workspace-grid", repo: activeFile.repo, branch: activeFile.branch, filePath: activeFile.path, route: activeFile.route, activeModule, viewMode, at: new Date().toISOString(), phase, message, ...extra };
+    const key = `${phase}:${message}`;
     if (key === lastManualEventRef.current) return;
     lastManualEventRef.current = key;
-    setVisualEditorLog((items) => [...items.slice(-40), `${eventDetail.phase}: ${eventDetail.message}`]);
-    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: eventDetail }));
-    window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: eventDetail }));
+    setVisualEditorLog((items) => [...items.slice(-40), `${phase}: ${message}`]);
+    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail }));
+    window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail }));
   }
 
-  function handleModuleChange(next: ModuleName) {
-    setActiveModule(next);
-    emitWorkspaceEvent({ phase: "workspace-selection", message: `User switched workstation to ${next}.` });
-  }
-
-  function handleViewModeChange(next: ViewMode) {
-    setViewMode(next);
-    emitWorkspaceEvent({ phase: "workspace-selection", message: `User changed workspace view mode to ${next}.` });
-  }
-
-  function handleStatusToggle() {
-    const next = !statusOpen;
-    setStatusOpen(next);
-    emitWorkspaceEvent({ phase: "workspace-toggle", message: `${next ? "Opened" : "Closed"} Status / Readiness / Files / Context panel.` });
-  }
-
-  function handleContentChange(next: string) {
-    setActiveFile((current) => ({ ...current, content: next }));
-    emitWorkspaceEvent({ phase: "workspace-content-change", message: `Active file draft changed manually in ${activeFile.path || "the open file"}.`, draftDirty: true, saved: false, patchState: "not_generated" });
-  }
+  function handleContentChange(next: string) { setActiveFile((current) => ({ ...current, content: next })); emit("workspace-content-change", `Active file draft changed manually in ${activeFile.path || "the open file"}.`, { draftDirty: true, saved: false, patchState: "not_generated" }); }
 
   useEffect(() => {
     setActiveFile(readActiveFile());
-    emitWorkspaceEvent({ phase: "workspace-audit-ready", message: `Workspace audit bridge is tracking manual selections, options, clicks, inputs, file pulls, editor changes, preview actions, save/patch/push states, and chat connection actions.` });
-    function onPulledFile(event: Event) {
-      const detail = (event as CustomEvent<PulledFileDetail>).detail;
-      if (!detail?.path) return;
-      setActiveFile(detail);
-      const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`;
-      setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]);
-      window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } }));
-    }
-    function onSummaryEvent(event: Event) {
-      const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail;
-      if (!detail?.message) return;
-      setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]);
-    }
-    function onManualClick(event: MouseEvent) {
-      const target = event.target as HTMLElement | null;
-      if (!target || target.closest("iframe")) return;
-      const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']");
-      if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return;
-      emitWorkspaceEvent({ phase: "manual-workspace-click", message: `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.` });
-    }
-    function onManualChange(event: Event) {
-      const target = event.target as HTMLElement | null;
-      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
-      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
-      emitWorkspaceEvent({ phase: "manual-workspace-change", message: `User changed ${fieldName(target)} to ${safeFieldValue(target)}.` });
-    }
-    function onManualInput(event: Event) {
-      const target = event.target as HTMLElement | null;
-      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
-      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
-      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
-      inputTimerRef.current = window.setTimeout(() => {
-        emitWorkspaceEvent({ phase: "manual-workspace-input", message: `User typed in ${fieldName(target)} (${safeFieldValue(target)}).` });
-      }, 900);
-    }
-    window.addEventListener("streams-builder:pulled-file", onPulledFile);
-    window.addEventListener("streams-builder-summary-event", onSummaryEvent);
-    document.addEventListener("click", onManualClick, true);
-    document.addEventListener("change", onManualChange, true);
-    document.addEventListener("input", onManualInput, true);
-    return () => {
-      window.removeEventListener("streams-builder:pulled-file", onPulledFile);
-      window.removeEventListener("streams-builder-summary-event", onSummaryEvent);
-      document.removeEventListener("click", onManualClick, true);
-      document.removeEventListener("change", onManualChange, true);
-      document.removeEventListener("input", onManualInput, true);
-      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
-    };
+    emit("workspace-audit-ready", "Workspace audit bridge is tracking manual selections, options, clicks, inputs, file pulls, editor changes, preview actions, save/patch/push states, and chat connection actions.");
+    function onPulledFile(event: Event) { const detail = (event as CustomEvent<PulledFileDetail>).detail; if (!detail?.path) return; setActiveFile(detail); const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`; setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]); window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } })); }
+    function onSummaryEvent(event: Event) { const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail; if (!detail?.message) return; setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]); }
+    function onManualClick(event: MouseEvent) { const target = event.target as HTMLElement | null; if (!target || target.closest("iframe")) return; const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']"); if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return; emit("manual-workspace-click", `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.`); }
+    function onManualChange(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; emit("manual-workspace-change", `User changed ${fieldName(target)} to ${safeFieldValue(target)}.`); }
+    function onManualInput(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current); inputTimerRef.current = window.setTimeout(() => emit("manual-workspace-input", `User typed in ${fieldName(target)} (${safeFieldValue(target)}).`), 900); }
+    window.addEventListener("streams-builder:pulled-file", onPulledFile); window.addEventListener("streams-builder-summary-event", onSummaryEvent); document.addEventListener("click", onManualClick, true); document.addEventListener("change", onManualChange, true); document.addEventListener("input", onManualInput, true);
+    return () => { window.removeEventListener("streams-builder:pulled-file", onPulledFile); window.removeEventListener("streams-builder-summary-event", onSummaryEvent); document.removeEventListener("click", onManualClick, true); document.removeEventListener("change", onManualChange, true); document.removeEventListener("input", onManualInput, true); if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current); };
   }, []);
 
   const connectedHere = chatConnection.connected && chatConnection.activeWorkstationName === activeModule;
-
   return (
     <main className="streamsBuilderShell">
       <section className="centerWorkspace">
-        <div className="topRow">
-          <GitHubRepositoryPicker />
-          <div className="controls">
-            <label><b>Workstation</b><select value={activeModule} onChange={(event) => handleModuleChange(event.target.value as ModuleName)}>{MODULES.map((name) => <option key={name}>{name}</option>)}</select></label>
-            <label><b>View Mode</b><select value={viewMode} onChange={(event) => handleViewModeChange(event.target.value as ViewMode)}><option>Single</option><option>Multi</option><option>Focus</option><option>Stack</option></select></label>
-          </div>
-        </div>
+        <div className="topRow"><GitHubRepositoryPicker /><div className="controls"><label><b>Workstation</b><select value={activeModule} onChange={(event) => { const next = event.target.value as ModuleName; setActiveModule(next); emit("workspace-selection", `User switched workstation to ${next}.`); }}>{MODULES.map((name) => <option key={name}>{name}</option>)}</select></label><label><b>View Mode</b><select value={viewMode} onChange={(event) => { const next = event.target.value as ViewMode; setViewMode(next); emit("workspace-selection", `User changed workspace view mode to ${next}.`); }}><option>Single</option><option>Multi</option><option>Focus</option><option>Stack</option></select></label></div></div>
         <section className="workArea">
-          <section className="operatorColumn">
-            <BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} />
-            <BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} summaryItems={visualEditorLog} />
-          </section>
-          <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
-            <div className="connectionRibbon">
-              {chatConnection.connected ? (connectedHere ? `iPhone chat connected to ${activeModule}` : `iPhone chat connected to ${chatConnection.activeWorkstationName}. Switch connection before controlling ${activeModule}.`) : "iPhone chat is standalone. Connect it to one workstation when needed."}
-            </div>
-            <div className="stationViewport">
-              {activeModule === "Visual Editing" ? (
-                <VisualEditingWorkstation
-                  stationLabel="Agent 1"
-                  route={activeFile.route || "/"}
-                  filePath={activeFile.path}
-                  repo={activeFile.repo}
-                  branch={activeFile.branch}
-                  content={activeFile.content}
-                  onContentChange={handleContentChange}
-                  onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
-                  onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
-                />
-              ) : (
-                <LiveFrontendWorkstation activeFile={activeFile} />
-              )}
-            </div>
-            <div className="stationContext">
-              {activeModule === "Visual Editing" ? (
-                <VisualOperationDock
-                  activeFile={activeFile}
-                  onContentChange={handleContentChange}
-                  onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])}
-                />
-              ) : (
-                <WorkspaceModulePanel moduleName={activeModule} />
-              )}
-            </div>
-            <button className="statusToggle" type="button" onClick={handleStatusToggle}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Original visual editor workstation restored." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}
-          </section>
+          <section className="operatorColumn"><BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} /><BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} summaryItems={visualEditorLog} /></section>
+          <section className={connectedHere ? "workstationShell connected" : "workstationShell"}><div className="connectionRibbon">{chatConnection.connected ? (connectedHere ? `iPhone chat connected to ${activeModule}` : `iPhone chat connected to ${chatConnection.activeWorkstationName}. Switch connection before controlling ${activeModule}.`) : "iPhone chat is standalone. Connect it to one workstation when needed."}</div><div className="stationViewport">{activeModule === "Visual Editing" ? <VisualEditingWorkstation stationLabel="Agent 1" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <LiveFrontendWorkstation activeFile={activeFile} />}</div><div className="stationContext">{activeModule === "Visual Editing" ? <VisualOperationDock activeFile={activeFile} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <WorkspaceModulePanel moduleName={activeModule} />}</div><button className="statusToggle" type="button" onClick={() => { const next = !statusOpen; setStatusOpen(next); emit("workspace-toggle", `${next ? "Opened" : "Closed"} Status / Readiness / Files / Context panel.`); }}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>{statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Agent 1 / {activeModule}</span></p><p><b>Readiness</b><span>{activeModule === "Visual Editing" ? "Original visual editor workstation restored." : visualEditorLog.slice(-1)[0] || "Pull a source file to bind this workstation."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? `${chatConnection.activeWorkstationName} only` : "Standalone / disconnected"}</span></p></div> : null}</section>
         </section>
       </section>
-      <TopRowWorkstationControls />
-      <VisualEditorScrollBehavior />
-      <WorkstationChromeEnhancer />
-      <style jsx>{`
-        .streamsBuilderShell{width:100vw;height:100dvh;display:block;background:#020713;color:#fff;padding:0;box-sizing:border-box;overflow:auto;}
-        .centerWorkspace{min-width:0;min-height:100dvh;border:0;border-radius:0;background:#020713;overflow:visible;padding:4px 4px 0;display:grid;grid-template-rows:34px minmax(calc(100dvh - 40px),auto);gap:2px;box-sizing:border-box;}
-        .topRow{height:34px;min-height:34px;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.48fr);gap:12px;min-width:0;align-items:center;overflow:hidden;}
-        .controls{height:34px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0;align-items:center;}
-        label{min-width:0;height:28px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;align-items:end;border:0;border-radius:0;background:transparent;padding:0;border-bottom:1px solid rgba(148,163,184,.34);}
-        label b,.statusDrop b{display:block;color:#6ee7b7;font-size:9px;text-transform:uppercase;margin-bottom:3px;line-height:1;}
-        select{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;padding:0 0 3px;}option{color:#020617;}
-        .workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start;}
-        .operatorColumn{min-width:0;display:grid;gap:6px;align-content:start;}
-        .workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible;}
-        .workstationShell.connected{border-color:rgba(110,231,183,.58);box-shadow:0 0 0 1px rgba(110,231,183,.12),0 0 26px rgba(16,185,129,.12);}
-        .connectionRibbon{min-width:0;padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.86);color:#cbd5e1;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.workstationShell.connected .connectionRibbon{color:#6ee7b7;background:rgba(6,78,59,.28);}
-        .stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden;}.stationContext{min-width:0;max-height:430px;overflow:auto;border-top:1px solid rgba(148,163,184,.12);}
-        .statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer;}
-        .statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72);}
-        .statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px;}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
-      `}</style>
-      <style jsx global>{`
-        .liveWorkstation .content.full{display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:stretch!important;height:100%!important;min-height:520px!important;}
-        .liveWorkstation .content.full>.frameWrap{width:calc(100% - 20px)!important;height:calc(100% - 20px)!important;min-height:520px!important;max-width:none!important;justify-self:stretch!important;align-self:stretch!important;}
-        .liveWorkstation .content.full>.frameWrap iframe{width:100%!important;min-width:100%!important;height:2200px!important;min-height:100%!important;display:block!important;}
-        .liveWorkstation .codePreviewSplit,.visualEditor .splitMode{display:grid!important;grid-template-columns:minmax(520px,1fr) minmax(520px,1fr)!important;grid-auto-flow:column!important;align-items:stretch!important;gap:10px!important;overflow:hidden!important;height:100%!important;min-height:520px!important;}
-        .liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:520px!important;width:auto!important;height:100%!important;min-height:520px!important;}
-        .liveWorkstation .previewPane,.visualEditor .splitPreview{display:grid!important;grid-template-rows:auto minmax(0,1fr)!important;overflow:hidden!important;}
-        .liveWorkstation .frameWrap.embedded,.visualEditor .desktopFrame.embedded{width:100%!important;max-width:none!important;height:100%!important;min-height:520px!important;margin:0!important;display:block!important;overflow:auto!important;background:#fff!important;}
-        .liveWorkstation .frameWrap.embedded iframe,.visualEditor .desktopFrame.embedded iframe{width:100%!important;min-width:100%!important;height:2200px!important;max-width:none!important;display:block!important;}
-        .liveWorkstation .codePane,.visualEditor .codePanel{display:grid!important;min-height:520px!important;overflow:hidden!important;}
-        @media(max-width:900px){.liveWorkstation .codePreviewSplit,.visualEditor .splitMode{grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important;overflow:auto!important;}.liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:0!important;min-height:520px!important;}}
-      `}</style>
+      <TopRowWorkstationControls /><VisualEditorScrollBehavior /><WorkstationChromeEnhancer />
+      <style jsx>{`.streamsBuilderShell{width:100vw;height:100dvh;display:block;background:#020713;color:#fff;padding:0;box-sizing:border-box;overflow:auto}.centerWorkspace{min-width:0;min-height:100dvh;border:0;border-radius:0;background:#020713;overflow:visible;padding:4px 4px 0;display:grid;grid-template-rows:34px minmax(calc(100dvh - 40px),auto);gap:2px;box-sizing:border-box}.topRow{height:34px;min-height:34px;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.48fr);gap:12px;min-width:0;align-items:center;overflow:hidden}.controls{height:34px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0;align-items:center}label{min-width:0;height:28px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;align-items:end;border:0;border-radius:0;background:transparent;padding:0;border-bottom:1px solid rgba(148,163,184,.34)}label b,.statusDrop b{display:block;color:#6ee7b7;font-size:9px;text-transform:uppercase;margin-bottom:3px;line-height:1}select{width:100%;min-width:0;border:0;background:transparent;color:#fff;font-size:11px;outline:none;padding:0 0 3px}option{color:#020617}.workArea{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-columns:370px minmax(0,1fr);gap:6px;overflow:visible;align-items:start}.operatorColumn{min-width:0;display:grid;gap:6px;align-content:start}.workstationShell{min-width:0;min-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);overflow:visible}.workstationShell.connected{border-color:rgba(110,231,183,.58);box-shadow:0 0 0 1px rgba(110,231,183,.12),0 0 26px rgba(16,185,129,.12)}.connectionRibbon{min-width:0;padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.86);color:#cbd5e1;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.workstationShell.connected .connectionRibbon{color:#6ee7b7;background:rgba(6,78,59,.28)}.stationViewport{min-width:0;min-height:0;height:100%;overflow:hidden}.stationContext{min-width:0;max-height:430px;overflow:auto;border-top:1px solid rgba(148,163,184,.12)}.statusToggle{height:28px;border:0;border-top:1px solid rgba(148,163,184,.12);background:rgba(2,6,23,.84);color:#cbd5e1;font-size:10px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer}.statusDrop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid rgba(148,163,184,.12);padding:6px;max-height:none;overflow:visible;background:rgba(2,6,23,.72)}.statusDrop p{min-width:0;margin:0;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(15,23,42,.72);padding:7px}.statusDrop span{display:block;color:#cbd5e1;font-size:10px;line-height:1.35;overflow-wrap:anywhere}`}</style>
+      <style jsx global>{`.liveWorkstation .content.full{display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:stretch!important;height:100%!important;min-height:520px!important}.liveWorkstation .content.full>.frameWrap{width:calc(100% - 20px)!important;height:calc(100% - 20px)!important;min-height:520px!important;max-width:none!important;justify-self:stretch!important;align-self:stretch!important}.liveWorkstation .content.full>.frameWrap iframe{width:100%!important;min-width:100%!important;height:2200px!important;min-height:100%!important;display:block!important}.liveWorkstation .codePreviewSplit,.visualEditor .splitMode{display:grid!important;grid-template-columns:minmax(520px,1fr) minmax(520px,1fr)!important;grid-auto-flow:column!important;align-items:stretch!important;gap:10px!important;overflow:hidden!important;height:100%!important;min-height:520px!important}.liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:520px!important;width:auto!important;height:100%!important;min-height:520px!important}.liveWorkstation .previewPane,.visualEditor .splitPreview{display:grid!important;grid-template-rows:auto minmax(0,1fr)!important;overflow:hidden!important}.liveWorkstation .frameWrap.embedded,.visualEditor .desktopFrame.embedded{width:100%!important;max-width:none!important;height:100%!important;min-height:520px!important;margin:0!important;display:block!important;overflow:auto!important;background:#fff!important}.liveWorkstation .frameWrap.embedded iframe,.visualEditor .desktopFrame.embedded iframe{width:100%!important;min-width:100%!important;height:2200px!important;max-width:none!important;display:block!important}.liveWorkstation .codePane,.visualEditor .codePanel{display:grid!important;min-height:520px!important;overflow:hidden!important}@media(max-width:900px){.liveWorkstation .codePreviewSplit,.visualEditor .splitMode{grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important;overflow:auto!important}.liveWorkstation .codePreviewSplit>.codePane,.liveWorkstation .codePreviewSplit>.previewPane,.visualEditor .splitMode>.codePanel,.visualEditor .splitMode>.splitPreview{min-width:0!important;min-height:520px!important}}`}</style>
     </main>
   );
 }
