@@ -20,7 +20,8 @@ export default function VisualEditorCodeTabBridge() {
       visualTab.textContent = "Visual Editor";
       visualTab.className = "visualEditorModeTab active";
       visualTab.onclick = () => {
-        const editorButton = Array.from(visualEditor.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "Editor");
+        const footer = visualEditor.querySelector<HTMLElement>(".sourceActionStrip");
+        const editorButton = Array.from((footer || visualEditor).querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "Editor");
         editorButton?.click();
       };
 
@@ -29,7 +30,8 @@ export default function VisualEditorCodeTabBridge() {
       codeTab.textContent = "Code Editor";
       codeTab.className = "visualEditorModeTab";
       codeTab.onclick = () => {
-        const codeButton = Array.from(visualEditor.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "Code Editor");
+        const footer = visualEditor.querySelector<HTMLElement>(".sourceActionStrip");
+        const codeButton = Array.from((footer || visualEditor).querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "Code Editor");
         codeButton?.click();
       };
 
@@ -44,35 +46,9 @@ export default function VisualEditorCodeTabBridge() {
   }, []);
 
   return <style jsx global>{`
-    .visualEditorModeTabs {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: auto;
-      margin-right: 8px;
-    }
-
-    .visualEditorModeTab {
-      height: 34px !important;
-      border: 1px solid rgba(148, 163, 184, 0.22) !important;
-      border-radius: 10px !important;
-      background: #7c3aed !important;
-      color: #fff !important;
-      padding: 0 14px !important;
-      font-size: 11px !important;
-      font-weight: 900 !important;
-      cursor: pointer !important;
-      white-space: nowrap !important;
-    }
-
-    .visualEditorModeTab.active {
-      background: rgba(6, 95, 70, 0.9) !important;
-      border-color: #34d399 !important;
-      color: #6ee7b7 !important;
-    }
-
-    .visualEditor .top {
-      flex-wrap: nowrap !important;
-    }
+    .visualEditorModeTabs { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 8px; }
+    .visualEditorModeTab { height: 34px !important; border: 1px solid rgba(148, 163, 184, 0.22) !important; border-radius: 10px !important; background: #7c3aed !important; color: #fff !important; padding: 0 14px !important; font-size: 11px !important; font-weight: 900 !important; cursor: pointer !important; white-space: nowrap !important; }
+    .visualEditorModeTab.active { background: rgba(6, 95, 70, 0.9) !important; border-color: #34d399 !important; color: #6ee7b7 !important; }
+    .visualEditor .top { flex-wrap: nowrap !important; }
   `}</style>;
 }
