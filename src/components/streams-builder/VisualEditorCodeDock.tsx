@@ -61,6 +61,22 @@ function restorePreviewScroll(items: Array<{ el: Element; top: number; left: num
   });
 }
 
+function captureCurrentPreviewScroll() {
+  try {
+    const doc = previewIframe()?.contentDocument;
+    return doc?.body ? snapshotPreviewScroll(doc) : [];
+  } catch {
+    return [];
+  }
+}
+
+function restoreCurrentPreviewScroll(items: Array<{ el: Element; top: number; left: number }>) {
+  restorePreviewScroll(items);
+  requestAnimationFrame(() => restorePreviewScroll(items));
+  window.setTimeout(() => restorePreviewScroll(items), 0);
+  window.setTimeout(() => restorePreviewScroll(items), 120);
+}
+
 function highlightPreviewText(text?: string) {
   const needle = clean(text);
   if (!needle || needle.length < 2) return;
@@ -79,13 +95,8 @@ function highlightPreviewText(text?: string) {
     const lower = needle.toLowerCase();
     const nodes = Array.from(doc.body.querySelectorAll<HTMLElement>("[data-streams-editable='true'],h1,h2,h3,h4,h5,h6,p,span,b,strong,a,button,label,li,small,img,section,article,div"));
     const found = nodes.find((el) => clean(el.innerText || el.textContent).toLowerCase().includes(lower) || String(el.getAttribute("src") || "").includes(needle));
-    if (!found) {
-      restorePreviewScroll(scrollSnapshot);
-      return;
-    }
-    found.dataset.streamsCodeSelected = "true";
-    restorePreviewScroll(scrollSnapshot);
-    requestAnimationFrame(() => restorePreviewScroll(scrollSnapshot));
+    if (found) found.dataset.streamsCodeSelected = "true";
+    restoreCurrentPreviewScroll(scrollSnapshot);
   } catch {
     // Preview frame not ready yet.
   }
@@ -112,6 +123,7 @@ export default function VisualEditorCodeDock() {
   }
 
   useEffect(() => {
+    let suppressCodeSelectionUntil = 0;
     setMounted(true);
     const initial = readActiveFile();
     setActiveFile(initial);
@@ -169,7 +181,12 @@ export default function VisualEditorCodeDock() {
       const data = event.data || {};
       if (data.source !== "streams-editable-preview") return;
       const query = bestQuery(data.payload || {});
-      if (query) window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "locate", query } }));
+      if (query) {
+        const scrollSnapshot = captureCurrentPreviewScroll();
+        suppressCodeSelectionUntil = Date.now() + 900;
+        window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "locate", query, origin: "visual-preview" } }));
+        restoreCurrentPreviewScroll(scrollSnapshot);
+      }
       if (data.type === "streams-editable-select") emit("visual-selection", `Selected preview element: ${query || "element"}. Code editor is locating the source without opening Find/Search.`, { selectedText: query });
       if (data.type === "streams-editable-input") emit("visual-input", `Unsaved visual typing detected: ${query || "text edit"}. Save Draft is required before review.`, { selectedText: query });
       if (String(data.type || "").includes("commit") || String(data.type || "").includes("remove") || String(data.type || "").includes("style") || String(data.type || "").includes("replace")) emit("visual-edit", "Unsaved visual change detected. Save Draft is required before review.", { selectedText: query });
@@ -178,6 +195,7 @@ export default function VisualEditorCodeDock() {
     function onCodeState(event: Event) {
       const selection = (event as CustomEvent<{ selection?: CodeSelection | null }>).detail?.selection;
       if (!selection?.text) return;
+      if (Date.now() < suppressCodeSelectionUntil) return;
       highlightPreviewText(selection.text);
       emit("code-selection", `Selected code lines ${selection.startLine}-${selection.endLine}. Matching preview element is highlighted without scrolling the preview.`, { selectedText: selection.text.slice(0, 160) });
     }
