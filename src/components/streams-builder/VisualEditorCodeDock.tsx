@@ -35,6 +35,7 @@ export default function VisualEditorCodeDock() {
     const latest = readActiveFile();
     setActiveFile(latest);
     setDraft(latest.content || "");
+    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "code-dock-loaded", source: "visual-code-dock", filePath: latest.path, repo: latest.repo, branch: latest.branch, route: latest.route, sha: latest.sha, message: `Code editor opened ${latest.path || "the active file"}.` } }));
   }
 
   useEffect(() => {
@@ -116,6 +117,8 @@ export default function VisualEditorCodeDock() {
     const merged = { ...activeFile, content: next };
     setActiveFile(merged);
     writeActiveFile(merged);
+    window.dispatchEvent(new CustomEvent("streams-builder:code-draft-changed", { detail: { ...merged, content: next, draftDirty: true, saved: false, patchState: "not_generated" } }));
+    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "manual-code-edit", source: "visual-code-dock", filePath: merged.path, repo: merged.repo, branch: merged.branch, draftDirty: true, saved: false, patchState: "not_generated", message: `Manual code edit made in ${merged.path || "the open file"}. Save Draft is required before review.` } }));
   }
 
   if (!mounted || !open || !canvas) {
