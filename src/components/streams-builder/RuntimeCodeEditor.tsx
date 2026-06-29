@@ -1,11 +1,12 @@
 "use client";
 
-import { ChangeEvent, KeyboardEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type CodeSelection = { startLine: number; startColumn: number; endLine: number; endColumn: number; text: string };
 type RuntimeCodeEditorProps = { value: string; filePath: string; sha?: string; onChange: (nextValue: string) => void; onSelectionChange?: (selection: CodeSelection | null) => void; highlightRange?: { startLine: number; endLine: number } | null };
 type CursorStatus = { line: number; column: number; offset: number };
 type Mark = { id: string; kind: string; start: number; end: number; label: string };
+type CodeEditorCommand = { action?: string; query?: string; kind?: string };
 
 function lineCount(value: string) { return Math.max(value.split("\n").length, 1); }
 function shortSha(value?: string) { return value ? value.slice(0, 7) : "no-sha"; }
@@ -28,28 +29,52 @@ export default function RuntimeCodeEditor({ value, filePath, sha, onChange, onSe
   const numbers = useMemo(() => lineNumbers(value || ""), [value]);
   const matches = useMemo(() => allMatches(value || "", findQuery), [value, findQuery]);
 
+  function publish(message = status) { window.dispatchEvent(new CustomEvent("streams-builder:code-editor-state", { detail: { filePath, sha, status: message, cursor, selection, findQuery, matchCount: matches.length, findIndex, marks: marks.length, lineCount: lineCount(value || ""), charCount: (value || "").length } })); }
+  function report(message: string) { setStatus(message); window.dispatchEvent(new CustomEvent("streams-builder:code-editor-result", { detail: { filePath, sha, message } })); window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "code-editor", message } })); }
   function syncScroll() { if (gutterRef.current && textareaRef.current) gutterRef.current.scrollTop = textareaRef.current.scrollTop; }
-  function updateSelection() { const textarea = textareaRef.current; if (!textarea) return; const next = selectionFromTextarea(textarea); setSelection(next); setCursor(positionFromOffset(textarea.value, textarea.selectionStart || 0)); onSelectionChange?.(next.text ? next : null); }
+  function updateSelection() { const textarea = textareaRef.current; if (!textarea) return; const next = selectionFromTextarea(textarea); setSelection(next); setCursor(positionFromOffset(textarea.value, textarea.selectionStart || 0)); onSelectionChange?.(next.text ? next : null); window.setTimeout(() => publish(), 0); }
   function scrollToOffset(offset: number) { const textarea = textareaRef.current; if (!textarea) return; const line = positionFromOffset(textarea.value, offset).line; textarea.scrollTop = Math.max(0, (line - 4) * 19); syncScroll(); }
-  function selectRange(start: number, end: number, message: string) { const textarea = textareaRef.current; if (!textarea) return; textarea.focus(); textarea.setSelectionRange(start, end); scrollToOffset(start); window.setTimeout(updateSelection, 0); setStatus(message); }
+  function selectRange(start: number, end: number, message: string) { const textarea = textareaRef.current; if (!textarea) return; textarea.focus(); textarea.setSelectionRange(start, end); scrollToOffset(start); window.setTimeout(updateSelection, 0); report(message); }
   function handleChange(event: ChangeEvent<HTMLTextAreaElement>) { onChange(event.target.value); window.setTimeout(updateSelection, 0); }
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") { event.preventDefault(); openFind(); } }
-  async function copyText(text: string, label: string) { if (!text) { setStatus("Nothing to copy"); return; } try { await navigator.clipboard.writeText(text); setStatus(`${label} copied`); } catch { const textarea = textareaRef.current; textarea?.focus(); document.execCommand("copy"); setStatus(`${label} copied`); } }
+  async function copyText(text: string, label: string) { if (!text) { report("Nothing to copy"); return; } try { await navigator.clipboard.writeText(text); report(`${label} copied`); } catch { const textarea = textareaRef.current; textarea?.focus(); document.execCommand("copy"); report(`${label} copied`); } }
   function copyCurrentLine() { const lines = (value || "").split("\n"); void copyText(lines[Math.max(0, cursor.line - 1)] || "", `Line ${cursor.line}`); }
   function copySelection() { const current = textareaRef.current ? selectionFromTextarea(textareaRef.current) : selection; void copyText(current?.text || "", current?.text ? `Lines ${current.startLine}-${current.endLine}` : "Selection"); }
   function copyAll() { void copyText(value || "", "Full file"); }
   function selectAll() { const textarea = textareaRef.current; if (!textarea) return; selectRange(0, textarea.value.length, "All code selected"); }
-  function openFind() { setFindOpen(true); setEditMenuOpen(true); setStatus("Find opened"); }
-  function clearMarks() { setMarks([]); setFindQuery(""); setFindIndex(-1); setFindOpen(false); setStatus("Marks and search cleared"); }
-  function mark(kind: string) { const textarea = textareaRef.current; if (!textarea) return; const start = textarea.selectionStart || 0; const end = textarea.selectionEnd || start; if (start === end) { setStatus(`Select code before ${kind.toLowerCase()}`); return; } const next = selectionFromTextarea(textarea); setMarks((items) => [...items, { id: `${Date.now()}-${kind}`, kind, start, end, label: `Lines ${next.startLine}-${next.endLine}` }]); setStatus(`${kind} marked on lines ${next.startLine}-${next.endLine}`); }
-  function goToMatch(nextIndex: number) { if (!matches.length) { setStatus(findQuery.trim() ? `No matches for ${findQuery}` : "Enter a search term"); return; } const safeIndex = (nextIndex + matches.length) % matches.length; const match = matches[safeIndex]; setFindIndex(safeIndex); selectRange(match.start, match.end, `Found ${safeIndex + 1} of ${matches.length}: ${findQuery}`); }
+  function openFind() { setFindOpen(true); setEditMenuOpen(true); report("Find opened"); }
+  function clearMarks() { setMarks([]); setFindQuery(""); setFindIndex(-1); setFindOpen(false); report("Marks and search cleared"); }
+  function mark(kind: string) { const textarea = textareaRef.current; if (!textarea) return; const start = textarea.selectionStart || 0; const end = textarea.selectionEnd || start; if (start === end) { report(`Select code before ${kind.toLowerCase()}`); return; } const next = selectionFromTextarea(textarea); setMarks((items) => [...items, { id: `${Date.now()}-${kind}`, kind, start, end, label: `Lines ${next.startLine}-${next.endLine}` }]); report(`${kind} marked on lines ${next.startLine}-${next.endLine}`); }
+  function goToMatch(nextIndex: number, query = findQuery) { const localMatches = allMatches(value || "", query); if (!localMatches.length) { report(query.trim() ? `No matches for ${query}` : "Enter a search term"); return; } const safeIndex = (nextIndex + localMatches.length) % localMatches.length; const match = localMatches[safeIndex]; setFindQuery(query); setFindIndex(safeIndex); setFindOpen(true); setEditMenuOpen(true); selectRange(match.start, match.end, `Found ${safeIndex + 1} of ${localMatches.length}: ${query}`); }
   function findNext() { goToMatch(findIndex + 1); }
   function findPrev() { goToMatch(findIndex <= 0 ? matches.length - 1 : findIndex - 1); }
+
+  useEffect(() => { publish("Code editor ready"); }, [filePath, sha]);
+  useEffect(() => {
+    function onCommand(event: Event) {
+      const detail = (event as CustomEvent<CodeEditorCommand>).detail || {};
+      const action = String(detail.action || "").toLowerCase();
+      if (!action) return;
+      if (action === "open" || action === "focus") { textareaRef.current?.focus(); report("Code editor focused"); return; }
+      if (action === "find" || action === "search") { goToMatch(0, detail.query || findQuery); return; }
+      if (action === "next" || action === "find-next") { findNext(); return; }
+      if (action === "prev" || action === "previous" || action === "find-prev") { findPrev(); return; }
+      if (action === "select-all") { selectAll(); return; }
+      if (action === "copy-all") { copyAll(); return; }
+      if (action === "copy-line") { copyCurrentLine(); return; }
+      if (action === "copy-selection" || action === "copy") { copySelection(); return; }
+      if (action === "clear") { clearMarks(); return; }
+      if (action === "highlight" || action === "circle" || action === "underline") { mark(detail.kind || action.charAt(0).toUpperCase() + action.slice(1)); return; }
+      report(`Unknown code editor command: ${action}`);
+    }
+    window.addEventListener("streams-builder:code-editor-command", onCommand);
+    return () => window.removeEventListener("streams-builder:code-editor-command", onCommand);
+  }, [findQuery, findIndex, matches.length, value, cursor.line, selection]);
 
   return (
     <section className="runtimeCodeEditor" aria-label={`Runtime code editor for ${filePath}`}>
       <header className="codeToolbar"><div className="fileMeta"><b>{filePath || "No file selected"}</b><span>{lineCount(value).toLocaleString()} lines · {(value || "").length.toLocaleString()} chars · {shortSha(sha)}</span></div><div className="iconTools"><button type="button" title="Copy selection" onClick={copySelection}>⧉</button><button type="button" title="Download file" onClick={() => { const blob = new Blob([value || ""], { type: "text/plain;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filePath.split("/").pop() || "source.txt"; a.click(); URL.revokeObjectURL(url); }}>⇩</button><button type="button" title="Edit tools" onClick={() => setEditMenuOpen((open) => !open)}>✎</button><button type="button" title="More tools" onClick={() => setEditMenuOpen((open) => !open)}>⌄</button></div></header>
-      <div className="utilityBar"><div className="cursorMeta"><span>Ln {cursor.line}, Col {cursor.column}</span><span>{Math.min(cursor.offset, (value || "").length).toLocaleString()} of {(value || "").length.toLocaleString()} characters</span></div><div className="historyMeta"><span>{shortSha(sha)} · current</span><button type="button" onClick={() => setStatus(`History ready for ${shortSha(sha)}`)}>↺ History</button></div></div>
+      <div className="utilityBar"><div className="cursorMeta"><span>Ln {cursor.line}, Col {cursor.column}</span><span>{Math.min(cursor.offset, (value || "").length).toLocaleString()} of {(value || "").length.toLocaleString()} characters</span></div><div className="historyMeta"><span>{shortSha(sha)} · current</span><button type="button" onClick={() => report(`History ready for ${shortSha(sha)}`)}>↺ History</button></div></div>
       {editMenuOpen ? <div className="editMenu"><button type="button" onClick={selectAll}>Select all</button><button type="button" onClick={copyAll}>Copy all</button><button type="button" onClick={copyCurrentLine}>Copy line</button><button type="button" onClick={copySelection}>Copy selection</button><button type="button" onClick={openFind}>Find/search</button><button type="button" onClick={() => mark("Highlight")}>Highlight</button><button type="button" onClick={() => mark("Circle")}>Circle</button><button type="button" onClick={() => mark("Underline")}>Underline</button><button type="button" onClick={clearMarks}>Clear marks</button></div> : null}
       {findOpen ? <div className="findBar"><input value={findQuery} onChange={(event) => { setFindQuery(event.target.value); setFindIndex(-1); }} onKeyDown={(event) => { if (event.key === "Enter") findNext(); if (event.key === "Escape") setFindOpen(false); }} placeholder="Find in file" autoFocus /><button type="button" onClick={findPrev}>Prev</button><button type="button" onClick={findNext}>{findIndex < 0 ? "Find" : "Next"}</button><span>{findQuery ? `${matches.length} match${matches.length === 1 ? "" : "es"}` : ""}</span><button type="button" onClick={() => { setFindOpen(false); setFindIndex(-1); }}>×</button></div> : null}
       {marks.length ? <div className="markBar">{marks.map((item) => <button key={item.id} type="button" className={item.kind.toLowerCase()} onClick={() => selectRange(item.start, item.end, `${item.kind} ${item.label}`)}>{item.kind}: {item.label}</button>)}</div> : null}
