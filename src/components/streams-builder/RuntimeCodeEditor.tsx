@@ -1,84 +1,90 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useMemo, useRef, useState } from "react";
 
 type CodeSelection = { startLine: number; startColumn: number; endLine: number; endColumn: number; text: string };
 type RuntimeCodeEditorProps = { value: string; filePath: string; sha?: string; onChange: (nextValue: string) => void; onSelectionChange?: (selection: CodeSelection | null) => void; highlightRange?: { startLine: number; endLine: number } | null };
 type CursorStatus = { line: number; column: number; offset: number };
 
-function languageFromPath(path: string) {
-  if (/\.tsx?$/.test(path)) return "typescript";
-  if (/\.jsx?$/.test(path)) return "javascript";
-  if (/\.css$/.test(path)) return "css";
-  if (/\.json$/.test(path)) return "json";
-  if (/\.mdx?$/.test(path)) return "markdown";
-  return "plaintext";
-}
 function lineCount(value: string) { return Math.max(value.split("\n").length, 1); }
 function shortSha(value?: string) { return value ? value.slice(0, 7) : "no-sha"; }
-function safeRegex(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-function wordAt(value: string, offset: number) { const left = value.slice(0, offset).match(/[A-Za-z0-9_$-]+$/)?.[0] || ""; const right = value.slice(offset).match(/^[A-Za-z0-9_$-]+/)?.[0] || ""; return `${left}${right}`; }
 function downloadTextFile(filePath: string, value: string) { const blob = new Blob([value], { type: "text/plain;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filePath.split("/").pop() || "source.txt"; a.click(); URL.revokeObjectURL(url); }
+function positionFromOffset(value: string, offset: number) { const before = value.slice(0, Math.max(0, offset)); const lines = before.split("\n"); return { line: lines.length, column: (lines.at(-1)?.length || 0) + 1, offset }; }
+function selectionFromTextarea(textarea: HTMLTextAreaElement): CodeSelection {
+  const value = textarea.value;
+  const start = textarea.selectionStart || 0;
+  const end = textarea.selectionEnd || start;
+  const startPos = positionFromOffset(value, start);
+  const endPos = positionFromOffset(value, end);
+  return { startLine: startPos.line, startColumn: startPos.column, endLine: endPos.line, endColumn: endPos.column, text: value.slice(start, end) };
+}
+function lineNumbers(value: string) { return Array.from({ length: lineCount(value) }, (_, index) => index + 1).join("\n"); }
 
 export default function RuntimeCodeEditor({ value, filePath, sha, onChange, onSelectionChange, highlightRange }: RuntimeCodeEditorProps) {
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
-  const decorationsRef = useRef<string[]>([]);
-  const historyRef = useRef<string[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const gutterRef = useRef<HTMLPreElement | null>(null);
   const [selection, setSelection] = useState<CodeSelection | null>(null);
   const [status, setStatus] = useState("Ready");
   const [cursor, setCursor] = useState<CursorStatus>({ line: 1, column: 1, offset: 0 });
   const [findOpen, setFindOpen] = useState(false);
-  const [replaceOpen, setReplaceOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
-  const [replaceValue, setReplaceValue] = useState("");
-  const [matchCase, setMatchCase] = useState(false);
-  const [wholeWord, setWholeWord] = useState(false);
-  const [regexMode, setRegexMode] = useState(false);
-  const [matchCount, setMatchCount] = useState(0);
   const [editMenuOpen, setEditMenuOpen] = useState(false);
-  const language = useMemo(() => languageFromPath(filePath), [filePath]);
+  const numbers = useMemo(() => lineNumbers(value || ""), [value]);
 
-  function updateCursor(editor = editorRef.current) { const model = editor?.getModel(); const pos = editor?.getPosition(); if (!model || !pos) return; setCursor({ line: pos.lineNumber, column: pos.column, offset: model.getOffsetAt(pos) }); }
-  function readSelection(editor = editorRef.current): CodeSelection | null { if (!editor) return null; const model = editor.getModel(); const raw = editor.getSelection(); if (!model || !raw) return null; const next = { startLine: raw.startLineNumber, startColumn: raw.startColumn, endLine: raw.endLineNumber, endColumn: raw.endColumn, text: model.getValueInRange(raw) }; setSelection(next); onSelectionChange?.(next); updateCursor(editor); return next; }
-  function runEditorAction(id: string, label: string) { const editor = editorRef.current; if (!editor) return; editor.focus(); const action = editor.getAction(id); if (action) { void action.run(); setStatus(label); } }
-  function selectAll() { runEditorAction("editor.action.selectAll", "All code selected"); setTimeout(() => readSelection(), 0); }
-  function undo() { runEditorAction("undo", "Undo applied"); }
-  function redo() { runEditorAction("redo", "Redo applied"); }
-
-  function seedFind() { const editor = editorRef.current; const model = editor?.getModel(); const current = readSelection(editor); if (current?.text) return current.text.split("\n")[0]; if (!model) return ""; return wordAt(model.getValue(), cursor.offset); }
-  function openFind(withReplace = false) { const seed = seedFind(); if (seed && !findQuery) setFindQuery(seed); setFindOpen(true); setReplaceOpen(withReplace); setEditMenuOpen(false); runEditorAction(withReplace ? "editor.action.startFindReplaceAction" : "actions.find", withReplace ? "Replace opened" : "Find opened"); setTimeout(() => highlightFindMatches(seed || findQuery), 0); }
-  function rememberQuery(query: string) { const q = query.trim(); if (!q) return; historyRef.current = [q, ...historyRef.current.filter((item) => item !== q)].slice(0, 20); }
-  function findNext() { rememberQuery(findQuery); runEditorAction("editor.action.nextMatchFindAction", "Next match"); }
-  function findPrevious() { rememberQuery(findQuery); runEditorAction("editor.action.previousMatchFindAction", "Previous match"); }
-  function historyStep(direction: 1 | -1) { if (!historyRef.current.length) return; const index = Math.max(0, historyRef.current.indexOf(findQuery)); const next = historyRef.current[(index + direction + historyRef.current.length) % historyRef.current.length]; setFindQuery(next); highlightFindMatches(next); }
-
-  function buildSearchRegex() { if (!findQuery) return null; try { const source = regexMode ? findQuery : safeRegex(findQuery); return new RegExp(wholeWord ? `\\b${source}\\b` : source, matchCase ? "g" : "gi"); } catch { setStatus("Invalid regular expression"); return null; } }
-  function clearDecorations() { const editor = editorRef.current; if (!editor) return; decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []); setMatchCount(0); setStatus("Marks cleared"); }
-  function highlightFindMatches(query = findQuery) { const editor = editorRef.current; const monaco = monacoRef.current; const model = editor?.getModel(); if (!editor || !monaco || !model || !query.trim()) { clearDecorations(); return; } const matches = model.findMatches(query, false, regexMode, matchCase, wholeWord ? " " : null, true).slice(0, 500); decorationsRef.current = editor.deltaDecorations(decorationsRef.current, matches.map((m: any) => ({ range: m.range, options: { inlineClassName: "streams-ai-find-match" } }))); setMatchCount(matches.length); if (matches[0]) { editor.setSelection(matches[0].range); editor.revealRangeInCenter(matches[0].range); } setStatus(`${matches.length} match${matches.length === 1 ? "" : "es"} found`); rememberQuery(query); }
-  function replaceNext() { const editor = editorRef.current; const model = editor?.getModel(); const sel = editor?.getSelection(); if (!editor || !model || !sel || !findQuery) return; const currentText = model.getValueInRange(sel); const re = buildSearchRegex(); const matches = re ? currentText.match(re) : null; if (!matches) { findNext(); return; } editor.pushUndoStop(); editor.executeEdits("streams-find-replace", [{ range: sel, text: replaceValue, forceMoveMarkers: true }]); editor.pushUndoStop(); onChange(model.getValue()); setStatus("Replaced current match"); setTimeout(() => { highlightFindMatches(); findNext(); }, 0); }
-  function replaceAll() { const editor = editorRef.current; const model = editor?.getModel(); const re = buildSearchRegex(); if (!editor || !model || !re) return; const before = model.getValue(); const next = before.replace(re, replaceValue); const replaced = before === next ? 0 : (before.match(re) || []).length; editor.pushUndoStop(); model.setValue(next); editor.pushUndoStop(); onChange(next); setStatus(`Replaced ${replaced} match${replaced === 1 ? "" : "es"}`); setTimeout(() => highlightFindMatches(), 0); }
-
+  function syncScroll() {
+    if (gutterRef.current && textareaRef.current) gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+  }
+  function updateSelection() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const next = selectionFromTextarea(textarea);
+    setSelection(next);
+    setCursor(positionFromOffset(textarea.value, textarea.selectionStart || 0));
+    onSelectionChange?.(next.text ? next : null);
+  }
+  function handleChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    onChange(event.target.value);
+    window.setTimeout(updateSelection, 0);
+  }
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      setFindOpen(true);
+      setStatus("Find opened");
+    }
+  }
   async function copyText(text: string, label: string) { if (!text) return; await navigator.clipboard.writeText(text); setStatus(`${label} copied`); }
-  function copyCurrentLine() { const editor = editorRef.current; const model = editor?.getModel(); const pos = editor?.getPosition(); if (!model || !pos) return; void copyText(model.getLineContent(pos.lineNumber), `Line ${pos.lineNumber}`); }
-  function copySelection() { const current = readSelection(); if (!current?.text) return; void copyText(current.text, `Lines ${current.startLine}-${current.endLine}`); }
+  function copyCurrentLine() { const lines = (value || "").split("\n"); void copyText(lines[Math.max(0, cursor.line - 1)] || "", `Line ${cursor.line}`); }
+  function copySelection() { const current = textareaRef.current ? selectionFromTextarea(textareaRef.current) : selection; if (!current?.text) return; void copyText(current.text, `Lines ${current.startLine}-${current.endLine}`); }
   function copyAll() { void copyText(value, "Full file"); }
-  function decorateSelection(kind: "highlight" | "underline" | "circle") { const editor = editorRef.current; const monaco = monacoRef.current; const current = readSelection(editor); if (!editor || !monaco || !current) return; const range = new monaco.Range(current.startLine, current.startColumn, current.endLine, current.endColumn); const lineRange = new monaco.Range(current.startLine, 1, current.endLine, 1); const decoration = kind === "underline" ? { range, options: { inlineClassName: "streams-ai-underline" } } : kind === "circle" ? { range: lineRange, options: { isWholeLine: true, className: "streams-ai-circle-line", glyphMarginClassName: "streams-ai-circle-glyph" } } : { range: lineRange, options: { isWholeLine: true, className: "streams-ai-highlight-line", glyphMarginClassName: "streams-ai-highlight-glyph" } }; decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [decoration]); setStatus(`${kind} applied to lines ${current.startLine}-${current.endLine}`); }
-
-  function handleMount(editor: any, monaco: any) { editorRef.current = editor; monacoRef.current = monaco; editor.onDidChangeCursorPosition(() => updateCursor(editor)); editor.onDidChangeCursorSelection(() => readSelection(editor)); editor.onDidFocusEditorText(() => readSelection(editor)); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => openFind(false)); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => openFind(true)); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => selectAll()); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => undo()); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ, () => redo()); readSelection(editor); updateCursor(editor); }
-
-  useEffect(() => { if (!highlightRange || !editorRef.current || !monacoRef.current) return; const editor = editorRef.current; const monaco = monacoRef.current; const range = new monaco.Range(highlightRange.startLine, 1, highlightRange.endLine, 1); decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [{ range, options: { isWholeLine: true, className: "streams-ai-highlight-line", glyphMarginClassName: "streams-ai-highlight-glyph" } }]); editor.revealLineInCenter(highlightRange.startLine); }, [highlightRange]);
+  function selectAll() { textareaRef.current?.select(); updateSelection(); setStatus("All code selected"); }
+  function clearMarks() { setFindQuery(""); setFindOpen(false); setStatus("Marks cleared"); }
+  function mark(kind: string) { const current = textareaRef.current ? selectionFromTextarea(textareaRef.current) : selection; setStatus(current?.text ? `${kind} marked on lines ${current.startLine}-${current.endLine}` : `Select code before ${kind.toLowerCase()}`); }
+  function findNext() {
+    const textarea = textareaRef.current;
+    if (!textarea || !findQuery) return;
+    const start = Math.max(textarea.selectionEnd || 0, 0);
+    const nextIndex = textarea.value.toLowerCase().indexOf(findQuery.toLowerCase(), start);
+    const wrappedIndex = nextIndex >= 0 ? nextIndex : textarea.value.toLowerCase().indexOf(findQuery.toLowerCase(), 0);
+    if (wrappedIndex < 0) { setStatus("No matches"); return; }
+    textarea.focus();
+    textarea.setSelectionRange(wrappedIndex, wrappedIndex + findQuery.length);
+    updateSelection();
+    setStatus(`Found ${findQuery}`);
+  }
 
   return (
     <section className="runtimeCodeEditor" aria-label={`Runtime code editor for ${filePath}`}>
       <header className="codeToolbar"><div className="fileMeta"><b>{filePath || "No file selected"}</b><span>{lineCount(value).toLocaleString()} lines · {value.length.toLocaleString()} chars · {shortSha(sha)}</span></div><div className="iconTools"><button type="button" title="Copy selection" onClick={copySelection} disabled={!selection?.text}>⧉</button><button type="button" title="Download file" onClick={() => downloadTextFile(filePath, value)}>⇩</button><button type="button" title="Edit tools" onClick={() => setEditMenuOpen((open) => !open)}>✎</button><button type="button" title="More tools" onClick={() => setEditMenuOpen((open) => !open)}>⌄</button></div></header>
       <div className="utilityBar"><div className="cursorMeta"><span>Ln {cursor.line}, Col {cursor.column}</span><span>{Math.min(cursor.offset, value.length).toLocaleString()} of {value.length.toLocaleString()} characters</span></div><div className="historyMeta"><span>{shortSha(sha)} · current</span><button type="button" onClick={() => setStatus(`History ready for ${shortSha(sha)}`)}>↺ History</button></div></div>
-      {editMenuOpen ? <div className="editMenu"><button type="button" onClick={selectAll}>Select all</button><button type="button" onClick={copyAll}>Copy all</button><button type="button" onClick={copyCurrentLine}>Copy line</button><button type="button" onClick={copySelection} disabled={!selection?.text}>Copy selection</button><button type="button" onClick={undo}>Undo</button><button type="button" onClick={redo}>Redo</button><button type="button" onClick={() => openFind(false)}>Find/search</button><button type="button" onClick={() => openFind(true)}>Replace</button><button type="button" onClick={() => decorateSelection("highlight")}>Highlight</button><button type="button" onClick={() => decorateSelection("circle")}>Circle</button><button type="button" onClick={() => decorateSelection("underline")}>Underline</button></div> : null}
-      {findOpen ? <div className="findBar"><input value={findQuery} onChange={(event) => { setFindQuery(event.target.value); highlightFindMatches(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && event.shiftKey) findPrevious(); else if (event.key === "Enter") findNext(); if (event.key === "Escape") setFindOpen(false); if (event.key === "ArrowUp") historyStep(-1); if (event.key === "ArrowDown") historyStep(1); }} placeholder="Find in file" autoFocus />{replaceOpen ? <input value={replaceValue} onChange={(event) => setReplaceValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") replaceNext(); }} placeholder="Replace" /> : null}<button type="button" onClick={() => highlightFindMatches()}>Find</button><button type="button" onClick={findPrevious}>↑</button><button type="button" onClick={findNext}>↓</button>{replaceOpen ? <button type="button" onClick={replaceNext}>Replace</button> : null}{replaceOpen ? <button type="button" onClick={replaceAll}>All</button> : null}<button type="button" className={matchCase ? "active" : ""} onClick={() => setMatchCase((v) => !v)}>Aa</button><button type="button" className={wholeWord ? "active" : ""} onClick={() => setWholeWord((v) => !v)}>Word</button><button type="button" className={regexMode ? "active" : ""} onClick={() => setRegexMode((v) => !v)}>.*</button><button type="button" onClick={() => { setFindOpen(false); setFindQuery(""); clearDecorations(); }}>×</button><span>{matchCount} matches</span></div> : null}
-      <div className="selectionBar"><span>{selection ? `Selected lines ${selection.startLine}-${selection.endLine}, columns ${selection.startColumn}-${selection.endColumn}` : "Click in code to select a range"}</span><span>{status}</span></div>
-      <div className="editorFrame"><Editor height="100%" language={language} value={value} onChange={(next) => onChange(next || "")} onMount={handleMount} options={{ automaticLayout: true, minimap: { enabled: false }, fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace", lineNumbers: "on", glyphMargin: true, folding: true, scrollBeyondLastLine: false, wordWrap: "off", tabSize: 2, insertSpaces: true, renderLineHighlight: "all", roundedSelection: false, overviewRulerBorder: false, quickSuggestions: true, find: { addExtraSpaceOnTop: false, autoFindInSelection: "never" } }} /></div>
-      <style jsx>{`.runtimeCodeEditor{height:100%;min-height:0;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);background:#0d1117;color:#e6edf3;overflow:hidden;border:1px solid #30363d;border-radius:12px}.codeToolbar{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:#f6f8fa;border-bottom:1px solid #d0d7de;color:#24292f}.fileMeta{min-width:0;display:grid;gap:2px}.fileMeta b{min-width:0;color:#24292f;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fileMeta span{color:#57606a;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.iconTools{display:flex;align-items:center;gap:8px}.iconTools button{height:32px;min-width:34px;border:1px solid #d0d7de;border-radius:10px;background:#f6f8fa;color:#57606a;font-size:18px;font-weight:800;cursor:pointer}.iconTools button:hover:not(:disabled){background:#eef2f7;color:#24292f}.iconTools button:disabled{opacity:.45;cursor:not-allowed}.utilityBar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 12px;background:#fff;border-bottom:1px solid #d8dee4;color:#57606a;font-size:12px}.cursorMeta,.historyMeta{display:flex;align-items:center;gap:14px;min-width:0}.cursorMeta span,.historyMeta span{white-space:nowrap}.historyMeta button{border:0;background:transparent;color:#24292f;font-weight:900;cursor:pointer;font-size:13px}.editMenu{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;background:#f6f8fa;border-bottom:1px solid #d0d7de}.editMenu button,.findBar button{height:28px;border:1px solid #d0d7de;border-radius:7px;background:#fff;color:#24292f;font-size:11px;font-weight:800;padding:0 9px;cursor:pointer}.editMenu button:hover:not(:disabled),.findBar button:hover{background:#eef2f7}.editMenu button:disabled{opacity:.45;cursor:not-allowed}.findBar{display:grid;grid-template-columns:minmax(150px,1fr) minmax(130px,1fr) repeat(10,auto);align-items:center;gap:6px;padding:8px 10px;background:#fff8c5;border-bottom:1px solid #d4a72c;color:#24292f;font-size:11px}.findBar input{height:30px;border:1px solid #d0d7de;border-radius:8px;background:#fff;color:#24292f;padding:0 10px;outline:none}.findBar button.active{background:#0969da;color:#fff;border-color:#0969da}.selectionBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;background:#0d1117;border-bottom:1px solid #30363d;color:#8b949e;font-size:11px}.selectionBar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.editorFrame{min-width:0;min-height:0;overflow:hidden;background:#0d1117}:global(.streams-ai-highlight-line){background:rgba(255,248,197,.38)!important}:global(.streams-ai-highlight-glyph){background:#d29922;border-radius:999px;margin-left:7px;width:9px!important;height:9px!important;margin-top:5px}:global(.streams-ai-underline){text-decoration:underline 2px #f59e0b;text-underline-offset:3px}:global(.streams-ai-circle-line){box-shadow:inset 0 0 0 2px rgba(56,139,253,.45);background:rgba(56,139,253,.12)!important}:global(.streams-ai-circle-glyph:after){content:"";display:block;width:12px;height:12px;border:2px solid #58a6ff;border-radius:999px;margin-left:5px;margin-top:3px}:global(.streams-ai-find-match){background:rgba(255,212,59,.45);border-radius:2px}`}</style>
+      {editMenuOpen ? <div className="editMenu"><button type="button" onClick={selectAll}>Select all</button><button type="button" onClick={copyAll}>Copy all</button><button type="button" onClick={copyCurrentLine}>Copy line</button><button type="button" onClick={copySelection} disabled={!selection?.text}>Copy selection</button><button type="button" onClick={() => setFindOpen(true)}>Find/search</button><button type="button" onClick={() => mark("Highlight")}>Highlight</button><button type="button" onClick={() => mark("Circle")}>Circle</button><button type="button" onClick={() => mark("Underline")}>Underline</button><button type="button" onClick={clearMarks}>Clear marks</button></div> : null}
+      {findOpen ? <div className="findBar"><input value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findNext(); if (event.key === "Escape") setFindOpen(false); }} placeholder="Find in file" autoFocus /><button type="button" onClick={findNext}>Find</button><button type="button" onClick={clearMarks}>×</button></div> : null}
+      <div className="selectionBar"><span>{selection?.text ? `Selected lines ${selection.startLine}-${selection.endLine}, columns ${selection.startColumn}-${selection.endColumn}` : highlightRange ? `Highlighted lines ${highlightRange.startLine}-${highlightRange.endLine}` : "Click in code to select a range"}</span><span>{status}</span></div>
+      <div className="editorFrame">
+        <pre ref={gutterRef} className="lineGutter" aria-hidden="true">{numbers}</pre>
+        <textarea ref={textareaRef} value={value} onChange={handleChange} onSelect={updateSelection} onKeyUp={updateSelection} onClick={updateSelection} onScroll={syncScroll} onKeyDown={handleKeyDown} spellCheck={false} />
+      </div>
+      <style jsx>{`.runtimeCodeEditor{height:100%;min-height:0;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);background:#0d1117;color:#e6edf3;overflow:hidden;border:1px solid #30363d;border-radius:12px}.codeToolbar{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:#f6f8fa;border-bottom:1px solid #d0d7de;color:#24292f}.fileMeta{min-width:0;display:grid;gap:2px}.fileMeta b{min-width:0;color:#24292f;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fileMeta span{color:#57606a;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.iconTools{display:flex;align-items:center;gap:8px}.iconTools button{height:32px;min-width:34px;border:1px solid #d0d7de;border-radius:10px;background:#f6f8fa;color:#57606a;font-size:18px;font-weight:800;cursor:pointer}.iconTools button:hover:not(:disabled){background:#eef2f7;color:#24292f}.iconTools button:disabled{opacity:.45;cursor:not-allowed}.utilityBar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 12px;background:#fff;border-bottom:1px solid #d8dee4;color:#57606a;font-size:12px}.cursorMeta,.historyMeta{display:flex;align-items:center;gap:14px;min-width:0}.cursorMeta span,.historyMeta span{white-space:nowrap}.historyMeta button{border:0;background:transparent;color:#24292f;font-weight:900;cursor:pointer;font-size:13px}.editMenu{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;background:#f6f8fa;border-bottom:1px solid #d0d7de}.editMenu button,.findBar button{height:28px;border:1px solid #d0d7de;border-radius:7px;background:#fff;color:#24292f;font-size:11px;font-weight:800;padding:0 9px;cursor:pointer}.editMenu button:hover:not(:disabled),.findBar button:hover{background:#eef2f7}.editMenu button:disabled{opacity:.45;cursor:not-allowed}.findBar{display:grid;grid-template-columns:minmax(160px,1fr) auto auto;align-items:center;gap:6px;padding:8px 10px;background:#fff8c5;border-bottom:1px solid #d4a72c;color:#24292f;font-size:11px}.findBar input{height:30px;border:1px solid #d0d7de;border-radius:8px;background:#fff;color:#24292f;padding:0 10px;outline:none}.selectionBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;background:#0d1117;border-bottom:1px solid #30363d;color:#8b949e;font-size:11px}.selectionBar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.editorFrame{min-width:0;min-height:0;display:grid;grid-template-columns:54px minmax(0,1fr);overflow:hidden;background:#0d1117}.lineGutter{margin:0;padding:10px 8px 40px 0;background:#0d1117;border-right:1px solid #30363d;color:#6e7681;text-align:right;font:12px/19px ui-monospace,SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;overflow:hidden;user-select:none}.editorFrame textarea{width:100%;height:100%;min-width:0;min-height:0;resize:none;border:0;outline:0;background:#0d1117;color:#e6edf3;padding:10px 12px 40px;font:12px/19px ui-monospace,SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;white-space:pre;overflow:auto;tab-size:2;box-sizing:border-box}.editorFrame textarea::selection{background:rgba(56,139,253,.45)}`}</style>
     </section>
   );
 }
