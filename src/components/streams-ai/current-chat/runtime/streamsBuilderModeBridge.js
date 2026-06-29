@@ -1,5 +1,9 @@
 "use client";
 
+const CONTEXT_KEY = "streams-builder:chat-context-events";
+const MAX_CONTEXT_EVENTS = 80;
+const MAX_CONTEXT_FOR_PROMPT = 24;
+
 function encodeSseEvent(type, data) {
   return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -77,6 +81,66 @@ function isBuilderCommand(message) {
     || isVisualEditCommand(message);
 }
 
+function readBuilderEvents() {
+  try {
+    const raw = window.localStorage.getItem(CONTEXT_KEY);
+    const events = raw ? JSON.parse(raw) : [];
+    return Array.isArray(events) ? events.slice(-MAX_CONTEXT_EVENTS) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBuilderEvents(events) {
+  try {
+    window.localStorage.setItem(CONTEXT_KEY, JSON.stringify((Array.isArray(events) ? events : []).slice(-MAX_CONTEXT_EVENTS)));
+  } catch {
+    // Context is a best-effort assistant memory layer.
+  }
+}
+
+function recordBuilderEvent(event) {
+  const detail = event && typeof event === "object" ? event : {};
+  const message = String(detail.message || "").trim();
+  if (!message) return;
+  const normalized = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    at: detail.at || new Date().toISOString(),
+    phase: detail.phase || "builder-event",
+    source: detail.source || "streams-builder",
+    repo: detail.repo || detail.repository || "",
+    branch: detail.branch || "",
+    filePath: detail.filePath || detail.path || "",
+    route: detail.route || "",
+    patchState: detail.patchState || "",
+    draftDirty: Boolean(detail.draftDirty),
+    saved: detail.saved,
+    message,
+  };
+  const current = readBuilderEvents();
+  const last = current[current.length - 1];
+  if (last && last.phase === normalized.phase && last.message === normalized.message && Date.now() - Date.parse(last.at || "0") < 1200) return;
+  writeBuilderEvents([...current, normalized]);
+}
+
+function builderContextBlock() {
+  const events = readBuilderEvents().slice(-MAX_CONTEXT_FOR_PROMPT);
+  if (!events.length) return "";
+  const active = [...events].reverse().find((event) => event.filePath || event.repo || event.route) || {};
+  const lines = events.map((event, index) => {
+    const target = [event.repo, event.branch, event.filePath, event.route].filter(Boolean).join(" | ");
+    return `${index + 1}. ${event.phase || "event"}${target ? ` [${target}]` : ""}: ${event.message}`;
+  });
+  return [
+    "",
+    "ACTIVE STREAMS BUILDER EVENT CONTEXT:",
+    "Use this as live workstation memory. It records file pulls, visual selections, code selections, unsaved edits, saves, patch generation, preview state, push blocking, and GitHub push results.",
+    active.repo || active.filePath ? `Current source truth: repo ${active.repo || "unknown"}, branch ${active.branch || "unknown"}, file ${active.filePath || "unknown"}, route ${active.route || "unknown"}.` : "Current source truth is whatever the latest builder event resolved.",
+    "Never ignore this context when answering builder questions. If a push/save/patch failed, explain the exact failure and recommend the safest next fix. If draftDirty is true or patchState is not generated, Push GitHub is blocked until Save Draft regenerates the review patch.",
+    ...lines,
+  ].join("\n");
+}
+
 function inferVisualEditContext(message) {
   const lower = String(message || "").toLowerCase();
   const patientLanding = /patient|doctor|provider|healthcare|visit|rx|refill|follow\s*up|private\s+review|personal\s+again/.test(lower);
@@ -93,7 +157,7 @@ function inferVisualEditContext(message) {
     "Resolve the user's visual language before queueing Codex. Map the visible target to route, source file, component usage, reusable component risk, and smallest safe patch.",
     "For one rendered instance, patch the page/section usage site. Do not edit or delete reusable component files globally unless the user explicitly asks for a global component change.",
     "Preserve unrelated layout, booking/payment/intake/provider/overlay logic, shared components, and all other sections.",
-    `Source target hint: ${target}.`,
+    `Source target hint: ${target}.",
     "If the user mentions cards below/under a doctor/provider/hero/Healthcare That Feels Personal Again section, treat it as a page-level rendered instance and remove the local JSX usage only.",
     "User-facing response should be operational and specific, for example: 'Resolved visual edit target: repo ..., file ..., scope usage_site. I sent this safe patch plan to Visual Editing. Check Logs for job/proof.'",
     "Stop at diff/approval. Do not commit. Do not push.",
@@ -102,7 +166,8 @@ function inferVisualEditContext(message) {
 
 function enrichBuilderMessage(message) {
   const context = inferVisualEditContext(message);
-  return context ? `${message.trim()}${context}` : message;
+  const liveContext = builderContextBlock();
+  return [message.trim(), context, liveContext].filter(Boolean).join("\n");
 }
 
 function inferConnection(message, current) {
@@ -115,6 +180,7 @@ function inferConnection(message, current) {
 }
 
 function fallbackStatus(message, routedConnection) {
+  const liveContext = builderContextBlock();
   if (isVisualEditCommand(message)) {
     return [
       "Resolved visual edit target: visible page element described by the user.",
@@ -122,10 +188,11 @@ function fallbackStatus(message, routedConnection) {
       "Safe patch: remove only the local rendered usage in that landing-page section; do not edit or delete reusable component files globally.",
       "Protected: src/components/home/VisitCards.tsx, BookingOverlay, provider, payment, intake, visit-type logic, and unrelated page sections.",
       `Current status: routed to ${routedConnection.activeWorkstationName || "Visual Editing"}; source pull and proof events will appear in Logs. Stop at approval; no commit or push.`,
-    ].join("\n");
+      liveContext,
+    ].filter(Boolean).join("\n");
   }
 
-  return `Routed to ${routedConnection.activeWorkstationName || "workstation"}. The chat model response was unavailable, so check Logs for source-pull and job status.`;
+  return [`Routed to ${routedConnection.activeWorkstationName || "workstation"}. The chat model response was unavailable, so check Logs for source-pull and job status.`, liveContext].filter(Boolean).join("\n");
 }
 
 export function installStreamsBuilderModeBridge() {
@@ -150,6 +217,10 @@ export function installStreamsBuilderModeBridge() {
     if (data.type === "streams-builder-status") {
       window.dispatchEvent(new CustomEvent("streams-builder-status", { detail: data }));
     }
+    if (data.type === "streams-builder-context-event") {
+      recordBuilderEvent(data.detail || {});
+      window.dispatchEvent(new CustomEvent("streams-builder-context-event", { detail: data.detail || {} }));
+    }
   }
 
   window.addEventListener("message", onParentMessage);
@@ -162,7 +233,7 @@ export function installStreamsBuilderModeBridge() {
     if (method === "POST" && isChatPostEndpoint(pathname)) {
       const body = parseChatBody(init);
       const message = messageFromBody(body);
-      const shouldRoute = message && (connection?.connected && connection?.activeWorkstationId || isBuilderCommand(message));
+      const shouldRoute = message && (connection?.connected && connection?.activeWorkstationId || isBuilderCommand(message) || readBuilderEvents().length);
       if (shouldRoute) {
         const routedConnection = inferConnection(message, connection);
         const routedMessage = enrichBuilderMessage(message);
@@ -175,13 +246,14 @@ export function installStreamsBuilderModeBridge() {
           connection: routedConnection,
           source: "iphone-chat",
           autoConnected: true,
+          builderContext: readBuilderEvents().slice(-MAX_CONTEXT_FOR_PROMPT),
           at: new Date().toISOString(),
         }, window.location.origin);
-if (isVisualEditCommand(message)) {
-  return makeSseResponse(fallbackStatus(message, routedConnection));
-}
+        if (isVisualEditCommand(message)) {
+          return makeSseResponse(fallbackStatus(message, routedConnection));
+        }
         try {
-          const enrichedBody = writeMessageToBody(body, routedMessage);
+          const enrichedBody = writeMessageToBody({ ...body, builderContext: readBuilderEvents().slice(-MAX_CONTEXT_FOR_PROMPT) }, routedMessage);
           const response = await originalFetch(input, cloneInitWithBody(init, JSON.stringify(enrichedBody)));
           if (response?.ok) return response;
         } catch {
