@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import RuntimeCodeEditor from "./RuntimeCodeEditor";
 
 type ActiveFile = { repo?: string; branch?: string; path?: string; folder?: string; sha?: string; content?: string; route?: string };
+type CodeSelection = { startLine: number; startColumn: number; endLine: number; endColumn: number; text: string };
 
 function readActiveFile(): ActiveFile {
   try {
@@ -15,6 +16,16 @@ function readActiveFile(): ActiveFile {
   }
 }
 
+function emit(phase: string, message: string, detail: Record<string, unknown> = {}) {
+  const payload = { phase, message, source: "visual-code-dock", at: new Date().toISOString(), ...detail };
+  window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: payload }));
+  window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: payload }));
+}
+
+function clean(value?: string) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 function writeActiveFile(next: ActiveFile) {
   try {
     window.localStorage.setItem("streams-builder:active-file", JSON.stringify(next));
@@ -22,6 +33,41 @@ function writeActiveFile(next: ActiveFile) {
   } catch {
     // Ignore storage failures; the visible editor still updates locally.
   }
+}
+
+function previewIframe() {
+  return document.querySelector<HTMLIFrameElement>(".visualEditor .canvas.editor iframe, .visualEditor .canvas.browser iframe, .visualEditor .splitPreview iframe");
+}
+
+function highlightPreviewText(text?: string) {
+  const needle = clean(text);
+  if (!needle || needle.length < 2) return;
+  try {
+    const doc = previewIframe()?.contentDocument;
+    if (!doc?.body) return;
+    doc.querySelectorAll("[data-streams-code-selected='true']").forEach((node) => (node as HTMLElement).removeAttribute("data-streams-code-selected"));
+    let style = doc.getElementById("streams-code-selected-style");
+    if (!style) {
+      style = doc.createElement("style");
+      style.id = "streams-code-selected-style";
+      style.textContent = `[data-streams-code-selected="true"]{outline:3px solid #22c55e!important;box-shadow:0 0 0 2px rgba(34,197,94,.5),0 0 24px rgba(34,197,94,.28)!important;background:rgba(34,197,94,.1)!important}`;
+      doc.head.appendChild(style);
+    }
+    const lower = needle.toLowerCase();
+    const nodes = Array.from(doc.body.querySelectorAll<HTMLElement>("[data-streams-editable='true'],h1,h2,h3,h4,h5,h6,p,span,b,strong,a,button,label,li,small,img,section,article,div"));
+    const found = nodes.find((el) => clean(el.innerText || el.textContent).toLowerCase().includes(lower) || String(el.getAttribute("src") || "").includes(needle));
+    if (!found) return;
+    found.dataset.streamsCodeSelected = "true";
+    found.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  } catch {
+    // Preview frame not ready yet.
+  }
+}
+
+function bestQuery(payload: Record<string, unknown>) {
+  return [payload.original, payload.text, payload.src]
+    .map((value) => clean(String(value || "")))
+    .find((value) => value.length > 2 && value.length < 240) || "";
 }
 
 export default function VisualEditorCodeDock() {
@@ -35,7 +81,7 @@ export default function VisualEditorCodeDock() {
     const latest = readActiveFile();
     setActiveFile(latest);
     setDraft(latest.content || "");
-    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "code-dock-loaded", source: "visual-code-dock", filePath: latest.path, repo: latest.repo, branch: latest.branch, route: latest.route, sha: latest.sha, message: `Code editor opened ${latest.path || "the active file"}.` } }));
+    emit("code-dock-loaded", `Code editor opened ${latest.path || "the active file"}.`, { filePath: latest.path, repo: latest.repo, branch: latest.branch, route: latest.route, sha: latest.sha });
   }
 
   useEffect(() => {
@@ -49,6 +95,7 @@ export default function VisualEditorCodeDock() {
       const next = detail?.path ? detail : readActiveFile();
       setActiveFile(next || {});
       setDraft(next?.content || "");
+      if (next?.path) emit("file-pulled", `Pulled file active: ${next.path}. Chat is tracking all saved and unsaved code/visual actions.`, { filePath: next.path, repo: next.repo, branch: next.branch, sha: next.sha });
     }
 
     function attachButton() {
@@ -90,14 +137,36 @@ export default function VisualEditorCodeDock() {
       setOpen(true);
     }
 
+    function onPreviewMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data || {};
+      if (data.source !== "streams-editable-preview") return;
+      const query = bestQuery(data.payload || {});
+      if (query) window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "search", query } }));
+      if (data.type === "streams-editable-select") emit("visual-selection", `Selected preview element: ${query || "element"}. Code editor is searching and highlighting the source.`, { selectedText: query });
+      if (data.type === "streams-editable-input") emit("visual-input", `Unsaved visual typing detected: ${query || "text edit"}. Save Draft is required before review.`, { selectedText: query });
+      if (String(data.type || "").includes("commit") || String(data.type || "").includes("remove") || String(data.type || "").includes("style") || String(data.type || "").includes("replace")) emit("visual-edit", "Unsaved visual change detected. Save Draft is required before review.", { selectedText: query });
+    }
+
+    function onCodeState(event: Event) {
+      const selection = (event as CustomEvent<{ selection?: CodeSelection | null }>).detail?.selection;
+      if (!selection?.text) return;
+      highlightPreviewText(selection.text);
+      emit("code-selection", `Selected code lines ${selection.startLine}-${selection.endLine}. Matching preview element is highlighted when found.`, { selectedText: selection.text.slice(0, 160) });
+    }
+
     attachButton();
     window.addEventListener("streams-builder:pulled-file", refreshFile as EventListener);
+    window.addEventListener("streams-builder:code-editor-state", onCodeState as EventListener);
+    window.addEventListener("message", onPreviewMessage);
     document.addEventListener("click", routeFooterCodeButton, true);
     const timer = window.setInterval(attachButton, 600);
     const observer = new MutationObserver(attachButton);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => {
       window.removeEventListener("streams-builder:pulled-file", refreshFile as EventListener);
+      window.removeEventListener("streams-builder:code-editor-state", onCodeState as EventListener);
+      window.removeEventListener("message", onPreviewMessage);
       document.removeEventListener("click", routeFooterCodeButton, true);
       window.clearInterval(timer);
       observer.disconnect();
@@ -118,7 +187,7 @@ export default function VisualEditorCodeDock() {
     setActiveFile(merged);
     writeActiveFile(merged);
     window.dispatchEvent(new CustomEvent("streams-builder:code-draft-changed", { detail: { ...merged, content: next, draftDirty: true, saved: false, patchState: "not_generated" } }));
-    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "manual-code-edit", source: "visual-code-dock", filePath: merged.path, repo: merged.repo, branch: merged.branch, draftDirty: true, saved: false, patchState: "not_generated", message: `Manual code edit made in ${merged.path || "the open file"}. Save Draft is required before review.` } }));
+    emit("manual-code-edit", `Manual code edit made in ${merged.path || "the open file"}. Save Draft is required before review.`, { filePath: merged.path, repo: merged.repo, branch: merged.branch, draftDirty: true, saved: false, patchState: "not_generated" });
   }
 
   if (!mounted || !open || !canvas) {
