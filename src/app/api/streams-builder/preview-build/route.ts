@@ -10,3 +10,16 @@ export async function GET(request: Request) {
   const json = await response.json().catch(() => ({}));
   return Response.json(json, { status: response.status });
 }
+
+export async function POST(request: Request) {
+  const url = new URL(request.url);
+  const body = await request.json().catch(() => ({}));
+  const response = await fetch(`${url.origin}/api/streams-builder/line-patches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ ...body, push: false, buildPreview: true }),
+  });
+  const json = await response.json().catch(() => ({}));
+  return Response.json(json, { status: response.status });
+}
