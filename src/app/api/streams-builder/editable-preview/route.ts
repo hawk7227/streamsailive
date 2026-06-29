@@ -31,6 +31,26 @@ function injectEditableBridge(html: string, target: URL) {
   let fileInput = null;
   let toolbar = null;
 
+  function snapshotScroll() {
+    const root = document.scrollingElement || document.documentElement;
+    const items = [{ el: root, top: root ? root.scrollTop : window.scrollY, left: root ? root.scrollLeft : window.scrollX }];
+    document.querySelectorAll('*').forEach(el => {
+      if ((el.scrollTop || el.scrollLeft) && el !== root) items.push({ el, top: el.scrollTop, left: el.scrollLeft });
+    });
+    return items;
+  }
+  function restoreScroll(items) {
+    items.forEach(item => { try { item.el.scrollTop = item.top; item.el.scrollLeft = item.left; } catch {} });
+  }
+  function keepPreviewScroll(fn) {
+    const scroll = snapshotScroll();
+    try { fn(); } finally {
+      restoreScroll(scroll);
+      requestAnimationFrame(() => restoreScroll(scroll));
+      setTimeout(() => restoreScroll(scroll), 0);
+    }
+  }
+
   function textOf(el) {
     return (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
   }
@@ -142,11 +162,13 @@ function injectEditableBridge(html: string, target: URL) {
     if (toolbar) toolbar.style.display = 'none';
   }
   function selectElement(el) {
-    if (selected) selected.removeAttribute('data-streams-selected');
-    selected = el;
-    el.dataset.streamsSelected = 'true';
-    moveToolbar(el);
-    post('streams-editable-select', payloadFor(el));
+    keepPreviewScroll(() => {
+      if (selected) selected.removeAttribute('data-streams-selected');
+      selected = el;
+      el.dataset.streamsSelected = 'true';
+      moveToolbar(el);
+      post('streams-editable-select', payloadFor(el));
+    });
   }
   function removeSelected(el) {
     const payload = payloadFor(el);
@@ -228,7 +250,7 @@ function injectEditableBridge(html: string, target: URL) {
       el.setAttribute('contenteditable', 'true');
       el.setAttribute('spellcheck', 'false');
       makeResizableAndMovable(el);
-      el.addEventListener('click', event => { event.stopPropagation(); el.focus(); selectElement(el); });
+      el.addEventListener('click', event => { event.stopPropagation(); keepPreviewScroll(() => { try { el.focus({ preventScroll: true }); } catch { el.focus(); } selectElement(el); }); });
       el.addEventListener('input', () => post('streams-editable-input', payloadFor(el)));
       el.addEventListener('blur', () => post('streams-editable-commit', payloadFor(el)));
     });
