@@ -31,6 +31,12 @@ export default function VisualEditorCodeDock() {
   const [activeFile, setActiveFile] = useState<ActiveFile>({});
   const [draft, setDraft] = useState("");
 
+  function loadLatestFile() {
+    const latest = readActiveFile();
+    setActiveFile(latest);
+    setDraft(latest.content || "");
+  }
+
   useEffect(() => {
     setMounted(true);
     const initial = readActiveFile();
@@ -59,21 +65,39 @@ export default function VisualEditorCodeDock() {
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const latest = readActiveFile();
-        setActiveFile(latest);
-        setDraft(latest.content || "");
+        loadLatestFile();
         setOpen((value) => !value);
       });
       header.append(button);
     }
 
+    function routeFooterCodeButton(event: Event) {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest?.("button") as HTMLButtonElement | null;
+      if (!button || button.dataset.visualCodeDockButton === "true") return;
+      if (button.textContent?.trim() !== "Code Editor") return;
+      if (!button.closest(".visualEditor .sourceActionStrip")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof (event as { stopImmediatePropagation?: () => void }).stopImmediatePropagation === "function") (event as { stopImmediatePropagation: () => void }).stopImmediatePropagation();
+      const editorButton = document.querySelector<HTMLButtonElement>(".visualEditor .sourceActionStrip button.active");
+      if (!editorButton || editorButton.textContent?.trim() !== "Editor") {
+        const footerEditorButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".visualEditor .sourceActionStrip button")).find((item) => item.textContent?.trim() === "Editor");
+        footerEditorButton?.click();
+      }
+      loadLatestFile();
+      setOpen(true);
+    }
+
     attachButton();
     window.addEventListener("streams-builder:pulled-file", refreshFile as EventListener);
+    document.addEventListener("click", routeFooterCodeButton, true);
     const timer = window.setInterval(attachButton, 600);
     const observer = new MutationObserver(attachButton);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => {
       window.removeEventListener("streams-builder:pulled-file", refreshFile as EventListener);
+      document.removeEventListener("click", routeFooterCodeButton, true);
       window.clearInterval(timer);
       observer.disconnect();
     };
