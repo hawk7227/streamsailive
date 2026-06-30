@@ -1,4 +1,5 @@
 import { createStreamsBuilderPlan, getStreamsBuilderToolRegistry, traceStreamsBuilderPlan, type StreamsBuilderOrchestratorInput } from "@/lib/streams-builder/orchestrator-core";
+import { getWorkspaceEventKinds, getWorkspaceToolRegistry, summarizeWorkspaceCapabilities } from "@/lib/streams-builder/workspace-tool-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,11 @@ export async function GET(request: Request) {
     ok: true,
     message: "Streams builder unified orchestrator is available.",
     oneBrainRule: plan.oneBrainRule,
+    workspaceAwarenessRule: "Chat knows workspace actions by reading builder events and capability metadata.",
     registry: getStreamsBuilderToolRegistry(),
+    workspaceRegistry: getWorkspaceToolRegistry(),
+    workspaceSummary: summarizeWorkspaceCapabilities(),
+    eventKinds: getWorkspaceEventKinds(),
     plan,
   });
 }
@@ -46,6 +51,8 @@ export async function POST(request: Request) {
     ok: plan.ok,
     mode: plan.mode,
     message: plan.chatIntervention.shouldIntervene ? plan.chatIntervention.message : "Streams builder orchestrator plan created.",
+    workspaceAwarenessRule: "Chat should know all meaningful workspace actions through builder events.",
+    workspaceSummary: summarizeWorkspaceCapabilities(plan.mode),
     plan,
   });
 }
