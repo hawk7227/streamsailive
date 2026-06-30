@@ -1,5 +1,6 @@
 import { APPROVED_OPENAI_TOOL_DEFINITIONS } from "@/lib/streams-ai/openai-tool-definitions";
 import { executeApprovedOpenAITool, type ToolExecutorDeps } from "@/lib/streams-ai/openai-tool-executor";
+import { maybeAnswerGroundedRuntimeRequest } from "@/lib/streams-ai/grounded-request-guards";
 
 type Send = (event: string, payload: Record<string, unknown>) => void;
 
@@ -52,6 +53,12 @@ function finalText(response: any) {
   return output.map((item: any) => textOf(item)).join("").trim();
 }
 
+function latestUserText(input: any[]) {
+  const reversed = [...(Array.isArray(input) ? input : [])].reverse();
+  const item = reversed.find((entry) => entry?.role === "user" && entry?.content);
+  return textOf(item?.content || "");
+}
+
 function callsFrom(response: any) {
   const output = Array.isArray(response?.output) ? response.output : [];
   return output
@@ -91,6 +98,25 @@ export async function runResponsesContinuation({
   metadata?: Record<string, unknown>;
   maxRounds?: number;
 }): Promise<ResponsesContinuationResult> {
+  const userContent = latestUserText(input);
+  const guarded = await maybeAnswerGroundedRuntimeRequest({
+    userContent,
+    sessionId: deps.sessionId,
+    scope: deps.scope,
+    jobs: deps.jobs,
+    assets: deps.assets,
+    providerRuns: deps.providerRuns,
+  });
+  if (guarded?.handled) {
+    return {
+      content: guarded.content,
+      responseId: null,
+      usage: null,
+      toolResults: (guarded.toolResults || []).map((item) => ({ name: item.name, ok: item.ok, result: item.result })),
+      rounds: 0,
+    };
+  }
+
   const tools = APPROVED_OPENAI_TOOL_DEFINITIONS;
   const toolResults: ResponsesContinuationResult["toolResults"] = [];
 
