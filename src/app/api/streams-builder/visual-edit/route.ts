@@ -84,6 +84,43 @@ async function expandFilesFromImports(repoFullName: string | undefined, branch: 
   return Array.from(byPath.values());
 }
 
+function assetPath(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try { return new URL(raw).pathname; } catch { return raw.replace(/^https?:\/\/[^/]+/i, ""); }
+}
+
+function quotedValue(block: string, key: string) {
+  const match = block.match(new RegExp(`${key}\\s*:\\s*([\"'\`])([\\s\\S]*?)\\1`));
+  return match?.[2] || "";
+}
+
+function inferSelection(files: SourceFileSnapshot[], selection: VisualSelection): VisualSelection {
+  const image = assetPath(selection.imageSrc || selection.itemKey || "");
+  if (!image) return selection;
+  for (const file of files) {
+    const content = file.content || "";
+    const imageIndex = content.indexOf(image);
+    if (imageIndex < 0) continue;
+    const before = content.slice(0, imageIndex);
+    const objectStart = before.lastIndexOf("{");
+    const arrayMatch = before.match(/(?:const|let|var)\s+([A-Za-z0-9_]*CARDS[A-Za-z0-9_]*|[A-Z][A-Z0-9_]*)\s*[:\w\s<>\[\],]*=\s*\[[\s\S]*$/);
+    const objectEnd = content.indexOf("}", imageIndex);
+    const block = objectStart >= 0 && objectEnd > objectStart ? content.slice(objectStart, objectEnd + 1) : "";
+    const href = quotedValue(block, "href");
+    return {
+      ...selection,
+      imageSrc: image,
+      itemKey: href || image,
+      href: selection.href || href,
+      sourceFile: selection.sourceFile || file.path,
+      symbol: selection.symbol || arrayMatch?.[1] || "",
+      operationTarget: selection.operationTarget || "array-item",
+    };
+  }
+  return { ...selection, imageSrc: image };
+}
+
 async function commitPatches(repoFullName: string, branch: string, patches: Array<{ file: string; after: string }>) {
   const results = [];
   for (const patch of patches) {
@@ -109,10 +146,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as Body;
     const suppliedFiles = Array.isArray(body.files) ? body.files : [];
-    const selection = body.selection || {};
     const command = body.command || "remove this";
     if (!suppliedFiles.length) return streamsAIJson({ ok: false, error: "files are required" }, 400);
     const files = await expandFilesFromImports(body.repoFullName, body.branch, suppliedFiles);
+    const selection = inferSelection(files, body.selection || {});
     const result = planVisualEdit(files, selection, command);
     const approved = Boolean(body.approve);
     let commits: Array<Record<string, unknown>> = [];
@@ -121,7 +158,7 @@ export async function POST(request: NextRequest) {
       if (result.error || !result.patches.length) return streamsAIJson({ ok: false, error: result.error || "No patch generated", result }, 400);
       commits = await commitPatches(body.repoFullName, body.branch, result.patches.map((patch) => ({ file: patch.file, after: patch.after })));
     }
-    return streamsAIJson({ ok: true, result, commits, approved, indexedFiles: files.map((file) => file.path) });
+    return streamsAIJson({ ok: true, result, commits, approved, selection, indexedFiles: files.map((file) => file.path) });
   } catch (error) {
     return streamsAIError(error);
   }
