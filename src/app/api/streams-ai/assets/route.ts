@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const projectId = request.nextUrl.searchParams.get("projectId");
     const sessionId = request.nextUrl.searchParams.get("sessionId");
     const data = await assets.list(scope, { projectId, sessionId });
-    return streamsAIJson({ ok: true, assets: data });
+    return streamsAIJson({ ok: true, assets: data.map(withProcessedMetadata) });
   } catch (error) {
     return streamsAIError(error);
   }
@@ -47,23 +47,24 @@ export async function POST(request: NextRequest) {
       }
 
       const processing = await processUploadedAssets(scope, uploaded as Record<string, any>[]);
-      const normalized = uploaded.map((asset: Record<string, any>, index) => ({
-        ...asset,
-        metadata: {
+      const normalized = uploaded.map((asset: Record<string, any>, index) => {
+        const result = processing[index] || {};
+        const metadata = {
           ...(asset.metadata || {}),
-          ...(processing[index]?.ok ? {
-            processingStatus: processing[index]?.status || "ready",
-            extractionStatus: processing[index]?.status || "ready",
-            chunkCount: processing[index]?.chunkCount || 0,
-            summary: processing[index]?.summary || null,
-            textPreview: processing[index]?.textPreview || null,
+          ...(result?.ok ? {
+            processingStatus: result?.status || "ready",
+            extractionStatus: result?.status || "ready",
+            chunkCount: result?.chunkCount || 0,
+            summary: result?.summary || null,
+            textPreview: result?.textPreview || null,
           } : {
             processingStatus: "failed",
             extractionStatus: "failed",
-            processingError: processing[index]?.error || "Processing failed",
+            processingError: result?.error || "Processing failed",
           }),
-        },
-      }));
+        };
+        return withProcessedMetadata({ ...asset, metadata });
+      });
 
       return streamsAIJson({ ok: true, assets: normalized, processing }, 201);
     }
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
     });
 
     const processing = await processUploadedAsset(scope, asset as Record<string, any>);
-    return streamsAIJson({ ok: true, asset, processing }, 201);
+    return streamsAIJson({ ok: true, asset: withProcessedMetadata(asset as Record<string, any>), processing }, 201);
   } catch (error) {
     return streamsAIError(error);
   }
@@ -120,4 +121,18 @@ function inferSessionIdFromRequest(request: NextRequest) {
   } catch {
     return null;
   }
+}
+
+function withProcessedMetadata(asset: Record<string, any>) {
+  const metadata = asset.metadata || {};
+  return {
+    ...asset,
+    processingStatus: metadata.processingStatus || metadata.extractionStatus || "stored",
+    extractionStatus: metadata.extractionStatus || metadata.processingStatus || "stored",
+    textPreview: metadata.textPreview || "",
+    textChunkCount: metadata.chunkCount || 0,
+    summary: metadata.summary || "",
+    extractionError: metadata.processingError || "",
+    status: metadata.processingStatus === "failed" ? "error" : "ready",
+  };
 }
