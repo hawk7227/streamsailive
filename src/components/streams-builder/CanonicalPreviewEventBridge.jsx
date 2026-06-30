@@ -56,6 +56,27 @@ function previewPayload(detail = {}) {
   };
 }
 
+function detailFromJob(job = {}, events = [], original = {}) {
+  const metadata = job.metadata || {};
+  const candidates = [metadata.previewHtml, metadata.html, metadata.sourceCode, metadata.source, metadata.code, metadata.artifactHtml, metadata.outputHtml].filter(Boolean);
+  const artifactUrl = metadata.previewUrl || metadata.artifactUrl || metadata.outputUrl || metadata.url || metadata.publicUrl || "";
+  return {
+    ...original,
+    title: metadata.title || original.prompt || original.title || "Builder job output",
+    previewHtml: candidates[0] || "",
+    sourceCode: metadata.sourceCode || metadata.source || metadata.code || candidates[0] || "",
+    artifactUrl,
+    outputUrl: metadata.outputUrl || artifactUrl,
+    builderRunId: original.builderRunId || original.jobId || job.id || original.runId || "",
+    sessionId: original.sessionId || metadata.sessionId || readActive().sessionId || "",
+    projectId: original.projectId || metadata.projectId || null,
+    assetIds: metadata.assetIds || original.assetIds || [],
+    reason: "builder_job_completed",
+    eventType: "builder_job_completed",
+    events,
+  };
+}
+
 async function linkAssets(previewId, detail = {}) {
   const ids = Array.isArray(detail.assetIds) ? detail.assetIds : detail.assetId ? [detail.assetId] : [];
   const sessionId = detail.sessionId || readActive().sessionId || "";
@@ -128,12 +149,37 @@ export default function CanonicalPreviewEventBridge() {
       window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { ...next, source: "builder", reason: payload.metadata.reason } }));
     }
 
+    async function pollRuntimeJob(detail = {}) {
+      if (!detail.jobId) return;
+      let attempts = 0;
+      const timer = window.setInterval(async () => {
+        attempts += 1;
+        try {
+          const response = await fetch(`/api/streams-ai/jobs?jobId=${encodeURIComponent(detail.jobId)}`, { cache: "no-store" });
+          const data = await response.json().catch(() => ({}));
+          const status = String(data.job?.status || "").toLowerCase();
+          if (/complete|completed|success|succeeded|ready|passed/.test(status)) {
+            window.clearInterval(timer);
+            await handle(detailFromJob(data.job || {}, data.events || [], detail));
+          }
+          if (/failed|error|blocked|cancelled/.test(status) || attempts > 80) window.clearInterval(timer);
+        } catch {
+          if (attempts > 8) window.clearInterval(timer);
+        }
+      }, 2500);
+    }
+
     const listeners = JOB_EVENTS.map((name) => {
       const listener = (event) => handle(event.detail || {}).catch(() => {});
       window.addEventListener(name, listener);
       return [name, listener];
     });
-    return () => listeners.forEach(([name, listener]) => window.removeEventListener(name, listener));
+    const runtimeListener = (event) => pollRuntimeJob(event.detail || {}).catch(() => {});
+    window.addEventListener("streams-builder:runtime-job", runtimeListener);
+    return () => {
+      listeners.forEach(([name, listener]) => window.removeEventListener(name, listener));
+      window.removeEventListener("streams-builder:runtime-job", runtimeListener);
+    };
   }, []);
   return null;
 }
