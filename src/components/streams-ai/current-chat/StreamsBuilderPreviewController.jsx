@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import CanonicalPreviewEventBridge from "@/components/streams-builder/CanonicalPreviewEventBridge";
 
 const OPEN_EVENT = "streams:open-builder-preview";
 const ACTIVE_KEY = "streams-ai:active-builder-preview";
@@ -151,5 +152,5 @@ export default function StreamsBuilderPreviewController({ chatRuntime }) {
     upsertPreview().catch(() => {});
   }, [chatRuntime?.messages, chatRuntime?.sessionId]);
 
-  return null;
+  return <CanonicalPreviewEventBridge />;
 }
