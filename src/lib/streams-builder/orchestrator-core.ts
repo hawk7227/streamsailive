@@ -108,7 +108,7 @@ export function evaluateStreamsBuilderSafety(input: StreamsBuilderOrchestratorIn
     return { safe: false, risk: "caution" as const, reason: "Selected visual layer needs exact source range resolution before source mutation.", recommendations: ["Run source range resolver", "Inspect source before patch", "Block direct mutation until mapping is clean"], requiresChat: true, requiresApproval: false };
   }
 
-  return { safe: true, risk: mode === "conversation" ? "safe" as const : "caution" as const, reason: "Action can proceed through scoped tools.", recommendations: ["Use smallest scoped patch", "Validate after change", "Record trace event"], requiresChat: false, requiresApproval: ["build", "repair", "visual-edit"].includes(mode) };
+  return { safe: true, risk: "caution" as const, reason: "Action can proceed through scoped tools.", recommendations: ["Use smallest scoped patch", "Validate after change", "Record trace event"], requiresChat: false, requiresApproval: ["build", "repair", "visual-edit"].includes(mode) };
 }
 
 export function createStreamsBuilderPlan(input: StreamsBuilderOrchestratorInput) {
