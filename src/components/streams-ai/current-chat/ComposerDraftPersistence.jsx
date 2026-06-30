@@ -16,6 +16,19 @@ function draftKey(threadId) {
   return `${DRAFT_PREFIX}${threadId || "new"}`;
 }
 
+function emitDraftState(detail) {
+  const payload = {
+    phase: "composer-draft-state",
+    source: "streams-composer-draft",
+    message: `Composer draft state: ${detail.hasDraft ? `${detail.draftLength} chars` : "empty"} for ${detail.sessionId || "new"}.`,
+    ...detail,
+    at: new Date().toISOString(),
+  };
+  try { window.localStorage.setItem("streams-ai:composer-draft-state", JSON.stringify(payload)); } catch {}
+  window.dispatchEvent(new CustomEvent("streams-ai:composer-draft-state", { detail: payload }));
+  try { window.parent?.postMessage({ type: "streams-ai:composer-draft-state", detail: payload, source: "streams-ai-chat-frame", at: payload.at }, window.location.origin); } catch {}
+}
+
 function findComposerInput() {
   return document.querySelector(".streamsComposerInput");
 }
@@ -81,6 +94,7 @@ export default function ComposerDraftPersistence({ chatRuntime }) {
       try { serverSaved = await readServerDraft(threadId); } catch {}
       if (cancelled) return;
       const saved = serverSaved || localSaved;
+      emitDraftState({ sessionId: threadId, hasDraft: Boolean(saved), draftLength: String(saved || "").length, savedLocal: Boolean(localSaved), savedServer: Boolean(serverSaved), restored: Boolean(saved) });
       if (!force && lastRestoredRef.current === `${threadId}:${saved}`) return;
       if (saved && !String(input.value || "").trim()) {
         setNativeInputValue(input, saved);
@@ -108,7 +122,7 @@ export default function ComposerDraftPersistence({ chatRuntime }) {
       pendingDraftRef.current = String(value || "");
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = window.setTimeout(() => {
-        writeServerDraft(threadId, pendingDraftRef.current).catch(() => {});
+        writeServerDraft(threadId, pendingDraftRef.current).then(() => emitDraftState({ sessionId: threadId, hasDraft: Boolean(pendingDraftRef.current.trim()), draftLength: pendingDraftRef.current.length, savedLocal: true, savedServer: true })).catch(() => {});
       }, 650);
     }
 
@@ -118,6 +132,7 @@ export default function ComposerDraftPersistence({ chatRuntime }) {
       if (!input.classList.contains("streamsComposerInput")) return;
       const threadId = activeThreadRef.current || currentThreadId(chatRuntime);
       writeLocalDraft(threadId, input.value);
+      emitDraftState({ sessionId: threadId, hasDraft: Boolean(input.value.trim()), draftLength: String(input.value || "").length, savedLocal: true, savedServer: false });
       scheduleServerSave(threadId, input.value);
     }
 
@@ -129,6 +144,7 @@ export default function ComposerDraftPersistence({ chatRuntime }) {
       window.setTimeout(() => {
         writeLocalDraft(threadId, "");
         writeServerDraft(threadId, "").catch(() => {});
+        emitDraftState({ sessionId: threadId, hasDraft: false, draftLength: 0, savedLocal: true, savedServer: true, clearedAfterSend: true });
         window.dispatchEvent(new Event("streams:recent-chats-refresh"));
       }, 600);
     }
