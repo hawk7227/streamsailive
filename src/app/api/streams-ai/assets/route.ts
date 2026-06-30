@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
+import { processUploadedAssets, processUploadedAsset } from "@/lib/streams-ai/asset-processing";
 import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
 
 const assets = new StreamsAIAssetsRepository();
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       const files = form.getAll("file").filter((item): item is File => item instanceof File);
       if (!files.length) return streamsAIJson({ ok: false, error: "file is required" }, 400);
 
-      const sessionId = stringOrNull(form.get("sessionId"));
+      const sessionId = stringOrNull(form.get("sessionId")) || inferSessionIdFromRequest(request);
       const projectId = stringOrNull(form.get("projectId"));
       const messageId = stringOrNull(form.get("messageId"));
       const productId = stringOrNull(form.get("productId"));
@@ -40,12 +41,31 @@ export async function POST(request: NextRequest) {
             projectId,
             messageId,
             productId,
-            metadata: { source: "streams-ai-upload" },
+            metadata: { source: "streams-ai-upload", uploadStatus: "stored", processingStatus: "queued" },
           }),
         );
       }
 
-      return streamsAIJson({ ok: true, assets: uploaded }, 201);
+      const processing = await processUploadedAssets(scope, uploaded as Record<string, any>[]);
+      const normalized = uploaded.map((asset: Record<string, any>, index) => ({
+        ...asset,
+        metadata: {
+          ...(asset.metadata || {}),
+          ...(processing[index]?.ok ? {
+            processingStatus: processing[index]?.status || "ready",
+            extractionStatus: processing[index]?.status || "ready",
+            chunkCount: processing[index]?.chunkCount || 0,
+            summary: processing[index]?.summary || null,
+            textPreview: processing[index]?.textPreview || null,
+          } : {
+            processingStatus: "failed",
+            extractionStatus: "failed",
+            processingError: processing[index]?.error || "Processing failed",
+          }),
+        },
+      }));
+
+      return streamsAIJson({ ok: true, assets: normalized, processing }, 201);
     }
 
     const body = await readJsonBody<{
@@ -77,10 +97,11 @@ export async function POST(request: NextRequest) {
       storageBucket: body.storageBucket,
       storagePath: body.storagePath,
       publicUrl: body.publicUrl,
-      metadata: body.metadata,
+      metadata: { ...(body.metadata || {}), processingStatus: "queued" },
     });
 
-    return streamsAIJson({ ok: true, asset }, 201);
+    const processing = await processUploadedAsset(scope, asset as Record<string, any>);
+    return streamsAIJson({ ok: true, asset, processing }, 201);
   } catch (error) {
     return streamsAIError(error);
   }
@@ -88,4 +109,15 @@ export async function POST(request: NextRequest) {
 
 function stringOrNull(value: FormDataEntryValue | null) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function inferSessionIdFromRequest(request: NextRequest) {
+  const referer = request.headers.get("referer") || request.headers.get("referrer") || "";
+  try {
+    const path = new URL(referer).pathname;
+    const parts = path.split("/").filter(Boolean);
+    return parts[0] === "streams-ai" && parts[1] ? parts[1] : null;
+  } catch {
+    return null;
+  }
 }
