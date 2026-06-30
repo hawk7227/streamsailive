@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import StreamsOperatorShell from "../visual-operator/StreamsOperatorShell";
 import { useStreamsChatRuntime } from "./new-face/hooks/useStreamsChatRuntime";
+import ActualRecentChatsOverlay from "./ActualRecentChatsOverlay";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -132,7 +133,6 @@ function installComposerUploadBridge() {
   const onChange = (event) => {
     const input = event.target;
     if (!input || input.tagName !== "INPUT" || input.type !== "file") return;
-    // Do NOT intercept the composer's native file selection input.
     if (input.getAttribute("aria-label") === "Add photos and files") return;
     const files = Array.from(input.files || []);
     if (!files.length) return;
@@ -270,5 +270,5 @@ export default function StreamsClientShell() {
   useEffect(() => installComposerUploadBridge(), []);
 
   if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
-  return <StreamsOperatorShell chatRuntime={chatRuntime} />;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /></>;
 }
