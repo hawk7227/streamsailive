@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 function cleanTitle(value) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -30,6 +31,7 @@ function groupSessions(sessions = []) {
 
 export default function ActualRecentChatsOverlay({ chatRuntime }) {
   const [remoteSessions, setRemoteSessions] = useState([]);
+  const [menuTarget, setMenuTarget] = useState(null);
   const sessions = useMemo(() => {
     const combined = [...(Array.isArray(remoteSessions) ? remoteSessions : []), ...(Array.isArray(chatRuntime?.sessions) ? chatRuntime.sessions : [])];
     const seen = new Set();
@@ -43,6 +45,26 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
       .sort((a, b) => toTime(b.updated_at || b.updatedAt || b.created_at || b.createdAt) - toTime(a.updated_at || a.updatedAt || a.created_at || a.createdAt))
       .slice(0, 18);
   }, [remoteSessions, chatRuntime?.sessions]);
+
+  useEffect(() => {
+    let stopped = false;
+    function locateSidebarMenu() {
+      if (stopped) return;
+      const target = document.querySelector(".desktopSide:not(.collapsed) .navScroll");
+      setMenuTarget(target || null);
+    }
+    locateSidebarMenu();
+    const timer = window.setInterval(locateSidebarMenu, 600);
+    const observer = new MutationObserver(locateSidebarMenu);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", locateSidebarMenu);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      observer.disconnect();
+      window.removeEventListener("resize", locateSidebarMenu);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,9 +92,9 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
     };
   }, []);
 
-  if (!sessions.length) return null;
+  if (!sessions.length || !menuTarget) return null;
 
-  return (
+  const recentNode = (
     <section className="actualRecentChats" aria-label="Recent chats">
       <div className="actualRecentChatsHead">RECENT</div>
       <div className="actualRecentChatsList">
@@ -95,34 +117,28 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
       </div>
       <style jsx>{`
         .actualRecentChats{
-          position:fixed;
-          left:8px;
-          bottom:72px;
-          width:276px;
-          max-height:206px;
-          z-index:45;
-          padding:0 7px 8px;
+          position:relative;
+          width:100%;
+          margin:8px 0 10px;
+          padding:8px 4px 10px;
           color:#eaf3ff;
           pointer-events:auto;
-          background:linear-gradient(180deg,rgba(7,11,29,.94),rgba(7,11,29,.72));
           border-top:1px solid rgba(77,133,226,.22);
-          box-shadow:0 -12px 24px rgba(2,5,12,.55);
         }
         .actualRecentChatsHead{
-          margin:8px 0 5px 0;
+          margin:0 0 6px 4px;
           color:#8dabdb;
           font-size:10px;
           letter-spacing:.18em;
           font-weight:900;
         }
         .actualRecentChatsList{
-          max-height:172px;
-          overflow-y:auto;
-          padding-right:4px;
-          scrollbar-width:thin;
+          display:flex;
+          flex-direction:column;
+          gap:2px;
         }
         .actualRecentGroup h3{
-          margin:8px 0 4px;
+          margin:8px 0 4px 4px;
           color:#8dabdb;
           font-size:10px;
           letter-spacing:.14em;
@@ -130,17 +146,17 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
         }
         .actualRecentGroup button{
           width:100%;
-          min-height:31px;
+          min-height:34px;
           border:0;
-          border-radius:9px;
+          border-radius:10px;
           background:transparent;
           color:#eef6ff;
           display:flex;
           align-items:center;
-          gap:8px;
+          gap:9px;
           padding:0 10px;
           text-align:left;
-          font-size:12px;
+          font-size:13px;
           font-weight:760;
           cursor:pointer;
         }
@@ -162,9 +178,9 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
         .actualRecentGroup button.active{
           background:linear-gradient(90deg,rgba(119,70,255,.62),rgba(8,108,255,.62));
         }
-        @media(max-width:900px){.actualRecentChats{display:none}}
-        @media(max-height:760px){.actualRecentChats{max-height:156px}.actualRecentChatsList{max-height:122px}}
       `}</style>
     </section>
   );
+
+  return createPortal(recentNode, menuTarget);
 }
