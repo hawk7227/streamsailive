@@ -6,8 +6,35 @@ import { createStreamsAIServiceClient, streamsAISchema } from "@/lib/streams-ai/
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function db() { return streamsAISchema(createStreamsAIServiceClient()); }
+function serviceClient() { return createStreamsAIServiceClient(); }
+function db() { return streamsAISchema(serviceClient()); }
 function clean(value: unknown, max = 240000) { return String(value || "").slice(0, max); }
+
+async function signedUrl(asset: Record<string, any>) {
+  const bucket = asset.storage_bucket || asset.storageBucket;
+  const path = asset.storage_path || asset.storagePath;
+  if (!bucket || !path) return asset.public_url || asset.publicUrl || asset.url || "";
+  try {
+    const { data } = await serviceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
+    return data?.signedUrl || asset.public_url || asset.publicUrl || "";
+  } catch {
+    return asset.public_url || asset.publicUrl || "";
+  }
+}
+
+async function loadPreviewAssets(scope: Awaited<ReturnType<typeof requireStreamsAIScope>>, previewId: string) {
+  const { data: links, error } = await db().from("streams_ai_preview_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("created_at", { ascending: false });
+  if (error) throw error;
+  const assetIds = (links || []).map((row) => row.asset_id).filter(Boolean);
+  if (!assetIds.length) return [];
+  const { data: assets } = await db().from("streams_ai_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).in("id", assetIds);
+  const byId = new Map((assets || []).map((asset) => [asset.id, asset]));
+  return Promise.all((links || []).map(async (link) => {
+    const asset = byId.get(link.asset_id) || null;
+    const url = asset ? await signedUrl(asset) : "";
+    return { ...link, asset: asset ? { ...asset, signedUrl: url, previewUrl: url, url } : null };
+  }));
+}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ previewId: string }> }) {
   try {
@@ -16,9 +43,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { data: preview, error } = await db().from("streams_ai_previews").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", previewId).maybeSingle();
     if (error) throw error;
     if (!preview) return streamsAIJson({ ok: false, error: "Preview not found" }, 404);
-    const { data: assets } = await db().from("streams_ai_preview_assets").select("*, asset:streams_ai_assets(*)").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("created_at", { ascending: false });
+    const assets = await loadPreviewAssets(scope, previewId);
     const { data: versions } = await db().from("streams_ai_preview_versions").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(25);
-    return streamsAIJson({ ok: true, preview, assets: assets || [], versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
+    return streamsAIJson({ ok: true, preview, assets, versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
   } catch (error) { return streamsAIError(error); }
 }
 
