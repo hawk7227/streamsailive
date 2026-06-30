@@ -35,24 +35,25 @@ function sessionHaystack(session) {
 
 export default function ActualRecentChatsOverlay({ chatRuntime }) {
   const [remoteSessions, setRemoteSessions] = useState([]);
+  const [serverSearchResults, setServerSearchResults] = useState([]);
   const [menuTarget, setMenuTarget] = useState(null);
   const [query, setQuery] = useState("");
   const [openMenuId, setOpenMenuId] = useState("");
   const sessions = useMemo(() => {
-    const combined = [...(Array.isArray(remoteSessions) ? remoteSessions : []), ...(Array.isArray(chatRuntime?.sessions) ? chatRuntime.sessions : [])];
-    const seen = new Set();
     const q = query.trim().toLowerCase();
-    return combined
+    const base = q && serverSearchResults.length ? serverSearchResults : [...(Array.isArray(remoteSessions) ? remoteSessions : []), ...(Array.isArray(chatRuntime?.sessions) ? chatRuntime.sessions : [])];
+    const seen = new Set();
+    return base
       .filter((session) => session?.id && String(session.status || "active") !== "archived")
       .filter((session) => {
         if (seen.has(session.id)) return false;
         seen.add(session.id);
         return true;
       })
-      .filter((session) => !q || sessionHaystack(session).includes(q))
+      .filter((session) => !q || serverSearchResults.length || sessionHaystack(session).includes(q))
       .sort((a, b) => toTime(b.updated_at || b.updatedAt || b.created_at || b.createdAt) - toTime(a.updated_at || a.updatedAt || a.created_at || a.createdAt))
       .slice(0, 24);
-  }, [remoteSessions, chatRuntime?.sessions, query]);
+  }, [remoteSessions, serverSearchResults, chatRuntime?.sessions, query]);
 
   async function loadSessions({ silent = false } = {}) {
     try {
@@ -141,6 +142,29 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
     };
   }, []);
 
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setServerSearchResults([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/streams-ai/search-chats?q=${encodeURIComponent(q)}&limit=30`, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        const rows = Array.isArray(data.results) ? data.results : [];
+        if (!cancelled) setServerSearchResults(rows);
+      } catch {
+        if (!cancelled) setServerSearchResults([]);
+      }
+    }, 260);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
   if (!menuTarget) return null;
 
   const recentNode = (
@@ -156,7 +180,7 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
       <div className="actualRecentChatsList">
         {sessions.length ? groupSessions(sessions).map(([label, items]) => (
           <div key={label} className="actualRecentGroup">
-            <h3>{label}</h3>
+            <h3>{query.trim() ? "Search results" : label}</h3>
             {items.map((session) => (
               <div key={session.id} className={session.id === chatRuntime?.sessionId ? "actualRecentRow active" : "actualRecentRow"}>
                 <button
@@ -178,7 +202,7 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
               </div>
             ))}
           </div>
-        )) : <div className="actualRecentEmpty">No recent chats yet.</div>}
+        )) : <div className="actualRecentEmpty">{query.trim() ? "No matching chats found." : "No recent chats yet."}</div>}
       </div>
       <style jsx>{`
         .actualRecentChats{position:relative;width:100%;margin:8px 0 10px;padding:8px 4px 10px;color:#eaf3ff;pointer-events:auto;border-top:1px solid rgba(77,133,226,.22)}
