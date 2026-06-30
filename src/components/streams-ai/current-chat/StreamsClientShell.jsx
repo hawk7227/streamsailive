@@ -5,6 +5,9 @@ import StreamsOperatorShell from "../visual-operator/StreamsOperatorShell";
 import { useStreamsChatRuntime } from "./new-face/hooks/useStreamsChatRuntime";
 import ActualRecentChatsOverlay from "./ActualRecentChatsOverlay";
 import ComposerDraftPersistence from "./ComposerDraftPersistence";
+import ThreadAssetsHydrator from "./ThreadAssetsHydrator";
+import StreamingRecoveryBanner from "./StreamingRecoveryBanner";
+import MemoryControlsPanel from "./MemoryControlsPanel";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -271,5 +274,5 @@ export default function StreamsClientShell() {
   useEffect(() => installComposerUploadBridge(), []);
 
   if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
-  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ComposerDraftPersistence chatRuntime={chatRuntime} /></>;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ComposerDraftPersistence chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
 }
