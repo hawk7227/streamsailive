@@ -4,12 +4,16 @@ import { readUniversalRuntimeEvents, recordUniversalRuntimeEvent, summarizeRunti
 import { resolveAndRecordUniversalActionTarget } from "@/lib/streams-ai/action-resolver";
 import { isApprovedOpenAIToolName, type ApprovedOpenAIToolName } from "@/lib/streams-ai/openai-tool-definitions";
 
+type RepositoryListProvider = {
+  list: (scope: any, args?: any) => Promise<any[]>;
+};
+
 export type ToolExecutorDeps = {
   sessionId: string;
-  jobs?: { list: (scope: unknown, args?: Record<string, unknown>) => Promise<Record<string, unknown>[]> };
-  assets?: { list: (scope: unknown, args?: Record<string, unknown>) => Promise<Record<string, unknown>[]> };
-  providerRuns?: { list: (scope: unknown, args?: Record<string, unknown>) => Promise<Record<string, unknown>[]> };
-  scope?: unknown;
+  jobs?: RepositoryListProvider;
+  assets?: RepositoryListProvider;
+  providerRuns?: RepositoryListProvider;
+  scope?: any;
 };
 
 function limit(value: unknown, fallback = 12) {
