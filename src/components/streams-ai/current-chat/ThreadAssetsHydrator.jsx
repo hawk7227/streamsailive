@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 const LIBRARY_KEY = "streams-ai.assets.cache.v1";
 
@@ -51,29 +51,6 @@ function writeLibrary(files) {
 }
 
 export default function ThreadAssetsHydrator({ chatRuntime }) {
-  const chatRuntimeRef = useRef(chatRuntime);
-  chatRuntimeRef.current = chatRuntime;
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (window.__streamsThreadAssetBinderInstalled) return undefined;
-    const originalFetch = window.fetch.bind(window);
-    window.__streamsThreadAssetBinderInstalled = true;
-    window.fetch = (input, init = {}) => {
-      const url = typeof input === "string" ? input : input?.url || "";
-      const method = String(init?.method || "GET").toUpperCase();
-      if (method === "POST" && url === "/api/streams-ai/assets" && init?.body instanceof FormData) {
-        const sessionId = activeSessionId(chatRuntimeRef.current);
-        if (sessionId && !init.body.get("sessionId")) init.body.set("sessionId", sessionId);
-      }
-      return originalFetch(input, init);
-    };
-    return () => {
-      window.fetch = originalFetch;
-      window.__streamsThreadAssetBinderInstalled = false;
-    };
-  }, []);
-
   useEffect(() => {
     const sessionId = activeSessionId(chatRuntime);
     if (!sessionId) return undefined;
