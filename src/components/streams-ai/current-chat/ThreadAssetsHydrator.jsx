@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const LIBRARY_KEY = "streams-ai.assets.cache.v1";
 
@@ -18,6 +18,13 @@ function normalizeAsset(asset = {}) {
     url,
     source: asset.source || "thread",
   };
+}
+
+function activeSessionId(chatRuntime) {
+  if (chatRuntime?.sessionId) return String(chatRuntime.sessionId);
+  if (typeof window === "undefined") return "";
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  return parts[0] === "streams-ai" && parts[1] ? parts[1] : "";
 }
 
 function readLibrary() {
@@ -44,8 +51,31 @@ function writeLibrary(files) {
 }
 
 export default function ThreadAssetsHydrator({ chatRuntime }) {
+  const chatRuntimeRef = useRef(chatRuntime);
+  chatRuntimeRef.current = chatRuntime;
+
   useEffect(() => {
-    const sessionId = chatRuntime?.sessionId;
+    if (typeof window === "undefined") return undefined;
+    if (window.__streamsThreadAssetBinderInstalled) return undefined;
+    const originalFetch = window.fetch.bind(window);
+    window.__streamsThreadAssetBinderInstalled = true;
+    window.fetch = (input, init = {}) => {
+      const url = typeof input === "string" ? input : input?.url || "";
+      const method = String(init?.method || "GET").toUpperCase();
+      if (method === "POST" && url === "/api/streams-ai/assets" && init?.body instanceof FormData) {
+        const sessionId = activeSessionId(chatRuntimeRef.current);
+        if (sessionId && !init.body.get("sessionId")) init.body.set("sessionId", sessionId);
+      }
+      return originalFetch(input, init);
+    };
+    return () => {
+      window.fetch = originalFetch;
+      window.__streamsThreadAssetBinderInstalled = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const sessionId = activeSessionId(chatRuntime);
     if (!sessionId) return undefined;
     let cancelled = false;
     async function loadAssets() {
