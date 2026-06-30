@@ -12,6 +12,9 @@ type Body = {
   selection?: VisualSelection;
   command?: string;
   approve?: boolean;
+  allowRiskyPush?: boolean;
+  rollback?: boolean;
+  rollbackPatches?: Array<{ file: string; before: string }>;
 };
 
 async function github(path: string, init: RequestInit = {}, authRequired = false) {
@@ -108,43 +111,42 @@ function inferSelection(files: SourceFileSnapshot[], selection: VisualSelection)
     const objectEnd = content.indexOf("}", imageIndex);
     const block = objectStart >= 0 && objectEnd > objectStart ? content.slice(objectStart, objectEnd + 1) : "";
     const href = quotedValue(block, "href");
-    return {
-      ...selection,
-      imageSrc: image,
-      itemKey: href || image,
-      href: selection.href || href,
-      sourceFile: selection.sourceFile || file.path,
-      symbol: selection.symbol || arrayMatch?.[1] || "",
-      operationTarget: selection.operationTarget || "array-item",
-    };
+    return { ...selection, imageSrc: image, itemKey: href || image, href: selection.href || href, sourceFile: selection.sourceFile || file.path, symbol: selection.symbol || arrayMatch?.[1] || "", operationTarget: selection.operationTarget || "array-item" };
   }
   return { ...selection, imageSrc: image };
 }
 
+async function putFile(repoFullName: string, branch: string, file: string, nextContent: string, message: string) {
+  const filePath = encodeURIComponent(file).replace(/%2F/g, "/");
+  const current = await github(`/repos/${repoFullName}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, {}, true);
+  const content = Buffer.from(nextContent, "utf8").toString("base64");
+  const updated = await github(`/repos/${repoFullName}/contents/${filePath}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, content, sha: current.sha, branch }) }, true);
+  return { file, commitSha: updated?.commit?.sha || "", htmlUrl: updated?.commit?.html_url || "" };
+}
+
 async function commitPatches(repoFullName: string, branch: string, patches: Array<{ file: string; after: string }>) {
   const results = [];
-  for (const patch of patches) {
-    const filePath = encodeURIComponent(patch.file).replace(/%2F/g, "/");
-    const current = await github(`/repos/${repoFullName}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, {}, true);
-    const content = Buffer.from(patch.after, "utf8").toString("base64");
-    const updated = await github(`/repos/${repoFullName}/contents/${filePath}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: `Apply visual edit to ${patch.file}`,
-        content,
-        sha: current.sha,
-        branch,
-      }),
-    }, true);
-    results.push({ file: patch.file, commitSha: updated?.commit?.sha || "", htmlUrl: updated?.commit?.html_url || "" });
-  }
+  for (const patch of patches) results.push(await putFile(repoFullName, branch, patch.file, patch.after, `Apply visual edit to ${patch.file}`));
+  return results;
+}
+
+async function rollbackPatches(repoFullName: string, branch: string, patches: Array<{ file: string; before: string }>) {
+  const results = [];
+  for (const patch of patches) results.push(await putFile(repoFullName, branch, patch.file, patch.before, `Rollback visual edit in ${patch.file}`));
   return results;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as Body;
+    if (body.rollback) {
+      if (!body.repoFullName || !body.branch) return streamsAIJson({ ok: false, error: "repoFullName and branch are required to rollback" }, 400);
+      const patches = Array.isArray(body.rollbackPatches) ? body.rollbackPatches : [];
+      if (!patches.length) return streamsAIJson({ ok: false, error: "rollbackPatches are required" }, 400);
+      const commits = await rollbackPatches(body.repoFullName, body.branch, patches);
+      return streamsAIJson({ ok: true, rolledBack: true, commits });
+    }
+
     const suppliedFiles = Array.isArray(body.files) ? body.files : [];
     const command = body.command || "remove this";
     if (!suppliedFiles.length) return streamsAIJson({ ok: false, error: "files are required" }, 400);
@@ -153,12 +155,16 @@ export async function POST(request: NextRequest) {
     const result = planVisualEdit(files, selection, command);
     const approved = Boolean(body.approve);
     let commits: Array<Record<string, unknown>> = [];
+    const rollbackPatchesForPanel = result.patches.map((patch) => ({ file: patch.file, before: patch.before }));
+
     if (approved) {
       if (!body.repoFullName || !body.branch) return streamsAIJson({ ok: false, error: "repoFullName and branch are required to commit", result }, 400);
       if (result.error || !result.patches.length) return streamsAIJson({ ok: false, error: result.error || "No patch generated", result }, 400);
+      const warnings = result.patches.flatMap((patch) => Array.isArray(patch.verification?.dependencyWarnings) ? patch.verification.dependencyWarnings : []);
+      if (warnings.length && !body.allowRiskyPush) return streamsAIJson({ ok: false, error: "Push blocked. The patch has dependency warnings and must be repaired or manually approved.", result, rollbackPatches: rollbackPatchesForPanel }, 409);
       commits = await commitPatches(body.repoFullName, body.branch, result.patches.map((patch) => ({ file: patch.file, after: patch.after })));
     }
-    return streamsAIJson({ ok: true, result, commits, approved, selection, indexedFiles: files.map((file) => file.path) });
+    return streamsAIJson({ ok: true, result, commits, approved, rollbackPatches: rollbackPatchesForPanel, selection, indexedFiles: files.map((file) => file.path) });
   } catch (error) {
     return streamsAIError(error);
   }
