@@ -106,6 +106,10 @@ function isWorkspaceQuestion(message) {
   return /\b(do\s+you\s+see|can\s+you\s+see|what\s+file|what\s+repo|what\s+branch|what\s+route|what\s+did\s+i\s+select|is\s+push\s+ready|why\s+is\s+push\s+blocked|look\s+at|see\s+the|workspace|visual editor|code editor|preview|selected)\b/i.test(message);
 }
 
+function requiresGroundedBackend(message) {
+  return /\b(upload|uploaded|attachment|attached file|search online|search the web|cite sources|sources you used|did you search|links\/sources|read the active file|syntax errors?|pull the active repo file|exact file path|generate a patch|patch but do not push|run validation|run build|validation\/build|create a text file|downloadable file|create a zip|zip of the changed|generate an image|attach it|pdf report|what file changed|changed files?|deployment|preview url|deploy url|live url)\b/i.test(message);
+}
+
 function isBuilderCommand(message) {
   return /\b(agent\s*1|codex|visual editing|visual editor|code editor|workstation|streams builder|repo\s+[\w.-]+\/[\w.-]+|autonomousrepair|build\/typecheck|approval required|pull real source|queue.*repair|browser review|generate patch|save draft|push ready)\b/i.test(message)
     || isVisualEditCommand(message)
@@ -196,7 +200,7 @@ function builderContextBlock() {
     `Selected: ${state.selectedText || "none"}; patch: ${state.patchState || "unknown"}; preview: ${state.previewBuildState || "unknown"}; pushReady: ${state.pushReady === true ? "yes" : state.pushReady === false ? "no" : "unknown"}.`,
     state.pushBlockedReason ? `Push blocked reason: ${state.pushBlockedReason}.` : "",
     registrySummaryBlock(),
-    "Connected chat must not claim it cannot see the workspace when this source of truth is present. Answer using this live state and route commands to the connected workstation. If disconnected, say standalone mode is active and do not use stale workspace context for actions.",
+    "Connected chat must not claim it cannot see the workspace when this source of truth is present. For proof-sensitive artifact/search/file/build/preview requests, pass the request to the backend grounded guard instead of answering from this status block.",
     ...lines,
   ].filter(Boolean).join("\n");
 }
@@ -348,7 +352,7 @@ export function installStreamsBuilderModeBridge() {
           at: new Date().toISOString(),
         }, window.location.origin);
 
-        if (isWorkspaceQuestion(message) || isConnectionCommand(message) || isVisualEditCommand(message)) {
+        if (!requiresGroundedBackend(message) && (isWorkspaceQuestion(message) || isConnectionCommand(message) || isVisualEditCommand(message))) {
           return makeSseResponse(workspaceStatusResponse(message, routedConnection));
         }
 
