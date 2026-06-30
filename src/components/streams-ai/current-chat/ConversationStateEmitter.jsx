@@ -22,11 +22,24 @@ function lastMessage(messages = [], role) {
   return null;
 }
 
+function postRuntimeEvent(detail) {
+  const sessionId = detail.sessionId || "agent-1";
+  const body = JSON.stringify({ sessionId, events: [detail] });
+  try {
+    const blob = new Blob([body], { type: "application/json" });
+    if (navigator.sendBeacon?.("/api/streams-ai/runtime-events", blob)) return;
+  } catch {}
+  try {
+    fetch("/api/streams-ai/runtime-events", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  } catch {}
+}
+
 function emit(type, detail) {
   if (typeof window === "undefined") return;
   try { window.localStorage.setItem(STATE_KEY, JSON.stringify(detail)); } catch {}
   window.dispatchEvent(new CustomEvent(type, { detail }));
   try { window.parent?.postMessage({ type, detail, source: "streams-ai-chat-frame", at: new Date().toISOString() }, window.location.origin); } catch {}
+  postRuntimeEvent(detail);
 }
 
 function buildState(chatRuntime) {
