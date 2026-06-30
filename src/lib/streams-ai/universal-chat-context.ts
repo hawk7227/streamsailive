@@ -1,5 +1,5 @@
-import { retrieveAssetContext, formatAssetContextForPrompt } from "@/lib/streams-ai/asset-processing";
-import { getDefaultStreamsAIScopeForSystemContext } from "@/lib/streams-ai/system-scope";
+import { createStreamsAIServiceClient, streamsAISchema } from "@/lib/streams-ai/server";
+import { formatAssetContextForPrompt } from "@/lib/streams-ai/asset-processing";
 import { readUniversalRuntimeEvents, summarizeRuntimeEvents } from "@/lib/streams-ai/runtime-events";
 import { summarizeUniversalCapabilities } from "@/lib/streams-ai/universal-capability-registry";
 import { createUniversalAssistantPlan } from "@/lib/streams-ai/universal-orchestrator";
@@ -15,11 +15,29 @@ function compact(value: unknown, max = 6000) {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
+function scoreChunks(rows: Record<string, any>[], query: string) {
+  const terms = String(query || "").toLowerCase().split(/\W+/).filter((term) => term.length > 2).slice(0, 24);
+  return rows
+    .map((row) => {
+      const haystack = `${row.content || ""} ${row.summary || ""}`.toLowerCase();
+      const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
+      return { ...row, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
 async function safeAssetContext(sessionId: string, userMessage: string) {
+  if (!sessionId) return "";
   try {
-    const scope = await getDefaultStreamsAIScopeForSystemContext();
-    const result = await retrieveAssetContext(scope, sessionId, userMessage, { limit: 8 });
-    return formatAssetContextForPrompt(result.chunks || []);
+    const { data, error } = await streamsAISchema(createStreamsAIServiceClient())
+      .from("streams_ai_asset_chunks")
+      .select("asset_id, chunk_index, content, summary, metadata, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return formatAssetContextForPrompt(scoreChunks(data || [], userMessage));
   } catch {
     return "";
   }
