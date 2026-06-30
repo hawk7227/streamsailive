@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const projectId = url.searchParams.get("projectId");
     const limit = Number(url.searchParams.get("limit") || 25);
     const memories = await listStreamsMemories(scope, query, { sessionId, projectId, limit });
-    return Response.json({ ok: true, ...memories });
+    return Response.json(memories);
   } catch (error) {
     return streamsAIError(error);
   }
