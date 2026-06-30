@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const PANEL_KEY = "streams-builder:visual-patch-panel-layout";
+const SUPPORTED_SCOPES = new Set(["card-item", "section-frame"]);
 
 function readActiveFile() {
   try {
@@ -90,20 +91,43 @@ function parseCards(source, arrayName) {
       depth -= 1;
       if (depth === 0 && objectStart >= 0) {
         const block = source.slice(objectStart, i + 1);
-        cards.push({
+        const card = {
           title: valueFromObject(block, "title"),
           accent: valueFromObject(block, "accent"),
           cta: valueFromObject(block, "cta"),
           href: valueFromObject(block, "href"),
           img: valueFromObject(block, "img"),
           alt: valueFromObject(block, "alt"),
-        });
+        };
+        if (card.title || card.accent || card.img || card.href || card.cta) cards.push(card);
         objectStart = -1;
       }
     }
     if (ch === "]" && depth <= 0 && i > arrayStart) break;
   }
   return cards;
+}
+
+function graphItemToCard(item) {
+  const text = item?.text || [];
+  return {
+    title: text[0] || "",
+    accent: text[1] || "",
+    cta: text.find((value) => /send|start|continue|book|submit|take/i.test(value)) || "",
+    href: item?.href || "",
+    img: item?.image || "",
+    alt: text.join(" ") || "Remaining item",
+  };
+}
+
+function fallbackAfterCards(plan, item) {
+  const items = plan?.result?.graph?.items || [];
+  if (!item?.arrayName) return [];
+  return items
+    .filter((candidate) => candidate.file === item.file && candidate.arrayName === item.arrayName && candidate.key !== item.key)
+    .map(graphItemToCard)
+    .filter((card) => card.title || card.accent || card.img || card.href)
+    .slice(0, 6);
 }
 
 function assetUrl(path, selection) {
@@ -132,12 +156,13 @@ function focusedPreview(patch, resolved) {
   return out.join("\n");
 }
 
-function MiniCard({ card, selection, removed = false }) {
+function MiniCard({ card, selection, removed = false, frame = false }) {
   return (
     <article className={removed ? "miniCard removed" : "miniCard"}>
       {card?.img ? <img src={assetUrl(card.img, selection)} alt={card.alt || card.title || "preview"} /> : null}
       <div>
         <b>{[card?.title, card?.accent].filter(Boolean).join(" ") || card?.alt || "Selected visual item"}</b>
+        {frame ? <em>Full card/frame will be removed</em> : null}
         {card?.cta ? <span>{card.cta}</span> : null}
         {card?.href ? <small>{card.href}</small> : null}
       </div>
@@ -151,6 +176,7 @@ export default function VisualSelectionPatchPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [layout, setLayout] = useState(() => ({ x: 980, y: 132, width: 540, height: 680, locked: false, minimized: false }));
+  const [scope, setScope] = useState("section-frame");
   const lastAutoPlanRef = useRef("");
   const dragRef = useRef(null);
 
@@ -174,8 +200,8 @@ export default function VisualSelectionPatchPanel() {
           repoFullName: activeFile.repo,
           branch: activeFile.branch,
           files: [{ path: activeFile.path, content: activeFile.content, repo: activeFile.repo, branch: activeFile.branch, sha: activeFile.sha, route: activeFile.route }],
-          selection: explicitSelection,
-          command: "remove this",
+          selection: { ...explicitSelection, removalScope: scope },
+          command: scope === "image-only" ? "remove exact image only" : scope === "parent-group" ? "remove parent group" : "remove this",
           approve,
         }),
       });
@@ -197,6 +223,7 @@ export default function VisualSelectionPatchPanel() {
       setSelection(normalized);
       setPlan(null);
       setError("");
+      setScope("section-frame");
       const key = `${normalized.selectionId || ""}:${normalized.imageSrc || ""}:${normalized.text || ""}:${normalized.selector || ""}`;
       if (key !== lastAutoPlanRef.current) {
         lastAutoPlanRef.current = key;
@@ -228,16 +255,21 @@ export default function VisualSelectionPatchPanel() {
   const patch = plan?.result?.patches?.[0] || null;
   const indexedFiles = plan?.indexedFiles || [];
   const item = resolved?.item || {};
+  const unsupportedScope = !SUPPORTED_SCOPES.has(scope);
+  const effect = scope === "section-frame" ? "removes full visual card/frame; next item moves up" : scope === "card-item" ? "removes this rendered data item/card" : scope === "image-only" ? "not enabled yet; use card/item or whole frame" : "not enabled yet; use card/item or whole frame";
   const summary = {
-    operation: patch?.operation || "remove-array-item",
+    operation: scope === "section-frame" ? "remove-section-frame" : scope === "card-item" ? "remove-card-item" : scope,
+    resolvedEdit: patch?.operation || "remove-array-item",
     target: item.arrayName ? `${item.arrayName} item` : resolved?.targetType || "visual selection",
     file: resolved?.sourceFile || patch?.file || "not resolved yet",
     image: item.image || selection.imageSrc || "",
     href: item.href || selection.href || "",
     confidence: resolved?.confidence || 0,
+    effect,
   };
-  const beforeCard = { title: item.text?.[0] || "", accent: item.text?.[1] || "", cta: item.text?.find((text) => /send|start|continue|book|submit/i.test(text)) || "", href: item.href || selection.href || "", img: item.image || selection.imageSrc || "", alt: item.text?.join(" ") || "Selected item" };
-  const afterCards = parseCards(patch?.after || "", item.arrayName).slice(0, 6);
+  const beforeCard = { title: item.text?.[0] || "", accent: item.text?.[1] || "", cta: item.text?.find((text) => /send|start|continue|book|submit|take/i.test(text)) || "", href: item.href || selection.href || "", img: item.image || selection.imageSrc || "", alt: item.text?.join(" ") || "Selected item" };
+  const parsedAfter = parseCards(patch?.after || "", item.arrayName);
+  const afterCards = (parsedAfter.length ? parsedAfter : fallbackAfterCards(plan, item)).slice(0, 6);
 
   const style = {
     left: `${layout.x}px`,
@@ -260,17 +292,19 @@ export default function VisualSelectionPatchPanel() {
       </header>
       {!layout.minimized ? <div className="body">
         <p><span>Selected</span><b>{selection.text || selection.parentText || selection.imageSrc || selection.selector || "Element"}</b></p>
+        <section className="scopePicker"><span>Scope</span><div>{[["image-only", "Image only"], ["card-item", "Card/item"], ["section-frame", "Whole frame/section"], ["parent-group", "Parent group"]].map(([value, label]) => <button key={value} type="button" className={scope === value ? "active" : ""} onClick={() => setScope(value)}>{label}</button>)}</div></section>
         {busy && !plan ? <p><span>Status</span><b>Resolving source automatically…</b></p> : null}
         {indexedFiles.length ? <p><span>Indexed files</span><b>{indexedFiles.slice(0, 5).join(" · ")}{indexedFiles.length > 5 ? ` +${indexedFiles.length - 5}` : ""}</b></p> : null}
-        {resolved ? <section className="summaryCard"><p><span>Operation</span><b>{summary.operation}</b></p><p><span>Target</span><b>{summary.target}</b></p><p><span>File</span><b>{summary.file}</b></p>{summary.image ? <p><span>Matched image</span><b>{summary.image}</b></p> : null}{summary.href ? <p><span>Matched href</span><b>{summary.href}</b></p> : null}<p><span>Confidence</span><b>{summary.confidence}%</b></p></section> : null}
-        {patch ? <section className="visualCompare"><div><h3>Will be removed</h3><MiniCard card={beforeCard} selection={selection} removed /></div><div><h3>After remove</h3><div className="afterGrid">{afterCards.length ? afterCards.map((card, index) => <MiniCard key={`${card.href}-${index}`} card={card} selection={selection} />) : <article className="emptyAfter">Selected item gone. Remaining layout collapses into place.</article>}</div></div></section> : null}
+        {resolved ? <section className="summaryCard"><p><span>Operation</span><b>{summary.operation}</b></p><p><span>Resolved edit</span><b>{summary.resolvedEdit}</b></p><p><span>Target</span><b>{summary.target}</b></p><p><span>File</span><b>{summary.file}</b></p>{summary.image ? <p><span>Matched image</span><b>{summary.image}</b></p> : null}{summary.href ? <p><span>Matched href</span><b>{summary.href}</b></p> : null}<p><span>Effect</span><b>{summary.effect}</b></p><p><span>Confidence</span><b>{summary.confidence}%</b></p></section> : null}
+        {patch ? <section className="visualCompare"><div><h3>{scope === "section-frame" ? "Will remove entire frame" : "Will be removed"}</h3><MiniCard card={beforeCard} selection={selection} removed frame={scope === "section-frame"} /></div><div><h3>After remove · following items move up</h3><div className="afterGrid">{afterCards.length ? afterCards.map((card, index) => <MiniCard key={`${card.href}-${index}`} card={card} selection={selection} />) : <article className="emptyAfter">Selected frame gone. Remaining layout collapses into place.</article>}</div></div></section> : null}
+        {unsupportedScope ? <p className="error">This scope is not safely patchable yet. Choose Card/item or Whole frame/section.</p> : null}
         {resolved?.reasons?.length ? <ul>{resolved.reasons.slice(0, 6).map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}
         {error ? <p className="error">{error}</p> : null}
         {plan?.result?.error ? <p className="error">{plan.result.error}</p> : null}
         {patch ? <pre>{focusedPreview(patch, resolved)}</pre> : null}
       </div> : null}
-      {!layout.minimized ? <footer><button type="button" disabled={busy} onClick={() => generatePatch(false)}>{busy ? "Working…" : "Re-plan"}</button><button type="button" disabled={busy || !patch} onClick={() => generatePatch(true)}>Apply + Push</button></footer> : null}
-      <style jsx>{`.visualPatchPanel{position:fixed;z-index:2147483000;min-width:360px;min-height:220px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);border:1px solid rgba(55,229,255,.38);border-radius:18px;background:#081126;color:#eaf3ff;box-shadow:0 24px 80px rgba(0,0,0,.45);overflow:hidden}header{height:46px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid rgba(148,163,184,.18);cursor:move;user-select:none}header b{font-size:12px}nav{display:flex;gap:6px;align-items:center}nav button{height:26px;border:0;background:rgba(255,255,255,.08);color:white;border-radius:999px;padding:0 8px;font-size:10px;font-weight:900}.body{height:calc(100% - 96px);padding:12px;display:grid;gap:8px;overflow:auto}.body p{margin:0;display:grid;gap:2px}.body span{color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.body b{font-size:12px;line-height:1.35;overflow-wrap:anywhere}.summaryCard{display:grid;gap:8px;border:1px solid rgba(110,231,183,.28);border-radius:14px;background:rgba(6,78,59,.18);padding:10px}.visualCompare{display:grid;grid-template-columns:1fr 1fr;gap:10px}.visualCompare h3{margin:0 0 6px;font-size:11px;color:#6ee7b7;text-transform:uppercase}.miniCard{overflow:hidden;border:1px solid rgba(148,163,184,.24);border-radius:13px;background:#0f172a;color:#fff}.miniCard.removed{opacity:.74;outline:2px solid rgba(248,113,113,.5)}.miniCard img{display:block;width:100%;height:88px;object-fit:cover}.miniCard div{padding:8px}.miniCard b{display:block;font-size:11px}.miniCard span,.miniCard small{display:block;margin-top:4px;color:#a9b8d9;font-size:10px;overflow-wrap:anywhere}.afterGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:250px;overflow:auto}.emptyAfter{display:grid;place-items:center;min-height:120px;border:1px dashed rgba(110,231,183,.35);border-radius:13px;padding:12px;color:#a9b8d9;text-align:center;font-size:12px}.body ul{margin:0;padding-left:18px;color:#a9b8d9;font-size:11px}.error{color:#fecaca!important}pre{white-space:pre-wrap;max-height:190px;overflow:auto;background:#020617;border-radius:12px;padding:10px;color:#cbd5e1;font-size:10px}footer{height:50px;display:flex;gap:8px;padding:8px 10px;border-top:1px solid rgba(148,163,184,.18)}footer button{flex:1;border:0;border-radius:10px;background:#7c3aed;color:white;font-weight:900;font-size:12px}footer button:disabled{opacity:.55}@media(max-width:980px){.visualCompare{grid-template-columns:1fr}.visualPatchPanel{left:10px!important;right:10px!important;width:auto!important}}`}</style>
+      {!layout.minimized ? <footer><button type="button" disabled={busy} onClick={() => generatePatch(false)}>{busy ? "Working…" : "Re-plan"}</button><button type="button" disabled={busy || !patch || unsupportedScope} onClick={() => generatePatch(true)}>Apply + Push</button></footer> : null}
+      <style jsx>{`.visualPatchPanel{position:fixed;z-index:2147483000;min-width:360px;min-height:220px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);border:1px solid rgba(55,229,255,.38);border-radius:18px;background:#081126;color:#eaf3ff;box-shadow:0 24px 80px rgba(0,0,0,.45);overflow:hidden}header{height:46px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid rgba(148,163,184,.18);cursor:move;user-select:none}header b{font-size:12px}nav{display:flex;gap:6px;align-items:center}nav button{height:26px;border:0;background:rgba(255,255,255,.08);color:white;border-radius:999px;padding:0 8px;font-size:10px;font-weight:900}.body{height:calc(100% - 96px);padding:12px;display:grid;gap:8px;overflow:auto}.body p{margin:0;display:grid;gap:2px}.body span,.scopePicker span{color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.body b{font-size:12px;line-height:1.35;overflow-wrap:anywhere}.scopePicker{display:grid;gap:8px;border:1px solid rgba(148,163,184,.18);border-radius:14px;background:rgba(15,23,42,.62);padding:10px}.scopePicker div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scopePicker button{height:30px;border:1px solid rgba(148,163,184,.24);border-radius:10px;background:#1e293b;color:#cbd5e1;font-size:11px;font-weight:900}.scopePicker button.active{background:#7c3aed;color:#fff;border-color:#a78bfa}.summaryCard{display:grid;gap:8px;border:1px solid rgba(110,231,183,.28);border-radius:14px;background:rgba(6,78,59,.18);padding:10px}.visualCompare{display:grid;grid-template-columns:1fr 1fr;gap:10px}.visualCompare h3{margin:0 0 6px;font-size:11px;color:#6ee7b7;text-transform:uppercase}.miniCard{overflow:hidden;border:1px solid rgba(148,163,184,.24);border-radius:13px;background:#0f172a;color:#fff}.miniCard.removed{opacity:.74;outline:2px solid rgba(248,113,113,.5)}.miniCard img{display:block;width:100%;height:88px;object-fit:cover}.miniCard div{padding:8px}.miniCard b{display:block;font-size:11px}.miniCard em{display:block;margin-top:4px;color:#fca5a5;font-size:10px;font-style:normal;font-weight:900}.miniCard span,.miniCard small{display:block;margin-top:4px;color:#a9b8d9;font-size:10px;overflow-wrap:anywhere}.afterGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:250px;overflow:auto}.emptyAfter{display:grid;place-items:center;min-height:120px;border:1px dashed rgba(110,231,183,.35);border-radius:13px;padding:12px;color:#a9b8d9;text-align:center;font-size:12px}.body ul{margin:0;padding-left:18px;color:#a9b8d9;font-size:11px}.error{color:#fecaca!important}pre{white-space:pre-wrap;max-height:190px;overflow:auto;background:#020617;border-radius:12px;padding:10px;color:#cbd5e1;font-size:10px}footer{height:50px;display:flex;gap:8px;padding:8px 10px;border-top:1px solid rgba(148,163,184,.18)}footer button{flex:1;border:0;border-radius:10px;background:#7c3aed;color:white;font-weight:900;font-size:12px}footer button:disabled{opacity:.55}@media(max-width:980px){.visualCompare{grid-template-columns:1fr}.visualPatchPanel{left:10px!important;right:10px!important;width:auto!important}}`}</style>
     </aside>
   );
 }
