@@ -14,6 +14,7 @@ export type VisualSelection = {
   parentText?: string;
   nearbyHeading?: string;
   route?: string;
+  removalScope?: string;
 };
 export type GraphItem = {
   key: string;
@@ -165,6 +166,70 @@ function removeObjectAt(content: string, range: GraphItem["range"]) {
   return content.slice(0, start) + content.slice(end);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function repairIndexList(values: string, removedIndex: number, nextLength: number) {
+  const numbers = values.split(",").map((value) => Number(value.trim())).filter((value) => Number.isInteger(value));
+  const repaired = numbers
+    .filter((value) => value !== removedIndex)
+    .map((value) => value > removedIndex ? value - 1 : value)
+    .filter((value, index, all) => value >= 0 && value < nextLength && all.indexOf(value) === index);
+  return repaired.join(", ");
+}
+
+function repairCollectionReferences(content: string, item: GraphItem, graph: SourceGraph) {
+  const arrayName = item.arrayName || "";
+  const removedIndex = Number(item.itemIndex ?? -1);
+  if (!arrayName || removedIndex < 0) return { content, repairs: [], warnings: [] };
+  const sameArrayItems = graph.items.filter((candidate) => candidate.file === item.file && candidate.arrayName === arrayName);
+  const nextLength = Math.max(0, sameArrayItems.length - 1);
+  const repairs: string[] = [];
+  const warnings: string[] = [];
+  let next = content;
+  const array = escapeRegExp(arrayName);
+
+  const indexArrayPattern = new RegExp(`(const\\s+([A-Za-z0-9_]+)\\s*=\\s*)\\[([\\s\\d,]+)\\](\\s*;)`, "g");
+  next = next.replace(indexArrayPattern, (full, prefix, name, values, suffix) => {
+    const rowUsedForArray = new RegExp(`${escapeRegExp(name)}\\s*\\.\\s*map[\\s\\S]{0,500}${array}\\s*\\[`).test(next);
+    if (!rowUsedForArray) return full;
+    const repaired = repairIndexList(values, removedIndex, nextLength);
+    repairs.push(`repaired index array ${name} after removing ${arrayName}[${removedIndex}]`);
+    return `${prefix}[${repaired}]${suffix}`;
+  });
+
+  const inlineArrayPattern = new RegExp(`\\[((?:\\s*${array}\\s*\\[\\s*\\d+\\s*\\]\\s*,?)+)\\]\\s*\\.\\s*map\\(\\s*\\(\\s*card\\s*\\)`, "g");
+  next = next.replace(inlineArrayPattern, () => {
+    repairs.push(`converted inline ${arrayName}[n] render list to ${arrayName}.filter(Boolean)`);
+    return `${arrayName}.filter(Boolean).map((card)`;
+  });
+
+  const directIndexPattern = new RegExp(`${array}\\s*\\[\\s*(\\d+)\\s*\\]`, "g");
+  next = next.replace(directIndexPattern, (full, raw) => {
+    const index = Number(raw);
+    if (!Number.isInteger(index)) return full;
+    if (index > removedIndex) {
+      repairs.push(`shifted ${arrayName}[${index}] to ${arrayName}[${index - 1}]`);
+      return `${arrayName}[${index - 1}]`;
+    }
+    if (index === removedIndex) {
+      warnings.push(`${arrayName}[${index}] referenced the removed item; kept index for nearest remaining item and requires preview verification`);
+      return `${arrayName}[${Math.min(index, Math.max(0, nextLength - 1))}]`;
+    }
+    return full;
+  });
+
+  const indexedMapPattern = new RegExp(`(\\.map\\(\\s*\\(\\s*idx\\s*\\)\\s*=>\\s*${array}\\s*\\[\\s*idx\\s*\\]\\s*\\))`, "g");
+  next = next.replace(indexedMapPattern, (full) => {
+    if (/\.filter\(Boolean\)/.test(next.slice(next.indexOf(full), next.indexOf(full) + full.length + 40))) return full;
+    repairs.push(`guarded ${arrayName}[idx] map with filter(Boolean)`);
+    return `${full}.filter(Boolean)`;
+  });
+
+  return { content: next, repairs: Array.from(new Set(repairs)), warnings: Array.from(new Set(warnings)) };
+}
+
 export function planVisualEdit(files: SourceFileSnapshot[], selection: VisualSelection, command = "remove this") {
   const graph = buildSourceGraph(files);
   const resolved = resolveSelection(graph, selection);
@@ -174,7 +239,9 @@ export function planVisualEdit(files: SourceFileSnapshot[], selection: VisualSel
   const file = files.find((f) => f.path === resolved.item?.file);
   if (!file) return { graph, resolved, patches: [], error: "Source file was not provided." };
   const before = file.content;
-  const after = removeObjectAt(before, resolved.item.range);
+  const removedOnly = removeObjectAt(before, resolved.item.range);
+  const repaired = repairCollectionReferences(removedOnly, resolved.item, graph);
+  const after = repaired.content;
   const removedText = resolved.item.text.join(" ");
   const verification = {
     selectedTextBefore: removedText ? before.includes(resolved.item.text[0] || removedText) : true,
@@ -182,7 +249,10 @@ export function planVisualEdit(files: SourceFileSnapshot[], selection: VisualSel
     sourceFile: file.path,
     confidence: resolved.confidence,
     reasons: resolved.reasons,
+    dependencyRepairs: repaired.repairs,
+    dependencyWarnings: repaired.warnings,
+    buildGateRequired: true,
   };
-  const patch: PatchResult = { file: file.path, before, after, patch: unifiedPatch(file.path, before, after), operation: "remove-array-item", verification };
+  const patch: PatchResult = { file: file.path, before, after, patch: unifiedPatch(file.path, before, after), operation: repaired.repairs.length ? "remove-array-item-with-reference-repair" : "remove-array-item", verification };
   return { graph, resolved, patches: [patch], error: "" };
 }
