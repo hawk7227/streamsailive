@@ -6,9 +6,10 @@ import BuilderContextEventSink from "@/components/streams-builder/BuilderContext
 import CanonicalPreviewEventBridge from "@/components/streams-builder/CanonicalPreviewEventBridge";
 import CanonicalPreviewWorkspaceSurface from "@/components/streams-builder/CanonicalPreviewWorkspaceSurface";
 import VisualSelectionPatchPanel from "@/components/streams-builder/VisualSelectionPatchPanel";
+import WorkspaceBridgeSourceOfTruth from "@/components/streams-builder/WorkspaceBridgeSourceOfTruth";
 
 export const dynamic = "force-dynamic";
 
 export default function StreamsAIStreamsBuilderPage() {
-  return <main className="h-dvh min-h-dvh overflow-hidden bg-[#020713] text-white"><WorkspaceGrid /><BuilderContextEventSink /><CanonicalPreviewEventBridge /><CanonicalPreviewWorkspaceSurface /><VisualSelectionPatchPanel /><PreviewCanvasFixStyles /><VisualEditorCanvasFixStyles /><VisualEditorCodeDock /></main>;
+  return <main className="h-dvh min-h-dvh overflow-hidden bg-[#020713] text-white"><WorkspaceGrid /><WorkspaceBridgeSourceOfTruth /><BuilderContextEventSink /><CanonicalPreviewEventBridge /><CanonicalPreviewWorkspaceSurface /><VisualSelectionPatchPanel /><PreviewCanvasFixStyles /><VisualEditorCanvasFixStyles /><VisualEditorCodeDock /></main>;
 }
