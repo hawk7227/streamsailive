@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 
+const CONTEXT_KEY = "streams-builder:chat-context-events";
+const CONVERSATION_KEY = "streams-ai:conversation-state";
+const MAX_CONTEXT_EVENTS = 80;
+
 type BuilderContextEvent = {
   phase?: string;
   type?: string;
@@ -35,7 +39,23 @@ type BuilderContextEvent = {
   error?: string;
   logs?: string[];
   metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 };
+
+function frame() {
+  return document.querySelector<HTMLIFrameElement>("iframe[title='Streams AI']");
+}
+
+function remember(detail: BuilderContextEvent) {
+  try {
+    const current = JSON.parse(window.localStorage.getItem(CONTEXT_KEY) || "[]");
+    const next = Array.isArray(current) ? current : [];
+    window.localStorage.setItem(CONTEXT_KEY, JSON.stringify([...next, detail].slice(-MAX_CONTEXT_EVENTS)));
+    if (detail.phase === "conversation-state" || String(detail.source || "").startsWith("streams-")) {
+      window.localStorage.setItem(CONVERSATION_KEY, JSON.stringify(detail));
+    }
+  } catch {}
+}
 
 function normalize(detail: BuilderContextEvent): BuilderContextEvent | null {
   const message = String(detail?.message || detail?.reason || detail?.error || "").trim();
@@ -58,7 +78,8 @@ export default function BuilderContextEventSink() {
     function flush() {
       const events = queueRef.current.splice(0, queueRef.current.length);
       if (!events.length) return;
-      const blob = new Blob([JSON.stringify({ sessionId: "agent-1", events })], { type: "application/json" });
+      const sessionId = String(events.find((event) => event.sessionId)?.sessionId || events.find((event) => event.conversationState && typeof event.conversationState === "object")?.conversationState?.sessionId || "agent-1");
+      const blob = new Blob([JSON.stringify({ sessionId, events })], { type: "application/json" });
       navigator.sendBeacon?.("/api/streams-builder/context-events", blob);
       navigator.sendBeacon?.("/api/streams-ai/runtime-events", blob);
     }
@@ -68,16 +89,37 @@ export default function BuilderContextEventSink() {
       const key = `${detail.phase}:${detail.message}:${detail.selectedLayerId || ""}:${detail.toolName || ""}`;
       if (key === lastKeyRef.current) return;
       lastKeyRef.current = key;
+      remember(detail);
       queueRef.current.push(detail);
+      frame()?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail, source: "builder-context-event-sink", at: detail.at }, window.location.origin);
       if (timerRef.current) window.clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(flush, 350);
     }
+    function onFrameMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data || {};
+      if (typeof data.type !== "string" || !data.type.startsWith("streams-ai:")) return;
+      const detail = { ...(data.detail || {}), phase: data.type.replace(/^streams-ai:/, ""), source: data.source || "streams-ai-chat-frame", message: data.detail?.message || `${data.type.replace(/^streams-ai:/, "")} updated` };
+      enqueue(new CustomEvent("streams-builder:chat-context-event", { detail }));
+    }
+    window.addEventListener("message", onFrameMessage);
     window.addEventListener("streams-builder-summary-event", enqueue as EventListener);
     window.addEventListener("streams-builder:chat-context-event", enqueue as EventListener);
+    window.addEventListener("streams-ai:conversation-state", enqueue as EventListener);
+    window.addEventListener("streams-ai:composer-draft-state", enqueue as EventListener);
+    window.addEventListener("streams-ai:recent-chats-state", enqueue as EventListener);
+    window.addEventListener("streams-ai:thread-assets-state", enqueue as EventListener);
+    window.addEventListener("streams-ai:streaming-recovery-state", enqueue as EventListener);
     window.addEventListener("streams-ai:runtime-event", enqueue as EventListener);
     return () => {
+      window.removeEventListener("message", onFrameMessage);
       window.removeEventListener("streams-builder-summary-event", enqueue as EventListener);
       window.removeEventListener("streams-builder:chat-context-event", enqueue as EventListener);
+      window.removeEventListener("streams-ai:conversation-state", enqueue as EventListener);
+      window.removeEventListener("streams-ai:composer-draft-state", enqueue as EventListener);
+      window.removeEventListener("streams-ai:recent-chats-state", enqueue as EventListener);
+      window.removeEventListener("streams-ai:thread-assets-state", enqueue as EventListener);
+      window.removeEventListener("streams-ai:streaming-recovery-state", enqueue as EventListener);
       window.removeEventListener("streams-ai:runtime-event", enqueue as EventListener);
       if (timerRef.current) window.clearTimeout(timerRef.current);
       flush();
