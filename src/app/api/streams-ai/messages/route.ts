@@ -13,6 +13,7 @@ import { generateAITitle } from "@/lib/streams-ai/services/title-generator";
 import { buildUniversalChatContext } from "@/lib/streams-ai/universal-chat-context";
 import { recordUniversalRuntimeEvent } from "@/lib/streams-ai/runtime-events";
 import { runControlledOpenAIToolLoopScaffold } from "@/lib/streams-ai/openai-tool-loop";
+import { buildStreamsMemoryContext, saveThreadSummary } from "@/lib/streams-ai/memory-context";
 
 const assets = new StreamsAIAssetsRepository();
 const jobs = new StreamsAIJobsRepository();
@@ -28,12 +29,13 @@ const MAX_HISTORY_MESSAGES = 28;
 
 const STREAMS_LIVE_ASSISTANT_INSTRUCTIONS = [
   "You are Streams AI, a universal OpenAI-powered assistant inside Streams.",
-  "Answer broadly like ChatGPT first, then use Streams capabilities when runtime context or the user request requires it.",
+  "Answer broadly like ChatGPT first, then use Streams capabilities when runtime context, saved memory, or the user request requires it.",
   "OpenAI is the single orchestrator brain. Tools, workers, providers, validators, memory, connectors, and workspace surfaces report results; they do not decide independently.",
   "For normal questions, answer naturally without forcing tool use.",
-  "For workspace, file, image, repo, generation, build, repair, automation, or safety requests, use the supplied runtime context, universal plan, and approved tool results.",
-  "Do not claim any action happened unless a tool result, runtime event, job, asset, provider run, commit, build status, deployment status, storage record, or other proof shows it.",
+  "For workspace, file, image, repo, generation, build, repair, automation, memory, or safety requests, use the supplied runtime context, saved memory, universal plan, and approved tool results.",
+  "Do not claim any action happened unless a tool result, runtime event, job, asset, provider run, commit, build status, deployment status, storage record, memory record, or other proof shows it.",
   "If proof is partial, say partial. If a tool is unavailable, say unavailable. If action confidence is low, pause and recommend safe options.",
+  "Users can ask what is remembered, ask to save memory, or ask to remove saved memory. Respect user and project scope.",
   "Keep existing Streams UI/system behavior intact unless the user explicitly asks for a change.",
 ].join("\n");
 
@@ -65,13 +67,11 @@ export async function POST(request: NextRequest) {
     const body = await readJsonBody<{ sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] }>(request);
     const content = (body.content || body.message || "").trim();
     if (!content) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
-
     let sessionId = body.sessionId || "";
     if (!sessionId) {
-      const created = await sessions.create(scope, { title: await generateAITitle(content), metadata: { source: "copied-streams-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled" } });
+      const created = await sessions.create(scope, { title: await generateAITitle(content), metadata: { source: "copied-streams-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled", recentChat: true } });
       sessionId = created.id;
     }
-
     const userMessage = await messages.create(scope, { sessionId, role: body.role || "user", content, status: body.status || "complete", metadata: { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled", attachments: body.attachments || [] } });
     if (body.runAssistant === false) return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     if (isCanonicalCapabilityQuestion(content)) return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
@@ -109,16 +109,19 @@ function streamAssistantResponse({ scope, sessionId, userContent, mode }: { scop
       await recordUniversalRuntimeEvent({ sessionId, phase: "turn.started", source: LIVE_ASSISTANT_SOURCE, severity: "info", message: "Universal assistant turn started." });
       const history = await messages.list(scope, sessionId);
       const universalContext = await buildUniversalChatContext({ sessionId, userMessage: userContent });
+      const memoryContext = await buildStreamsMemoryContext(scope, sessionId, userContent);
       const requestedUniversalTools = detectUniversalToolRequests(userContent, sessionId, universalContext);
       const loopResult = await runControlledOpenAIToolLoopScaffold({ requestedTools: requestedUniversalTools, deps: { sessionId, jobs, assets, providerRuns, scope } });
       const controlledToolResults: ExecutedToolResult[] = loopResult.toolResults.map((item) => ({ name: item.name, ok: item.ok, result: item.result || { error: item.error || "Tool failed" } }));
       const legacyToolResults = await executeRequestedBackendTools({ userContent, scope, sessionId, send });
       const toolResults = [...controlledToolResults, ...legacyToolResults];
-      const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, universalContextText: universalContext.contextText, toolResults, send, mode });
-      const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: assistant.content, status: "complete", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: assistant.providerStatus, providerError: assistant.providerError || null, openaiModel: assistant.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL, openaiResponseId: assistant.responseId || null, openaiUsage: assistant.usage || null, backendTools: "universal-approved-tools", toolLoop: { scaffold: true, requested: requestedUniversalTools.map((tool) => tool.name), maxRounds: loopResult.maxRounds }, universalPlan: universalContext.plan || null, universalCapabilitySummary: universalContext.capabilitySummary, toolResults: assistant.toolResults || toolResults, runtimeContract: "universal_live_assistant_orchestrator" } });
+      const fullContextText = [universalContext.contextText, memoryContext.contextText].join("\n\n");
+      const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, universalContextText: fullContextText, toolResults, send, mode });
+      const memoryUpdate = await saveThreadSummary(scope, sessionId, userContent, assistant.content);
+      const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: assistant.content, status: "complete", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: assistant.providerStatus, providerError: assistant.providerError || null, openaiModel: assistant.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL, openaiResponseId: assistant.responseId || null, openaiUsage: assistant.usage || null, backendTools: "universal-approved-tools", toolLoop: { scaffold: true, requested: requestedUniversalTools.map((tool) => tool.name), maxRounds: loopResult.maxRounds }, universalPlan: universalContext.plan || null, universalCapabilitySummary: universalContext.capabilitySummary, memoryContext: { memoryCount: memoryContext.memories.length, hasSessionSummary: Boolean(memoryContext.sessionSummary), memoryUpdate }, toolResults: assistant.toolResults || toolResults, runtimeContract: "universal_live_assistant_with_durable_memory" } });
       if (assistant.providerStatus !== "ok") for (const token of chunkText(assistant.content)) send("response", { token });
-      await recordUniversalRuntimeEvent({ sessionId, phase: "turn.completed", source: LIVE_ASSISTANT_SOURCE, severity: assistant.providerStatus === "ok" ? "info" : "error", message: `Universal assistant turn completed with provider status: ${assistant.providerStatus}.`, proof: { responseId: assistant.responseId || null, assistantMessageId: assistantMessage.id } });
-      send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "openai", providerStatus: assistant.providerStatus, responseId: assistant.responseId || null, toolResults: assistant.toolResults || toolResults, universalPlan: universalContext.plan, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
+      await recordUniversalRuntimeEvent({ sessionId, phase: "turn.completed", source: LIVE_ASSISTANT_SOURCE, severity: assistant.providerStatus === "ok" ? "info" : "error", message: `Universal assistant turn completed with provider status: ${assistant.providerStatus}.`, proof: { responseId: assistant.responseId || null, assistantMessageId: assistantMessage.id, memoryUpdated: Boolean(memoryUpdate) } });
+      send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "openai", providerStatus: assistant.providerStatus, responseId: assistant.responseId || null, toolResults: assistant.toolResults || toolResults, universalPlan: universalContext.plan, memoryContext: { memoryCount: memoryContext.memories.length, hasSessionSummary: Boolean(memoryContext.sessionSummary) }, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
     } catch (error) {
       const fallback = providerFallback(error);
       const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: fallback.content, status: "complete", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: "failed", providerError: fallback.providerError || null } });
@@ -144,7 +147,7 @@ async function runLiveOpenAIResponse({ history, scope, sessionId, universalConte
     let content = "";
     let responseId: string | null = null;
     let usage: Record<string, unknown> | null = null;
-    send("activity", { phase: "openai.started", statusText: "Reading runtime context and approved tool results…", model, source: LIVE_ASSISTANT_SOURCE });
+    send("activity", { phase: "openai.started", statusText: "Reading runtime context, saved memory, and approved tool results…", model, source: LIVE_ASSISTANT_SOURCE });
     for await (const event of responseStream) {
       if (event.type === "response.output_text.delta" && typeof event.delta === "string") { content += event.delta; send("response", { token: event.delta }); continue; }
       if (event.type === "response.output_text.done" && !content && typeof event.text === "string") { content = event.text; send("response", { token: event.text }); continue; }
