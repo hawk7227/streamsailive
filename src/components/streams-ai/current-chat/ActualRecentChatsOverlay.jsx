@@ -97,23 +97,26 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
         .actualRecentChats{
           position:fixed;
           left:8px;
-          top:326px;
+          bottom:72px;
           width:276px;
-          max-height:265px;
+          max-height:206px;
           z-index:45;
           padding:0 7px 8px;
           color:#eaf3ff;
           pointer-events:auto;
+          background:linear-gradient(180deg,rgba(7,11,29,.94),rgba(7,11,29,.72));
+          border-top:1px solid rgba(77,133,226,.22);
+          box-shadow:0 -12px 24px rgba(2,5,12,.55);
         }
         .actualRecentChatsHead{
-          margin:0 0 5px 0;
+          margin:8px 0 5px 0;
           color:#8dabdb;
           font-size:10px;
           letter-spacing:.18em;
           font-weight:900;
         }
         .actualRecentChatsList{
-          max-height:235px;
+          max-height:172px;
           overflow-y:auto;
           padding-right:4px;
           scrollbar-width:thin;
@@ -160,6 +163,7 @@ export default function ActualRecentChatsOverlay({ chatRuntime }) {
           background:linear-gradient(90deg,rgba(119,70,255,.62),rgba(8,108,255,.62));
         }
         @media(max-width:900px){.actualRecentChats{display:none}}
+        @media(max-height:760px){.actualRecentChats{max-height:156px}.actualRecentChatsList{max-height:122px}}
       `}</style>
     </section>
   );
