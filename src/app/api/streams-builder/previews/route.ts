@@ -14,9 +14,18 @@ function clean(value: unknown, max = 20000) {
   return String(value || "").slice(0, max);
 }
 
-function defaultPreviewHtml(title = "Streams Preview") {
-  const safeTitle = clean(title, 120).replace(/[&<>]/g, "");
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui;background:#070b18;color:#f8fbff}main{width:min(760px,calc(100vw - 40px));border:1px solid rgba(255,255,255,.14);border-radius:28px;background:rgba(255,255,255,.08);padding:34px}h1{margin:0 0 10px;font-size:52px;line-height:.94}p{color:#a9b8d9;line-height:1.55}</style></head><body><main><h1>${safeTitle}</h1><p>Streams Builder preview is ready.</p></main></body></html>`;
+function inferType(source: string) {
+  if (/<svg[\s>]/i.test(source)) return "svg";
+  if (/export\s+default|className=|React\./.test(source)) return "react";
+  return "html";
+}
+
+function asPreviewHtml(source: string) {
+  const value = source.trim();
+  if (/<!doctype html|<html[\s>]/i.test(value)) return value;
+  if (/<svg[\s>]/i.test(value)) return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#090b12">${value}</body></html>`;
+  if (/<[a-z][\s\S]*>/i.test(value) && !/export\s+default|className=/.test(value)) return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body>${value}</body></html>`;
+  return value;
 }
 
 export async function POST(request: NextRequest) {
@@ -24,8 +33,11 @@ export async function POST(request: NextRequest) {
     const scope = await requireStreamsAIScope(request);
     const body = await readJsonBody<{ title?: string; type?: string; sessionId?: string | null; projectId?: string | null; sourceCode?: string; previewHtml?: string; status?: string; metadata?: Record<string, unknown> }>(request);
     const title = clean(body.title || "Streams Builder Preview", 180);
-    const sourceCode = clean(body.sourceCode || body.previewHtml || "", 200000);
-    const previewHtml = clean(body.previewHtml || body.sourceCode || defaultPreviewHtml(title), 240000);
+    const sourceCode = clean(body.sourceCode || "", 200000);
+    const requestedPreviewHtml = clean(body.previewHtml || "", 240000);
+    const hasRealPreview = Boolean(sourceCode.trim() || requestedPreviewHtml.trim());
+    if (!hasRealPreview) return streamsAIJson({ ok: false, error: "Real preview source is required. Empty or placeholder previews are not created." }, 400);
+    const previewHtml = requestedPreviewHtml.trim() ? requestedPreviewHtml : asPreviewHtml(sourceCode);
     const now = new Date().toISOString();
 
     const { data: preview, error } = await db().from("streams_ai_previews").insert({
@@ -34,11 +46,11 @@ export async function POST(request: NextRequest) {
       project_id: body.projectId || scope.defaultProjectId || null,
       session_id: body.sessionId || null,
       title,
-      type: clean(body.type || "html", 40),
+      type: clean(body.type || inferType(sourceCode || previewHtml), 40),
       source_code: sourceCode,
       preview_html: previewHtml,
       status: body.status || "ready",
-      metadata: { ...(body.metadata || {}), source: "streams-ai-chat-controller" },
+      metadata: { ...(body.metadata || {}), source: "streams-ai-chat-controller", canonical: true, placeholder: false },
       created_at: now,
       updated_at: now,
     }).select("*").single();
@@ -51,7 +63,7 @@ export async function POST(request: NextRequest) {
       version_number: 1,
       source_code: sourceCode,
       preview_html: previewHtml,
-      metadata: { source: "initial-preview-create" },
+      metadata: { source: "initial-preview-create", placeholder: false },
       created_at: now,
     }).select("*").single();
     if (versionError) throw versionError;
