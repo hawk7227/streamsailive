@@ -13,6 +13,7 @@ import { generateAITitle } from "@/lib/streams-ai/services/title-generator";
 import { buildUniversalChatContext } from "@/lib/streams-ai/universal-chat-context";
 import { recordUniversalRuntimeEvent } from "@/lib/streams-ai/runtime-events";
 import { runControlledOpenAIToolLoopScaffold } from "@/lib/streams-ai/openai-tool-loop";
+import { runResponsesContinuation } from "@/lib/streams-ai/responses-continuation";
 import { buildStreamsMemoryContext, saveThreadSummary } from "@/lib/streams-ai/memory-context";
 
 const assets = new StreamsAIAssetsRepository();
@@ -44,8 +45,6 @@ type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 type ExecutedToolResult = { name: string; ok: boolean; result: Record<string, unknown> };
 type AssistantResult = { content: string; providerStatus: AssistantProviderStatus; providerError?: string; responseId?: string | null; model?: string; usage?: Record<string, unknown> | null; toolResults?: ExecutedToolResult[] };
-type OpenAIStreamEvent = { type?: string; delta?: string; text?: string; response?: { id?: string; output_text?: string; usage?: Record<string, unknown> }; error?: { message?: string } };
-type ResponsesCreateStream = (args: Record<string, unknown>) => Promise<AsyncIterable<OpenAIStreamEvent>>;
 
 export async function GET(request: NextRequest) {
   try {
@@ -118,7 +117,7 @@ function streamAssistantResponse({ scope, sessionId, userContent, mode }: { scop
       const fullContextText = [universalContext.contextText, memoryContext.contextText].join("\n\n");
       const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, universalContextText: fullContextText, toolResults, send, mode });
       const memoryUpdate = await saveThreadSummary(scope, sessionId, userContent, assistant.content);
-      const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: assistant.content, status: "complete", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: assistant.providerStatus, providerError: assistant.providerError || null, openaiModel: assistant.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL, openaiResponseId: assistant.responseId || null, openaiUsage: assistant.usage || null, backendTools: "universal-approved-tools", toolLoop: { scaffold: true, requested: requestedUniversalTools.map((tool) => tool.name), maxRounds: loopResult.maxRounds }, universalPlan: universalContext.plan || null, universalCapabilitySummary: universalContext.capabilitySummary, memoryContext: { memoryCount: memoryContext.memories.length, hasSessionSummary: Boolean(memoryContext.sessionSummary), memoryUpdate }, toolResults: assistant.toolResults || toolResults, runtimeContract: "universal_live_assistant_with_durable_memory" } });
+      const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: assistant.content, status: "complete", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: assistant.providerStatus, providerError: assistant.providerError || null, openaiModel: assistant.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL, openaiResponseId: assistant.responseId || null, openaiUsage: assistant.usage || null, backendTools: "universal-approved-tools", toolLoop: { scaffold: true, requested: requestedUniversalTools.map((tool) => tool.name), maxRounds: loopResult.maxRounds, responsesContinuation: true }, universalPlan: universalContext.plan || null, universalCapabilitySummary: universalContext.capabilitySummary, memoryContext: { memoryCount: memoryContext.memories.length, hasSessionSummary: Boolean(memoryContext.sessionSummary), memoryUpdate }, toolResults: assistant.toolResults || toolResults, runtimeContract: "universal_live_assistant_with_responses_tool_continuation" } });
       if (assistant.providerStatus !== "ok") for (const token of chunkText(assistant.content)) send("response", { token });
       await recordUniversalRuntimeEvent({ sessionId, phase: "turn.completed", source: LIVE_ASSISTANT_SOURCE, severity: assistant.providerStatus === "ok" ? "info" : "error", message: `Universal assistant turn completed with provider status: ${assistant.providerStatus}.`, proof: { responseId: assistant.responseId || null, assistantMessageId: assistantMessage.id, memoryUpdated: Boolean(memoryUpdate) } });
       send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "openai", providerStatus: assistant.providerStatus, responseId: assistant.responseId || null, toolResults: assistant.toolResults || toolResults, universalPlan: universalContext.plan, memoryContext: { memoryCount: memoryContext.memories.length, hasSessionSummary: Boolean(memoryContext.sessionSummary) }, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
@@ -142,19 +141,12 @@ async function runLiveOpenAIResponse({ history, scope, sessionId, universalConte
   try {
     const client = new OpenAI({ apiKey });
     const input = buildOpenAIInput(history, toolResults, universalContextText);
-    const createStream = client.responses.create.bind(client.responses) as unknown as ResponsesCreateStream;
-    const responseStream = await createStream({ model, instructions: STREAMS_LIVE_ASSISTANT_INSTRUCTIONS, input: input as any, stream: true, store: true, metadata: { product: "streams-ai", runtime: LIVE_ASSISTANT_SOURCE, backendTools: toolResults.length ? "executed" : "none-requested", tenantId: String(scope.tenantId || ""), sessionId: String(sessionId || "") } });
-    let content = "";
-    let responseId: string | null = null;
-    let usage: Record<string, unknown> | null = null;
-    send("activity", { phase: "openai.started", statusText: "Reading runtime context, saved memory, and approved tool results…", model, source: LIVE_ASSISTANT_SOURCE });
-    for await (const event of responseStream) {
-      if (event.type === "response.output_text.delta" && typeof event.delta === "string") { content += event.delta; send("response", { token: event.delta }); continue; }
-      if (event.type === "response.output_text.done" && !content && typeof event.text === "string") { content = event.text; send("response", { token: event.text }); continue; }
-      if (event.type === "response.completed") { responseId = event.response?.id || responseId; usage = event.response?.usage || usage; if (!content && event.response?.output_text) { content = event.response.output_text; send("response", { token: content }); } continue; }
-      if (event.type === "response.failed") throw new Error(event.error?.message || "OpenAI response failed.");
-    }
-    return { providerStatus: "ok", content: content.trim() || summarizeToolResults(toolResults), responseId, model, usage, toolResults };
+    send("activity", { phase: "openai.started", statusText: "Reading runtime context, saved memory, approved tools, and live source-of-truth state…", model, source: LIVE_ASSISTANT_SOURCE });
+    const continuation = await runResponsesContinuation({ client, model, instructions: STREAMS_LIVE_ASSISTANT_INSTRUCTIONS, input: input as any[], deps: { sessionId, jobs, assets, providerRuns, scope }, send, metadata: { product: "streams-ai", runtime: LIVE_ASSISTANT_SOURCE, backendTools: "responses-continuation", tenantId: String(scope.tenantId || ""), sessionId: String(sessionId || "") }, maxRounds: 6 });
+    if (continuation.content) for (const token of chunkText(continuation.content)) send("response", { token });
+    const continuationResults: ExecutedToolResult[] = continuation.toolResults.map((item) => ({ name: item.name, ok: item.ok, result: item.result || { error: item.error || "Tool failed" } }));
+    const mergedToolResults = [...toolResults, ...continuationResults];
+    return { providerStatus: "ok", content: continuation.content || summarizeToolResults(mergedToolResults), responseId: continuation.responseId, model, usage: continuation.usage, toolResults: mergedToolResults };
   } catch (error) { return providerFallback(error, model, toolResults); }
 }
 

@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
+import type { EditorProps } from '@monaco-editor/react';
 import { C } from './tokens';
 
 // Dynamically import Monaco Editor (large bundle)
-const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
+const MonacoEditor = dynamic<EditorProps>(() => import('@monaco-editor/react').then((mod) => mod.default), {
   ssr: false,
   loading: () => (
     <div style={{

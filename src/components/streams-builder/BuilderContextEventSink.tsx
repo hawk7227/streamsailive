@@ -39,6 +39,8 @@ type BuilderContextEvent = {
   error?: string;
   logs?: string[];
   metadata?: Record<string, unknown>;
+  sessionId?: string;
+  conversationState?: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -69,6 +71,15 @@ function normalize(detail: BuilderContextEvent): BuilderContextEvent | null {
   };
 }
 
+function sessionIdFromEvents(events: BuilderContextEvent[]) {
+  for (const event of events) {
+    if (event.sessionId) return String(event.sessionId);
+    const state = event.conversationState;
+    if (state && typeof state === "object" && typeof state.sessionId === "string") return state.sessionId;
+  }
+  return "agent-1";
+}
+
 export default function BuilderContextEventSink() {
   const queueRef = useRef<BuilderContextEvent[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -78,7 +89,7 @@ export default function BuilderContextEventSink() {
     function flush() {
       const events = queueRef.current.splice(0, queueRef.current.length);
       if (!events.length) return;
-      const sessionId = String(events.find((event) => event.sessionId)?.sessionId || events.find((event) => event.conversationState && typeof event.conversationState === "object")?.conversationState?.sessionId || "agent-1");
+      const sessionId = sessionIdFromEvents(events);
       const blob = new Blob([JSON.stringify({ sessionId, events })], { type: "application/json" });
       navigator.sendBeacon?.("/api/streams-builder/context-events", blob);
       navigator.sendBeacon?.("/api/streams-ai/runtime-events", blob);
