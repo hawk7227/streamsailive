@@ -134,10 +134,11 @@ export default function StreamsComposer({
     if (isDisabled) return;
 
     const value = message.trim();
-    const hasAttachments = libraryFiles && libraryFiles.length > 0;
+    const readyAttachments = Array.isArray(libraryFiles) ? libraryFiles.filter((file) => file.status !== "uploading") : [];
+    const hasAttachments = readyAttachments.length > 0;
     if (!value && !hasAttachments) return;
 
-    let finalMessage = value || " ";
+    let finalMessage = value || `Review the attached file${readyAttachments.length === 1 ? "" : "s"}.`;
 
     if (selectedTool?.id === "create_image") {
       finalMessage = "Create an image of " + finalMessage;
