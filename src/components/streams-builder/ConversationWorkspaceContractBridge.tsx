@@ -9,6 +9,12 @@ const ACTIVE_FILE_KEY = "streams-builder:active-file";
 const CONNECTION_KEY = "streams-builder:chat-connection";
 const MAX_EVENTS = 80;
 
+type ContextEvent = Record<string, unknown> & {
+  message: string;
+  at: string;
+  phase?: unknown;
+};
+
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key);
@@ -28,10 +34,10 @@ function frame() {
 
 function remember(detail: Record<string, unknown>) {
   const message = String(detail.message || detail.reason || detail.phase || "contract event").trim();
-  const normalized = { ...detail, message, at: String(detail.at || new Date().toISOString()) };
-  const current = readJson<Record<string, unknown>[]>(CONTEXT_KEY, []);
+  const normalized: ContextEvent = { ...detail, message, at: String(detail.at || new Date().toISOString()) };
+  const current = readJson<ContextEvent[]>(CONTEXT_KEY, []);
   const last = current[current.length - 1];
-  if (last?.phase === normalized.phase && last?.message === normalized.message) return;
+  if (last?.phase === normalized.phase && last.message === normalized.message) return;
   writeJson(CONTEXT_KEY, [...current, normalized].slice(-MAX_EVENTS));
 }
 
