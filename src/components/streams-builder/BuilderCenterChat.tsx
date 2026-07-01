@@ -1,7 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { FormEvent, useState } from "react";
 import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
@@ -23,62 +22,17 @@ type FileResult = {
   sourceTruth?: { route?: string; file?: string };
 };
 
-type RuntimeQueueResult = {
-  ok?: boolean;
-  error?: string;
-  message?: string;
-  queuedJob?: { id?: string | number };
-};
-
-type BuilderContextEvent = {
-  id?: string;
-  at?: string;
-  phase?: string;
-  source?: string;
-  repo?: string;
-  repository?: string;
-  branch?: string;
-  filePath?: string;
-  path?: string;
-  route?: string;
-  patchState?: string;
-  draftDirty?: boolean;
-  saved?: boolean;
-  message?: string;
-};
-
-const BUILDER_CONTEXT_KEY = "streams-builder:chat-context-events";
-const MAX_BUILDER_CONTEXT_EVENTS = 80;
-
 async function readJson(response: Response) {
   const text = await response.text();
-  try { return JSON.parse(text); } catch { throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`); }
-}
-
-async function runtimeHeaders() {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
   try {
-    const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    if (token) headers.Authorization = `Bearer ${token}`;
+    return JSON.parse(text);
   } catch {
-    // The runtime route will return the exact auth error if no session is available.
+    throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`);
   }
-  return headers;
 }
 
 function workstationId(name: string) {
   return String(name || "workstation").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workstation";
-}
-
-function workstationNameFromId(id: string, fallback: string) {
-  if (id === "visual-editing") return "Visual Editing";
-  if (id === "approval-center") return "Approval Center";
-  if (id === "browser-verification") return "Browser Verification";
-  if (id === "repository-truth") return "Repository Truth";
-  if (id === "primary-builder") return "Primary Builder";
-  return fallback || "Primary Builder";
 }
 
 function routeFromFile(path: string) {
@@ -111,176 +65,59 @@ function readTopRowSourceTruth() {
   return { repo, branch, path };
 }
 
-function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail) {
-  window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } }));
+function parseAgentOnePrompt(prompt: string) {
+  const live = readTopRowSourceTruth();
+  const last = readLastActiveFile();
+  const repo = prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || live.repo || last?.repo || "hawk7227/streamsailive";
+  const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || live.branch || last?.branch || "main";
+  const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || live.path || last?.path || "src/app/page.tsx";
+  return { repo, branch, path };
 }
 
 function publishSummary(phase: string, message: string) {
   window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase, message } }));
 }
 
-function readBuilderContextEvents() {
-  try {
-    const raw = window.localStorage.getItem(BUILDER_CONTEXT_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.slice(-MAX_BUILDER_CONTEXT_EVENTS) as BuilderContextEvent[] : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeBuilderContextEvents(events: BuilderContextEvent[]) {
-  try {
-    window.localStorage.setItem(BUILDER_CONTEXT_KEY, JSON.stringify(events.slice(-MAX_BUILDER_CONTEXT_EVENTS)));
-  } catch {
-    // Context persistence is best-effort; the UI still runs without storage.
-  }
-}
-
-function normalizeBuilderContextEvent(detail: BuilderContextEvent): BuilderContextEvent | null {
-  const message = String(detail?.message || "").trim();
-  if (!message) return null;
-  return {
-    id: detail.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    at: detail.at || new Date().toISOString(),
-    phase: detail.phase || "builder-event",
-    source: detail.source || "builder-workspace",
-    repo: detail.repo || detail.repository || "",
-    branch: detail.branch || "",
-    filePath: detail.filePath || detail.path || "",
-    route: detail.route || "",
-    patchState: detail.patchState || "",
-    draftDirty: Boolean(detail.draftDirty),
-    saved: detail.saved,
-    message,
-  };
-}
-
-function rememberBuilderContextEvent(detail: BuilderContextEvent) {
-  const normalized = normalizeBuilderContextEvent(detail);
-  if (!normalized) return null;
-  const current = readBuilderContextEvents();
-  const last = current[current.length - 1];
-  if (last?.phase === normalized.phase && last?.message === normalized.message) return normalized;
-  writeBuilderContextEvents([...current, normalized]);
-  return normalized;
-}
-
-function parseAgentOnePrompt(prompt: string) {
-  const live = readTopRowSourceTruth();
-  const last = readLastActiveFile();
-  const repo = prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || live.repo || last?.repo || "hawk7227/streamsailive";
-  const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || live.branch || last?.branch || "main";
-  const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || live.path || last?.path || "src/app/about/page.tsx";
-  return { repo, branch, path };
-}
-
-async function queueRuntime(detail: PulledFileDetail, prompt: string) {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 3000);
-  try {
-    const response = await fetch("/api/streams-builder/repository-execution", {
-      method: "POST",
-      headers: await runtimeHeaders(),
-      cache: "no-store",
-      signal: controller.signal,
-      body: JSON.stringify({
-        sessionId: "agent-1",
-        repoFullName: detail.repo,
-        branchName: detail.branch,
-        baseBranch: detail.branch,
-        route: detail.route,
-        userPrompt: prompt,
-        targetFiles: [detail.path],
-        requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff"],
-        autonomousRepair: true,
-        maxRepairAttempts: 3,
-        maxFilesTouched: 4,
-        runBuildAfterPatch: true,
-        requireApprovalBeforePush: true,
-        enqueue: true,
-      }),
-    });
-    const json = (await readJson(response)) as RuntimeQueueResult;
-    if (!response.ok || json.ok === false) throw new Error(json.error || json.message || "Runtime queue failed");
-    const jobId = json.queuedJob?.id ? String(json.queuedJob.id) : "";
-    if (!jobId) return null;
-    return { jobId, prompt, repo: detail.repo, branch: detail.branch, path: detail.path, route: detail.route };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw new Error("runtime queue timed out after source truth pull");
-    throw error;
-  } finally {
-    window.clearTimeout(timer);
-  }
+function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail) {
+  window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } }));
 }
 
 export default function BuilderCenterChat({ activeModule, connection, onConnectionChange }: Props) {
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const [prompt, setPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen. Fix the pull-to-workscreen issue.");
-  const [status, setStatus] = useState("iPhone chat bridge ready");
-  const [bridgeProof, setBridgeProof] = useState("not tested");
-  const [lastPingId, setLastPingId] = useState("");
+  const [prompt, setPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen.");
+  const [status, setStatus] = useState("Builder chat is stable. Embedded iPhone frame is parked to prevent page freezes.");
   const [running, setRunning] = useState(false);
 
-  function pushConnectionState(next = connection, pingId = "") {
-    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-connection-state", connection: next, pingId }, window.location.origin);
-  }
-
-  function pushBuilderContext(detail: BuilderContextEvent) {
-    const stored = rememberBuilderContextEvent(detail);
-    if (!stored) return;
-    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail: stored }, window.location.origin);
-  }
-
   function connectToActiveWorkstation() {
-    const next = { connected: true, activeWorkstationId: workstationId(activeModule), activeWorkstationName: activeModule, sessionId: "agent-1" };
+    const next = {
+      connected: true,
+      activeWorkstationId: workstationId(activeModule),
+      activeWorkstationName: activeModule,
+      sessionId: "agent-1",
+    };
     onConnectionChange(next);
-    setStatus(`iPhone chat connected to ${activeModule}.`);
-    publishSummary("bridge", `iPhone chat connected to ${activeModule}.`);
-    window.setTimeout(() => pushConnectionState(next), 50);
+    setStatus(`Connected local Agent 1 controls to ${activeModule}.`);
+    publishSummary("bridge", `Local Agent 1 controls connected to ${activeModule}.`);
   }
 
   function disconnectWorkstation() {
     const next = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
     onConnectionChange(next);
-    setBridgeProof("not tested");
-    setStatus("iPhone chat disconnected. Standalone Streams AI mode preserved.");
-    publishSummary("bridge", "iPhone chat disconnected. Standalone mode preserved.");
-    window.setTimeout(() => pushConnectionState(next), 50);
+    setStatus("Local Agent 1 controls are standalone.");
+    publishSummary("bridge", "Local Agent 1 controls disconnected from workstation.");
   }
 
-  function testBridge() {
-    if (!connection.connected || !connection.activeWorkstationId) {
-      setBridgeProof("blocked");
-      setStatus("Bridge test blocked: connect the iPhone chat to a workstation first.");
-      return;
-    }
-    const pingId = `bridge-${Date.now()}`;
-    setLastPingId(pingId);
-    setBridgeProof("testing");
-    setStatus(`Testing iPhone chat ↔ ${connection.activeWorkstationName} bridge...`);
-    frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-bridge-ping", pingId, connection }, window.location.origin);
-    window.setTimeout(() => {
-      setBridgeProof((current) => current === "testing" ? "timeout" : current);
-    }, 1800);
-  }
-
-  async function runAgentOneText(nextPrompt: string, source: "local-form" | "iphone-chat" = "local-form") {
+  async function runAgentOneText(nextPrompt: string) {
     const cleanPrompt = String(nextPrompt || "").trim();
     if (!cleanPrompt || running) return;
-    if (source === "iphone-chat" && (!connection.connected || !connection.activeWorkstationId)) {
-      setStatus("iPhone chat is standalone. Connect it to one workstation before routing commands.");
-      return;
-    }
     setRunning(true);
-    setStatus(source === "iphone-chat" ? `iPhone chat command routed to ${connection.activeWorkstationName}.` : "Agent 1 running: interpreting prompt...");
+    setStatus("Agent 1 running: pulling source truth...");
+
     try {
       if (isStudioVideoRequest(cleanPrompt)) {
         await runStudioVideoLane(cleanPrompt, setStatus);
         return;
       }
 
-      setStatus("Agent 1 running: interpreting prompt, pulling source truth, queueing Codex repair loop...");
       const command = parseAgentOnePrompt(cleanPrompt);
       const params = new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path });
       const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
@@ -301,35 +138,13 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
 
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
-      pushBuilderContext({ phase: "file-pulled", source: "agent-one", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message: `Agent 1 pulled source truth for ${detail.repo}@${detail.branch}:${detail.path}.` });
-      window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt: cleanPrompt, command, pulled: detail, intent: source === "iphone-chat" ? "iphone-chat-to-codex-workstation" : "pull-file-to-codex-workscreen", workstation: connection } }));
-      const queueingMessage = `Codex repair loop queueing for ${detail.repo}@${detail.branch}:${detail.path}`;
-      sendAgentLog(queueingMessage, "codex-runtime-queueing", detail);
-      publishSummary("codex", queueingMessage);
-      setStatus(`Agent 1 pulled source truth: ${detail.repo}:${detail.path}. Queueing Codex repair loop...`);
-      frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-status", status: `Pulled ${detail.repo}:${detail.path}`, connection }, window.location.origin);
-
-      try {
-        const runtime = await queueRuntime(detail, cleanPrompt);
-        if (runtime?.jobId) {
-          window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: runtime }));
-          const queuedMessage = `Codex repair loop queued job ${runtime.jobId} for ${detail.repo}@${detail.branch}:${detail.path}`;
-          sendAgentLog(queuedMessage, "codex-runtime-queued", detail);
-          publishSummary("codex", queuedMessage);
-          setStatus(`Agent 1 queued Codex repair loop: ${runtime.jobId}`);
-        } else {
-          const completedMessage = `Codex route returned no job id after source truth pull for ${detail.path}`;
-          sendAgentLog(completedMessage, "codex-no-job", detail);
-          setStatus(`Agent 1 completed pull-to-workscreen: ${detail.path} → ${detail.route}`);
-        }
-      } catch (runtimeError) {
-        const message = runtimeError instanceof Error ? runtimeError.message : "unknown runtime bridge failure";
-        sendAgentLog(`Codex repair loop blocked: ${message}`, "codex-runtime-blocked", detail);
-        setStatus(`Agent 1 pulled source truth; Codex repair loop blocked: ${message}`);
-      }
+      window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-pulled", source: "agent-one", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message: `Agent 1 pulled ${detail.repo}@${detail.branch}:${detail.path}.` } }));
+      sendAgentLog(`Agent 1 pulled ${detail.repo}@${detail.branch}:${detail.path}`, "pull-file-to-workscreen", detail);
+      publishSummary("file-pulled", `Agent 1 pulled ${detail.repo}@${detail.branch}:${detail.path}.`);
+      setStatus(`Pulled ${detail.path} to the workscreen.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown command failure";
-      sendAgentLog(`Agent 1 blocked before Codex loop: ${message}`, "agent-blocked");
+      sendAgentLog(`Agent 1 blocked: ${message}`, "agent-blocked");
       setStatus(`Agent 1 blocked: ${message}`);
     } finally {
       setRunning(false);
@@ -338,101 +153,44 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
 
   async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    await runAgentOneText(prompt, "local-form");
+    await runAgentOneText(prompt);
   }
 
-  useEffect(() => {
-    pushConnectionState(connection);
-  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName]);
-
-  useEffect(() => {
-    function onBuilderContextEvent(event: Event) {
-      const detail = (event as CustomEvent<BuilderContextEvent>).detail || {};
-      const stored = rememberBuilderContextEvent(detail);
-      if (!stored) return;
-      frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail: stored }, window.location.origin);
-    }
-    window.addEventListener("streams-builder-summary-event", onBuilderContextEvent as EventListener);
-    window.addEventListener("streams-builder:chat-context-event", onBuilderContextEvent as EventListener);
-    return () => {
-      window.removeEventListener("streams-builder-summary-event", onBuilderContextEvent as EventListener);
-      window.removeEventListener("streams-builder:chat-context-event", onBuilderContextEvent as EventListener);
-    };
-  }, []);
-
-  useEffect(() => {
-    function onFrameMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data || {};
-      if (data.type === "streams-builder-frame-ready") {
-        setBridgeProof("frame ready");
-        pushConnectionState(connection);
-        readBuilderContextEvents().slice(-24).forEach((detail) => frameRef.current?.contentWindow?.postMessage({ type: "streams-builder-context-event", detail }, window.location.origin));
-      }
-      if (data.type === "streams-builder-bridge-pong") {
-        const targetMatches = data.connection?.activeWorkstationId === connection.activeWorkstationId;
-        const pingMatches = !lastPingId || !data.pingId || data.pingId === lastPingId || data.pingId === "connection-state";
-        if (data.connected && targetMatches && pingMatches) {
-          setBridgeProof("passed");
-          const message = `Bridge proof passed: iPhone chat can see ${connection.activeWorkstationName} and workstation can see the iPhone chat.`;
-          setStatus(message);
-          publishSummary("bridge-proof", message);
-        } else {
-          setBridgeProof("failed");
-          setStatus("Bridge proof failed: stale or mismatched workstation connection.");
-        }
-      }
-      if (data.type === "streams-builder-chat-command") {
-        const incoming = (data.connection || {}) as Partial<BuilderChatConnection>;
-        if (Array.isArray(data.builderContext)) data.builderContext.forEach((item: BuilderContextEvent) => rememberBuilderContextEvent(item));
-        const next = {
-          connected: true,
-          activeWorkstationId: incoming.activeWorkstationId || connection.activeWorkstationId || workstationId(activeModule),
-          activeWorkstationName: incoming.activeWorkstationName || workstationNameFromId(incoming.activeWorkstationId || connection.activeWorkstationId || workstationId(activeModule), activeModule),
-          sessionId: incoming.sessionId || "agent-1",
-        };
-        if (!connection.connected || connection.activeWorkstationId !== next.activeWorkstationId) {
-          onConnectionChange(next);
-          setBridgeProof("auto connected");
-          pushConnectionState(next);
-          publishSummary("bridge", `iPhone chat auto-connected to ${next.activeWorkstationName}.`);
-        }
-        publishSummary("iphone-command", `iPhone chat command reached ${next.activeWorkstationName}: ${String(data.originalMessage || data.message || "").slice(0, 80)}`);
-        void runAgentOneText(data.message, "local-form");
-      }
-    }
-    window.addEventListener("message", onFrameMessage);
-    return () => window.removeEventListener("message", onFrameMessage);
-  }, [connection.connected, connection.activeWorkstationId, connection.activeWorkstationName, lastPingId, running]);
-
   return (
-    <section className="builderChatFrame" aria-label="Existing Streams AI mobile chat">
-      <iframe ref={frameRef} title="Streams AI" src="/streams-ai?builderMode=1" onLoad={() => pushConnectionState(connection)} />
-      <section className="connectionBar" aria-label="iPhone chat workstation connection">
+    <section className="builderChatFrame" aria-label="Stable Streams Builder Agent panel">
+      <section className="chatParked">
+        <div className="orb" />
+        <h2>Ask, build, create, launch.</h2>
+        <p>The embedded iPhone chat frame is parked so the builder does not freeze. Use the local Agent 1 controls below to pull files and keep working.</p>
+      </section>
+      <section className="connectionBar" aria-label="Agent 1 workstation connection">
         <div className="connectionStatus">
-          <b>iPhone chat connection</b>
-          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName} · bridge ${bridgeProof}` : "Standalone Streams AI mode"}</span>
+          <b>Agent 1 connection</b>
+          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone stable mode"}</span>
         </div>
         <div className="connectionActions">
           {connection.connected ? <button type="button" onClick={disconnectWorkstation}>Disconnect</button> : <button type="button" onClick={connectToActiveWorkstation}>Connect {activeModule}</button>}
-          {connection.connected && connection.activeWorkstationName !== activeModule ? <button type="button" onClick={connectToActiveWorkstation}>Switch to {activeModule}</button> : <button type="button" onClick={testBridge} disabled={!connection.connected}>Test Bridge</button>}
+          <button type="button" onClick={() => setStatus("Bridge test skipped: embedded iPhone frame is intentionally parked for stability.")}>Test Stable</button>
         </div>
         <p>{status}</p>
-        <details className="fallbackCommand">
-          <summary>Manual bridge fallback</summary>
-          <form onSubmit={runAgentOnePrompt} aria-label="Agent 1 fallback command prompt">
+        <details className="fallbackCommand" open>
+          <summary>Agent 1 source pull</summary>
+          <form onSubmit={runAgentOnePrompt} aria-label="Agent 1 source pull prompt">
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Agent 1, pull src/app/page.tsx and show it on the workscreen" />
-            <button type="submit" disabled={running}>{running ? "Agent running" : "Run fallback"}</button>
+            <button type="submit" disabled={running}>{running ? "Agent running" : "Run Agent 1"}</button>
           </form>
         </details>
       </section>
       <style jsx>{`
         .builderChatFrame{width:min(100%,430px);max-width:430px;min-width:320px;height:min(932px,calc(100dvh - 24px));min-height:640px;overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;}
-        iframe{display:block;width:100%;height:100%;border:0;background:#020713;}
+        .chatParked{display:grid;align-content:center;justify-items:center;gap:18px;padding:28px 24px;background:linear-gradient(180deg,#020713,#04111f);text-align:center;}
+        .orb{width:80px;height:80px;border-radius:24px;background:radial-gradient(circle at 50% 50%,#22d3ee 0 12%,#7c3aed 34%,#d946ef 72%);box-shadow:0 0 42px rgba(124,58,237,.45);}
+        h2{margin:0;color:#f8fafc;font-size:25px;line-height:1.15;font-weight:800;}
+        .chatParked p{max-width:300px;margin:0;color:#c7d2fe;font-size:14px;line-height:1.45;}
         .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box;}
         .connectionStatus{display:grid;gap:2px;}.connectionStatus b{color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em;}.connectionStatus span{color:#fff;font-size:11px;font-weight:800;}
         .connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}.connectionActions button,.fallbackCommand button{height:30px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;cursor:pointer;}.connectionActions button:first-child{background:#065f46;color:#6ee7b7;}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed;}
-        p{margin:0;color:#cbd5e1;font-size:9px;line-height:1.35;}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617;}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;}.fallbackCommand form{display:grid;gap:6px;margin-top:6px;}textarea{width:100%;height:54px;resize:none;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:10px;line-height:1.35;outline:none;box-sizing:border-box;}
+        p{margin:0;color:#cbd5e1;font-size:9px;line-height:1.35;}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617;}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;}.fallbackCommand form{display:grid;gap:6px;margin-top:6px;}textarea{width:100%;height:64px;resize:none;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:10px;line-height:1.35;outline:none;box-sizing:border-box;}
       `}</style>
     </section>
   );
