@@ -1,21 +1,20 @@
-/* Organization pass: keep all admingeneration panels visible, non-floating, and unclipped. */
+/* Admingeneration layout stabilization: no forced 1920px canvas, no page-level double scrollbars. */
 
 html,
 body {
   min-height: 100%;
-  overflow-x: auto;
-  overflow-y: auto;
+  overflow: hidden;
   background: #03070e;
 }
 
 .opus-fit-shell {
-  position: relative !important;
-  inset: auto !important;
-  width: 100% !important;
-  min-width: 1920px !important;
-  min-height: 1800px !important;
-  height: auto !important;
-  overflow: visible !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
 }
 
 .opus-board {
@@ -23,72 +22,151 @@ body {
   left: auto !important;
   top: auto !important;
   transform: none !important;
-  width: 1920px !important;
-  min-height: 1800px !important;
-  height: auto !important;
-  align-items: start !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 1440px !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 340px minmax(720px, 1fr) 390px !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
 }
 
-.opus-left,
-.opus-main.compact-shell,
-.right-utility-rail {
-  height: auto !important;
-  min-height: 1800px !important;
-  overflow: visible !important;
+.opus-left {
+  width: 340px !important;
+  min-width: 340px !important;
+  max-width: 340px !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .opus-main.compact-shell {
-  padding-bottom: 480px !important;
+  min-width: 720px !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-bottom: 16px !important;
+}
+
+.right-utility-rail {
+  width: 390px !important;
+  min-width: 390px !important;
+  max-width: 390px !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  padding: 84px 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .movie-generate-state {
-  height: auto !important;
-  min-height: 1450px !important;
-  grid-template-rows: auto auto auto !important;
-  align-content: start !important;
-  overflow: visible !important;
+  height: calc(100dvh - 92px) !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  align-content: stretch !important;
+  overflow: hidden !important;
 }
 
 .compact-prompt-top {
   height: auto !important;
-  min-height: 166px !important;
+  min-height: 0 !important;
   overflow: visible !important;
   grid-template-rows: auto auto auto !important;
 }
 
 .movie-production-stage {
-  min-height: 980px !important;
+  min-height: 0 !important;
   height: auto !important;
-  overflow: visible !important;
-  align-items: start !important;
+  display: grid !important;
+  grid-template-columns: 330px minmax(720px, 1fr) 390px !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
 }
 
 .production-column,
 .center-preview-stack,
-.movie-output-band,
-.result-state-grid,
-.result-main-card,
-.result-summary-rail,
-.right-utility-rail,
-.utility-card {
-  overflow: visible !important;
+.result-summary-rail {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .center-preview-stack {
-  height: auto !important;
-  min-height: 980px !important;
+  min-width: 720px !important;
+  height: 100% !important;
   display: grid !important;
-  grid-template-rows: 38px 560px auto 82px !important;
+  grid-template-rows: 38px minmax(420px, 1fr) auto 72px !important;
   gap: 14px !important;
-  align-content: start !important;
-  overflow: visible !important;
+  align-content: stretch !important;
 }
 
 .large-center-preview,
 .output-player {
-  min-height: 560px !important;
+  min-height: 420px !important;
 }
 
+.movie-output-band {
+  min-height: 128px !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.production-card,
+.production-group-card,
+.negative-card,
+.output-card,
+.utility-card {
+  overflow: visible !important;
+}
+
+.production-card textarea,
+.production-card input,
+.production-group-card input,
+.negative-card textarea,
+.output-card input,
+.output-card select,
+.utility-card input,
+.utility-card textarea {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+}
+
+.production-card textarea,
+.negative-card textarea {
+  min-height: 74px !important;
+  resize: vertical !important;
+}
+
+.production-group-card div {
+  grid-template-columns: 1fr !important;
+}
+
+.production-group-card input {
+  min-height: 42px !important;
+  white-space: normal !important;
+}
+
+.prompt-chip-row,
+.create-type-strip.compact,
+.output-inline-fields {
+  min-width: 0 !important;
+}
+
+.prompt-chip-row button,
+.create-type-card,
+.output-inline-fields button {
+  white-space: normal !important;
+}
+
+/* Embedded analyzer must not float over the workspace or leave a page overlay. */
 .preview-analyzer-slot {
   width: 100% !important;
   display: grid !important;
@@ -99,7 +177,6 @@ body {
   overflow: visible !important;
 }
 
-/* Standalone Analyzer embedded under preview */
 #streams-preview-analyzer-slot [data-standalone-analyzer="true"] {
   position: relative !important;
   inset: auto !important;
@@ -120,13 +197,11 @@ body {
   align-items: end !important;
 }
 
-/* Hide floating close control once embedded */
 #streams-preview-analyzer-slot [data-standalone-analyzer="true"] button[aria-label="Close"],
 #streams-preview-analyzer-slot [data-standalone-analyzer="true"] [aria-label="Close"] {
   display: none !important;
 }
 
-/* Semantic Edit Rail embedded under analyzer */
 #streams-preview-analyzer-slot [data-streams-analyzer-edit-rail],
 #streams-preview-analyzer-slot [data-streams-analyzer-edit-rail] > section {
   position: relative !important;
@@ -144,61 +219,14 @@ body {
   overflow: visible !important;
 }
 
-/* If the analyzer has not moved yet, prevent it from blocking the page. */
 [data-standalone-analyzer="true"],
 [data-streams-analyzer-edit-rail],
 [data-streams-analyzer-edit-rail] > section {
   max-width: none !important;
 }
 
-/* Right rail must be a readable vertical stack */
-.right-utility-rail {
-  width: 312px !important;
-  min-width: 312px !important;
-  max-width: 312px !important;
-  height: auto !important;
-  min-height: 1800px !important;
-  padding: 84px 16px 18px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 16px !important;
-  overflow: visible !important;
-}
-
-.utility-card {
-  width: 100% !important;
-  height: auto !important;
-  min-height: auto !important;
-  overflow: visible !important;
-  display: block !important;
-}
-
-.utility-card.quick {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-}
-
-.utility-card.quick button {
-  width: 100% !important;
-  min-height: 62px !important;
-  height: auto !important;
-  display: block !important;
-  padding: 12px 14px !important;
-  white-space: normal !important;
-  text-align: left !important;
-  line-height: 1.25 !important;
-}
-
-.utility-card.quick button span {
-  display: block !important;
-  margin-top: 4px !important;
-  white-space: normal !important;
-  line-height: 1.25 !important;
-  font-size: 11px !important;
-}
-
-.movie-output-band {
-  min-height: 145px !important;
-  height: auto !important;
+@media (max-width: 1439px) {
+  .opus-fit-shell {
+    overflow-x: auto !important;
+  }
 }
