@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useState } from "react";
 import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
@@ -83,9 +83,8 @@ function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail)
 }
 
 export default function BuilderCenterChat({ activeModule, connection, onConnectionChange }: Props) {
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [prompt, setPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen.");
-  const [status, setStatus] = useState("Embedded chat console restored in no-bridge mode.");
+  const [status, setStatus] = useState("Builder chat is stable. Embedded iPhone frame is parked to prevent page freezes.");
   const [running, setRunning] = useState(false);
 
   function connectToActiveWorkstation() {
@@ -96,15 +95,15 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       sessionId: "agent-1",
     };
     onConnectionChange(next);
-    setStatus(`Connected Agent 1 controls to ${activeModule}.`);
-    publishSummary("bridge", `Agent 1 controls connected to ${activeModule}.`);
+    setStatus(`Connected local Agent 1 controls to ${activeModule}.`);
+    publishSummary("bridge", `Local Agent 1 controls connected to ${activeModule}.`);
   }
 
   function disconnectWorkstation() {
     const next = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
     onConnectionChange(next);
-    setStatus("Agent 1 controls are standalone. Chat console remains available.");
-    publishSummary("bridge", "Agent 1 controls disconnected from workstation.");
+    setStatus("Local Agent 1 controls are standalone.");
+    publishSummary("bridge", "Local Agent 1 controls disconnected from workstation.");
   }
 
   async function runAgentOneText(nextPrompt: string) {
@@ -158,19 +157,23 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
   }
 
   return (
-    <section className="builderChatFrame" aria-label="Streams AI embedded chat console">
-      <iframe ref={frameRef} title="Streams AI" src="/streams-ai/builder-embed" />
+    <section className="builderChatFrame" aria-label="Stable Streams Builder Agent panel">
+      <section className="chatParked">
+        <div className="orb" />
+        <h2>Ask, build, create, launch.</h2>
+        <p>The embedded iPhone chat frame is parked so the builder does not freeze. Use the local Agent 1 controls below to pull files and keep working.</p>
+      </section>
       <section className="connectionBar" aria-label="Agent 1 workstation connection">
         <div className="connectionStatus">
           <b>Agent 1 connection</b>
-          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone Streams AI mode"}</span>
+          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone stable mode"}</span>
         </div>
         <div className="connectionActions">
           {connection.connected ? <button type="button" onClick={disconnectWorkstation}>Disconnect</button> : <button type="button" onClick={connectToActiveWorkstation}>Connect {activeModule}</button>}
-          <button type="button" onClick={() => setStatus("Chat console restored. Builder bridge is parked to prevent freezes.")}>Test Console</button>
+          <button type="button" onClick={() => setStatus("Bridge test skipped: embedded iPhone frame is intentionally parked for stability.")}>Test Stable</button>
         </div>
         <p>{status}</p>
-        <details className="fallbackCommand">
+        <details className="fallbackCommand" open>
           <summary>Agent 1 source pull</summary>
           <form onSubmit={runAgentOnePrompt} aria-label="Agent 1 source pull prompt">
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Agent 1, pull src/app/page.tsx and show it on the workscreen" />
@@ -180,7 +183,10 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       </section>
       <style jsx>{`
         .builderChatFrame{width:min(100%,430px);max-width:430px;min-width:320px;height:min(932px,calc(100dvh - 24px));min-height:640px;overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;}
-        iframe{display:block;width:100%;height:100%;border:0;background:#020713;}
+        .chatParked{display:grid;align-content:center;justify-items:center;gap:18px;padding:28px 24px;background:linear-gradient(180deg,#020713,#04111f);text-align:center;}
+        .orb{width:80px;height:80px;border-radius:24px;background:radial-gradient(circle at 50% 50%,#22d3ee 0 12%,#7c3aed 34%,#d946ef 72%);box-shadow:0 0 42px rgba(124,58,237,.45);}
+        h2{margin:0;color:#f8fafc;font-size:25px;line-height:1.15;font-weight:800;}
+        .chatParked p{max-width:300px;margin:0;color:#c7d2fe;font-size:14px;line-height:1.45;}
         .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box;}
         .connectionStatus{display:grid;gap:2px;}.connectionStatus b{color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em;}.connectionStatus span{color:#fff;font-size:11px;font-weight:800;}
         .connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}.connectionActions button,.fallbackCommand button{height:30px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;cursor:pointer;}.connectionActions button:first-child{background:#065f46;color:#6ee7b7;}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed;}
