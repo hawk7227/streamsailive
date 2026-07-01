@@ -1,4 +1,4 @@
-import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
+import StreamsClientDirectShell from "@/components/streams-ai/current-chat/StreamsClientDirectShell";
 import ConversationStateEmitter from "@/components/streams-ai/current-chat/ConversationStateEmitter";
 import StreamsAIBuilderModeBridge from "./StreamsAIBuilderModeBridge";
 import StreamsAIBuilderProofBridge from "./StreamsAIBuilderProofBridge";
@@ -8,5 +8,5 @@ import mobileChatStyles from "./StreamsAIMobileChat.module.css";
 
 export default function StreamsAIPage() {
   void mobileChatStyles;
-  return <><StreamsAIBuilderModeBridge /><StreamsAIBuilderProofBridge /><StreamsAIPageVisualFix /><StreamsAIChatBehaviorTuning /><ConversationStateEmitter /><StreamsClientShell /></>;
+  return <><StreamsAIBuilderModeBridge /><StreamsAIBuilderProofBridge /><StreamsAIPageVisualFix /><StreamsAIChatBehaviorTuning /><ConversationStateEmitter /><StreamsClientDirectShell /></>;
 }
