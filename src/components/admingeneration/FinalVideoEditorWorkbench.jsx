@@ -4,6 +4,27 @@ import { useRef, useState } from "react";
 
 const PROJECT_ID = "fb7bf446-78c9-4905-80bc-32a19d0f9803";
 
+const STREET_DRAMA_TRAILER_PROMPT = `Create a gritty 1990s-style urban movie trailer.
+
+Two longtime friends run through the late-night streets, ducking trouble and chasing the rush of a life they barely control. Under flickering streetlights, they jump into a cream-colored 1977 Buick Deuce and a Quarter, the engine growling as chrome flashes past corner stores, alleyways, and empty intersections.
+
+Special Ed's "I Got It Made" blasts from the speakers, giving the ride an old-school hip-hop confidence while the mood underneath stays tense and dangerous. The friends laugh at first, acting untouchable, but the night quickly turns heavier as old choices, street pressure, and consequences begin closing in.
+
+Show the Buick cruising low and smooth through the city, headlights cutting through smoke and neon. Show quick cuts of worried faces, running shoes hitting pavement, hands gripping the steering wheel, police lights reflecting in the rearview mirror, and the two friends realizing the night has gone too far.
+
+Tone: gritty, cinematic, high-energy, emotional, street-drama, non-graphic.
+
+Visual style: 1990s urban crime drama, moody night lighting, neon reflections, handheld camera shots, fast trailer cuts, vintage film grain, chrome highlights, tense close-ups.
+
+Trailer structure:
+Open with the quiet sound of footsteps running.
+Cut to the Buick door swinging open.
+Music kicks in with old-school hip-hop energy.
+Fast cuts of the city, the car, the friends, and the pressure building.
+End on a silent close-up of the Buick stopped under a streetlight as one friend says, "We still got a choice."
+
+No graphic violence. Focus on tension, loyalty, bad decisions, and consequences.`;
+
 async function readJson(res) {
   const data = await res.json().catch(() => null);
   if (!res.ok || data?.ok === false) throw new Error(data?.error || `Request failed ${res.status}`);
@@ -25,6 +46,7 @@ function JsonView({ title, value }) {
 export default function FinalVideoEditorWorkbench() {
   const fileRef = useRef(null);
   const [url, setUrl] = useState("");
+  const [prompt, setPrompt] = useState(STREET_DRAMA_TRAILER_PROMPT);
   const [message, setMessage] = useState("Ready");
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState(null);
@@ -119,12 +141,16 @@ export default function FinalVideoEditorWorkbench() {
     try {
       await post(`/api/admingeneration/editor/projects/${editorId}/provider-runs`, {
         provider: "provider_router",
-        action: "segment_edit",
+        action: "generate_trailer_from_prompt",
         targetType: "project",
-        prompt: analysis?.blueprint?.generation?.providerReadyPrompt || "",
+        prompt: prompt.trim() || STREET_DRAMA_TRAILER_PROMPT,
+        metadata: {
+          preset: "street_drama_1977_buick_trailer",
+          source: "video_generator_prompt_panel",
+        },
       });
       await refresh();
-      setMessage("Provider edit request queued through the real provider router.");
+      setMessage("Trailer prompt queued through the real provider router.");
     } catch (e) { setError(e.message || String(e)); } finally { setBusy(false); }
   }
 
@@ -150,6 +176,16 @@ export default function FinalVideoEditorWorkbench() {
         <h1 style={styles.h1}>Streams Video Analyzer + Editor</h1>
         <p style={styles.small}>Final bundle UI: upload/analyze, editor project, timeline, worker job, provider/edit/export control plane.</p>
 
+        <Box title="Trailer Prompt Preset">
+          <textarea
+            style={styles.prompt}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Enter a trailer prompt for the video generator"
+          />
+          <button style={styles.button} disabled={busy} onClick={() => setPrompt(STREET_DRAMA_TRAILER_PROMPT)}>Load Buick Street Drama Trailer</button>
+        </Box>
+
         <Box title="Analyze URL">
           <input style={styles.input} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube or direct video URL" />
           <button style={styles.primary} disabled={busy || !url} onClick={analyzeUrl}>Analyze URL</button>
@@ -161,7 +197,7 @@ export default function FinalVideoEditorWorkbench() {
         </Box>
 
         <Box title="Editor Actions">
-          <button style={styles.button} disabled={busy || !editorId} onClick={saveProviderRun}>Save Provider Edit Request</button>
+          <button style={styles.button} disabled={busy || !editorId} onClick={saveProviderRun}>Queue Trailer Prompt</button>
           <button style={styles.button} disabled={busy || !editorId} onClick={saveExport}>Save Stitch + Export Request</button>
           <button style={styles.button} disabled={busy || (!analysisId && !editorId)} onClick={() => refresh()}>Refresh State</button>
         </Box>
@@ -215,6 +251,7 @@ const styles = {
   box: { background: "rgba(15,23,42,.86)", border: "1px solid rgba(148,163,184,.2)", borderRadius: 16, padding: 14, display: "grid", gap: 10 },
   boxTitle: { color: "#93c5fd", textTransform: "uppercase", fontSize: 12, letterSpacing: ".1em" },
   input: { minHeight: 42, borderRadius: 12, border: "1px solid rgba(148,163,184,.25)", background: "#020617", color: "#fff", padding: "0 12px" },
+  prompt: { width: "100%", minHeight: 260, borderRadius: 12, border: "1px solid rgba(148,163,184,.25)", background: "#020617", color: "#f8fafc", padding: 10, fontSize: 12, lineHeight: 1.45, resize: "vertical" },
   primary: { minHeight: 42, borderRadius: 12, border: "1px solid rgba(96,165,250,.5)", background: "#2563eb", color: "#fff", cursor: "pointer" },
   button: { minHeight: 42, borderRadius: 12, border: "1px solid rgba(148,163,184,.25)", background: "#1e293b", color: "#fff", cursor: "pointer" },
   error: { color: "#fecaca", fontSize: 13 },
