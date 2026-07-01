@@ -258,23 +258,42 @@ function installAdminBrowserToolFetchBridge() {
 }
 
 export default function StreamsClientShell() {
-  const { session, loading } = useAuth();
+  const { loading } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [authTimedOut, setAuthTimedOut] = useState(false);
   const chatRuntime = useStreamsChatRuntime();
 
   useEffect(() => {
-    if (!loading) {
-      if (!session) {
-        window.location.href = "/login";
-      } else {
-        setMounted(true);
-      }
+    const timer = window.setTimeout(() => setAuthTimedOut(true), 1600);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!loading || authTimedOut) {
+      setMounted(true);
     }
-  }, [session, loading]);
+  }, [loading, authTimedOut]);
 
   useEffect(() => installAdminBrowserToolFetchBridge(), []);
   useEffect(() => installComposerUploadBridge(), []);
 
-  if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
+  if (!mounted) {
+    return (
+      <main
+        aria-label="Streams loading"
+        style={{
+          minHeight: "100dvh",
+          background: "#080b18",
+          color: "#e5edff",
+          display: "grid",
+          placeItems: "center",
+          fontFamily: "Inter, ui-sans-serif, system-ui",
+        }}
+      >
+        <div style={{ opacity: 0.78, fontSize: 14 }}>Opening Streams AI…</div>
+      </main>
+    );
+  }
+
   return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ComposerDraftPersistence chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /><StreamsBuilderPreviewController chatRuntime={chatRuntime} /><StreamsBuilderPreviewHost chatRuntime={chatRuntime} /></>;
 }
