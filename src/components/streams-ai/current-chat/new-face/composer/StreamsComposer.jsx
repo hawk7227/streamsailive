@@ -35,6 +35,7 @@ export default function StreamsComposer({
 
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,6 +106,18 @@ export default function StreamsComposer({
   const hasUploadingFiles = libraryFiles?.some((file) => file.status === "uploading");
   const isDisabled = isStreaming || hasUploadingFiles;
 
+  function hardClearInput() {
+    setMessage("");
+    window.dispatchEvent(new CustomEvent("streams:composer-submitted", { detail: { cleared: true, at: new Date().toISOString() } }));
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current || document.querySelector(".streamsComposerInput");
+      if (input && input.value) {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+  }
+
   function handleModeSelection(nextMode) {
     setActiveMenu("");
 
@@ -145,17 +158,17 @@ export default function StreamsComposer({
       finalMessage = value;
     }
 
+    hardClearInput();
+    setSelectedTool(null);
+    setActiveMenu("");
+    setBlockedNotice("");
+
     onSubmit?.({
       message: finalMessage,
       composerMode: selectedTool?.id === "url" ? "url" : "chat",
       mode,
       webSearchEnabled: selectedTool?.id === "web_search",
     });
-
-    setMessage("");
-    setSelectedTool(null);
-    setActiveMenu("");
-    setBlockedNotice("");
   }
 
   function handleFileChange(event) {
@@ -271,6 +284,7 @@ export default function StreamsComposer({
         ) : null}
 
         <input
+          ref={inputRef}
           className="streamsComposerInput"
           value={message}
           placeholder={placeholder}
@@ -341,16 +355,14 @@ export default function StreamsComposer({
         <div className="streamsComposerMenu modelMenu" role="menu">
           {MODES.map((item) => (
             <button key={item} type="button" onClick={() => handleModeSelection(item)}>
-              <span>{item === mode ? "✓" : ""}</span>
               <strong>{item}</strong>
-              <em />
+              <em>{item === mode ? "Active" : ""}</em>
             </button>
           ))}
-          <div className="streamsProviderHint">Provider preferences are managed in Account → Personalization.</div>
         </div>
       ) : null}
 
-      <RealtimeVoicePanel open={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
+      {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
     </section>
   );
 }
