@@ -259,22 +259,18 @@ function installAdminBrowserToolFetchBridge() {
 
 export default function StreamsClientShell() {
   const { session, loading } = useAuth();
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(true);
   const chatRuntime = useStreamsChatRuntime();
 
   useEffect(() => {
-    if (!loading) {
-      if (!session) {
-        window.location.href = "/login";
-      } else {
-        setMounted(true);
-      }
+    if (!loading || session) {
+      setMounted(true);
     }
   }, [session, loading]);
 
   useEffect(() => installAdminBrowserToolFetchBridge(), []);
   useEffect(() => installComposerUploadBridge(), []);
 
-  if (loading || !mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
+  if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
   return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ComposerDraftPersistence chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /><StreamsBuilderPreviewController chatRuntime={chatRuntime} /><StreamsBuilderPreviewHost chatRuntime={chatRuntime} /></>;
 }
