@@ -32,3 +32,4 @@ Acceptance behavior:
 - A video prompt with two or more `CLIP:` or `SCENE:` markers creates a batch.
 - The batch response includes `batch: true`, `sceneCount`, `bulkJobId`, and the created job list.
 - The stored prompt for each child job is the continuity-locked prompt, not the raw isolated clip only.
+- The long-video scene-batch runtime also repeats continuity fields when scenes are submitted as child provider jobs.
