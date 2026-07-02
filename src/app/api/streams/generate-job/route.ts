@@ -240,7 +240,10 @@ export async function POST(request: Request) {
           bulkJobId: batchId,
           batch: true,
           sceneCount: rows.length,
-          jobIds: (jobs || []).map((job: { id: string }) => job.id),
+          jobs: (jobs || []).map((job: { id: string; generation_id?: string; prompt?: string }) => ({
+            id: job.id,
+            generationId: job.generation_id,
+          })),
           estimatedDuration,
         }),
         { status: 201, headers: { "Content-Type": "application/json" } }
