@@ -8,12 +8,27 @@
 
 // ── Scene spec ────────────────────────────────────────────────────────────
 
-/** A single planned scene within a long-video job. */
+/**
+ * A single planned scene within a long-video job.
+ *
+ * Important: each provider submission is independent. Continuity information
+ * must travel with every scene prompt, not only with the parent prompt.
+ */
 export type VideoSceneSpec = {
   sceneIndex: number;
   prompt: string;
   durationSeconds: number;
   imageUrl?: string; // for i2v scenes only
+  /** Stable world/character/camera/lighting rules repeated on every provider submission. */
+  sequenceSetup?: string;
+  /** Scene-specific location/set rules. Changes only when the story intentionally changes set. */
+  sceneSetup?: string;
+  /** Short continuity handoff from the previous clip to reduce drift in independent submissions. */
+  previousSceneSummary?: string;
+  /** Intended continuity handoff into the next clip. */
+  nextSceneSummary?: string;
+  /** Group key for clips that share the same screen/set/environment. */
+  setId?: string;
 };
 
 // ── Scene batch job ───────────────────────────────────────────────────────
@@ -26,6 +41,8 @@ export type LongVideoSubmission = {
   provider: string;
   model: string | null;
   type: "video" | "i2v";
+  /** Parent-level continuity lock repeated into every child clip prompt. */
+  sequenceSetup?: string;
 };
 
 /** Record created in DB for each submitted scene clip. */
