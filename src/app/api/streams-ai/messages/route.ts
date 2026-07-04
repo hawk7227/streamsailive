@@ -123,6 +123,7 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
     const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
     try {
       send("activity", { phase: "capabilities.started", statusText: "Loading canonical STREAMS capabilities…", source: CAPABILITY_SOURCE, startedAt, sessionId });
+      send("response", { token: "Loading the Streams capability map…\n\n" });
       for (const token of chunkText(answer, 160)) send("response", { token });
       const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: answer, status: "complete", metadata: { source: CAPABILITY_SOURCE, provider: "streams", providerStatus: "ok", registryVersion: registry.version, capabilityCount: registry.total, statusCounts: registry.statusCounts } });
       send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "streams", providerStatus: "ok", source: CAPABILITY_SOURCE, registryVersion: registry.version, capabilityCount: registry.total, elapsedMs: Date.now() - startedAt });
@@ -138,9 +139,13 @@ function streamAssistantResponse({ scope, sessionId, userContent, mode }: { scop
   const stream = new ReadableStream<Uint8Array>({ async start(controller) {
     const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
     try {
-      send("activity", { phase: "turn.started", source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId });
+      send("activity", { phase: "turn.started", statusText: "Checking the right context…", source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId });
+      send("response", { token: "Checking the right context…\n\n" });
       await recordUniversalRuntimeEvent({ sessionId, phase: "turn.started", source: LIVE_ASSISTANT_SOURCE, severity: "info", message: "Universal assistant turn started." });
+      send("activity", { phase: "history.started", statusText: "Loading recent chat state…", source: LIVE_ASSISTANT_SOURCE, sessionId });
       const history = await messages.list(scope, sessionId);
+      send("response", { token: "Loading recent chat state…\n\n" });
+      send("activity", { phase: "context.started", statusText: "Checking memory, tools, and workspace context…", source: LIVE_ASSISTANT_SOURCE, sessionId });
       const universalContext = await buildUniversalChatContext({ sessionId, userMessage: userContent });
       const memoryContext = await buildStreamsMemoryContext(scope, sessionId, userContent);
       const requestedUniversalTools = detectUniversalToolRequests(userContent, sessionId, universalContext);
@@ -148,6 +153,7 @@ function streamAssistantResponse({ scope, sessionId, userContent, mode }: { scop
       const controlledToolResults: ExecutedToolResult[] = loopResult.toolResults.map((item) => ({ name: item.name, ok: item.ok, result: item.result || { error: item.error || "Tool failed" } }));
       const legacyToolResults = await executeRequestedBackendTools({ userContent, scope, sessionId, send });
       const toolResults = [...controlledToolResults, ...legacyToolResults];
+      send("response", { token: "Preparing the answer…\n\n" });
       const fullContextText = [universalContext.contextText, memoryContext.contextText].join("\n\n");
       const assistant = await runLiveOpenAIResponse({ history, scope, sessionId, universalContextText: fullContextText, toolResults, send, mode });
       const memoryUpdate = await saveThreadSummary(scope, sessionId, userContent, assistant.content);
@@ -175,7 +181,8 @@ async function runLiveOpenAIResponse({ history, scope, sessionId, universalConte
   try {
     const client = new OpenAI({ apiKey });
     const input = buildOpenAIInput(history, toolResults, universalContextText);
-    send("activity", { phase: "openai.started", statusText: "Reading runtime context, saved memory, approved tools, and live source-of-truth state…", model, source: LIVE_ASSISTANT_SOURCE });
+    send("activity", { phase: "openai.started", statusText: "Writing the answer…", model, source: LIVE_ASSISTANT_SOURCE });
+    send("response", { token: "Writing the answer…\n\n" });
     const continuation = await runResponsesContinuation({ client, model, instructions: STREAMS_LIVE_ASSISTANT_INSTRUCTIONS, input: input as any[], deps: { sessionId, jobs, assets, providerRuns, scope }, send, metadata: { product: "streams-ai", runtime: LIVE_ASSISTANT_SOURCE, backendTools: "responses-continuation", tenantId: String(scope.tenantId || ""), sessionId: String(sessionId || "") }, maxRounds: 6 });
     if (continuation.content) for (const token of chunkText(continuation.content)) send("response", { token });
     const continuationResults: ExecutedToolResult[] = continuation.toolResults.map((item) => ({ name: item.name, ok: item.ok, result: item.result || { error: item.error || "Tool failed" } }));
@@ -213,6 +220,7 @@ async function executeRequestedBackendTools({ userContent, scope, sessionId, sen
   const results: ExecutedToolResult[] = [];
   for (const request of requests) {
     send("activity", { phase: "tool.started", statusText: `Running ${request.name.replace(/_/g, " ")}…`, toolName: request.name });
+    send("response", { token: `Running ${request.name.replace(/_/g, " ")}…\n\n` });
     try { const result = await executeApprovedBackendTool({ name: request.name, args: request.args, scope, sessionId }); results.push({ name: request.name, ok: true, result }); send("tool", { status: "completed", toolName: request.name, result }); }
     catch (error) { const message = error instanceof Error ? error.message : String(error || "Tool failed"); results.push({ name: request.name, ok: false, result: { error: message } }); send("tool", { status: "failed", toolName: request.name, error: message }); }
   }
