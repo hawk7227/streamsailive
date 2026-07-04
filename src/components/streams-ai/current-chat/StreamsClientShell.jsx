@@ -4,12 +4,9 @@ import { useEffect, useState } from "react";
 import StreamsOperatorShell from "../visual-operator/StreamsOperatorShell";
 import { useStreamsChatRuntime } from "./new-face/hooks/useStreamsChatRuntime";
 import ActualRecentChatsOverlay from "./ActualRecentChatsOverlay";
-import ComposerDraftPersistence from "./ComposerDraftPersistence";
 import ThreadAssetsHydrator from "./ThreadAssetsHydrator";
 import StreamingRecoveryBanner from "./StreamingRecoveryBanner";
 import MemoryControlsPanel from "./MemoryControlsPanel";
-import StreamsBuilderPreviewHost from "./StreamsBuilderPreviewHost";
-import StreamsBuilderPreviewController from "./StreamsBuilderPreviewController";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -271,6 +268,6 @@ export default function StreamsClientShell() {
   useEffect(() => installAdminBrowserToolFetchBridge(), []);
   useEffect(() => installComposerUploadBridge(), []);
 
-  if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100dvh", background: "#080b18" }} />;
-  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ComposerDraftPersistence chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /><StreamsBuilderPreviewController chatRuntime={chatRuntime} /><StreamsBuilderPreviewHost chatRuntime={chatRuntime} /></>;
+  if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
 }
