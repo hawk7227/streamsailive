@@ -21,3 +21,10 @@
 :global(.shell.mobile .composer) {
   transition: bottom 180ms ease !important;
 }
+
+@media (max-width: 899px) {
+  :global(.shell.mobile .mobileTop) { display: none !important; }
+  :global(.shell.mobile .chatScroll) { padding-top: 24px !important; padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; scroll-padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; gap: 8px !important; }
+  :global(.shell.mobile .composer) { bottom: calc(58px + env(safe-area-inset-bottom)) !important; }
+  :global(.shell.mobile .mobileNav) { position: fixed !important; left: 8px !important; right: 8px !important; bottom: calc(8px + env(safe-area-inset-bottom)) !important; display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 5px !important; padding: 6px !important; border-top: 1px solid rgba(148,163,184,.14) !important; background: rgba(2,7,19,.86) !important; border-radius: 16px !important; z-index: 40 !important; }
+}
