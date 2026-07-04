@@ -65,6 +65,11 @@ function scrollActiveChatToBottom() {
       activeSurface.scrollTo({ top: activeSurface.scrollHeight, behavior: "smooth" });
       return;
     }
+    const chatScroll = document.querySelector(".chatScroll");
+    if (chatScroll) {
+      chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: "smooth" });
+      return;
+    }
     const splitSurface = document.querySelector(".splitChatScroll");
     if (splitSurface) splitSurface.scrollTo({ top: splitSurface.scrollHeight, behavior: "smooth" });
   });
