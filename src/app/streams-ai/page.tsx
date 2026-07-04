@@ -1,4 +1,5 @@
 import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
+import StreamsAIDesktopVisualBridge from "./StreamsAIDesktopVisualBridge";
 import StreamsAIMobileKeyboardBridge from "./StreamsAIMobileKeyboardBridge";
 import StreamsAIStatusStreamBridge from "./StreamsAIStatusStreamBridge";
 import desktopConsoleStyles from "./StreamsAIDesktopConsole.module.css";
@@ -11,6 +12,7 @@ export default function StreamsAIPage() {
   void mobileKeyboardStyles;
   return (
     <>
+      <StreamsAIDesktopVisualBridge />
       <StreamsAIMobileKeyboardBridge />
       <StreamsAIStatusStreamBridge />
       <StreamsClientShell />
