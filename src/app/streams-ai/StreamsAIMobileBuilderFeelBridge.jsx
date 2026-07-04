@@ -6,8 +6,6 @@ export default function StreamsAIMobileBuilderFeelBridge() {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
-    let cleanupMore = null;
-
     const clickHiddenTopMenu = () => {
       document.querySelector(".mobileTop button[aria-label='Open menu']")?.click();
     };
@@ -65,8 +63,6 @@ export default function StreamsAIMobileBuilderFeelBridge() {
       launchButton.dataset.streamsMobileMore = "1";
       profileButton.style.display = "none";
       nav.dataset.streamsBuilderFeelReady = "1";
-      if (cleanupMore) cleanupMore();
-      cleanupMore = () => closeMore();
       nav.addEventListener("click", (event) => {
         const target = event.target instanceof HTMLElement ? event.target.closest("button") : null;
         if (!target || target.dataset.streamsMobileMore !== "1" || target.dataset.streamsSkipMore === "1") return;
@@ -77,40 +73,12 @@ export default function StreamsAIMobileBuilderFeelBridge() {
       }, true);
     };
 
-    const patchToolsMenu = () => {
-      const menu = document.querySelector(".shell.mobile .streamsComposerMenu.toolsMenu");
-      if (!menu || menu.dataset.streamsBuilderFeelToolsReady === "1") return;
-      const addTool = (label, detail, action) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.innerHTML = `<span></span><strong>${label}</strong><em>${detail}</em>`;
-        button.addEventListener("click", action);
-        menu.appendChild(button);
-      };
-      addTool("Mode: Thinking", "Active", () => {
-        document.querySelector(".streamsComposerPill")?.click();
-        window.setTimeout(() => {
-          const item = Array.from(document.querySelectorAll(".streamsComposerMenu.modelMenu button")).find((button) => String(button.textContent || "").includes("Thinking"));
-          item?.click();
-        }, 0);
-      });
-      addTool("Configure...", "/account/personalization", () => { window.location.assign("/account/personalization"); });
-      addTool("Voice / Mic", "Realtime", () => { document.querySelector(".streamsComposerMicButton")?.click(); });
-      menu.dataset.streamsBuilderFeelToolsReady = "1";
-    };
-
-    const run = () => {
-      patchBottomNav();
-      patchToolsMenu();
-    };
-
-    run();
-    const observer = new MutationObserver(run);
+    patchBottomNav();
+    const observer = new MutationObserver(patchBottomNav);
     observer.observe(document.documentElement, { childList: true, subtree: true });
     return () => {
       observer.disconnect();
       closeMore();
-      cleanupMore?.();
     };
   }, []);
 
