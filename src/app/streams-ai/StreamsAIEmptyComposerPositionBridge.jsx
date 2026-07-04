@@ -15,35 +15,57 @@ function positionComposer() {
   const panel = document.querySelector(".chatPanel");
   const empty = document.querySelector(".chatPanel .empty");
   const composer = document.querySelector(".chatPanel .composer");
-  if (!panel || !composer) return;
+  const chatScroll = document.querySelector(".chatPanel .chatScroll");
+  if (!panel || !composer || !chatScroll) return;
 
-  const baseStyles = {
-    left: "50%",
-    right: "auto",
-    width: "min(1120px, calc(100vw - 520px))",
-    "min-width": "640px",
-    transform: "translateX(-50%)",
-    "z-index": "90",
-  };
+  const width = "min(1120px, calc(100vw - 520px))";
+
+  setImportant(panel, {
+    height: "100%",
+    "min-height": "0",
+    display: "grid",
+    "grid-template-rows": "minmax(0, 1fr) auto",
+    overflow: "hidden",
+  });
+
+  setImportant(chatScroll, {
+    "min-height": "0",
+    "overflow-y": "auto",
+  });
 
   if (empty) {
     const panelRect = panel.getBoundingClientRect();
     const emptyRect = empty.getBoundingClientRect();
     const top = Math.round(Math.min(emptyRect.bottom - panelRect.top + 28, panelRect.height - 124));
     setImportant(composer, {
-      ...baseStyles,
+      position: "absolute",
+      left: "50%",
+      right: "auto",
       top: `${Math.max(260, top)}px`,
       bottom: "auto",
+      width,
+      "min-width": "640px",
+      transform: "translateX(-50%)",
+      margin: "0",
+      "z-index": "90",
     });
     panel.setAttribute("data-streams-empty-chat", "true");
     return;
   }
 
   setImportant(composer, {
-    ...baseStyles,
+    position: "relative",
+    left: "auto",
+    right: "auto",
     top: "auto",
-    bottom: "24px",
+    bottom: "auto",
+    width,
+    "min-width": "640px",
+    transform: "none",
+    margin: "0 auto 24px",
+    "z-index": "90",
   });
+
   panel.removeAttribute("data-streams-empty-chat");
 }
 
