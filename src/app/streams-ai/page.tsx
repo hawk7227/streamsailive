@@ -4,6 +4,7 @@ import StreamsAIBuilderModeBridge from "./StreamsAIBuilderModeBridge";
 import StreamsAIBuilderProofBridge from "./StreamsAIBuilderProofBridge";
 import StreamsAIPageVisualFix from "./StreamsAIPageVisualFix";
 import StreamsAIChatBehaviorTuning from "./StreamsAIChatBehaviorTuning";
+import StreamsAIMobileBuilderFeelBridge from "./StreamsAIMobileBuilderFeelBridge";
 import mobileChatStyles from "./StreamsAIMobileChat.module.css";
 
 export default function StreamsAIPage() {
@@ -14,6 +15,7 @@ export default function StreamsAIPage() {
       <StreamsAIBuilderProofBridge />
       <StreamsAIPageVisualFix />
       <StreamsAIChatBehaviorTuning />
+      <StreamsAIMobileBuilderFeelBridge />
       <ConversationStateEmitter />
       <StreamsClientShell />
     </>
