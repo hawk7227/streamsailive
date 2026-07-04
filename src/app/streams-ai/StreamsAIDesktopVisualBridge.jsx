@@ -83,7 +83,8 @@ export default function StreamsAIDesktopVisualBridge() {
           left: 50% !important;
           right: auto !important;
           bottom: 24px !important;
-          width: min(768px, calc(100vw - 48px)) !important;
+          width: min(1120px, calc(100vw - 520px)) !important;
+          min-width: 640px !important;
           transform: translateX(-50%) !important;
           z-index: 90 !important;
         }
