@@ -24,10 +24,8 @@ function tokenFromCookies(request: NextRequest): string | null {
       })
     );
 
-    // 1. Direct access_token cookie
     if (cookies["access_token"]) return cookies["access_token"];
 
-    // 2. Parse from Supabase client cookie targeting ONLY our active project ref
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
     const projectRefMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase/);
     const projectRef = projectRefMatch?.[1] || "";
@@ -35,7 +33,6 @@ function tokenFromCookies(request: NextRequest): string | null {
     if (projectRef) {
       const baseKey = `sb-${projectRef}-auth-token`;
 
-      // Try single cookie first
       if (cookies[baseKey]) {
         const val = cookies[baseKey];
         if (val.startsWith("base64-")) {
@@ -45,16 +42,10 @@ function tokenFromCookies(request: NextRequest): string | null {
         }
       }
 
-      // Try split cookies (.0, .1, etc.)
-      const splitKeys = Object.keys(cookies).filter(
-        (key) => key.startsWith(baseKey + ".")
-      ).sort();
-
+      const splitKeys = Object.keys(cookies).filter((key) => key.startsWith(baseKey + ".")).sort();
       if (splitKeys.length > 0) {
         let combined = "";
-        for (const k of splitKeys) {
-          combined += cookies[k];
-        }
+        for (const k of splitKeys) combined += cookies[k];
         if (combined.startsWith("base64-")) {
           const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
           const json = JSON.parse(decoded);
@@ -63,11 +54,7 @@ function tokenFromCookies(request: NextRequest): string | null {
       }
     }
 
-    // Fallback: search for any sb-xxx-auth-token cookies if projectRef couldn't be parsed
-    const supabaseCookieKeys = Object.keys(cookies).filter(
-      (key) => key.startsWith("sb-") && key.endsWith("-auth-token")
-    );
-
+    const supabaseCookieKeys = Object.keys(cookies).filter((key) => key.startsWith("sb-") && key.endsWith("-auth-token"));
     if (supabaseCookieKeys.length > 0) {
       const val = cookies[supabaseCookieKeys[0]];
       if (val.startsWith("base64-")) {
@@ -77,18 +64,12 @@ function tokenFromCookies(request: NextRequest): string | null {
       }
     }
 
-    // Split fallback
-    const splitKeysFallback = Object.keys(cookies).filter(
-      (key) => key.startsWith("sb-") && key.includes("-auth-token.")
-    ).sort();
-
+    const splitKeysFallback = Object.keys(cookies).filter((key) => key.startsWith("sb-") && key.includes("-auth-token.")).sort();
     if (splitKeysFallback.length > 0) {
       const baseKeyFallback = splitKeysFallback[0].split(".")[0];
       const matchingSplitKeys = splitKeysFallback.filter((k) => k.startsWith(baseKeyFallback + "."));
       let combined = "";
-      for (const k of matchingSplitKeys) {
-        combined += cookies[k];
-      }
+      for (const k of matchingSplitKeys) combined += cookies[k];
       if (combined.startsWith("base64-")) {
         const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
         const json = JSON.parse(decoded);
@@ -102,16 +83,13 @@ function tokenFromCookies(request: NextRequest): string | null {
 }
 
 function bearerFromRequest(request: NextRequest): string | null {
-  // 1. Authorization Header
   const header = request.headers.get("authorization") || request.headers.get("Authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
   if (match?.[1]?.trim()) return match[1].trim();
 
-  // 2. Query Parameter Fallback (e.g. for assets/download)
   const tokenParam = request.nextUrl.searchParams.get("token");
   if (tokenParam) return tokenParam.trim();
 
-  // 3. Cookies Fallback (e.g. for standard browser direct image links)
   const tokenCookie = tokenFromCookies(request);
   if (tokenCookie) return tokenCookie.trim();
 
@@ -146,6 +124,20 @@ function testUserId() {
   return process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-4000-8000-000000000001";
 }
 
+function publicGuestUserId() {
+  return process.env.STREAMS_AI_PUBLIC_GUEST_USER_ID || "00000000-0000-4000-8000-0000000000aa";
+}
+
+function publicGuestTenantId() {
+  return process.env.STREAMS_AI_PUBLIC_GUEST_TENANT_ID || null;
+}
+
+function publicGuestModeEnabled(request: NextRequest) {
+  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE === "false") return false;
+  const pathname = request.nextUrl.pathname || "";
+  return pathname.startsWith("/api/streams-ai/");
+}
+
 function testScopeOptions(reason: string) {
   return {
     tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || null,
@@ -154,10 +146,22 @@ function testScopeOptions(reason: string) {
   };
 }
 
+function publicScopeOptions(reason: string) {
+  return {
+    tenantId: publicGuestTenantId(),
+    projectName: "STREAMS AI public guest project",
+    entitlementPlan: reason,
+  };
+}
+
 export async function requireStreamsAIScope(request: NextRequest): Promise<StreamsAIScope> {
   const accessToken = bearerFromRequest(request);
 
   if (!accessToken) {
+    if (publicGuestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest"), true);
+    }
+
     if (isTestModeEnabled(request)) {
       return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-no-token"), true);
     }
@@ -168,6 +172,10 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   const userClient = createStreamsAIUserClient(accessToken);
   const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
+    if (publicGuestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
+    }
+
     if (isTestModeEnabled(request)) {
       return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
     }
@@ -206,7 +214,7 @@ async function ensureStreamsAIAccountScope(
   if (!tenantId) {
     const { data: tenant, error: tenantError } = await service
       .from(streamsAITables.tenants)
-      .insert({ name: testMode ? "STREAMS AI test workspace" : "Personal workspace" })
+      .insert({ name: testMode ? "STREAMS AI guest workspace" : "Personal workspace" })
       .select("id")
       .single();
 
@@ -237,7 +245,7 @@ async function ensureStreamsAIAccountScope(
         product_id: "streams-ai",
         status: "active",
         plan_id: options.entitlementPlan || "included",
-        metadata: testMode ? { testMode: true } : {},
+        metadata: testMode ? { guestMode: true } : {},
       },
       { onConflict: "tenant_id,user_id,product_id" },
     );
