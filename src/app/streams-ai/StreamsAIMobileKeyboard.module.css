@@ -1,14 +1,60 @@
 @media (max-width: 899px) {
+  :global(.shell.mobile .composer) {
+    bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    z-index: 70 !important;
+    overflow: visible !important;
+  }
+
+  :global(.shell.mobile .streamsComposerRow) {
+    min-height: 36px !important;
+    display: grid !important;
+    grid-template-columns: 36px minmax(0, 1fr) 42px !important;
+    grid-template-rows: 36px !important;
+    grid-template-areas: "tools input send" !important;
+    gap: 7px !important;
+    align-items: center !important;
+  }
+
+  :global(.shell.mobile .streamsComposerInput) {
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    transform: none !important;
+  }
+
+  :global(.shell.mobile .streamsComposerIconButton) {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 999px !important;
+    font-size: 16px !important;
+  }
+
+  :global(.shell.mobile .streamsComposerSendButton) {
+    width: 42px !important;
+    height: 36px !important;
+    border-radius: 999px !important;
+    font-size: 16px !important;
+  }
+
+  :global(.shell.mobile .streamsComposerPill),
+  :global(.shell.mobile .streamsComposerMicButton) {
+    display: none !important;
+  }
+
+  :global(.shell.mobile .chatScroll) {
+    padding-bottom: calc(176px + env(safe-area-inset-bottom)) !important;
+    scroll-padding-bottom: calc(176px + env(safe-area-inset-bottom)) !important;
+  }
+
   :global(.shell.mobile:focus-within .composer) {
-    position: fixed !important;
-    left: 12px !important;
-    right: 12px !important;
     bottom: calc(8px + env(safe-area-inset-bottom)) !important;
     z-index: 90 !important;
   }
 
   :global(.shell.mobile:focus-within .mobileNav) {
     opacity: 0 !important;
+    visibility: hidden !important;
   }
 
   :global(.shell.mobile:focus-within .chatScroll) {
