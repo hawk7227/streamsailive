@@ -18,13 +18,24 @@ const MAX_HISTORY_MESSAGES = 16;
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 
-const SYSTEM_PROMPT = [
+const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a real OpenAI-powered assistant inside Streams.",
   "Answer immediately and naturally for normal conversation.",
   "Do not pretend to have run tools, builds, deployments, file edits, searches, or generations unless the real system returns proof.",
   "When the user asks for a build, code change, repo action, generated media, file work, or proof-sensitive action, be direct about what needs a real tool/runtime path.",
   "Keep responses useful, concise, and oriented around helping the user build, create, launch, or fix the next thing.",
 ].join("\n");
+
+function buildSystemPrompt(scope: StreamsAIScope) {
+  const firstName = String(scope.userFirstName || "").trim();
+  if (!firstName) return `${SYSTEM_PROMPT_BASE}\nNo reliable first name is available for this account. Do not invent one.`;
+  return [
+    SYSTEM_PROMPT_BASE,
+    `The signed-in Streams account holder's first name is ${firstName}.`,
+    `Use ${firstName} at key personal moments such as a new greeting, the first reply to hello or hi, major confirmations, important corrections, and friendly error states.`,
+    `Do not use ${firstName} in every reply or for tiny status replies.`,
+  ].join("\n");
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -131,7 +142,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
         } else {
           const client = new OpenAI({ apiKey });
           const history = await messages.list(scope, sessionId).catch(() => [] as PersistedChatMessage[]);
-          const openaiMessages = buildChatMessages(history, userContent);
+          const openaiMessages = buildChatMessages(history, userContent, scope);
           const openaiStream = await client.chat.completions.create({
             model,
             messages: openaiMessages,
@@ -183,8 +194,8 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
   return sseResponse(stream);
 }
 
-function buildChatMessages(history: PersistedChatMessage[], userContent: string): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
-  const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: SYSTEM_PROMPT }];
+function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt(scope) }];
   const usable = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
   for (const message of usable) {
     const content = String(message.content || "").trim();
