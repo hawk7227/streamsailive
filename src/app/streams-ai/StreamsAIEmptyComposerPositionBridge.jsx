@@ -12,6 +12,7 @@ function setImportant(node, styles) {
 function positionComposer() {
   if (typeof window === "undefined" || window.innerWidth < 900) return;
 
+  const main = document.querySelector(".shell.desktop main, .shell.expanded main, .shell.collapsed main");
   const panel = document.querySelector(".chatPanel");
   const empty = document.querySelector(".chatPanel .empty");
   const composer = document.querySelector(".chatPanel .composer");
@@ -20,25 +21,31 @@ function positionComposer() {
 
   const width = "min(1120px, calc(100vw - 520px))";
 
-  setImportant(panel, {
-    height: "100%",
-    "min-height": "0",
-    display: "grid",
-    "grid-template-rows": "minmax(0, 1fr) auto",
-    overflow: "hidden",
-    position: "relative",
-  });
-
-  setImportant(chatScroll, {
-    "min-height": "0",
-    height: "auto",
-    overflow: "auto",
-    "overflow-y": "auto",
-    "padding-bottom": empty ? "138px" : "24px",
-    "scroll-padding-bottom": empty ? "138px" : "24px",
-  });
+  if (main) {
+    setImportant(main, {
+      height: "100%",
+      "min-height": "0",
+      overflow: "hidden",
+    });
+  }
 
   if (empty) {
+    setImportant(panel, {
+      height: "100%",
+      "min-height": "0",
+      display: "block",
+      overflow: "hidden",
+      position: "relative",
+    });
+
+    setImportant(chatScroll, {
+      "min-height": "0",
+      height: "100%",
+      overflow: "auto",
+      "padding-bottom": "138px",
+      "scroll-padding-bottom": "138px",
+    });
+
     const panelRect = panel.getBoundingClientRect();
     const emptyRect = empty.getBoundingClientRect();
     const top = Math.round(Math.min(emptyRect.bottom - panelRect.top + 28, panelRect.height - 124));
@@ -54,27 +61,45 @@ function positionComposer() {
       margin: "0",
       "z-index": "90",
       display: "block",
-      "align-self": "auto",
-      "grid-row": "auto",
+      "flex-shrink": "0",
     });
     panel.setAttribute("data-streams-empty-chat", "true");
     return;
   }
 
+  setImportant(panel, {
+    height: "100%",
+    "min-height": "0",
+    display: "flex",
+    "flex-direction": "column",
+    overflow: "hidden",
+    position: "relative",
+  });
+
+  setImportant(chatScroll, {
+    flex: "1 1 auto",
+    "min-height": "0",
+    height: "auto",
+    overflow: "auto",
+    "overflow-y": "auto",
+    "padding-bottom": "24px",
+    "scroll-padding-bottom": "24px",
+  });
+
   setImportant(composer, {
-    position: "sticky",
+    position: "relative",
     left: "auto",
     right: "auto",
     top: "auto",
-    bottom: "0",
+    bottom: "auto",
     width,
     "min-width": "640px",
     transform: "none",
     margin: "0 auto 24px",
     "z-index": "90",
     display: "block",
-    "align-self": "end",
-    "grid-row": "2",
+    "flex": "0 0 auto",
+    "flex-shrink": "0",
   });
 
   panel.removeAttribute("data-streams-empty-chat");
@@ -91,7 +116,7 @@ export default function StreamsAIEmptyComposerPositionBridge() {
     };
 
     run();
-    const interval = window.setInterval(run, 250);
+    const interval = window.setInterval(run, 200);
     const observer = new MutationObserver(run);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
     window.addEventListener("resize", run);
