@@ -176,3 +176,121 @@
     font-size: 11px;
   }
 }
+
+@media (max-width: 899px) {
+  .shell.mobile .streamsComposer {
+    min-height: 48px !important;
+    border: 1px solid rgba(168,85,247,.45) !important;
+    border-radius: 22px !important;
+    background: rgba(49,18,89,.78) !important;
+    box-shadow: 0 0 32px rgba(124,58,237,.25) !important;
+    padding: 6px !important;
+    backdrop-filter: none !important;
+    overflow: visible !important;
+  }
+
+  .shell.mobile .streamsComposer::before,
+  .shell.mobile .streamsComposer::after {
+    display: none !important;
+  }
+
+  .shell.mobile .streamsComposerRow {
+    min-height: 36px !important;
+    display: grid !important;
+    grid-template-columns: 36px minmax(0,1fr) 42px !important;
+    grid-template-rows: 36px !important;
+    grid-template-areas: "tools input send" !important;
+    gap: 7px !important;
+    align-items: center !important;
+  }
+
+  .shell.mobile .streamsComposerInput {
+    grid-area: input !important;
+    height: 36px !important;
+    min-width: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #fff !important;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    line-height: 36px !important;
+    letter-spacing: 0 !important;
+    text-shadow: none !important;
+    transform: none !important;
+  }
+
+  .shell.mobile .streamsComposerInput::placeholder {
+    color: #fff !important;
+    opacity: .92 !important;
+    font-weight: 800 !important;
+  }
+
+  .shell.mobile .streamsComposerIconButton {
+    grid-area: tools !important;
+    width: 36px !important;
+    height: 36px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: rgba(30,41,59,.96) !important;
+    color: #fff !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    box-shadow: none !important;
+    display: grid !important;
+    place-items: center !important;
+  }
+
+  .shell.mobile .streamsComposerSendButton {
+    grid-area: send !important;
+    width: 42px !important;
+    height: 36px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #7c3aed !important;
+    color: #fff !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    box-shadow: none !important;
+    display: grid !important;
+    place-items: center !important;
+  }
+
+  .shell.mobile .streamsComposerSendButton:disabled {
+    opacity: .55 !important;
+    cursor: not-allowed !important;
+    animation: none !important;
+  }
+
+  .shell.mobile .streamsComposerIconButton,
+  .shell.mobile .streamsComposerSendButton {
+    transition: transform 100ms ease, background 120ms ease !important;
+  }
+
+  .shell.mobile .streamsComposerIconButton:active,
+  .shell.mobile .streamsComposerSendButton:active {
+    transform: scale(.96) !important;
+  }
+
+  .shell.mobile .streamsComposerPill,
+  .shell.mobile .streamsComposerMicButton {
+    display: none !important;
+  }
+
+  .shell.mobile .streamsComposer:has(.streamsComposerAttachments) {
+    min-height: auto !important;
+  }
+
+  .shell.mobile .streamsComposerAttachments {
+    position: relative !important;
+    z-index: 3 !important;
+    width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+    border-bottom: 1px solid rgba(192,132,252,.16) !important;
+    padding: 8px 0 !important;
+    align-items: flex-end !important;
+  }
+}
