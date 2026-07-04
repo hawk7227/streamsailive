@@ -26,11 +26,16 @@ function positionComposer() {
     display: "grid",
     "grid-template-rows": "minmax(0, 1fr) auto",
     overflow: "hidden",
+    position: "relative",
   });
 
   setImportant(chatScroll, {
     "min-height": "0",
+    height: "auto",
+    overflow: "auto",
     "overflow-y": "auto",
+    "padding-bottom": empty ? "138px" : "24px",
+    "scroll-padding-bottom": empty ? "138px" : "24px",
   });
 
   if (empty) {
@@ -48,22 +53,28 @@ function positionComposer() {
       transform: "translateX(-50%)",
       margin: "0",
       "z-index": "90",
+      display: "block",
+      "align-self": "auto",
+      "grid-row": "auto",
     });
     panel.setAttribute("data-streams-empty-chat", "true");
     return;
   }
 
   setImportant(composer, {
-    position: "relative",
+    position: "sticky",
     left: "auto",
     right: "auto",
     top: "auto",
-    bottom: "auto",
+    bottom: "0",
     width,
     "min-width": "640px",
     transform: "none",
     margin: "0 auto 24px",
     "z-index": "90",
+    display: "block",
+    "align-self": "end",
+    "grid-row": "2",
   });
 
   panel.removeAttribute("data-streams-empty-chat");
@@ -80,7 +91,7 @@ export default function StreamsAIEmptyComposerPositionBridge() {
     };
 
     run();
-    const interval = window.setInterval(run, 350);
+    const interval = window.setInterval(run, 250);
     const observer = new MutationObserver(run);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
     window.addEventListener("resize", run);
