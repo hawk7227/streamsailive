@@ -47,18 +47,22 @@
     scroll-padding-bottom: calc(176px + env(safe-area-inset-bottom)) !important;
   }
 
+  :global(.shell.mobile.keyboardOpen .composer),
   :global(.shell.mobile:focus-within .composer) {
-    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    bottom: calc(var(--keyboard, 0px) + 8px + env(safe-area-inset-bottom)) !important;
     z-index: 90 !important;
   }
 
+  :global(.shell.mobile.keyboardOpen .mobileNav),
   :global(.shell.mobile:focus-within .mobileNav) {
     opacity: 0 !important;
     visibility: hidden !important;
+    pointer-events: none !important;
   }
 
+  :global(.shell.mobile.keyboardOpen .chatScroll),
   :global(.shell.mobile:focus-within .chatScroll) {
-    padding-bottom: calc(104px + env(safe-area-inset-bottom)) !important;
-    scroll-padding-bottom: calc(104px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(104px + var(--keyboard, 0px) + env(safe-area-inset-bottom)) !important;
+    scroll-padding-bottom: calc(104px + var(--keyboard, 0px) + env(safe-area-inset-bottom)) !important;
   }
 }
