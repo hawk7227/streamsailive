@@ -12,18 +12,21 @@ function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function statusTextFromBubble(bubble) {
+  return normalizeText(bubble?.textContent || "").replace(/^✦\s*/, "");
+}
+
 function isStatusText(text) {
   const clean = normalizeText(text).replace(/^✦\s*/, "");
   return clean === "Thinking…" || clean === "Thinking..." || STATUS_TEXTS.includes(clean);
 }
 
-function latestStatusBubble() {
-  const bubbles = Array.from(document.querySelectorAll(".chatPanel .msg.assistant .bubble"));
-  for (let index = bubbles.length - 1; index >= 0; index -= 1) {
-    const bubble = bubbles[index];
-    if (isStatusText(bubble.textContent)) return bubble;
-  }
-  return null;
+function statusBubbles() {
+  return Array.from(document.querySelectorAll(".chatPanel .msg.assistant .bubble")).filter((bubble) => isStatusText(statusTextFromBubble(bubble)));
+}
+
+function escapeText(text) {
+  return String(text || "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
 }
 
 export default function StreamsAIStatusStreamBridge() {
@@ -35,19 +38,29 @@ export default function StreamsAIStatusStreamBridge() {
     const style = document.createElement("style");
     style.id = styleId;
     style.textContent = `
+      .streamsLiveStatusBubble,
       .streamsLiveStatusText {
-        display: inline-block;
-        background: linear-gradient(90deg, rgba(226,232,240,.42), rgba(255,255,255,.98), rgba(226,232,240,.42));
-        background-size: 220% 100%;
-        -webkit-background-clip: text;
-        background-clip: text;
+        display: inline-block !important;
+        width: fit-content !important;
+        background-image: linear-gradient(90deg, rgba(226,232,240,.35) 0%, rgba(255,255,255,1) 48%, rgba(226,232,240,.35) 100%) !important;
+        background-size: 240% 100% !important;
+        -webkit-background-clip: text !important;
+        background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
         color: transparent !important;
-        animation: streamsStatusShimmer 1.25s ease-in-out infinite;
+        animation: streamsStatusShimmer 1.15s ease-in-out infinite, streamsStatusPulse 1.65s ease-in-out infinite !important;
+      }
+      .streamsLiveStatusBubble * {
+        -webkit-text-fill-color: transparent !important;
+        color: transparent !important;
       }
       @keyframes streamsStatusShimmer {
-        0% { background-position: 100% 50%; opacity: .58; }
-        50% { background-position: 0% 50%; opacity: 1; }
-        100% { background-position: -100% 50%; opacity: .72; }
+        0% { background-position: 120% 50%; }
+        100% { background-position: -120% 50%; }
+      }
+      @keyframes streamsStatusPulse {
+        0%, 100% { opacity: .55; }
+        50% { opacity: 1; }
       }
     `;
     document.head.appendChild(style);
@@ -58,20 +71,22 @@ export default function StreamsAIStatusStreamBridge() {
     const renderStatus = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const bubble = latestStatusBubble();
-        if (!bubble) return;
-        const current = normalizeText(bubble.textContent).replace(/^✦\s*/, "");
-        if (!isStatusText(current)) return;
-        const next = STATUS_TEXTS[index % STATUS_TEXTS.length];
-        index += 1;
-        bubble.innerHTML = `<span class="streamsLiveStatusText">${next}</span>`;
+        const bubbles = statusBubbles();
+        bubbles.forEach((bubble, bubbleIndex) => {
+          const current = statusTextFromBubble(bubble);
+          if (!isStatusText(current)) return;
+          const next = current.startsWith("Thinking") ? STATUS_TEXTS[(index + bubbleIndex) % STATUS_TEXTS.length] : current;
+          bubble.classList.add("streamsLiveStatusBubble");
+          bubble.innerHTML = `<span class="streamsLiveStatusText">${escapeText(next)}</span>`;
+        });
+        if (bubbles.length) index += 1;
       });
     };
 
     renderStatus();
-    const timer = window.setInterval(renderStatus, 1450);
+    const timer = window.setInterval(renderStatus, 900);
     const observer = new MutationObserver(renderStatus);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     return () => {
       cancelAnimationFrame(frame);
