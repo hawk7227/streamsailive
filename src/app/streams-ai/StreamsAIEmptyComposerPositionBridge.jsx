@@ -9,6 +9,13 @@ function setImportant(node, styles) {
   }
 }
 
+function panelMetrics(main, panel) {
+  const rect = (main || panel).getBoundingClientRect();
+  const safeWidth = Math.max(280, Math.min(1120, Math.round(rect.width - 48)));
+  const left = Math.round(rect.left + Math.max(24, (rect.width - safeWidth) / 2));
+  return { rect, safeWidth, left };
+}
+
 function positionComposer() {
   if (typeof window === "undefined" || window.innerWidth < 900) return;
 
@@ -19,7 +26,9 @@ function positionComposer() {
   const chatScroll = document.querySelector(".chatPanel .chatScroll");
   if (!panel || !composer || !chatScroll) return;
 
-  const width = "min(1120px, calc(100vw - 520px))";
+  const { safeWidth, left } = panelMetrics(main, panel);
+  const widthPx = `${safeWidth}px`;
+  const leftPx = `${left}px`;
 
   if (main) {
     setImportant(main, {
@@ -55,8 +64,9 @@ function positionComposer() {
       right: "auto",
       top: `${Math.max(260, top)}px`,
       bottom: "auto",
-      width,
-      "min-width": "640px",
+      width: "min(1120px, calc(100% - 48px))",
+      "min-width": "0",
+      "max-width": "calc(100% - 48px)",
       transform: "translateX(-50%)",
       margin: "0",
       "z-index": "90",
@@ -67,36 +77,37 @@ function positionComposer() {
     return;
   }
 
+  const composerHeight = Math.max(72, Math.round(composer.getBoundingClientRect().height || 72));
+
   setImportant(panel, {
     height: "100%",
     "min-height": "0",
-    display: "flex",
-    "flex-direction": "column",
+    display: "block",
     overflow: "hidden",
     position: "relative",
   });
 
   setImportant(chatScroll, {
-    flex: "1 1 auto",
+    height: "100%",
     "min-height": "0",
-    height: "auto",
     overflow: "auto",
     "overflow-y": "auto",
-    "padding-bottom": "24px",
-    "scroll-padding-bottom": "24px",
+    "padding-bottom": `${composerHeight + 48}px`,
+    "scroll-padding-bottom": `${composerHeight + 48}px`,
   });
 
   setImportant(composer, {
-    position: "relative",
-    left: "auto",
+    position: "fixed",
+    left: leftPx,
     right: "auto",
     top: "auto",
-    bottom: "auto",
-    width,
-    "min-width": "640px",
+    bottom: "24px",
+    width: widthPx,
+    "min-width": "0",
+    "max-width": "calc(100vw - 48px)",
     transform: "none",
-    margin: "0 auto 24px",
-    "z-index": "90",
+    margin: "0",
+    "z-index": "999",
     display: "block",
     "flex": "0 0 auto",
     "flex-shrink": "0",
@@ -120,12 +131,16 @@ export default function StreamsAIEmptyComposerPositionBridge() {
     const observer = new MutationObserver(run);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
     window.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("scroll", run);
 
     return () => {
       cancelAnimationFrame(frame);
       window.clearInterval(interval);
       observer.disconnect();
       window.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("scroll", run);
     };
   }, []);
 
