@@ -13,6 +13,12 @@ const BASE_TOOL_ITEMS = [
   { id: "web_search", icon: "◎", label: "Web search", enabled: true, shortcut: "Live" },
 ];
 
+const MOBILE_TOOL_ITEMS = [
+  { id: "mode_thinking", icon: "◌", label: "Mode: Thinking", shortcut: "Active", enabled: true },
+  { id: "configure", icon: "⚙", label: "Configure...", shortcut: "/account/personalization", enabled: true },
+  { id: "voice_mic", icon: "🎙", label: "Voice / Mic", shortcut: "Realtime", enabled: true },
+];
+
 export default function StreamsComposer({
   onSubmit,
   onFilesSelected,
@@ -28,6 +34,7 @@ export default function StreamsComposer({
   const [selectedTool, setSelectedTool] = useState(null);
   const [blockedNotice, setBlockedNotice] = useState("");
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+  const [isMobileComposer, setIsMobileComposer] = useState(false);
   const [webSearchStatus, setWebSearchStatus] = useState({
     configured: false,
     blockedReason: "Checking real web search configuration...",
@@ -36,6 +43,17 @@ export default function StreamsComposer({
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    const updateMobileState = () => setIsMobileComposer(window.innerWidth < 900);
+    updateMobileState();
+    window.addEventListener("resize", updateMobileState);
+    window.addEventListener("orientationchange", updateMobileState);
+    return () => {
+      window.removeEventListener("resize", updateMobileState);
+      window.removeEventListener("orientationchange", updateMobileState);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +101,7 @@ export default function StreamsComposer({
     };
   }, [activeMenu]);
 
-  const toolItems = BASE_TOOL_ITEMS.map((item) => {
+  const baseToolItems = BASE_TOOL_ITEMS.map((item) => {
     if (item.id !== "web_search") return item;
     return {
       ...item,
@@ -92,6 +110,8 @@ export default function StreamsComposer({
       blockedReason: webSearchStatus.blockedReason,
     };
   });
+
+  const toolItems = isMobileComposer ? [...baseToolItems, ...MOBILE_TOOL_ITEMS] : baseToolItems;
 
   const placeholder = selectedTool
     ? selectedTool.id === "url"
@@ -196,6 +216,22 @@ export default function StreamsComposer({
       setSelectedTool((current) => (current?.id === item.id ? null : item));
       setBlockedNotice("");
       setActiveMenu("");
+      return;
+    }
+
+    if (item.id === "mode_thinking") {
+      handleModeSelection("Thinking");
+      return;
+    }
+
+    if (item.id === "configure") {
+      handleModeSelection("Configure...");
+      return;
+    }
+
+    if (item.id === "voice_mic") {
+      setActiveMenu("");
+      setVoicePanelOpen(true);
       return;
     }
 
