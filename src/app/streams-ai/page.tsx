@@ -1,5 +1,6 @@
 import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
 import StreamsAIDesktopVisualBridge from "./StreamsAIDesktopVisualBridge";
+import StreamsAIEmptyComposerPositionBridge from "./StreamsAIEmptyComposerPositionBridge";
 import StreamsAIMobileKeyboardBridge from "./StreamsAIMobileKeyboardBridge";
 import StreamsAIStatusStreamBridge from "./StreamsAIStatusStreamBridge";
 import desktopConsoleStyles from "./StreamsAIDesktopConsole.module.css";
@@ -13,6 +14,7 @@ export default function StreamsAIPage() {
   return (
     <>
       <StreamsAIDesktopVisualBridge />
+      <StreamsAIEmptyComposerPositionBridge />
       <StreamsAIMobileKeyboardBridge />
       <StreamsAIStatusStreamBridge />
       <StreamsClientShell />
