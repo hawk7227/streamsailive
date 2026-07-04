@@ -25,6 +25,7 @@ const toolCalls = new StreamsAIToolCallsRepository();
 
 const LIVE_ASSISTANT_SOURCE = "streams-ai-openai-live-assistant";
 const CAPABILITY_SOURCE = "streams-ai-canonical-capability-registry";
+const FAST_REPLY_SOURCE = "streams-ai-fast-local-reply";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1";
 const MAX_HISTORY_MESSAGES = 28;
 
@@ -66,18 +67,51 @@ export async function POST(request: NextRequest) {
     const body = await readJsonBody<{ sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] }>(request);
     const content = (body.content || body.message || "").trim();
     if (!content) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
+    const isFastReply = isSimpleFastReply(content);
     let sessionId = body.sessionId || "";
     if (!sessionId) {
-      const created = await sessions.create(scope, { title: await generateAITitle(content), metadata: { source: "copied-streams-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled", recentChat: true } });
+      const created = await sessions.create(scope, { title: isFastReply ? "New chat" : await generateAITitle(content), metadata: { source: "copied-streams-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled", recentChat: true } });
       sessionId = created.id;
     }
     const userMessage = await messages.create(scope, { sessionId, role: body.role || "user", content, status: body.status || "complete", metadata: { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "universal-live-assistant", backendTools: "universal-approved-tools", canonicalCapabilities: "enabled", attachments: body.attachments || [] } });
     if (body.runAssistant === false) return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
+    if (isFastReply) return streamFastAssistantResponse({ scope, sessionId, userContent: content });
     if (isCanonicalCapabilityQuestion(content)) return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
     return streamAssistantResponse({ scope, sessionId, userContent: content, mode: body.mode });
   } catch (error) {
     return streamsAIError(error);
   }
+}
+
+function isSimpleFastReply(content: string) {
+  const text = content.toLowerCase().replace(/[!?.\s]+$/g, "").trim();
+  return /^(hi|hello|hey|yo|sup|gm|good morning|good afternoon|good evening|test)$/.test(text);
+}
+
+function fastReplyText(content: string) {
+  const text = content.toLowerCase();
+  if (text.includes("test")) return "I’m here and responding.";
+  return "Hey — I’m here. What do you want to build, create, or work on?";
+}
+
+function streamFastAssistantResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
+  const encoder = new TextEncoder();
+  const startedAt = Date.now();
+  const answer = fastReplyText(userContent);
+  const stream = new ReadableStream<Uint8Array>({ async start(controller) {
+    const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+    try {
+      send("activity", { phase: "fast_reply.started", statusText: "Replying…", source: FAST_REPLY_SOURCE, startedAt, sessionId });
+      for (const token of chunkText(answer, 80)) send("response", { token });
+      const assistantMessage = await messages.create(scope, { sessionId, role: "assistant", content: answer, status: "complete", metadata: { source: FAST_REPLY_SOURCE, provider: "local", providerStatus: "ok", reason: "simple_greeting_fast_path" } });
+      send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "local", providerStatus: "ok", source: FAST_REPLY_SOURCE, elapsedMs: Date.now() - startedAt });
+    } catch (error) {
+      send("error", { message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      controller.close();
+    }
+  } });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
 }
 
 function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
