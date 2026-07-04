@@ -8,6 +8,9 @@ export type StreamsAIScope = {
   workspaceId: "streams-ai";
   moduleId: "streams-ai-core";
   productId: "streams-ai";
+  userFirstName?: string | null;
+  userFullName?: string | null;
+  userDisplayName?: string | null;
 };
 
 export class StreamsAIAuthError extends Error {
@@ -94,6 +97,35 @@ function bearerFromRequest(request: NextRequest): string | null {
   if (tokenCookie) return tokenCookie.trim();
 
   return null;
+}
+
+function cleanNamePart(value: unknown) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function titleCaseFirstName(value: unknown) {
+  const first = cleanNamePart(value).split(" ")[0] || "";
+  if (!first || /@/.test(first)) return "";
+  return first.toLocaleLowerCase().replace(/^\p{L}/u, (letter) => letter.toLocaleUpperCase());
+}
+
+function profileNamesFromMetadata(metadata: Record<string, any> | null | undefined, email?: string | null) {
+  const fullName = cleanNamePart(
+    metadata?.full_name ||
+    metadata?.fullName ||
+    metadata?.name ||
+    metadata?.display_name ||
+    metadata?.displayName ||
+    "",
+  );
+  const displayName = cleanNamePart(metadata?.display_name || metadata?.displayName || fullName);
+  const firstName = titleCaseFirstName(metadata?.first_name || metadata?.firstName || fullName || displayName || "");
+
+  return {
+    userFirstName: firstName || null,
+    userFullName: fullName || null,
+    userDisplayName: displayName || fullName || null,
+  };
 }
 
 function isExplicitTestModeEnabled() {
@@ -183,15 +215,19 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
     throw new StreamsAIAuthError(userError?.message || "Invalid STREAMS AI auth session.");
   }
 
-  return ensureStreamsAIAccountScope(userData.user.id);
+  return ensureStreamsAIAccountScope(userData.user.id, {
+    userMetadata: userData.user.user_metadata,
+    userEmail: userData.user.email,
+  });
 }
 
 async function ensureStreamsAIAccountScope(
   userId: string,
-  options: { tenantId?: string | null; projectName?: string; entitlementPlan?: string } = {},
+  options: { tenantId?: string | null; projectName?: string; entitlementPlan?: string; userMetadata?: Record<string, any> | null; userEmail?: string | null } = {},
   testMode = false,
 ): Promise<StreamsAIScope> {
   const service = streamsAISchema(createStreamsAIServiceClient());
+  const profileNames = profileNamesFromMetadata(options.userMetadata, options.userEmail);
 
   let tenantId = options.tenantId || undefined;
 
@@ -285,5 +321,6 @@ async function ensureStreamsAIAccountScope(
     workspaceId: "streams-ai",
     moduleId: "streams-ai-core",
     productId: "streams-ai",
+    ...profileNames,
   };
 }
