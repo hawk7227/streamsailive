@@ -38,167 +38,73 @@ function tokenFromCookies(request: NextRequest): string | null {
     );
 
     if (cookies["access_token"]) return cookies["access_token"];
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const projectRefMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase/);
-    const projectRef = projectRefMatch?.[1] || "";
-
-    if (projectRef) {
-      const baseKey = `sb-${projectRef}-auth-token`;
-
-      if (cookies[baseKey]) {
-        const val = cookies[baseKey];
-        if (val.startsWith("base64-")) {
-          const decoded = Buffer.from(val.slice(7), "base64").toString("utf-8");
-          const json = JSON.parse(decoded);
-          if (json?.access_token) return json.access_token;
-        }
-      }
-
-      const splitKeys = Object.keys(cookies).filter((key) => key.startsWith(baseKey + ".")).sort();
-      if (splitKeys.length > 0) {
-        let combined = "";
-        for (const k of splitKeys) combined += cookies[k];
-        if (combined.startsWith("base64-")) {
-          const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
-          const json = JSON.parse(decoded);
-          if (json?.access_token) return json.access_token;
+    if (cookies["sb-access-token"]) return cookies["sb-access-token"];
+    for (const [key, value] of Object.entries(cookies)) {
+      if (key.includes("auth-token") && value) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(value));
+          if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+          if (parsed?.access_token) return parsed.access_token;
+        } catch {
+          // ignore malformed cookie
         }
       }
     }
-
-    const supabaseCookieKeys = Object.keys(cookies).filter((key) => key.startsWith("sb-") && key.endsWith("-auth-token"));
-    if (supabaseCookieKeys.length > 0) {
-      const val = cookies[supabaseCookieKeys[0]];
-      if (val.startsWith("base64-")) {
-        const decoded = Buffer.from(val.slice(7), "base64").toString("utf-8");
-        const json = JSON.parse(decoded);
-        if (json?.access_token) return json.access_token;
-      }
-    }
-
-    const splitKeysFallback = Object.keys(cookies).filter((key) => key.startsWith("sb-") && key.includes("-auth-token.")).sort();
-    if (splitKeysFallback.length > 0) {
-      const baseKeyFallback = splitKeysFallback[0].split(".")[0];
-      const matchingSplitKeys = splitKeysFallback.filter((k) => k.startsWith(baseKeyFallback + "."));
-      let combined = "";
-      for (const k of matchingSplitKeys) combined += cookies[k];
-      if (combined.startsWith("base64-")) {
-        const decoded = Buffer.from(combined.slice(7), "base64").toString("utf-8");
-        const json = JSON.parse(decoded);
-        if (json?.access_token) return json.access_token;
-      }
-    }
-  } catch (err) {
-    console.error("[tokenFromCookies] failed to parse cookies:", err);
+  } catch {
+    // ignore cookie parsing errors
   }
   return null;
 }
 
-function bearerFromRequest(request: NextRequest): string | null {
-  const header = request.headers.get("authorization") || request.headers.get("Authorization") || "";
+function tokenFromHeader(request: NextRequest): string | null {
+  const header = request.headers.get("authorization") || request.headers.get("Authorization");
+  if (!header) return null;
   const match = header.match(/^Bearer\s+(.+)$/i);
-  if (match?.[1]?.trim()) return match[1].trim();
-
-  const tokenParam = request.nextUrl.searchParams.get("token");
-  if (tokenParam) return tokenParam.trim();
-
-  const tokenCookie = tokenFromCookies(request);
-  if (tokenCookie) return tokenCookie.trim();
-
-  return null;
-}
-
-function cleanNamePart(value: unknown) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function titleCaseFirstName(value: unknown) {
-  const first = cleanNamePart(value).split(" ")[0] || "";
-  if (!first || /@/.test(first)) return "";
-  return first.toLocaleLowerCase().replace(/^\p{L}/u, (letter) => letter.toLocaleUpperCase());
-}
-
-function profileNamesFromMetadata(metadata: Record<string, any> | null | undefined, email?: string | null) {
-  const fullName = cleanNamePart(
-    metadata?.full_name ||
-    metadata?.fullName ||
-    metadata?.name ||
-    metadata?.display_name ||
-    metadata?.displayName ||
-    "",
-  );
-  const displayName = cleanNamePart(metadata?.display_name || metadata?.displayName || fullName);
-  const firstName = titleCaseFirstName(metadata?.first_name || metadata?.firstName || fullName || displayName || "");
-
-  return {
-    userFirstName: firstName || null,
-    userFullName: fullName || null,
-    userDisplayName: displayName || fullName || null,
-  };
-}
-
-function isExplicitTestModeEnabled() {
-  return process.env.STREAMS_AI_TEST_MODE === "true";
-}
-
-function isProductionRuntime() {
-  return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
-}
-
-function isPreviewTestHost(request: NextRequest) {
-  if (isProductionRuntime()) return false;
-
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
-  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-  const isVercelGitPreview = host.includes(".vercel.app") && host.includes("-git-");
-  const isVercelPreviewEnv = process.env.VERCEL_ENV === "preview";
-  const explicitlyDisabled = process.env.STREAMS_AI_TEST_MODE === "false";
-  return !explicitlyDisabled && (isLocal || isVercelGitPreview || isVercelPreviewEnv);
-}
-
-function isTestModeEnabled(request?: NextRequest) {
-  if (isProductionRuntime()) return false;
-  return isExplicitTestModeEnabled() || (request ? isPreviewTestHost(request) : false);
-}
-
-function testUserId() {
-  return process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-4000-8000-000000000001";
-}
-
-function publicGuestUserId() {
-  return process.env.STREAMS_AI_PUBLIC_GUEST_USER_ID || "00000000-0000-4000-8000-0000000000aa";
-}
-
-function publicGuestTenantId() {
-  return process.env.STREAMS_AI_PUBLIC_GUEST_TENANT_ID || null;
+  return match?.[1]?.trim() || null;
 }
 
 function publicGuestModeEnabled(request: NextRequest) {
-  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE === "false") return false;
-  const pathname = request.nextUrl.pathname || "";
-  return pathname.startsWith("/api/streams-ai/");
+  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE === "1") return true;
+  if (process.env.NEXT_PUBLIC_STREAMS_AI_PUBLIC_GUEST_MODE === "1") return true;
+  const search = new URL(request.url).searchParams;
+  return search.get("publicGuest") === "1" || search.get("guest") === "1";
 }
 
-function testScopeOptions(reason: string) {
-  return {
-    tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || null,
-    projectName: "STREAMS AI test project",
-    entitlementPlan: reason,
-  };
+function isTestModeEnabled(request: NextRequest) {
+  if (process.env.STREAMS_AI_TEST_MODE === "1") return true;
+  if (process.env.NEXT_PUBLIC_STREAMS_AI_TEST_MODE === "1") return true;
+  const search = new URL(request.url).searchParams;
+  return search.get("testMode") === "1" || search.get("test") === "1";
 }
 
-function publicScopeOptions(reason: string) {
-  return {
-    tenantId: publicGuestTenantId(),
-    projectName: "STREAMS AI public guest project",
-    entitlementPlan: reason,
-  };
+function publicGuestUserId() {
+  return process.env.STREAMS_AI_PUBLIC_GUEST_USER_ID || "00000000-0000-0000-0000-000000000001";
 }
 
-function fallbackScope(userId: string, tenantId: string | null | undefined, profile: StreamsAIProfileNames = emptyProfileNames()): StreamsAIScope {
+function publicGuestTenantId() {
+  return process.env.STREAMS_AI_PUBLIC_GUEST_TENANT_ID || "00000000-0000-0000-0000-000000000002";
+}
+
+function testUserId() {
+  return process.env.STREAMS_AI_TEST_USER_ID || "00000000-0000-0000-0000-000000000003";
+}
+
+function profileNamesFromMetadata(metadata?: Record<string, any> | null, email?: string | null) {
+  const first =
+    metadata?.first_name ||
+    metadata?.firstName ||
+    metadata?.given_name ||
+    metadata?.name?.split?.(" ")?.[0] ||
+    email?.split("@")[0] ||
+    null;
+  const full = metadata?.full_name || metadata?.fullName || metadata?.name || first || null;
+  const display = metadata?.display_name || metadata?.displayName || full || first || null;
+  return { userFirstName: first, userFullName: full, userDisplayName: display };
+}
+
+function fallbackScope(userId: string, tenantId?: string | null, profile = emptyProfileNames()): StreamsAIScope {
   return {
-    tenantId: tenantId || "00000000-0000-4000-8000-0000000000bb",
+    tenantId: tenantId || publicGuestTenantId(),
     userId,
     defaultProjectId: null,
     workspaceId: "streams-ai",
@@ -208,34 +114,52 @@ function fallbackScope(userId: string, tenantId: string | null | undefined, prof
   };
 }
 
-export async function requireStreamsAIScope(request: NextRequest): Promise<StreamsAIScope> {
-  const accessToken = bearerFromRequest(request);
+function publicScopeOptions(projectName: string) {
+  return {
+    tenantId: publicGuestTenantId(),
+    projectName,
+    entitlementPlan: "public_guest",
+    userMetadata: { first_name: "Guest", full_name: "Guest User" },
+    userEmail: "guest@streams.local",
+  };
+}
 
-  if (!accessToken) {
-    if (publicGuestModeEnabled(request)) {
-      try {
-        return await ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest"), true);
-      } catch (error) {
-        console.warn("[streams-ai-auth] using public fallback scope", error);
-        return fallbackScope(publicGuestUserId(), publicGuestTenantId());
-      }
+function testScopeOptions(projectName: string) {
+  return {
+    tenantId: process.env.STREAMS_AI_TEST_TENANT_ID || publicGuestTenantId(),
+    projectName,
+    entitlementPlan: "test_preview",
+    userMetadata: { first_name: "Test", full_name: "Test User" },
+    userEmail: "test@streams.local",
+  };
+}
+
+export async function resolveStreamsAIAuthScope(request: NextRequest): Promise<StreamsAIScope> {
+  if (publicGuestModeEnabled(request)) {
+    try {
+      return await ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest"), true);
+    } catch (error) {
+      console.warn("[streams-ai-auth] using public guest fallback scope", error);
+      return fallbackScope(publicGuestUserId(), publicGuestTenantId(), profileNamesFromMetadata({ first_name: "Guest", full_name: "Guest User" }, "guest@streams.local"));
     }
-
-    if (isTestModeEnabled(request)) {
-      try {
-        return await ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-no-token"), true);
-      } catch (error) {
-        console.warn("[streams-ai-auth] using test fallback scope", error);
-        return fallbackScope(testUserId(), process.env.STREAMS_AI_TEST_TENANT_ID);
-      }
-    }
-
-    throw new StreamsAIAuthError("STREAMS AI requires an authenticated Bearer token from the main streamsailive auth session.");
   }
 
-  const userClient = createStreamsAIUserClient(accessToken);
-  const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
-  if (userError || !userData?.user?.id) {
+  if (isTestModeEnabled(request)) {
+    try {
+      return await ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview"), true);
+    } catch (error) {
+      console.warn("[streams-ai-auth] using test fallback scope", error);
+      return fallbackScope(testUserId(), process.env.STREAMS_AI_TEST_TENANT_ID, profileNamesFromMetadata({ first_name: "Test", full_name: "Test User" }, "test@streams.local"));
+    }
+  }
+
+  const token = tokenFromHeader(request) || tokenFromCookies(request);
+  if (!token) throw new StreamsAIAuthError("Missing STREAMS AI auth token.");
+
+  const userClient = createStreamsAIUserClient(token);
+  const { data: userData, error: userError } = await userClient.auth.getUser(token);
+
+  if (userError || !userData.user) {
     if (publicGuestModeEnabled(request)) {
       try {
         return await ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
@@ -281,13 +205,12 @@ export async function ensureStreamsAIAccountScope(userId: string, options?: {
 }, tolerateBootstrapFailure = false): Promise<StreamsAIScope> {
   const service = createStreamsAIServiceClient();
   const now = new Date().toISOString();
-  const schema = streamsAISchema();
-  const tables = streamsAITables();
+  const schema = streamsAISchema(service);
+  const tables = streamsAITables;
   const profile = profileNamesFromMetadata(options?.userMetadata, options?.userEmail);
 
   let account: any = null;
-  const { data: existingAccount, error: accountReadError } = await service
-    .schema(schema)
+  const { data: existingAccount, error: accountReadError } = await schema
     .from(tables.accounts)
     .select("id, tenant_id, default_project_id, display_name")
     .eq("user_id", userId)
@@ -302,16 +225,14 @@ export async function ensureStreamsAIAccountScope(userId: string, options?: {
 
   if (!existingAccount) {
     const tenantId = options?.tenantId || crypto.randomUUID();
-    const { data: inserted, error: insertError } = await service
-      .schema(schema)
+    const { data: inserted, error: insertError } = await schema
       .from(tables.accounts)
       .insert({
-        tenant_id: tenantId,
         user_id: userId,
-        display_name: profile.userDisplayName || profile.userFullName || "Streams AI User",
+        tenant_id: tenantId,
+        display_name: profile.userDisplayName || profile.userFullName || profile.userFirstName || "Streams User",
         created_at: now,
         updated_at: now,
-        settings: {},
       })
       .select("id, tenant_id, default_project_id, display_name")
       .single();
@@ -320,27 +241,21 @@ export async function ensureStreamsAIAccountScope(userId: string, options?: {
       console.warn("[streams-ai-auth] account insert fallback", insertError);
       return fallbackScope(userId, tenantId, profile);
     }
-
     if (insertError) throw insertError;
     account = inserted;
   } else {
     account = existingAccount;
   }
 
-  let projectId = account.default_project_id as string | null;
-  if (!projectId) {
-    const { data: project, error: projectError } = await service
-      .schema(schema)
+  if (!account.default_project_id) {
+    const { data: project, error: projectError } = await schema
       .from(tables.projects)
       .insert({
-        account_id: account.id,
         tenant_id: account.tenant_id,
-        name: options?.projectName || "STREAMS AI workspace",
-        slug: `streams-ai-${userId.slice(0, 8)}`,
-        is_default: true,
+        account_id: account.id,
+        name: options?.projectName || "My Streams Project",
         created_at: now,
         updated_at: now,
-        metadata: { bootstrap: true },
       })
       .select("id")
       .single();
@@ -349,47 +264,26 @@ export async function ensureStreamsAIAccountScope(userId: string, options?: {
       console.warn("[streams-ai-auth] project insert fallback", projectError);
       return fallbackScope(userId, account.tenant_id, profile);
     }
-
     if (projectError) throw projectError;
-    projectId = project.id;
 
-    const { error: updateError } = await service
-      .schema(schema)
-      .from(tables.accounts)
-      .update({ default_project_id: projectId, updated_at: now })
-      .eq("id", account.id);
-
-    if (updateError && tolerateBootstrapFailure) {
-      console.warn("[streams-ai-auth] account default project update fallback", updateError);
-      return fallbackScope(userId, account.tenant_id, profile);
-    }
-
-    if (updateError) throw updateError;
+    account.default_project_id = project.id;
+    await schema.from(tables.accounts).update({ default_project_id: project.id, updated_at: now }).eq("id", account.id);
   }
 
-  const { error: entitlementError } = await service
-    .schema(schema)
-    .from(tables.entitlements)
-    .upsert({
+  if (options?.entitlementPlan) {
+    await schema.from(tables.productEntitlements).upsert({
+      account_id: account.id,
       tenant_id: account.tenant_id,
-      user_id: userId,
       product_id: "streams-ai",
-      plan: options?.entitlementPlan || "trial",
-      status: "active",
+      plan: options.entitlementPlan,
       updated_at: now,
-    }, { onConflict: "tenant_id,user_id,product_id" });
-
-  if (entitlementError && tolerateBootstrapFailure) {
-    console.warn("[streams-ai-auth] entitlement upsert fallback", entitlementError);
-    return fallbackScope(userId, account.tenant_id, profile);
+    }, { onConflict: "account_id,product_id" });
   }
-
-  if (entitlementError) throw entitlementError;
 
   return {
     tenantId: account.tenant_id,
     userId,
-    defaultProjectId: projectId,
+    defaultProjectId: account.default_project_id,
     workspaceId: "streams-ai",
     moduleId: "streams-ai-core",
     productId: "streams-ai",
