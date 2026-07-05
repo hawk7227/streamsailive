@@ -5,6 +5,8 @@ import "./chat-message-text-fix.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 
 const MODES = ["Thinking", "Configure..."];
+const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
+const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
 
 const BASE_TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U", enabled: true },
@@ -18,6 +20,14 @@ const MOBILE_TOOL_ITEMS = [
   { id: "configure", icon: "⚙", label: "Configure...", shortcut: "/account/personalization", enabled: true },
   { id: "voice_mic", icon: "🎙", label: "Voice / Mic", shortcut: "Realtime", enabled: true },
 ];
+
+function autosizeComposerTextarea(node) {
+  if (!node) return;
+  node.style.height = "0px";
+  const nextHeight = Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT, Math.max(COMPOSER_TEXTAREA_MIN_HEIGHT, node.scrollHeight));
+  node.style.height = `${nextHeight}px`;
+  node.style.overflowY = node.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+}
 
 export default function StreamsComposer({
   onSubmit,
@@ -43,6 +53,10 @@ export default function StreamsComposer({
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    autosizeComposerTextarea(inputRef.current);
+  }, [message, selectedTool]);
 
   useEffect(() => {
     const updateMobileState = () => setIsMobileComposer(window.innerWidth < 900);
@@ -131,8 +145,10 @@ export default function StreamsComposer({
     window.dispatchEvent(new CustomEvent("streams:composer-submitted", { detail: { cleared: true, at: new Date().toISOString() } }));
     window.requestAnimationFrame(() => {
       const input = inputRef.current || document.querySelector(".streamsComposerInput");
-      if (input && input.value) {
+      if (input) {
         input.value = "";
+        input.style.height = `${COMPOSER_TEXTAREA_MIN_HEIGHT}px`;
+        input.style.overflowY = "hidden";
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }
     });
@@ -320,12 +336,19 @@ export default function StreamsComposer({
           </div>
         ) : null}
 
-        <input
+        <textarea
           ref={inputRef}
           className="streamsComposerInput"
           value={message}
           placeholder={placeholder}
-          onChange={(event) => setMessage(event.target.value)}
+          rows={1}
+          aria-label="Message Streams AI"
+          spellCheck="true"
+          onChange={(event) => {
+            setMessage(event.target.value);
+            autosizeComposerTextarea(event.target);
+          }}
+          onInput={(event) => autosizeComposerTextarea(event.currentTarget)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
