@@ -17,6 +17,16 @@ export class StreamsAIAuthError extends Error {
   status = 401;
 }
 
+type StreamsAIProfileNames = ReturnType<typeof profileNamesFromMetadata>;
+
+function emptyProfileNames(): StreamsAIProfileNames {
+  return {
+    userFirstName: null,
+    userFullName: null,
+    userDisplayName: null,
+  };
+}
+
 function tokenFromCookies(request: NextRequest): string | null {
   try {
     const cookieHeader = request.headers.get("cookie") || "";
@@ -186,7 +196,7 @@ function publicScopeOptions(reason: string) {
   };
 }
 
-function fallbackScope(userId: string, tenantId: string | null | undefined, profile: ReturnType<typeof profileNamesFromMetadata> = {}): StreamsAIScope {
+function fallbackScope(userId: string, tenantId: string | null | undefined, profile: StreamsAIProfileNames = emptyProfileNames()): StreamsAIScope {
   return {
     tenantId: tenantId || "00000000-0000-4000-8000-0000000000bb",
     userId,
@@ -262,106 +272,127 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   }
 }
 
-async function ensureStreamsAIAccountScope(
-  userId: string,
-  options: { tenantId?: string | null; projectName?: string; entitlementPlan?: string; userMetadata?: Record<string, any> | null; userEmail?: string | null } = {},
-  testMode = false,
-): Promise<StreamsAIScope> {
-  const service = streamsAISchema(createStreamsAIServiceClient());
-  const profileNames = profileNamesFromMetadata(options.userMetadata, options.userEmail);
+export async function ensureStreamsAIAccountScope(userId: string, options?: {
+  userMetadata?: Record<string, any> | null;
+  userEmail?: string | null;
+  tenantId?: string | null;
+  projectName?: string;
+  entitlementPlan?: string;
+}, tolerateBootstrapFailure = false): Promise<StreamsAIScope> {
+  const service = createStreamsAIServiceClient();
+  const now = new Date().toISOString();
+  const schema = streamsAISchema();
+  const tables = streamsAITables();
+  const profile = profileNamesFromMetadata(options?.userMetadata, options?.userEmail);
 
-  let tenantId = options.tenantId || undefined;
-
-  if (!tenantId) {
-    const { data: membership, error: membershipError } = await service
-      .from(streamsAITables.memberships)
-      .select("tenant_id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (membershipError) {
-      throw new Error(`Failed to resolve STREAMS AI membership: ${membershipError.message}`);
-    }
-
-    tenantId = membership?.tenant_id as string | undefined;
-  }
-
-  if (!tenantId) {
-    const { data: tenant, error: tenantError } = await service
-      .from(streamsAITables.tenants)
-      .insert({ name: testMode ? "STREAMS AI guest workspace" : "Personal workspace" })
-      .select("id")
-      .single();
-
-    if (tenantError || !tenant?.id) {
-      throw new Error(`Failed to create STREAMS AI tenant: ${tenantError?.message || "unknown error"}`);
-    }
-
-    tenantId = tenant.id as string;
-  }
-
-  const { error: memberUpsertError } = await service
-    .from(streamsAITables.memberships)
-    .upsert(
-      { tenant_id: tenantId, user_id: userId, role: "owner" },
-      { onConflict: "tenant_id,user_id" },
-    );
-
-  if (memberUpsertError) {
-    throw new Error(`Failed to ensure STREAMS AI membership: ${memberUpsertError.message}`);
-  }
-
-  await service
-    .from(streamsAITables.productEntitlements)
-    .upsert(
-      {
-        tenant_id: tenantId,
-        user_id: userId,
-        product_id: "streams-ai",
-        status: "active",
-        plan_id: options.entitlementPlan || "included",
-        metadata: testMode ? { guestMode: true } : {},
-      },
-      { onConflict: "tenant_id,user_id,product_id" },
-    );
-
-  const { data: project, error: projectError } = await service
-    .from(streamsAITables.projects)
-    .select("id")
-    .eq("tenant_id", tenantId)
+  let account: any = null;
+  const { data: existingAccount, error: accountReadError } = await service
+    .schema(schema)
+    .from(tables.accounts)
+    .select("id, tenant_id, default_project_id, display_name")
     .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
 
-  if (projectError) {
-    throw new Error(`Failed to resolve STREAMS AI project: ${projectError.message}`);
+  if (accountReadError && tolerateBootstrapFailure) {
+    console.warn("[streams-ai-auth] account read fallback", accountReadError);
+    return fallbackScope(userId, options?.tenantId, profile);
   }
 
-  let defaultProjectId = project?.id as string | undefined;
-  if (!defaultProjectId) {
-    const { data: createdProject, error: createProjectError } = await service
-      .from(streamsAITables.projects)
-      .insert({ tenant_id: tenantId, user_id: userId, name: options.projectName || "Default STREAMS AI project" })
+  if (accountReadError) throw accountReadError;
+
+  if (!existingAccount) {
+    const tenantId = options?.tenantId || crypto.randomUUID();
+    const { data: inserted, error: insertError } = await service
+      .schema(schema)
+      .from(tables.accounts)
+      .insert({
+        tenant_id: tenantId,
+        user_id: userId,
+        display_name: profile.userDisplayName || profile.userFullName || "Streams AI User",
+        created_at: now,
+        updated_at: now,
+        settings: {},
+      })
+      .select("id, tenant_id, default_project_id, display_name")
+      .single();
+
+    if (insertError && tolerateBootstrapFailure) {
+      console.warn("[streams-ai-auth] account insert fallback", insertError);
+      return fallbackScope(userId, tenantId, profile);
+    }
+
+    if (insertError) throw insertError;
+    account = inserted;
+  } else {
+    account = existingAccount;
+  }
+
+  let projectId = account.default_project_id as string | null;
+  if (!projectId) {
+    const { data: project, error: projectError } = await service
+      .schema(schema)
+      .from(tables.projects)
+      .insert({
+        account_id: account.id,
+        tenant_id: account.tenant_id,
+        name: options?.projectName || "STREAMS AI workspace",
+        slug: `streams-ai-${userId.slice(0, 8)}`,
+        is_default: true,
+        created_at: now,
+        updated_at: now,
+        metadata: { bootstrap: true },
+      })
       .select("id")
       .single();
 
-    if (createProjectError || !createdProject?.id) {
-      throw new Error(`Failed to create STREAMS AI project: ${createProjectError?.message || "unknown error"}`);
+    if (projectError && tolerateBootstrapFailure) {
+      console.warn("[streams-ai-auth] project insert fallback", projectError);
+      return fallbackScope(userId, account.tenant_id, profile);
     }
 
-    defaultProjectId = createdProject.id as string;
+    if (projectError) throw projectError;
+    projectId = project.id;
+
+    const { error: updateError } = await service
+      .schema(schema)
+      .from(tables.accounts)
+      .update({ default_project_id: projectId, updated_at: now })
+      .eq("id", account.id);
+
+    if (updateError && tolerateBootstrapFailure) {
+      console.warn("[streams-ai-auth] account default project update fallback", updateError);
+      return fallbackScope(userId, account.tenant_id, profile);
+    }
+
+    if (updateError) throw updateError;
   }
 
+  const { error: entitlementError } = await service
+    .schema(schema)
+    .from(tables.entitlements)
+    .upsert({
+      tenant_id: account.tenant_id,
+      user_id: userId,
+      product_id: "streams-ai",
+      plan: options?.entitlementPlan || "trial",
+      status: "active",
+      updated_at: now,
+    }, { onConflict: "tenant_id,user_id,product_id" });
+
+  if (entitlementError && tolerateBootstrapFailure) {
+    console.warn("[streams-ai-auth] entitlement upsert fallback", entitlementError);
+    return fallbackScope(userId, account.tenant_id, profile);
+  }
+
+  if (entitlementError) throw entitlementError;
+
   return {
-    tenantId,
+    tenantId: account.tenant_id,
     userId,
-    defaultProjectId: defaultProjectId || null,
+    defaultProjectId: projectId,
     workspaceId: "streams-ai",
     moduleId: "streams-ai-core",
     productId: "streams-ai",
-    ...profileNames,
+    ...profile,
   };
 }
