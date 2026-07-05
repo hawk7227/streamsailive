@@ -1,10 +1,13 @@
 /* StreamsAI composer autosize contract.
    The input surface is a multiline textarea: soft-wrap long prompts, grow with content,
-   cap at the max height, then scroll inside the textarea instead of clipping horizontally. */
+   grow the outer composer with the textarea, and only scroll internally after max height. */
 .streamsComposer {
   min-height: 76px !important;
   height: auto !important;
-  max-height: min(260px, 42dvh) !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
 
 .streamsComposerRow {
@@ -20,8 +23,9 @@
 
 .streamsComposerInput {
   display: block !important;
+  flex: 1 1 auto !important;
   min-height: 30px !important;
-  height: 30px;
+  height: auto;
   max-height: 168px !important;
   width: 100% !important;
   min-width: 0 !important;
@@ -34,7 +38,7 @@
   appearance: none !important;
   -webkit-appearance: none !important;
   padding: 2px 0 !important;
-  margin: 0 !important;
+  margin: 0 0 10px 0 !important;
   box-sizing: border-box !important;
   scrollbar-width: thin;
 }
@@ -55,17 +59,19 @@
 .streamsComposerIconButton,
 .streamsComposerSendButton {
   align-self: flex-end !important;
+  margin-bottom: 0 !important;
 }
 
 .streamsComposerPill,
 .streamsComposerMicButton {
-  align-self: center !important;
+  align-self: flex-end !important;
+  margin-bottom: 18px !important;
 }
 
 @media (max-width: 760px) {
   .streamsComposer {
     min-height: 70px !important;
-    max-height: min(240px, 44dvh) !important;
+    max-height: none !important;
   }
 
   .streamsComposerRow {
@@ -77,5 +83,11 @@
     max-height: 150px !important;
     font-size: 16px !important;
     line-height: 1.28 !important;
+    margin-bottom: 9px !important;
+  }
+
+  .streamsComposerPill,
+  .streamsComposerMicButton {
+    margin-bottom: 16px !important;
   }
 }
