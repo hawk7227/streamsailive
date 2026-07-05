@@ -186,16 +186,38 @@ function publicScopeOptions(reason: string) {
   };
 }
 
+function fallbackScope(userId: string, tenantId: string | null | undefined, profile: ReturnType<typeof profileNamesFromMetadata> = {}): StreamsAIScope {
+  return {
+    tenantId: tenantId || "00000000-0000-4000-8000-0000000000bb",
+    userId,
+    defaultProjectId: null,
+    workspaceId: "streams-ai",
+    moduleId: "streams-ai-core",
+    productId: "streams-ai",
+    ...profile,
+  };
+}
+
 export async function requireStreamsAIScope(request: NextRequest): Promise<StreamsAIScope> {
   const accessToken = bearerFromRequest(request);
 
   if (!accessToken) {
     if (publicGuestModeEnabled(request)) {
-      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest"), true);
+      try {
+        return await ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest"), true);
+      } catch (error) {
+        console.warn("[streams-ai-auth] using public fallback scope", error);
+        return fallbackScope(publicGuestUserId(), publicGuestTenantId());
+      }
     }
 
     if (isTestModeEnabled(request)) {
-      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-no-token"), true);
+      try {
+        return await ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-no-token"), true);
+      } catch (error) {
+        console.warn("[streams-ai-auth] using test fallback scope", error);
+        return fallbackScope(testUserId(), process.env.STREAMS_AI_TEST_TENANT_ID);
+      }
     }
 
     throw new StreamsAIAuthError("STREAMS AI requires an authenticated Bearer token from the main streamsailive auth session.");
@@ -205,20 +227,39 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
     if (publicGuestModeEnabled(request)) {
-      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
+      try {
+        return await ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
+      } catch (error) {
+        console.warn("[streams-ai-auth] using public invalid-token fallback scope", error);
+        return fallbackScope(publicGuestUserId(), publicGuestTenantId());
+      }
     }
 
     if (isTestModeEnabled(request)) {
-      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
+      try {
+        return await ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
+      } catch (error) {
+        console.warn("[streams-ai-auth] using test invalid-token fallback scope", error);
+        return fallbackScope(testUserId(), process.env.STREAMS_AI_TEST_TENANT_ID);
+      }
     }
 
     throw new StreamsAIAuthError(userError?.message || "Invalid STREAMS AI auth session.");
   }
 
-  return ensureStreamsAIAccountScope(userData.user.id, {
-    userMetadata: userData.user.user_metadata,
-    userEmail: userData.user.email,
-  });
+  const profile = profileNamesFromMetadata(userData.user.user_metadata, userData.user.email);
+  try {
+    return await ensureStreamsAIAccountScope(userData.user.id, {
+      userMetadata: userData.user.user_metadata,
+      userEmail: userData.user.email,
+    });
+  } catch (error) {
+    if (publicGuestModeEnabled(request) || isTestModeEnabled(request)) {
+      console.warn("[streams-ai-auth] using signed-in fallback scope", error);
+      return fallbackScope(userData.user.id, publicGuestTenantId(), profile);
+    }
+    throw error;
+  }
 }
 
 async function ensureStreamsAIAccountScope(
