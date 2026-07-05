@@ -2,9 +2,52 @@
 
 Branch: `frontend-confidence-audit-fixes`
 
-Purpose: separate runtime-active stacked files from safe dead-file cleanup candidates before merging UI behavior changes into `main`.
+Purpose: prevent developers from reusing deleted bridge files or one-off patch scripts while preserving the current approved Streams AI chat visual version.
 
-## Audit rules
+## Approved current visual version
+
+The current approved version is the dark Streams AI workspace with:
+
+- left desktop sidebar
+- centered empty state
+- purple glowing composer
+- `Ask, build, create, launch.` empty-state heading
+- composer at the bottom of the chat surface
+
+Do not redesign this look in this cleanup pass.
+
+## Current source of truth
+
+These files are required for the current approved `/streams-ai` version:
+
+- `src/app/streams-ai/page.tsx`
+- `src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx`
+- `src/app/streams-ai/StreamsAIDesktopConsole.module.css`
+- `src/app/streams-ai/StreamsAIMobileKeyboardBridge.jsx`
+- `src/app/streams-ai/StreamsAIMobileChat.module.css`
+- `src/app/streams-ai/StreamsAIMobileKeyboard.module.css`
+- `src/components/streams-ai/current-chat/StreamsClientShell.jsx`
+- `src/components/streams-ai/current-chat/new-face/composer/StreamsComposer.jsx`
+- `src/components/streams-ai/current-chat/new-face/composer/streams-composer.css`
+- `src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css`
+- `src/components/streams-ai/current-chat/new-face/composer/chat-message-text-fix.css`
+
+## Removed confusing files
+
+These files were intentionally removed from the preview branch and should not be re-created or re-imported:
+
+- `src/app/streams-ai/StreamsAIEmptyComposerPositionBridge.jsx`
+  - Reason: it used polling, `MutationObserver`, DOM measurement, and inline `!important` layout mutation to position the composer.
+  - Replacement: normal ChatPanel/composer layout ownership.
+
+- `src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx`
+  - Reason: it injected runtime CSS into the page and created a second style owner for the same desktop composer/chat layout.
+  - Replacement: desktop route rules live in `StreamsAIDesktopConsole.module.css`.
+
+- `scripts/fix-streams-ai-mobile-source-truth.js`
+  - Reason: one-off patch script for a prior repair. It is not runtime source code and can mislead future edits.
+
+## Audit rules for future cleanup
 
 - Do not delete files only because the filename looks old.
 - Treat any file imported by a live route as runtime-active.
@@ -20,58 +63,63 @@ Active route file:
 
 Current route stack after branch cleanup:
 
-- `StreamsAIDesktopVisualBridge` — active desktop CSS bridge. Still active, but now no longer forces fixed 36px textarea height.
 - `StreamsAIMobileKeyboardBridge` — active mobile viewport/keyboard variable bridge.
 - `StreamsClientShell` — real client shell/runtime owner.
 - CSS modules imported for desktop/mobile route styles.
 
-Removed from route stack on this branch:
-
-- `StreamsAIEmptyComposerPositionBridge` — deleted. It previously used a `MutationObserver`, interval polling, DOM measurement, and inline `!important` styles to reposition the composer. Composer layout is now owned by normal ChatPanel layout plus composer CSS.
-
 ## Active stack findings
 
-### 1. Desktop visual bridge
+### 1. Visual operator shell
 
-File: `src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx`
+File: `src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx`
 
-Status: ACTIVE, SIDE-EFFECT STYLE INJECTOR
-
-Risk:
-
-- Injects runtime CSS into the page.
-- Controls chat scroll, composer, composer row, buttons, attachments, and empty state.
-- Can conflict with component-owned CSS if not tightly scoped.
-
-Branch action taken:
-
-- Removed the fixed `grid-template-rows: 36px` composer layout.
-- Removed forced textarea `height: 36px` and `line-height: 36px` behavior.
-- Moved desktop composer into normal ChatPanel grid flow instead of overlay/fixed behavior.
-
-Follow-up recommendation:
-
-- Move the remaining bridge CSS into the real shell/component stylesheet or CSS module.
-- Delete this bridge once the shell owns all desktop route styles.
-
-### 2. Mobile keyboard bridge
-
-File: `src/app/streams-ai/StreamsAIMobileKeyboardBridge.jsx`
-
-Status: ACTIVE, ACCEPTABLE NARROW SIDE-EFFECT
+Status: ACTIVE, CURRENT VISUAL SOURCE
 
 Risk:
 
-- Writes only `--keyboard` and toggles a keyboard class.
-- Listens to viewport and focus events.
+- Many components are compressed into one long file.
+- Inline `styles` string controls large parts of layout.
+- Hard to review and patch safely.
 
-Keep for now because the responsibility is narrow and mobile keyboard behavior is platform-specific.
+Keep for now because it currently renders the approved visual version.
 
 Follow-up recommendation:
 
-- Keep as the only keyboard sidecar unless this behavior is moved into the shell runtime.
+- Split into:
+  - `StreamsOperatorShell.jsx`
+  - `ChatPanel.jsx`
+  - `SidebarNav.jsx`
+  - `MobileDrawer.jsx`
+  - `InlineBuildPanel.jsx`
+  - `streams-operator-shell.css`
 
-### 3. Client shell fetch bridge
+### 2. Desktop route CSS
+
+File: `src/app/streams-ai/StreamsAIDesktopConsole.module.css`
+
+Status: ACTIVE, ROUTE STYLE OWNER
+
+This file now owns the desktop route style overrides that were previously in the deleted desktop visual bridge.
+
+Keep for now because it helps preserve the approved desktop visual version.
+
+### 3. Composer visual style
+
+File: `src/components/streams-ai/current-chat/new-face/composer/streams-composer.css`
+
+Status: ACTIVE, COMPOSER VISUAL OWNER
+
+This file creates the approved purple glowing composer visual style. Do not delete it.
+
+### 4. Composer layout behavior patch
+
+File: `src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css`
+
+Status: ACTIVE, COMPOSER AUTOSIZE CONTRACT
+
+This file provides multiline textarea wrapping/growth behavior. Keep it until its rules are merged into `streams-composer.css` and visually checked.
+
+### 5. Client shell fetch bridge
 
 File: `src/components/streams-ai/current-chat/StreamsClientShell.jsx`
 
@@ -93,66 +141,6 @@ Follow-up recommendation:
   - `attachAuthHeaders()`
   - `attachReadableFileContext()`
 
-### 4. Composer stack
-
-Files:
-
-- `src/components/streams-ai/current-chat/new-face/composer/StreamsComposer.jsx`
-- `src/components/streams-ai/current-chat/new-face/composer/streams-composer.css`
-- `src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css`
-- `src/components/streams-ai/current-chat/new-face/composer/chat-message-text-fix.css`
-
-Status: ACTIVE, STACKED CSS OWNERSHIP
-
-Risk:
-
-- Multiple CSS files affect composer/message behavior.
-- `layout-fix` files are historically risky because they often override real component styles.
-
-Branch action taken:
-
-- `StreamsComposer.jsx` owns textarea autosize logic.
-- `streams-composer-layout-fix.css` owns explicit textarea soft-wrap/growth behavior.
-- Desktop bridge no longer fights textarea growth.
-
-Follow-up recommendation:
-
-- Merge stable rules from `streams-composer-layout-fix.css` back into `streams-composer.css`.
-- Delete `streams-composer-layout-fix.css` once stable.
-- Audit `chat-message-text-fix.css` separately before deletion because it may affect live message readability.
-
-### 5. Visual operator shell
-
-File: `src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx`
-
-Status: ACTIVE, OVER-COMPRESSED SOURCE FILE
-
-Risk:
-
-- Many components are compressed into one long file.
-- Inline `styles` string controls large parts of layout.
-- Hard to review and patch safely.
-
-Follow-up recommendation:
-
-- Split into:
-  - `StreamsOperatorShell.jsx`
-  - `ChatPanel.jsx`
-  - `SidebarNav.jsx`
-  - `MobileDrawer.jsx`
-  - `InlineBuildPanel.jsx`
-  - `streams-operator-shell.css`
-
-## Dead/safe cleanup performed on this branch
-
-### Deleted
-
-- `src/app/streams-ai/StreamsAIEmptyComposerPositionBridge.jsx`
-  - Reason: disabled and removed from `/streams-ai/page.tsx`; previous behavior was high-risk DOM polling/inline style mutation.
-
-- `scripts/fix-streams-ai-mobile-source-truth.js`
-  - Reason: one-off patch script for prior source-truth repair; no search hit indicated it is imported or called by runtime. Keeping it increases future patch confusion.
-
 ## Do-not-delete without deeper audit
 
 - API routes under `src/app/api/**`
@@ -165,9 +153,8 @@ Follow-up recommendation:
 
 ## Next cleanup phase
 
-1. Move remaining desktop bridge CSS into a real stylesheet owned by the shell.
-2. Delete `StreamsAIDesktopVisualBridge.jsx` only after no import remains.
-3. Refactor global `window.fetch` patch into explicit API clients.
-4. Split `StreamsOperatorShell.jsx` into auditable components.
-5. Consolidate composer CSS files after visual approval.
-6. Run build, route test, keyboard test, zoom test, and mobile keyboard test.
+1. Do not delete more `/streams-ai` runtime files until visual behavior is approved.
+2. Keep the purple composer visual version.
+3. Split `StreamsOperatorShell.jsx` into auditable components without visual change.
+4. Merge `streams-composer-layout-fix.css` into `streams-composer.css` only after visual approval.
+5. Refactor global `window.fetch` patch into explicit API clients in a separate PR.
