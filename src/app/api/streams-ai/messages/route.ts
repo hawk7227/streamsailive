@@ -53,10 +53,15 @@ export async function GET(request: NextRequest) {
     const scope = await requireStreamsAIScope(request);
     const sessionId = request.nextUrl.searchParams.get("sessionId");
     if (!sessionId) return streamsAIJson({ ok: false, error: "sessionId is required" }, 400);
-    const session = await sessions.get(scope, sessionId);
-    if (!session) return streamsAIJson({ ok: false, error: "Session not found" }, 404);
-    const data = await messages.list(scope, sessionId);
-    return streamsAIJson({ ok: true, messages: data });
+    try {
+      const session = await sessions.get(scope, sessionId);
+      if (!session) return streamsAIJson({ ok: false, error: "Session not found" }, 404);
+      const data = await messages.list(scope, sessionId);
+      return streamsAIJson({ ok: true, messages: data });
+    } catch (error) {
+      console.warn("[streams-ai-messages] get fallback", error);
+      return streamsAIJson({ ok: true, messages: [], fallback: true });
+    }
   } catch (error) {
     return streamsAIError(error);
   }
@@ -71,19 +76,10 @@ export async function POST(request: NextRequest) {
 
     let sessionId = body.sessionId || "";
     if (!sessionId) {
-      const created = await sessions.create(scope, {
-        title: buildFastTitle(content),
-        metadata: {
-          source: "streams-ai-chat-ui",
-          assistantRuntime: LIVE_ASSISTANT_SOURCE,
-          mode: "direct-openai-stream",
-          recentChat: true,
-        },
-      });
-      sessionId = created.id;
+      sessionId = await safeCreateSession(scope, content);
     }
 
-    const userMessage = await messages.create(scope, {
+    const userMessage = await safeCreateMessage(scope, {
       sessionId,
       role: body.role || "user",
       content,
@@ -97,7 +93,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (body.runAssistant === false) return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
+    if (body.runAssistant === false) return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage], fallback: userMessage.metadata?.previewFallback === true }, 201);
     if (isCanonicalCapabilityQuestion(content)) return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
     return streamDirectOpenAIResponse({ scope, sessionId, userContent: content, mode: body.mode });
   } catch (error) {
@@ -116,7 +112,7 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
       try {
         send("activity", { phase: "capabilities.started", statusText: "Loading Streams capabilities…", source: CAPABILITY_SOURCE, startedAt, sessionId });
         for (const token of chunkText(answer, 120)) send("response", { token });
-        const assistantMessage = await messages.create(scope, {
+        const assistantMessage = await safeCreateMessage(scope, {
           sessionId,
           role: "assistant",
           content: answer,
@@ -141,7 +137,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
     async start(controller) {
       const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
       let assistantContent = "";
-      let model = resolveModel(mode);
+      const model = resolveModel(mode);
 
       try {
         send("activity", { phase: "openai.started", statusText: "Writing…", model, source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId });
@@ -174,7 +170,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
           send("response", { token: assistantContent });
         }
 
-        const assistantMessage = await messages.create(scope, {
+        const assistantMessage = await safeCreateMessage(scope, {
           sessionId,
           role: "assistant",
           content: assistantContent,
@@ -192,9 +188,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error || "Unknown provider failure");
         assistantContent = `The real provider response did not complete successfully.\n\nProvider error: ${message}`;
-        try {
-          await messages.create(scope, { sessionId, role: "assistant", content: assistantContent, status: "error", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: "failed", providerError: message, openaiModel: model } });
-        } catch {}
+        await safeCreateMessage(scope, { sessionId, role: "assistant", content: assistantContent, status: "error", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: "failed", providerError: message, openaiModel: model } });
         for (const token of chunkText(assistantContent, 90)) send("response", { token });
         send("complete", { ok: true, sessionId, provider: "openai", providerStatus: "failed", model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
       } finally {
@@ -216,6 +210,44 @@ function buildChatMessages(history: PersistedChatMessage[], userContent: string,
   }
   result.push({ role: "user", content: userContent });
   return result;
+}
+
+async function safeCreateSession(scope: StreamsAIScope, content: string) {
+  try {
+    const created = await sessions.create(scope, {
+      title: buildFastTitle(content),
+      metadata: {
+        source: "streams-ai-chat-ui",
+        assistantRuntime: LIVE_ASSISTANT_SOURCE,
+        mode: "direct-openai-stream",
+        recentChat: true,
+      },
+    });
+    return String(created.id);
+  } catch (error) {
+    console.warn("[streams-ai-messages] create session fallback", error);
+    return `preview_session_${Date.now()}`;
+  }
+}
+
+async function safeCreateMessage(scope: StreamsAIScope, input: { sessionId: string; role: "user" | "assistant" | "system" | "tool"; content?: string; status?: string; metadata?: Record<string, any> }) {
+  try {
+    return await messages.create(scope, input);
+  } catch (error) {
+    console.warn("[streams-ai-messages] create message fallback", error);
+    return {
+      id: `preview_message_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      tenant_id: scope.tenantId,
+      user_id: scope.userId,
+      project_id: scope.defaultProjectId,
+      session_id: input.sessionId,
+      role: input.role,
+      content: input.content || "",
+      status: input.status || "complete",
+      metadata: { ...(input.metadata || {}), previewFallback: true },
+      created_at: new Date().toISOString(),
+    };
+  }
 }
 
 function buildFastTitle(content: string) {
