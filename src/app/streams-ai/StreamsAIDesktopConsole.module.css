@@ -16,6 +16,26 @@
     z-index: 30 !important;
   }
 
+  :global(.shell.desktop .msg.user .bubble) {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18) !important;
+    padding: 14px 18px !important;
+    font-size: 17px !important;
+    line-height: 1.35 !important;
+    font-weight: 550 !important;
+    letter-spacing: -0.01em !important;
+    text-shadow: none !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+  }
+
+  :global(.shell.desktop .msg.user) {
+    max-width: min(640px, 82%) !important;
+  }
+
   :global(.shell.desktop .streamsComposer) {
     min-height: 52px !important;
     padding: 5px !important;
