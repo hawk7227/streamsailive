@@ -196,6 +196,8 @@ export async function resolveStreamsAIAuthScope(request: NextRequest): Promise<S
   }
 }
 
+export const requireStreamsAIScope = resolveStreamsAIAuthScope;
+
 export async function ensureStreamsAIAccountScope(userId: string, options?: {
   userMetadata?: Record<string, any> | null;
   userEmail?: string | null;
