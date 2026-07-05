@@ -1,1 +1,81 @@
-/* Disabled: previous override used mobile :has() and heavy glow rules that could freeze mobile browsers. Base composer styles remain active. */
+/* StreamsAI composer autosize contract.
+   The input surface is a multiline textarea: soft-wrap long prompts, grow with content,
+   cap at the max height, then scroll inside the textarea instead of clipping horizontally. */
+.streamsComposer {
+  min-height: 76px !important;
+  height: auto !important;
+  max-height: min(260px, 42dvh) !important;
+}
+
+.streamsComposerRow {
+  min-height: 58px !important;
+  height: auto !important;
+  align-items: flex-end !important;
+  flex-wrap: nowrap !important;
+}
+
+.streamsComposerRow::before {
+  inset: -1px -3px -1px -3px !important;
+}
+
+.streamsComposerInput {
+  display: block !important;
+  min-height: 30px !important;
+  height: 30px;
+  max-height: 168px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  resize: none !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  padding: 2px 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin;
+}
+
+.streamsComposerInput::-webkit-scrollbar {
+  width: 6px;
+}
+
+.streamsComposerInput::-webkit-scrollbar-thumb {
+  background: rgba(192, 132, 252, 0.34);
+  border-radius: 999px;
+}
+
+.streamsComposerInput::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.streamsComposerIconButton,
+.streamsComposerSendButton {
+  align-self: flex-end !important;
+}
+
+.streamsComposerPill,
+.streamsComposerMicButton {
+  align-self: center !important;
+}
+
+@media (max-width: 760px) {
+  .streamsComposer {
+    min-height: 70px !important;
+    max-height: min(240px, 44dvh) !important;
+  }
+
+  .streamsComposerRow {
+    min-height: 54px !important;
+    gap: 6px !important;
+  }
+
+  .streamsComposerInput {
+    max-height: 150px !important;
+    font-size: 16px !important;
+    line-height: 1.28 !important;
+  }
+}
