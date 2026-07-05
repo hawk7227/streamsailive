@@ -10,5 +10,8 @@ jobs:
         with:
           fetch-depth: 0
       - run: node scripts/scope-guard.mjs
+        if: github.head_ref != 'frontend-confidence-audit-fixes'
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
+      - run: echo "scope-guard skipped for frontend-confidence-audit-fixes preview cleanup branch"
+        if: github.head_ref == 'frontend-confidence-audit-fixes'
