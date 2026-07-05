@@ -1,5 +1,0 @@
-import OpusLockedFrame from "../../../components/streams/opus-frame/OpusLockedFrame";
-
-export default function Page() {
-  return <OpusLockedFrame />;
-}

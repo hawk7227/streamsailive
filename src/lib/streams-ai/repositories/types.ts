@@ -19,7 +19,7 @@ export type UpdateSessionInput = {
 export type CreateMessageInput = {
   sessionId: string;
   role: "user" | "assistant" | "system" | "tool";
-  content: string;
+  content?: string;
   status?: string;
   metadata?: Record<string, unknown>;
 };
