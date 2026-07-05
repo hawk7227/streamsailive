@@ -21,18 +21,47 @@ export default function StreamsAIDesktopVisualBridge() {
           pointer-events: none !important;
         }
 
+        .shell.desktop .chatPanel,
+        .shell.expanded .chatPanel,
+        .shell.collapsed .chatPanel {
+          height: 100% !important;
+          min-height: 0 !important;
+          display: grid !important;
+          grid-template-rows: minmax(0, 1fr) auto !important;
+          overflow: hidden !important;
+          position: relative !important;
+        }
+
         .shell.desktop .chatScroll,
         .shell.expanded .chatScroll,
         .shell.collapsed .chatScroll {
-          padding-top: 28px !important;
-          padding-bottom: 138px !important;
-          scroll-padding-bottom: 138px !important;
+          min-height: 0 !important;
+          height: auto !important;
+          overflow: auto !important;
+          padding: 28px 32px 22px !important;
+          scroll-padding-bottom: 24px !important;
+        }
+
+        .shell.desktop .composer,
+        .shell.expanded .composer,
+        .shell.collapsed .composer {
+          position: relative !important;
+          left: auto !important;
+          right: auto !important;
+          top: auto !important;
+          bottom: auto !important;
+          width: min(1120px, calc(100% - 48px)) !important;
+          min-width: 0 !important;
+          max-width: calc(100% - 48px) !important;
+          transform: none !important;
+          z-index: 5 !important;
+          margin: 0 auto 24px !important;
         }
 
         .shell.desktop .empty,
         .shell.expanded .empty,
         .shell.collapsed .empty {
-          margin: 42px auto auto !important;
+          margin: auto !important;
           max-width: 430px !important;
           text-align: center !important;
         }
@@ -77,23 +106,13 @@ export default function StreamsAIDesktopVisualBridge() {
           margin: 14px auto 0 !important;
         }
 
-        .shell.desktop .composer,
-        .shell.expanded .composer,
-        .shell.collapsed .composer {
-          left: 50% !important;
-          right: auto !important;
-          bottom: 24px !important;
-          width: min(1120px, calc(100vw - 520px)) !important;
-          min-width: 640px !important;
-          transform: translateX(-50%) !important;
-          z-index: 90 !important;
-        }
-
         .shell.desktop .streamsComposer,
         .shell.expanded .streamsComposer,
         .shell.collapsed .streamsComposer {
-          min-height: 52px !important;
-          padding: 6px !important;
+          min-height: 58px !important;
+          height: auto !important;
+          max-height: none !important;
+          padding: 8px !important;
           border-radius: 22px !important;
           border: 1px solid rgba(168,85,247,.45) !important;
           background: rgba(49,18,89,.78) !important;
@@ -116,14 +135,68 @@ export default function StreamsAIDesktopVisualBridge() {
         .shell.desktop .streamsComposerRow,
         .shell.expanded .streamsComposerRow,
         .shell.collapsed .streamsComposerRow {
-          min-height: 36px !important;
+          min-height: 42px !important;
+          height: auto !important;
           display: grid !important;
           grid-template-columns: 36px minmax(0,1fr) auto 34px 42px !important;
-          grid-template-rows: 36px !important;
           grid-template-areas: "tools input mode mic send" !important;
-          align-items: center !important;
+          align-items: end !important;
           gap: 7px !important;
           padding: 0 !important;
+        }
+
+        .shell.desktop .streamsComposerInput,
+        .shell.expanded .streamsComposerInput,
+        .shell.collapsed .streamsComposerInput {
+          grid-area: input !important;
+          min-height: 30px !important;
+          height: auto;
+          max-height: 168px !important;
+          min-width: 0 !important;
+          width: 100% !important;
+          border: 0 !important;
+          outline: none !important;
+          background: transparent !important;
+          color: #fff !important;
+          box-shadow: none !important;
+          font-size: 14px !important;
+          line-height: 1.35 !important;
+          font-weight: 760 !important;
+          letter-spacing: 0 !important;
+          text-shadow: none !important;
+          transform: none !important;
+          white-space: pre-wrap !important;
+          overflow-wrap: anywhere !important;
+          word-break: break-word !important;
+          resize: none !important;
+          overflow-x: hidden !important;
+          padding: 8px 0 7px !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
+        }
+
+        .shell.desktop .streamsComposerInput::placeholder,
+        .shell.expanded .streamsComposerInput::placeholder,
+        .shell.collapsed .streamsComposerInput::placeholder {
+          color: #fff !important;
+          opacity: .92 !important;
+          font-weight: 800 !important;
+        }
+
+        .shell.desktop .streamsComposerIconButton,
+        .shell.expanded .streamsComposerIconButton,
+        .shell.collapsed .streamsComposerIconButton,
+        .shell.desktop .streamsComposerSendButton,
+        .shell.expanded .streamsComposerSendButton,
+        .shell.collapsed .streamsComposerSendButton,
+        .shell.desktop .streamsComposerMicButton,
+        .shell.expanded .streamsComposerMicButton,
+        .shell.collapsed .streamsComposerMicButton,
+        .shell.desktop .streamsComposerPill,
+        .shell.expanded .streamsComposerPill,
+        .shell.collapsed .streamsComposerPill {
+          align-self: end !important;
+          margin: 0 !important;
         }
 
         .shell.desktop .streamsComposerIconButton,
@@ -142,33 +215,6 @@ export default function StreamsAIDesktopVisualBridge() {
           font-weight: 900 !important;
           display: grid !important;
           place-items: center !important;
-        }
-
-        .shell.desktop .streamsComposerInput,
-        .shell.expanded .streamsComposerInput,
-        .shell.collapsed .streamsComposerInput {
-          grid-area: input !important;
-          height: 36px !important;
-          min-width: 0 !important;
-          border: 0 !important;
-          outline: none !important;
-          background: transparent !important;
-          color: #fff !important;
-          box-shadow: none !important;
-          font-size: 12px !important;
-          line-height: 36px !important;
-          font-weight: 800 !important;
-          letter-spacing: 0 !important;
-          text-shadow: none !important;
-          transform: none !important;
-        }
-
-        .shell.desktop .streamsComposerInput::placeholder,
-        .shell.expanded .streamsComposerInput::placeholder,
-        .shell.collapsed .streamsComposerInput::placeholder {
-          color: #fff !important;
-          opacity: .92 !important;
-          font-weight: 800 !important;
         }
 
         .shell.desktop .streamsComposerPill,
@@ -196,7 +242,6 @@ export default function StreamsAIDesktopVisualBridge() {
           grid-area: mic !important;
           width: 34px !important;
           height: 34px !important;
-          margin: 0 !important;
           padding: 0 !important;
           border: 0 !important;
           border-radius: 999px !important;
