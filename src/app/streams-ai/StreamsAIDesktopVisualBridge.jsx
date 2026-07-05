@@ -25,8 +25,8 @@ export default function StreamsAIDesktopVisualBridge() {
         .shell.expanded .chatScroll,
         .shell.collapsed .chatScroll {
           padding-top: 28px !important;
-          padding-bottom: 138px !important;
-          scroll-padding-bottom: 138px !important;
+          padding-bottom: 28px !important;
+          scroll-padding-bottom: 28px !important;
         }
 
         .shell.desktop .empty,
@@ -80,12 +80,6 @@ export default function StreamsAIDesktopVisualBridge() {
         .shell.desktop .composer,
         .shell.expanded .composer,
         .shell.collapsed .composer {
-          left: 50% !important;
-          right: auto !important;
-          bottom: 24px !important;
-          width: min(1120px, calc(100vw - 520px)) !important;
-          min-width: 640px !important;
-          transform: translateX(-50%) !important;
           z-index: 90 !important;
         }
 
@@ -116,12 +110,12 @@ export default function StreamsAIDesktopVisualBridge() {
         .shell.desktop .streamsComposerRow,
         .shell.expanded .streamsComposerRow,
         .shell.collapsed .streamsComposerRow {
-          min-height: 36px !important;
+          min-height: 44px !important;
           display: grid !important;
           grid-template-columns: 36px minmax(0,1fr) auto 34px 42px !important;
-          grid-template-rows: 36px !important;
+          grid-template-rows: auto !important;
           grid-template-areas: "tools input mode mic send" !important;
-          align-items: center !important;
+          align-items: end !important;
           gap: 7px !important;
           padding: 0 !important;
         }
@@ -148,19 +142,24 @@ export default function StreamsAIDesktopVisualBridge() {
         .shell.expanded .streamsComposerInput,
         .shell.collapsed .streamsComposerInput {
           grid-area: input !important;
-          height: 36px !important;
+          height: auto !important;
+          min-height: 36px !important;
+          max-height: 168px !important;
           min-width: 0 !important;
           border: 0 !important;
           outline: none !important;
           background: transparent !important;
           color: #fff !important;
           box-shadow: none !important;
-          font-size: 12px !important;
-          line-height: 36px !important;
+          font-size: 13px !important;
+          line-height: 1.35 !important;
           font-weight: 800 !important;
           letter-spacing: 0 !important;
           text-shadow: none !important;
           transform: none !important;
+          resize: none !important;
+          overflow-y: auto !important;
+          padding: 9px 0 !important;
         }
 
         .shell.desktop .streamsComposerInput::placeholder,
