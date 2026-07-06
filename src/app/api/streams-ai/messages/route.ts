@@ -23,7 +23,7 @@ const MAX_ATTACHMENT_CONTEXT_CHARS = 36000;
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
-type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] };
+type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[]; statusText: string };
 
 const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a provider-agnostic AI business operator inside Streams.",
@@ -169,7 +169,9 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
         } else {
           const client = new OpenAI({ apiKey });
           const history = await getHistoryForPrompt(scope, persistedSessionId, userContent);
+          if (body.attachments?.length) send("activity", { phase: "attachments.reading", statusText: body.attachments.length === 1 ? "Reading attached file…" : `Reading ${body.attachments.length} attached files…`, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId });
           const attachmentContext = await buildAttachmentContext(scope, body, persistedSessionId);
+          if (attachmentContext.statusText) send("activity", { phase: "attachments.ready", statusText: attachmentContext.statusText, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId });
           const openaiMessages = buildChatMessages(history, userContent, scope, attachmentContext);
           const openaiStream = await client.chat.completions.create({ model, messages: openaiMessages, stream: true, temperature: 0.7 });
           for await (const part of openaiStream) {
@@ -240,7 +242,7 @@ function buildUserMetadata(body: ChatPostBody) {
 
 async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string): Promise<AttachmentContext> {
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
-  if (!attachments.length) return { text: "", imageParts: [] };
+  if (!attachments.length) return { text: "", imageParts: [], statusText: "" };
   const assetRows = sessionId ? await assets.list(scope, { sessionId }).catch(() => []) : [];
   const byId = new Map<string, any>();
   const byName = new Map<string, any>();
@@ -249,6 +251,9 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     if (row?.name) byName.set(String(row.name), row);
   }
   let used = 0;
+  let imageCount = 0;
+  let readableCount = 0;
+  let pendingCount = 0;
   const sections: string[] = [];
   const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] = [];
   for (let index = 0; index < attachments.length; index += 1) {
@@ -264,8 +269,13 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
     const isImage = String(merged.kind || input.kind || "").toLowerCase() === "image" || mime.startsWith("image/");
     const signedImageUrl = isImage ? await resolveImageUrl(merged).catch(() => "") : "";
-    if (signedImageUrl) imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } });
+    if (signedImageUrl) {
+      imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } });
+      imageCount += 1;
+    }
     const readable = [summary ? `Summary: ${summary}` : "", textPreview ? `Extracted text preview:\n${textPreview}` : ""].filter(Boolean).join("\n\n");
+    if (readable) readableCount += 1;
+    if (!readable && !signedImageUrl) pendingCount += 1;
     const statusLine = signedImageUrl ? "vision_input_available" : readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
     let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction status: ${statusLine}`].join("\n");
     if (signedImageUrl) block += "\n\nImage is attached as a vision input for direct visual review.";
@@ -276,25 +286,31 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     used += block.length;
     sections.push(block);
   }
+  const statusText = imageCount ? `Inspecting ${imageCount} image${imageCount === 1 ? "" : "s"}…` : readableCount ? `Reading ${readableCount} extracted file${readableCount === 1 ? "" : "s"}…` : pendingCount ? `Checking ${pendingCount} attachment${pendingCount === 1 ? "" : "s"}…` : "";
   return {
     text: sections.length ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\nUse the attached file context above when answering. If readable_context_available or vision_input_available is present, do not say you cannot access the file.` : "",
     imageParts,
+    statusText,
   };
 }
 
+function absoluteHttpUrl(value: unknown) {
+  const text = String(value || "").trim();
+  return /^https?:\/\//i.test(text) ? text : "";
+}
 async function resolveImageUrl(asset: any) {
   const mime = String(asset.mimeType || asset.mime_type || "");
   if (!mime.startsWith("image/")) return "";
-  if (asset.publicUrl || asset.public_url || asset.url) return String(asset.publicUrl || asset.public_url || asset.url);
   const bucket = asset.storageBucket || asset.storage_bucket || "";
   const path = asset.storagePath || asset.storage_path || "";
-  if (!bucket || !path) return "";
-  const { data, error } = await createStreamsAIServiceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
-  if (error || !data?.signedUrl) return "";
-  return data.signedUrl;
+  if (bucket && path) {
+    const { data, error } = await createStreamsAIServiceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+  return absoluteHttpUrl(asset.publicUrl || asset.public_url || asset.url);
 }
 
-function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext: AttachmentContext = { text: "", imageParts: [] }): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext: AttachmentContext = { text: "", imageParts: [], statusText: "" }): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt(scope) }];
   const usable = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
   for (const message of usable) {
