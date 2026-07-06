@@ -10,6 +10,8 @@ const ACTIVITY_LABELS = {
   file: {
     starting: ["Reading attached file…", "The attachment is being prepared."],
     uploading: ["Reading attached file…", "The attachment is being uploaded."],
+    reading: ["Reading attached file…", "The attachment is being read."],
+    extracting: ["Text extracted", "Readable attachment text is available."],
     complete: ["Files ready", "The file is ready."],
     error: ["Upload failed", "The upload did not complete successfully."],
   },
@@ -24,14 +26,29 @@ const ACTIVITY_LABELS = {
     starting: ["Rendering video…", "I’m setting up your video request now."],
     rendering: ["Rendering video…", "Your video is actively being created."],
     polling: ["Rendering video…", "I’m preparing the finished video output."],
+    frames: ["Sampling frames…", "Video frame sampling is active."],
     complete: ["Video ready", "Your generated video is ready."],
     error: ["Video failed", "The video request did not complete successfully."],
+  },
+  audio: {
+    starting: ["Transcribing audio…", "Audio transcription is active."],
+    transcribing: ["Transcribing audio…", "Audio transcription is active."],
+    complete: ["Files ready", "The audio file is ready."],
+    error: ["Upload failed", "The audio request failed."],
   },
   tool: {
     starting: ["Searching the web…", "The web search is starting."],
     thinking: ["Searching the web…", "The web search is running."],
+    received: ["Received app response", "A tool or app response was received."],
     complete: ["Search complete", "The web search is complete."],
     error: ["Search failed", "The web search did not complete successfully."],
+  },
+  build: {
+    starting: ["Running checks…", "Build or verification checks are running."],
+    checking: ["Running checks…", "Build or verification checks are running."],
+    deploying: ["Deploying…", "Deployment has started."],
+    complete: ["Ready", "The build step is complete."],
+    error: ["Ready", "The build step failed."],
   },
   link: {
     starting: ["Writing…", "The link request is being handled."],
