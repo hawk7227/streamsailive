@@ -4,6 +4,17 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import "./chat-markdown.css";
 
+const STREAM_PACING = {
+  largeDeltaThresholdChars: 220,
+  sentenceChunkMaxChars: 180,
+  lineChunkMaxChars: 160,
+  fallbackChunkMaxChars: 120,
+  minimumChunkDelayMs: 24,
+  maximumChunkDelayMs: 72,
+  millisecondsPerCharacter: 0.55,
+  autoScrollOnlyWithinPx: 220,
+};
+
 function normalizeMarkdownContent(content) {
   return String(content || "")
     .replace(/\r\n/g, "\n")
@@ -22,10 +33,13 @@ function getSafeHref(href = "") {
 function makeReadableChunks(text = "") {
   const value = String(text || "");
   const pieces = [];
-  const pattern = /([^.!?\n]{1,180}[.!?]\s+|[^\n]{1,160}\n+|\S.{0,120}(?:\s+|$))/g;
+  const pattern = new RegExp(
+    `([^.!?\\n]{1,${STREAM_PACING.sentenceChunkMaxChars}}[.!?]\\s+|[^\\n]{1,${STREAM_PACING.lineChunkMaxChars}}\\n+|\\S.{0,${STREAM_PACING.fallbackChunkMaxChars}}(?:\\s+|$))`,
+    "g",
+  );
   let match;
   while ((match = pattern.exec(value))) pieces.push(match[0]);
-  return pieces.length ? pieces : value.match(/[\s\S]{1,120}/g) || [];
+  return pieces.length ? pieces : value.match(new RegExp(`[\\s\\S]{1,${STREAM_PACING.fallbackChunkMaxChars}}`, "g")) || [];
 }
 
 function scrollStreamingMessage() {
@@ -39,7 +53,7 @@ function scrollStreamingMessage() {
     const node = nodes[0];
     if (!node) return;
     const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
-    if (distance < 220) node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    if (distance < STREAM_PACING.autoScrollOnlyWithinPx) node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
   });
 }
 
@@ -150,7 +164,7 @@ function ChatMarkdownMessage({ content }) {
     const delta = fullMarkdown.slice(previous.length);
     if (!delta) return undefined;
 
-    if (delta.length < 220) {
+    if (delta.length < STREAM_PACING.largeDeltaThresholdChars) {
       setDisplayMarkdown(fullMarkdown);
       scrollStreamingMessage();
       return undefined;
@@ -168,7 +182,10 @@ function ChatMarkdownMessage({ content }) {
       setDisplayMarkdown(current);
       scrollStreamingMessage();
       if (index < chunks.length) {
-        const delay = Math.max(24, Math.min(72, next.length * 0.55));
+        const delay = Math.max(
+          STREAM_PACING.minimumChunkDelayMs,
+          Math.min(STREAM_PACING.maximumChunkDelayMs, next.length * STREAM_PACING.millisecondsPerCharacter),
+        );
         timerRef.current = window.setTimeout(step, delay);
       }
     };
