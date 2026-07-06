@@ -5,7 +5,7 @@ const ACTIVITY_LABELS = {
     starting: ["Writing…", "The live assistant is preparing a response."],
     streaming: ["Writing…", "The answer is streaming."],
     complete: ["Ready", "The response is ready."],
-    error: ["Upload failed", "The request did not complete successfully."],
+    error: ["Ready", "The request did not complete successfully."],
   },
   file: {
     starting: ["Reading attached file…", "The attachment is being prepared."],
@@ -37,13 +37,13 @@ const ACTIVITY_LABELS = {
     starting: ["Writing…", "The link request is being handled."],
     thinking: ["Writing…", "The link request is being handled."],
     complete: ["Ready", "The link request is complete."],
-    error: ["Upload failed", "The link request did not complete successfully."],
+    error: ["Ready", "The link request did not complete successfully."],
   },
   artifact: {
     starting: ["Writing…", "The artifact request is starting."],
     rendering: ["Writing…", "The artifact request is running."],
     complete: ["Ready", "The artifact is ready."],
-    error: ["Upload failed", "The artifact request did not complete successfully."],
+    error: ["Ready", "The artifact request did not complete successfully."],
   },
 };
 
@@ -55,6 +55,12 @@ function parseCreateActivityArgs(arg1, arg2, arg3) {
   return {};
 }
 
+function statusStyle(phase) {
+  if (phase === "error" || phase === "failed") return "error";
+  if (phase === "complete") return "success";
+  return "subtle";
+}
+
 export function createActivity(arg1 = {}, arg2, arg3) {
   const input = parseCreateActivityArgs(arg1, arg2, arg3);
   const mode = input.mode || "chat";
@@ -64,15 +70,20 @@ export function createActivity(arg1 = {}, arg2, arg3) {
   const [fallbackTitle, subtitle] = group[phase] || group.starting;
   const requested = normalizeStatusText(input.statusText || fallbackTitle);
   const statusText = canShowStreamsStatus(requested) ? requested : fallbackTitle;
+  const visible = canShowStreamsStatus(statusText);
 
   return {
     id: `activity_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     mode: safeMode,
+    source: input.source || safeMode,
     phase,
     title: statusText,
     subtitle,
     statusText,
-    visible: canShowStreamsStatus(statusText),
+    detail: input.detail || "",
+    backendProof: input.backendProof || null,
+    visible,
+    style: input.style || statusStyle(phase),
     createdAt: new Date().toISOString(),
   };
 }
