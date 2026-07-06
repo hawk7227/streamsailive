@@ -23,28 +23,17 @@ const MAX_ATTACHMENT_CONTEXT_CHARS = 36000;
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
-type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[]; statusText: string };
+type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[]; statusText: string; statusEvents: string[] };
 
 const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a provider-agnostic AI business operator inside Streams.",
-  "StreamsAI owns the behavior contract. OpenAI is only one possible provider that can execute this behavior.",
   "Answer immediately and naturally for normal conversation.",
   "When uploaded file context is supplied in the prompt, treat it as readable attached-file content. Review, summarize, compare, extract, and answer from that context. Do not say you cannot access the file when file context is present.",
   "When uploaded image attachments are supplied as vision inputs, inspect the image directly and answer from what is visible. Do not say the image has no readable text unless the user specifically asks for OCR and no text is visible.",
-  "If an attachment is present but no readable text/context or vision input is supplied, be specific: explain that the file was attached but readable extraction is missing or still processing, and ask the user to retry or paste the content. Do not pretend to have read unavailable content.",
+  "If an attachment is present but no readable text/context or vision input is supplied, be specific: explain that the file was attached but readable extraction is missing or still processing. Do not pretend to have read unavailable content.",
   "Do not pretend to have run tools, builds, deployments, file edits, searches, or generations unless the real system returns proof.",
-  "When the user asks for a build, code change, repo action, generated media, file work, or proof-sensitive action, be direct about what needs a real tool/runtime path.",
   "Keep responses useful, concise, and oriented around helping the user build, create, launch, or fix the next thing.",
   "StreamsAI markdown behavior: render markdown only when it improves scanning; use bold status labels, short paragraphs, tight bullets, inline code for exact technical references, fenced code blocks only for copy/paste code or commands, and markdown tables only when comparison is clearer than bullets.",
-  "StreamsAI markdown visual contract: default assistant markdown is compact builder-console text using Inter / SF Pro Display / Nunito Sans / system-ui, about 13px, 1.42 line-height, 600 weight, #f8fafc text, and -0.01em letter spacing.",
-  "StreamsAI bold text contract: bold labels render at 800 weight and #ffffff. Emphasis uses #c4b5fd with normal style.",
-  "StreamsAI heading contract: headings are compact, not article-sized by default. h1 is about 16px, h2 15px, h3 14px, all 800 weight, #ffffff, 1.24 line-height, with tight margins.",
-  "StreamsAI inline code contract: inline code is purple-tinted, using ui-monospace/SFMono/Menlo/Consolas, about 0.92em, 700 weight, #d8b4fe text, rgba(124,58,237,.18) background, rgba(168,85,247,.28) border, 6px radius, and 1px 5px padding.",
-  "StreamsAI code block contract: fenced code blocks render as compact dark cards with language labels and copy controls. Use #020617 background, rgba(148,163,184,.18) border, 12px radius, 10px code padding, 12px monospace text, #e5e7eb code color, 1.5 line-height, and horizontal scrolling.",
-  "StreamsAI code header contract: code headers are 30px tall, rgba(15,23,42,.88) background, rgba(148,163,184,.16) bottom border, rgba(238,246,255,.76) label color, 11px uppercase label, 700 weight, .04em letter spacing, with a compact copy button.",
-  "StreamsAI table contract: tables are compact, 12px text, 1.4 line-height, rgba(2,6,23,.44) background, rgba(148,163,184,.18) border, 12px radius, and horizontal scrolling.",
-  "StreamsAI streaming contract: preserve markdown structure while tokens stream; do not expand compact replies into article formatting unless the user asks for a full breakdown, document, specification, report, or detailed explanation.",
-  "Large article-style markdown is an explicit mode only for full breakdowns, docs, specs, reports, research summaries, or detailed explanations. Otherwise stay in compact builder-console mode.",
 ].join("\n");
 
 function buildSystemPrompt(scope: StreamsAIScope) {
@@ -169,9 +158,9 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
         } else {
           const client = new OpenAI({ apiKey });
           const history = await getHistoryForPrompt(scope, persistedSessionId, userContent);
-          if (body.attachments?.length) send("activity", { phase: "attachments.reading", statusText: body.attachments.length === 1 ? "Reading attached file…" : `Reading ${body.attachments.length} attached files…`, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId });
+          if (body.attachments?.length) send("activity", { phase: "attachments.reading", statusText: body.attachments.length === 1 ? "Reading attached file…" : `Reading ${body.attachments.length} attached files…`, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId, backendProof: { attachmentCount: body.attachments.length } });
           const attachmentContext = await buildAttachmentContext(scope, body, persistedSessionId);
-          if (attachmentContext.statusText) send("activity", { phase: "attachments.ready", statusText: attachmentContext.statusText, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId });
+          for (const statusText of attachmentContext.statusEvents) send("activity", { phase: "attachments.proof", statusText, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId, backendProof: { attachmentContextReady: true } });
           const openaiMessages = buildChatMessages(history, userContent, scope, attachmentContext);
           const openaiStream = await client.chat.completions.create({ model, messages: openaiMessages, stream: true, temperature: 0.7 });
           for await (const part of openaiStream) {
@@ -180,6 +169,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
             assistantContent += token;
             send("response", { token });
           }
+          send("activity", { phase: "reasoning.duration", statusText: `Thought for ${formatDuration(Date.now() - startedAt)}`, source: LIVE_ASSISTANT_SOURCE, sessionId: persistedSessionId, backendProof: { elapsedMs: Date.now() - startedAt } });
         }
         if (!assistantContent.trim()) {
           assistantContent = "I’m here. Send that again and I’ll respond from the live assistant.";
@@ -242,7 +232,7 @@ function buildUserMetadata(body: ChatPostBody) {
 
 async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string): Promise<AttachmentContext> {
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
-  if (!attachments.length) return { text: "", imageParts: [], statusText: "" };
+  if (!attachments.length) return { text: "", imageParts: [], statusText: "", statusEvents: [] };
   const assetRows = sessionId ? await assets.list(scope, { sessionId }).catch(() => []) : [];
   const byId = new Map<string, any>();
   const byName = new Map<string, any>();
@@ -255,6 +245,7 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
   let readableCount = 0;
   let pendingCount = 0;
   const sections: string[] = [];
+  const statusEvents = new Set<string>();
   const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] = [];
   for (let index = 0; index < attachments.length; index += 1) {
     const input = attachments[index] || {};
@@ -264,20 +255,27 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     const textPreview = String(merged.textPreview || metadata.textPreview || input.textPreview || "").trim();
     const summary = String(merged.summary || metadata.summary || input.summary || "").trim();
     const extractionStatus = String(merged.extractionStatus || metadata.extractionStatus || metadata.processingStatus || input.extractionStatus || "unknown");
+    const extractionMode = String(merged.extractionMode || metadata.extractionMode || input.extractionMode || "").toLowerCase();
+    const chunkCount = Number(merged.textChunkCount || metadata.chunkCount || input.textChunkCount || 0);
     const name = String(merged.name || input.name || `Attachment ${index + 1}`);
     const mime = String(merged.mimeType || merged.mime_type || input.mimeType || "unknown");
     const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
-    const isImage = String(merged.kind || input.kind || "").toLowerCase() === "image" || mime.startsWith("image/");
+    const isImage = String(merged.kind || input.kind || "").toLowerCase() === "image" || mime.startsWith("image/") || extractionMode === "image";
     const signedImageUrl = isImage ? await resolveImageUrl(merged).catch(() => "") : "";
     if (signedImageUrl) {
       imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } });
       imageCount += 1;
     }
+    addExtractionStatus(statusEvents, extractionMode, mime, name, metadata);
     const readable = [summary ? `Summary: ${summary}` : "", textPreview ? `Extracted text preview:\n${textPreview}` : ""].filter(Boolean).join("\n\n");
-    if (readable) readableCount += 1;
+    if (readable) {
+      readableCount += 1;
+      statusEvents.add("Text extracted");
+      if (chunkCount > 0 || extractionStatus === "ready") statusEvents.add("Extraction complete");
+    }
     if (!readable && !signedImageUrl) pendingCount += 1;
     const statusLine = signedImageUrl ? "vision_input_available" : readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
-    let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction status: ${statusLine}`].join("\n");
+    let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction mode: ${extractionMode || "unknown"}`, `Extraction status: ${statusLine}`].join("\n");
     if (signedImageUrl) block += "\n\nImage is attached as a vision input for direct visual review.";
     block += readable ? `\n\n${readable}` : signedImageUrl ? "" : "\n\nNo extracted text was available for this file in the backend asset metadata at request time.";
     const remaining = MAX_ATTACHMENT_CONTEXT_CHARS - used;
@@ -286,12 +284,25 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     used += block.length;
     sections.push(block);
   }
-  const statusText = imageCount ? `Inspecting ${imageCount} image${imageCount === 1 ? "" : "s"}…` : readableCount ? `Reading ${readableCount} extracted file${readableCount === 1 ? "" : "s"}…` : pendingCount ? `Checking ${pendingCount} attachment${pendingCount === 1 ? "" : "s"}…` : "";
+  const aggregate = imageCount ? `Inspecting ${imageCount} image${imageCount === 1 ? "" : "s"}…` : readableCount ? `Reading ${readableCount} extracted file${readableCount === 1 ? "" : "s"}…` : pendingCount ? `Checking ${pendingCount} attachment${pendingCount === 1 ? "" : "s"}…` : "";
+  if (aggregate) statusEvents.add(aggregate);
   return {
     text: sections.length ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\nUse the attached file context above when answering. If readable_context_available or vision_input_available is present, do not say you cannot access the file.` : "",
     imageParts,
-    statusText,
+    statusText: aggregate,
+    statusEvents: Array.from(statusEvents),
   };
+}
+
+function addExtractionStatus(statusEvents: Set<string>, extractionMode: string, mime: string, name: string, metadata: Record<string, any>) {
+  const lowerName = name.toLowerCase();
+  if (extractionMode === "pdf" || mime.includes("pdf") || lowerName.endsWith(".pdf")) statusEvents.add("Reading PDF…");
+  else if (["docx", "legacy-doc", "odt-document", "epub", "rtf"].includes(extractionMode) || /word|rtf|epub|opendocument/.test(mime)) statusEvents.add("Reading document…");
+  else if (["spreadsheet", "csv"].includes(extractionMode) || /spreadsheet|excel|csv/.test(mime)) statusEvents.add("Reading spreadsheet…");
+  else if (extractionMode === "presentation" || /presentation|powerpoint/.test(mime) || lowerName.endsWith(".pptx")) statusEvents.add("Reading presentation…");
+  else if (["text", "html"].includes(extractionMode) || /text|json|javascript|typescript|css|html|xml|yaml|sql|markdown/.test(mime)) statusEvents.add("Reading code…");
+  if (String(metadata.transcriptionStatus || "").toLowerCase() === "processing" || metadata.transcriptionJobId) statusEvents.add("Transcribing audio…");
+  if (String(metadata.frameStatus || metadata.videoFrameStatus || "").toLowerCase() === "processing" || metadata.frameJobId) statusEvents.add("Sampling frames…");
 }
 
 function absoluteHttpUrl(value: unknown) {
@@ -310,7 +321,7 @@ async function resolveImageUrl(asset: any) {
   return absoluteHttpUrl(asset.publicUrl || asset.public_url || asset.url);
 }
 
-function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext: AttachmentContext = { text: "", imageParts: [], statusText: "" }): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext: AttachmentContext = { text: "", imageParts: [], statusText: "", statusEvents: [] }): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt(scope) }];
   const usable = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
   for (const message of usable) {
@@ -343,6 +354,10 @@ function chunkText(text: string, max = 32) {
   const chunks: string[] = [];
   for (let index = 0; index < value.length; index += max) chunks.push(value.slice(index, index + max));
   return chunks;
+}
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${Math.max(1, Math.round(ms))}ms`;
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
 }
 function sseResponse(stream: ReadableStream<Uint8Array>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
