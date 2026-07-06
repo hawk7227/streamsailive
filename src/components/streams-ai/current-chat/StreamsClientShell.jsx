@@ -8,12 +8,9 @@ import ThreadAssetsHydrator from "./ThreadAssetsHydrator";
 import StreamingRecoveryBanner from "./StreamingRecoveryBanner";
 import MemoryControlsPanel from "./MemoryControlsPanel";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 const LIBRARY_KEY = "streams-ai.assets.cache.v1";
-
-const supabase = typeof window !== "undefined" ? createClient() : null;
 
 const PUBLIC_STREAMS_CAPABILITY_TEXT = `I’m STREAMS AI — your visual AI business operator, builder, creator assistant, and launch workspace.
 
@@ -114,6 +111,11 @@ function wantsImageToVideoFromPrompt(message = "") {
   );
 }
 
+function wantsReadableFileContext(message = "", body = {}) {
+  if (Array.isArray(body.attachments) && body.attachments.length) return true;
+  return /\b(uploaded|attached|attachment|file|document|pdf|image|photo|video|transcript|read this|analyze this|summarize this)\b/i.test(String(message || ""));
+}
+
 async function uploadSelectedFiles(files) {
   const selected = Array.from(files || []);
   if (!selected.length) return [];
@@ -184,9 +186,10 @@ function stringifyChatBody(body) {
 }
 
 function appendFileContextToMessage(body) {
+  const direct = body?.message || body?.input || body?.prompt || body?.text || body?.content || "";
+  if (!wantsReadableFileContext(direct, body)) return body;
   const fileContext = recentReadableFileContext();
   if (!fileContext) return body;
-  const direct = body?.message || body?.input || body?.prompt || body?.text || body?.content || "";
   const existing = String(direct || "").trim();
   const contextBlock = `\n\n[Uploaded file context available to answer the user]\n${fileContext}\n[/Uploaded file context]`;
   return { ...body, message: `${existing}${contextBlock}`, file: true, uploadedFileContext: fileContext };
@@ -209,23 +212,11 @@ function installAdminBrowserToolFetchBridge() {
   window.fetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input?.url || "";
     const method = String(init?.method || "GET").toUpperCase();
-
     const headers = new Headers(init?.headers || {});
-    if (url.startsWith("/api/streams-ai") && supabase) {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data?.session?.access_token;
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-      } catch (e) {
-        console.error("[streams-fetch-bridge] Token resolution error:", e);
-      }
-    }
-
     const options = { ...init, headers };
+
     if (url.startsWith("/api/streams-ai")) {
-      options.credentials = "omit";
+      options.credentials = "same-origin";
     }
 
     if (method === "POST" && url === "/api/streams-ai/tools") {
