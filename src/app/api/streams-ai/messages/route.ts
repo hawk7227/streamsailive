@@ -6,6 +6,7 @@ import { buildCanonicalCapabilityAnswer, buildRuntimeCapabilityRegistry, isCanon
 import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
+import { createStreamsAIServiceClient } from "@/lib/streams-ai/server";
 
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
@@ -22,13 +23,15 @@ const MAX_ATTACHMENT_CONTEXT_CHARS = 36000;
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
+type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] };
 
 const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a provider-agnostic AI business operator inside Streams.",
   "StreamsAI owns the behavior contract. OpenAI is only one possible provider that can execute this behavior.",
   "Answer immediately and naturally for normal conversation.",
   "When uploaded file context is supplied in the prompt, treat it as readable attached-file content. Review, summarize, compare, extract, and answer from that context. Do not say you cannot access the file when file context is present.",
-  "If an attachment is present but no readable text/context is supplied, be specific: explain that the file was attached but readable extraction is missing or still processing, and ask the user to retry or paste the content. Do not pretend to have read unavailable content.",
+  "When uploaded image attachments are supplied as vision inputs, inspect the image directly and answer from what is visible. Do not say the image has no readable text unless the user specifically asks for OCR and no text is visible.",
+  "If an attachment is present but no readable text/context or vision input is supplied, be specific: explain that the file was attached but readable extraction is missing or still processing, and ask the user to retry or paste the content. Do not pretend to have read unavailable content.",
   "Do not pretend to have run tools, builds, deployments, file edits, searches, or generations unless the real system returns proof.",
   "When the user asks for a build, code change, repo action, generated media, file work, or proof-sensitive action, be direct about what needs a real tool/runtime path.",
   "Keep responses useful, concise, and oriented around helping the user build, create, launch, or fix the next thing.",
@@ -105,7 +108,6 @@ function streamSimpleGreetingResponse({ request, sessionId, userContent, body }:
       try {
         send("activity", { phase: "simple-greeting.started", statusText: "Writing…", source: SIMPLE_GREETING_SOURCE, startedAt, sessionId: persistedSessionId });
         send("response", { token: assistantContent });
-
         try {
           const scope = await requireStreamsAIScope(request);
           const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: SIMPLE_GREETING_SOURCE, provider: "streams", providerStatus: "ok", fastPath: "simple-greeting" } });
@@ -158,7 +160,6 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
       let assistantContent = "";
       const model = resolveModel(mode);
       let persistedSessionId = sessionId;
-
       try {
         send("activity", { phase: "openai.started", statusText: "Writing…", model, source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId: persistedSessionId });
         const apiKey = process.env.OPENAI_API_KEY;
@@ -171,7 +172,6 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
           const attachmentContext = await buildAttachmentContext(scope, body, persistedSessionId);
           const openaiMessages = buildChatMessages(history, userContent, scope, attachmentContext);
           const openaiStream = await client.chat.completions.create({ model, messages: openaiMessages, stream: true, temperature: 0.7 });
-
           for await (const part of openaiStream) {
             const token = part.choices?.[0]?.delta?.content || "";
             if (!token) continue;
@@ -179,12 +179,10 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
             send("response", { token });
           }
         }
-
         if (!assistantContent.trim()) {
           assistantContent = "I’m here. Send that again and I’ll respond from the live assistant.";
           send("response", { token: assistantContent });
         }
-
         const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: apiProviderStatus(), openaiModel: model, runtimeContract: "streams_provider_markdown_contract_v1", fileContextUsed: Boolean(body.attachments?.length) } });
         persistedSessionId = persisted.sessionId;
         send("complete", { ok: true, sessionId: persistedSessionId, assistantMessageId: persisted.assistantMessageId, provider: "openai", providerStatus: apiProviderStatus(), model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
@@ -215,39 +213,34 @@ function isSimpleGreetingPrompt(content: string) {
   const text = content.trim().toLowerCase();
   return /^(hi|hello|hey|yo|sup|good morning|good afternoon|good evening)[.!?\s]*$/.test(text);
 }
-
 function isFastStandalonePrompt(content: string) {
   const text = content.trim().toLowerCase();
   return /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no|cool|great|good morning|good afternoon|good evening)[.!?\s]*$/.test(text);
 }
-
 function isAuthPresent(request: NextRequest) {
   const authorization = request.headers.get("authorization") || request.headers.get("Authorization") || "";
   if (/^Bearer\s+\S+/i.test(authorization)) return true;
   const cookie = request.headers.get("cookie") || "";
   return /(?:^|;\s*)access_token=/.test(cookie) || /sb-[^=;]*-auth-token/.test(cookie);
 }
-
 async function ensureSession(scope: StreamsAIScope, sessionId: string, content: string) {
   if (sessionId) return sessionId;
   const created = await sessions.create(scope, { title: buildFastTitle(content), metadata: { source: "streams-ai-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "direct-openai-stream", recentChat: true } });
   return created.id;
 }
-
 async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   await messages.create(scope, { sessionId: persistedSessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
   const assistantMessage = await messages.create(scope, { sessionId: persistedSessionId, role: "assistant", content: assistantContent, status: assistantStatus, metadata: assistantMetadata });
   return { sessionId: persistedSessionId, assistantMessageId: assistantMessage.id };
 }
-
 function buildUserMetadata(body: ChatPostBody) {
   return { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "direct-openai-stream", attachments: body.attachments || [] };
 }
 
-async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string) {
+async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string): Promise<AttachmentContext> {
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
-  if (!attachments.length) return "";
+  if (!attachments.length) return { text: "", imageParts: [] };
   const assetRows = sessionId ? await assets.list(scope, { sessionId }).catch(() => []) : [];
   const byId = new Map<string, any>();
   const byName = new Map<string, any>();
@@ -255,9 +248,9 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     if (row?.id) byId.set(String(row.id), row);
     if (row?.name) byName.set(String(row.name), row);
   }
-
   let used = 0;
   const sections: string[] = [];
+  const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] = [];
   for (let index = 0; index < attachments.length; index += 1) {
     const input = attachments[index] || {};
     const row = byId.get(String(input.id || input.assetId || "")) || byName.get(String(input.name || "")) || null;
@@ -269,23 +262,39 @@ async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody,
     const name = String(merged.name || input.name || `Attachment ${index + 1}`);
     const mime = String(merged.mimeType || merged.mime_type || input.mimeType || "unknown");
     const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
+    const isImage = String(merged.kind || input.kind || "").toLowerCase() === "image" || mime.startsWith("image/");
+    const signedImageUrl = isImage ? await resolveImageUrl(merged).catch(() => "") : "";
+    if (signedImageUrl) imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } });
     const readable = [summary ? `Summary: ${summary}` : "", textPreview ? `Extracted text preview:\n${textPreview}` : ""].filter(Boolean).join("\n\n");
-    const statusLine = readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
+    const statusLine = signedImageUrl ? "vision_input_available" : readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
     let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction status: ${statusLine}`].join("\n");
-    block += readable ? `\n\n${readable}` : "\n\nNo extracted text was available for this file in the backend asset metadata at request time.";
+    if (signedImageUrl) block += "\n\nImage is attached as a vision input for direct visual review.";
+    block += readable ? `\n\n${readable}` : signedImageUrl ? "" : "\n\nNo extracted text was available for this file in the backend asset metadata at request time.";
     const remaining = MAX_ATTACHMENT_CONTEXT_CHARS - used;
     if (remaining <= 0) break;
     if (block.length > remaining) block = `${block.slice(0, remaining)}\n[Attachment context truncated]`;
     used += block.length;
     sections.push(block);
   }
-
-  return sections.length
-    ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\nUse the attached file context above when answering. If readable_context_available is present, do not say you cannot access the file.`
-    : "";
+  return {
+    text: sections.length ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\nUse the attached file context above when answering. If readable_context_available or vision_input_available is present, do not say you cannot access the file.` : "",
+    imageParts,
+  };
 }
 
-function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext = ""): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+async function resolveImageUrl(asset: any) {
+  const mime = String(asset.mimeType || asset.mime_type || "");
+  if (!mime.startsWith("image/")) return "";
+  if (asset.publicUrl || asset.public_url || asset.url) return String(asset.publicUrl || asset.public_url || asset.url);
+  const bucket = asset.storageBucket || asset.storage_bucket || "";
+  const path = asset.storagePath || asset.storage_path || "";
+  if (!bucket || !path) return "";
+  const { data, error } = await createStreamsAIServiceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
+  if (error || !data?.signedUrl) return "";
+  return data.signedUrl;
+}
+
+function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext: AttachmentContext = { text: "", imageParts: [] }): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt(scope) }];
   const usable = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
   for (const message of usable) {
@@ -294,26 +303,24 @@ function buildChatMessages(history: PersistedChatMessage[], userContent: string,
     if (message.role === "assistant") result.push({ role: "assistant", content });
     else if (message.role === "user") result.push({ role: "user", content });
   }
-  const userMessage = attachmentContext ? `${attachmentContext}\n\nUser request:\n${userContent}` : userContent;
-  result.push({ role: "user", content: userMessage });
+  const text = attachmentContext.text ? `${attachmentContext.text}\n\nUser request:\n${userContent}` : userContent;
+  if (attachmentContext.imageParts.length) {
+    result.push({ role: "user", content: [{ type: "text", text }, ...attachmentContext.imageParts] as any });
+  } else {
+    result.push({ role: "user", content: text });
+  }
   return result;
 }
-
 function buildFastTitle(content: string) {
   const cleaned = content.replace(/\s+/g, " ").trim();
   if (!cleaned) return "New chat";
   return cleaned.length > 58 ? `${cleaned.slice(0, 55)}…` : cleaned;
 }
-
 function resolveModel(mode?: string) {
   if (mode === "Pro") return process.env.OPENAI_PRO_MODEL || DEFAULT_PRO_MODEL;
   return process.env.OPENAI_FAST_MODEL || process.env.OPENAI_MODEL || DEFAULT_FAST_MODEL;
 }
-
-function apiProviderStatus() {
-  return process.env.OPENAI_API_KEY ? "ok" : "not_configured";
-}
-
+function apiProviderStatus() { return process.env.OPENAI_API_KEY ? "ok" : "not_configured"; }
 function chunkText(text: string, max = 32) {
   const value = String(text || "");
   if (!value) return [];
@@ -321,7 +328,6 @@ function chunkText(text: string, max = 32) {
   for (let index = 0; index < value.length; index += max) chunks.push(value.slice(index, index + max));
   return chunks;
 }
-
 function sseResponse(stream: ReadableStream<Uint8Array>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
 }
