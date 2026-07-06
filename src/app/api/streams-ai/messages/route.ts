@@ -11,6 +11,7 @@ const sessions = new StreamsAISessionsRepository();
 
 const LIVE_ASSISTANT_SOURCE = "streams-ai-openai-direct-stream";
 const CAPABILITY_SOURCE = "streams-ai-canonical-capability-registry";
+const SIMPLE_GREETING_SOURCE = "streams-ai-simple-greeting-fast-path";
 const DEFAULT_FAST_MODEL = "gpt-4o-mini";
 const DEFAULT_PRO_MODEL = "gpt-4o";
 const MAX_HISTORY_MESSAGES = 16;
@@ -65,10 +66,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireStreamsAIScope(request);
     const body = await readJsonBody<ChatPostBody>(request);
     const content = (body.content || body.message || "").trim();
     if (!content) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
+
+    if (isAuthPresent(request) && body.runAssistant !== false && isSimpleGreetingPrompt(content)) {
+      return streamSimpleGreetingResponse({ request, sessionId: body.sessionId || "", userContent: content, body });
+    }
+
+    const scope = await requireStreamsAIScope(request);
 
     if (body.runAssistant === false) {
       const sessionId = await ensureSession(scope, body.sessionId || "", content);
@@ -81,6 +87,36 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return streamsAIError(error);
   }
+}
+
+function streamSimpleGreetingResponse({ request, sessionId, userContent, body }: { request: NextRequest; sessionId: string; userContent: string; body: ChatPostBody }) {
+  const encoder = new TextEncoder();
+  const startedAt = Date.now();
+  const assistantContent = "Hey — I’m here. What are we building or fixing next?";
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      let persistedSessionId = sessionId;
+      try {
+        send("activity", { phase: "simple-greeting.started", statusText: "Writing…", source: SIMPLE_GREETING_SOURCE, startedAt, sessionId: persistedSessionId });
+        send("response", { token: assistantContent });
+
+        try {
+          const scope = await requireStreamsAIScope(request);
+          const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: SIMPLE_GREETING_SOURCE, provider: "streams", providerStatus: "ok", fastPath: "simple-greeting" } });
+          persistedSessionId = persisted.sessionId;
+          send("complete", { ok: true, sessionId: persistedSessionId, assistantMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok", source: SIMPLE_GREETING_SOURCE, elapsedMs: Date.now() - startedAt });
+        } catch (persistError) {
+          send("complete", { ok: true, sessionId: persistedSessionId, provider: "streams", providerStatus: "not_persisted", source: SIMPLE_GREETING_SOURCE, elapsedMs: Date.now() - startedAt, persistError: persistError instanceof Error ? persistError.message : String(persistError) });
+        }
+      } catch (error) {
+        send("error", { message: error instanceof Error ? error.message : String(error) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return sseResponse(stream);
 }
 
 function streamCanonicalCapabilityResponse({ scope, sessionId, userContent, body }: { scope: StreamsAIScope; sessionId: string; userContent: string; body: ChatPostBody }) {
@@ -169,9 +205,21 @@ async function getHistoryForPrompt(scope: StreamsAIScope, sessionId: string, use
   return messages.list(scope, sessionId).catch(() => [] as PersistedChatMessage[]);
 }
 
+function isSimpleGreetingPrompt(content: string) {
+  const text = content.trim().toLowerCase();
+  return /^(hi|hello|hey|yo|sup|good morning|good afternoon|good evening)[.!?\s]*$/.test(text);
+}
+
 function isFastStandalonePrompt(content: string) {
   const text = content.trim().toLowerCase();
   return /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no|cool|great|good morning|good afternoon|good evening)[.!?\s]*$/.test(text);
+}
+
+function isAuthPresent(request: NextRequest) {
+  const authorization = request.headers.get("authorization") || request.headers.get("Authorization") || "";
+  if (/^Bearer\s+\S+/i.test(authorization)) return true;
+  const cookie = request.headers.get("cookie") || "";
+  return /(?:^|;\s*)access_token=/.test(cookie) || /sb-[^=;]*-auth-token/.test(cookie);
 }
 
 async function ensureSession(scope: StreamsAIScope, sessionId: string, content: string) {
