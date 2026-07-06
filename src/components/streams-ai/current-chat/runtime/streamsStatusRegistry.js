@@ -13,6 +13,19 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Inspecting \d+ images?…$/,
   /^Reading \d+ extracted files?…$/,
   /^Checking \d+ attachments?…$/,
+  /^Reading PDF…$/,
+  /^Reading document…$/,
+  /^Reading spreadsheet…$/,
+  /^Reading presentation…$/,
+  /^Reading code…$/,
+  /^Text extracted$/,
+  /^Extraction complete$/,
+  /^Received app response$/,
+  /^Thought for \d+(?:\.\d+)?(?:ms|s)$/,
+  /^Transcribing audio…$/,
+  /^Sampling frames…$/,
+  /^Running checks…$/,
+  /^Deploying…$/,
   /^Searching the web…$/,
   /^Search complete$/,
   /^Search failed$/,
@@ -39,5 +52,5 @@ export function isVisibleSafeStatus(activity = {}, isStreaming = false) {
   if (!canShowStreamsStatus(text)) return false;
   if (text === "Ready" || text === "Ask anything" || text === "Chat is ready") return false;
   if (isStreaming) return true;
-  return /(?:failed|ready|complete)$/i.test(text) || text === "Upload failed" || text === "Files ready" || text === "File ready";
+  return /(?:failed|ready|complete|extracted)$/i.test(text) || text === "Upload failed" || text === "Files ready" || text === "File ready" || text.startsWith("Thought for ") || text === "Received app response";
 }
