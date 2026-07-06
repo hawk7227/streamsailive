@@ -22,14 +22,16 @@ export default function StreamsAIStatusBridge({ chatRuntime }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const onStatus = (event) => {
-      const detail = event?.detail || {};
+    const showStatus = (detail = {}) => {
       const text = normalizeStatusText(detail.statusText || detail.text || "");
       if (!canShowStreamsStatus(text)) return;
       setExternalStatus({ statusText: text, visible: true, createdAt: Date.now() });
       window.clearTimeout(window.__streamsStatusBridgeTimer);
       window.__streamsStatusBridgeTimer = window.setTimeout(() => setExternalStatus(null), detail.durationMs || 3200);
     };
+    const buffered = window.__streamsLastLiveStatus;
+    if (buffered && Date.now() - Number(buffered.emittedAt || 0) < 3000) showStatus(buffered);
+    const onStatus = (event) => showStatus(event?.detail || {});
     window.addEventListener("streams:live-status", onStatus);
     return () => window.removeEventListener("streams:live-status", onStatus);
   }, []);
