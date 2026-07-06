@@ -84,4 +84,7 @@ export const streamsAITables = {
   spendLimits: "streams_ai_spend_limits",
   usageNotifications: "streams_ai_usage_notifications",
   userSettings: "streams_ai_user_settings",
+  memories: "streams_ai_memories",
+  memoryChunks: "streams_ai_memory_chunks",
+  projectKnowledge: "streams_ai_project_knowledge",
 } as const;
