@@ -7,6 +7,7 @@ import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 const MODES = ["Thinking", "Configure..."];
 const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
+const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
 
 const BASE_TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", shortcut: "Ctrl + U", enabled: true },
@@ -266,7 +267,7 @@ export default function StreamsComposer({
         <div key={file.id} className="streamsComposerAttachmentImage">
           <img src={previewUrl} alt={file.name || "Image"} />
           {isUploading ? <span className="streamsComposerAttachmentOverlay">Uploading</span> : null}
-          {isError ? <span className="streamsComposerAttachmentOverlay">⚠️</span> : null}
+          {isError ? <span className="streamsComposerAttachmentOverlay">⚠️ Retry from upload notice</span> : null}
           {!isUploading ? (
             <button
               type="button"
@@ -284,6 +285,7 @@ export default function StreamsComposer({
       <div key={file.id} className={isError ? "streamsComposerAttachmentFile isError" : "streamsComposerAttachmentFile"}>
         <span>{isError ? "⚠️" : isUploading ? "⏳" : "📄"}</span>
         <strong>{file.name || "File"}</strong>
+        {isError ? <em>Retry from upload notice</em> : null}
         {!isUploading ? (
           <button
             type="button"
@@ -387,7 +389,7 @@ export default function StreamsComposer({
         aria-label="Add photos and files"
         type="file"
         multiple
-        accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md"
+        accept={ACCEPTED_UPLOAD_TYPES}
         hidden
         ref={fileInputRef}
         onChange={handleFileChange}
