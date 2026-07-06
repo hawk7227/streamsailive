@@ -7,6 +7,7 @@ import ActualRecentChatsOverlay from "./ActualRecentChatsOverlay";
 import ThreadAssetsHydrator from "./ThreadAssetsHydrator";
 import StreamingRecoveryBanner from "./StreamingRecoveryBanner";
 import MemoryControlsPanel from "./MemoryControlsPanel";
+import StreamsAIComposerParityBridge from "./StreamsAIComposerParityBridge";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -260,5 +261,5 @@ export default function StreamsClientShell() {
   useEffect(() => installComposerUploadBridge(), []);
 
   if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
-  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><StreamsAIComposerParityBridge chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
 }
