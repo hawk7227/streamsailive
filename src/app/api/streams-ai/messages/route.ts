@@ -17,6 +17,7 @@ const MAX_HISTORY_MESSAGES = 16;
 
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
+type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
 
 const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a provider-agnostic AI business operator inside Streams.",
@@ -65,47 +66,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
-    const body = await readJsonBody<{ sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] }>(request);
+    const body = await readJsonBody<ChatPostBody>(request);
     const content = (body.content || body.message || "").trim();
     if (!content) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
 
-    let sessionId = body.sessionId || "";
-    if (!sessionId) {
-      const created = await sessions.create(scope, {
-        title: buildFastTitle(content),
-        metadata: {
-          source: "streams-ai-chat-ui",
-          assistantRuntime: LIVE_ASSISTANT_SOURCE,
-          mode: "direct-openai-stream",
-          recentChat: true,
-        },
-      });
-      sessionId = created.id;
+    if (body.runAssistant === false) {
+      const sessionId = await ensureSession(scope, body.sessionId || "", content);
+      const userMessage = await messages.create(scope, { sessionId, role: body.role || "user", content, status: body.status || "complete", metadata: buildUserMetadata(body) });
+      return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
 
-    const userMessage = await messages.create(scope, {
-      sessionId,
-      role: body.role || "user",
-      content,
-      status: body.status || "complete",
-      metadata: {
-        ...(body.metadata || {}),
-        copiedUiUserId: body.userId || null,
-        assistantRuntime: LIVE_ASSISTANT_SOURCE,
-        mode: "direct-openai-stream",
-        attachments: body.attachments || [],
-      },
-    });
-
-    if (body.runAssistant === false) return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
-    if (isCanonicalCapabilityQuestion(content)) return streamCanonicalCapabilityResponse({ scope, sessionId, userContent: content });
-    return streamDirectOpenAIResponse({ scope, sessionId, userContent: content, mode: body.mode });
+    if (isCanonicalCapabilityQuestion(content)) return streamCanonicalCapabilityResponse({ scope, sessionId: body.sessionId || "", userContent: content, body });
+    return streamDirectOpenAIResponse({ scope, sessionId: body.sessionId || "", userContent: content, mode: body.mode, body });
   } catch (error) {
     return streamsAIError(error);
   }
 }
 
-function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { scope: StreamsAIScope; sessionId: string; userContent: string }) {
+function streamCanonicalCapabilityResponse({ scope, sessionId, userContent, body }: { scope: StreamsAIScope; sessionId: string; userContent: string; body: ChatPostBody }) {
   const encoder = new TextEncoder();
   const startedAt = Date.now();
   const answer = buildCanonicalCapabilityAnswer(userContent);
@@ -113,17 +91,13 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      let persistedSessionId = sessionId;
       try {
-        send("activity", { phase: "capabilities.started", statusText: "Loading Streams capabilities…", source: CAPABILITY_SOURCE, startedAt, sessionId });
+        send("activity", { phase: "capabilities.started", statusText: "Writing…", source: CAPABILITY_SOURCE, startedAt, sessionId: persistedSessionId });
         for (const token of chunkText(answer, 120)) send("response", { token });
-        const assistantMessage = await messages.create(scope, {
-          sessionId,
-          role: "assistant",
-          content: answer,
-          status: "complete",
-          metadata: { source: CAPABILITY_SOURCE, provider: "streams", providerStatus: "ok", registryVersion: registry.version, capabilityCount: registry.total, statusCounts: registry.statusCounts },
-        });
-        send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "streams", providerStatus: "ok", source: CAPABILITY_SOURCE, elapsedMs: Date.now() - startedAt });
+        const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent: answer, body, assistantStatus: "complete", assistantMetadata: { source: CAPABILITY_SOURCE, provider: "streams", providerStatus: "ok", registryVersion: registry.version, capabilityCount: registry.total, statusCounts: registry.statusCounts } });
+        persistedSessionId = persisted.sessionId;
+        send("complete", { ok: true, sessionId: persistedSessionId, assistantMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok", source: CAPABILITY_SOURCE, elapsedMs: Date.now() - startedAt });
       } catch (error) {
         send("error", { message: error instanceof Error ? error.message : String(error) });
       } finally {
@@ -134,32 +108,27 @@ function streamCanonicalCapabilityResponse({ scope, sessionId, userContent }: { 
   return sseResponse(stream);
 }
 
-function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { scope: StreamsAIScope; sessionId: string; userContent: string; mode?: string }) {
+function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body }: { scope: StreamsAIScope; sessionId: string; userContent: string; mode?: string; body: ChatPostBody }) {
   const encoder = new TextEncoder();
   const startedAt = Date.now();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send: StreamSend = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
       let assistantContent = "";
-      let model = resolveModel(mode);
+      const model = resolveModel(mode);
+      let persistedSessionId = sessionId;
 
       try {
-        send("activity", { phase: "openai.started", statusText: "Writing…", model, source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId });
-
+        send("activity", { phase: "openai.started", statusText: "Writing…", model, source: LIVE_ASSISTANT_SOURCE, startedAt, sessionId: persistedSessionId });
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
-          assistantContent = "Streams AI saved your message, but the real OpenAI assistant is not enabled because OPENAI_API_KEY is not configured in this deployment.";
+          assistantContent = "Streams AI received your message, but the real OpenAI assistant is not enabled because OPENAI_API_KEY is not configured in this deployment.";
           for (const token of chunkText(assistantContent, 90)) send("response", { token });
         } else {
           const client = new OpenAI({ apiKey });
-          const history = await messages.list(scope, sessionId).catch(() => [] as PersistedChatMessage[]);
+          const history = await getHistoryForPrompt(scope, persistedSessionId, userContent);
           const openaiMessages = buildChatMessages(history, userContent, scope);
-          const openaiStream = await client.chat.completions.create({
-            model,
-            messages: openaiMessages,
-            stream: true,
-            temperature: 0.7,
-          });
+          const openaiStream = await client.chat.completions.create({ model, messages: openaiMessages, stream: true, temperature: 0.7 });
 
           for await (const part of openaiStream) {
             const token = part.choices?.[0]?.delta?.content || "";
@@ -174,35 +143,52 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode }: { s
           send("response", { token: assistantContent });
         }
 
-        const assistantMessage = await messages.create(scope, {
-          sessionId,
-          role: "assistant",
-          content: assistantContent,
-          status: "complete",
-          metadata: {
-            source: LIVE_ASSISTANT_SOURCE,
-            provider: "openai",
-            providerStatus: apiProviderStatus(),
-            openaiModel: model,
-            runtimeContract: "streams_provider_markdown_contract_v1",
-          },
-        });
-
-        send("complete", { ok: true, sessionId, assistantMessageId: assistantMessage.id, provider: "openai", providerStatus: apiProviderStatus(), model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
+        const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: apiProviderStatus(), openaiModel: model, runtimeContract: "streams_provider_markdown_contract_v1" } });
+        persistedSessionId = persisted.sessionId;
+        send("complete", { ok: true, sessionId: persistedSessionId, assistantMessageId: persisted.assistantMessageId, provider: "openai", providerStatus: apiProviderStatus(), model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error || "Unknown provider failure");
         assistantContent = `The real provider response did not complete successfully.\n\nProvider error: ${message}`;
         try {
-          await messages.create(scope, { sessionId, role: "assistant", content: assistantContent, status: "error", metadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: "failed", providerError: message, openaiModel: model } });
+          const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "error", assistantMetadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: "failed", providerError: message, openaiModel: model } });
+          persistedSessionId = persisted.sessionId;
         } catch {}
         for (const token of chunkText(assistantContent, 90)) send("response", { token });
-        send("complete", { ok: true, sessionId, provider: "openai", providerStatus: "failed", model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
+        send("complete", { ok: true, sessionId: persistedSessionId, provider: "openai", providerStatus: "failed", model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
       } finally {
         controller.close();
       }
     },
   });
   return sseResponse(stream);
+}
+
+async function getHistoryForPrompt(scope: StreamsAIScope, sessionId: string, userContent: string) {
+  if (!sessionId) return [] as PersistedChatMessage[];
+  if (isFastStandalonePrompt(userContent)) return [] as PersistedChatMessage[];
+  return messages.list(scope, sessionId).catch(() => [] as PersistedChatMessage[]);
+}
+
+function isFastStandalonePrompt(content: string) {
+  const text = content.trim().toLowerCase();
+  return /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no|cool|great|good morning|good afternoon|good evening)[.!?\s]*$/.test(text);
+}
+
+async function ensureSession(scope: StreamsAIScope, sessionId: string, content: string) {
+  if (sessionId) return sessionId;
+  const created = await sessions.create(scope, { title: buildFastTitle(content), metadata: { source: "streams-ai-chat-ui", assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "direct-openai-stream", recentChat: true } });
+  return created.id;
+}
+
+async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
+  const persistedSessionId = await ensureSession(scope, sessionId, userContent);
+  await messages.create(scope, { sessionId: persistedSessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
+  const assistantMessage = await messages.create(scope, { sessionId: persistedSessionId, role: "assistant", content: assistantContent, status: assistantStatus, metadata: assistantMetadata });
+  return { sessionId: persistedSessionId, assistantMessageId: assistantMessage.id };
+}
+
+function buildUserMetadata(body: ChatPostBody) {
+  return { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "direct-openai-stream", attachments: body.attachments || [] };
 }
 
 function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
@@ -242,11 +228,5 @@ function chunkText(text: string, max = 32) {
 }
 
 function sseResponse(stream: ReadableStream<Uint8Array>) {
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
 }
