@@ -3,11 +3,13 @@ import OpenAI from "openai";
 import { requireStreamsAIScope, type StreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { buildCanonicalCapabilityAnswer, buildRuntimeCapabilityRegistry, isCanonicalCapabilityQuestion } from "@/lib/streams-ai/capabilities/canonical-capabilities";
+import { StreamsAIAssetsRepository } from "@/lib/streams-ai/repositories/assets-repository";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
+const assets = new StreamsAIAssetsRepository();
 
 const LIVE_ASSISTANT_SOURCE = "streams-ai-openai-direct-stream";
 const CAPABILITY_SOURCE = "streams-ai-canonical-capability-registry";
@@ -15,6 +17,7 @@ const SIMPLE_GREETING_SOURCE = "streams-ai-simple-greeting-fast-path";
 const DEFAULT_FAST_MODEL = "gpt-4o-mini";
 const DEFAULT_PRO_MODEL = "gpt-4o";
 const MAX_HISTORY_MESSAGES = 16;
+const MAX_ATTACHMENT_CONTEXT_CHARS = 36000;
 
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
@@ -24,6 +27,8 @@ const SYSTEM_PROMPT_BASE = [
   "You are Streams AI, a provider-agnostic AI business operator inside Streams.",
   "StreamsAI owns the behavior contract. OpenAI is only one possible provider that can execute this behavior.",
   "Answer immediately and naturally for normal conversation.",
+  "When uploaded file context is supplied in the prompt, treat it as readable attached-file content. Review, summarize, compare, extract, and answer from that context. Do not say you cannot access the file when file context is present.",
+  "If an attachment is present but no readable text/context is supplied, be specific: explain that the file was attached but readable extraction is missing or still processing, and ask the user to retry or paste the content. Do not pretend to have read unavailable content.",
   "Do not pretend to have run tools, builds, deployments, file edits, searches, or generations unless the real system returns proof.",
   "When the user asks for a build, code change, repo action, generated media, file work, or proof-sensitive action, be direct about what needs a real tool/runtime path.",
   "Keep responses useful, concise, and oriented around helping the user build, create, launch, or fix the next thing.",
@@ -163,7 +168,8 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
         } else {
           const client = new OpenAI({ apiKey });
           const history = await getHistoryForPrompt(scope, persistedSessionId, userContent);
-          const openaiMessages = buildChatMessages(history, userContent, scope);
+          const attachmentContext = await buildAttachmentContext(scope, body, persistedSessionId);
+          const openaiMessages = buildChatMessages(history, userContent, scope, attachmentContext);
           const openaiStream = await client.chat.completions.create({ model, messages: openaiMessages, stream: true, temperature: 0.7 });
 
           for await (const part of openaiStream) {
@@ -179,7 +185,7 @@ function streamDirectOpenAIResponse({ scope, sessionId, userContent, mode, body 
           send("response", { token: assistantContent });
         }
 
-        const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: apiProviderStatus(), openaiModel: model, runtimeContract: "streams_provider_markdown_contract_v1" } });
+        const persisted = await persistChatTurn({ scope, sessionId: persistedSessionId, userContent, assistantContent, body, assistantStatus: "complete", assistantMetadata: { source: LIVE_ASSISTANT_SOURCE, provider: "openai", providerStatus: apiProviderStatus(), openaiModel: model, runtimeContract: "streams_provider_markdown_contract_v1", fileContextUsed: Boolean(body.attachments?.length) } });
         persistedSessionId = persisted.sessionId;
         send("complete", { ok: true, sessionId: persistedSessionId, assistantMessageId: persisted.assistantMessageId, provider: "openai", providerStatus: apiProviderStatus(), model, elapsedMs: Date.now() - startedAt, source: LIVE_ASSISTANT_SOURCE });
       } catch (error) {
@@ -239,7 +245,47 @@ function buildUserMetadata(body: ChatPostBody) {
   return { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: LIVE_ASSISTANT_SOURCE, mode: "direct-openai-stream", attachments: body.attachments || [] };
 }
 
-function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string) {
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+  if (!attachments.length) return "";
+  const assetRows = sessionId ? await assets.list(scope, { sessionId }).catch(() => []) : [];
+  const byId = new Map<string, any>();
+  const byName = new Map<string, any>();
+  for (const row of assetRows as any[]) {
+    if (row?.id) byId.set(String(row.id), row);
+    if (row?.name) byName.set(String(row.name), row);
+  }
+
+  let used = 0;
+  const sections: string[] = [];
+  for (let index = 0; index < attachments.length; index += 1) {
+    const input = attachments[index] || {};
+    const row = byId.get(String(input.id || input.assetId || "")) || byName.get(String(input.name || "")) || null;
+    const merged = { ...(row || {}), ...(input || {}), metadata: { ...(row?.metadata || {}), ...(input?.metadata || {}) } };
+    const metadata = merged.metadata || {};
+    const textPreview = String(merged.textPreview || metadata.textPreview || input.textPreview || "").trim();
+    const summary = String(merged.summary || metadata.summary || input.summary || "").trim();
+    const extractionStatus = String(merged.extractionStatus || metadata.extractionStatus || metadata.processingStatus || input.extractionStatus || "unknown");
+    const name = String(merged.name || input.name || `Attachment ${index + 1}`);
+    const mime = String(merged.mimeType || merged.mime_type || input.mimeType || "unknown");
+    const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
+    const readable = [summary ? `Summary: ${summary}` : "", textPreview ? `Extracted text preview:\n${textPreview}` : ""].filter(Boolean).join("\n\n");
+    const statusLine = readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
+    let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction status: ${statusLine}`].join("\n");
+    block += readable ? `\n\n${readable}` : "\n\nNo extracted text was available for this file in the backend asset metadata at request time.";
+    const remaining = MAX_ATTACHMENT_CONTEXT_CHARS - used;
+    if (remaining <= 0) break;
+    if (block.length > remaining) block = `${block.slice(0, remaining)}\n[Attachment context truncated]`;
+    used += block.length;
+    sections.push(block);
+  }
+
+  return sections.length
+    ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\nUse the attached file context above when answering. If readable_context_available is present, do not say you cannot access the file.`
+    : "";
+}
+
+function buildChatMessages(history: PersistedChatMessage[], userContent: string, scope: StreamsAIScope, attachmentContext = ""): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const result: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt(scope) }];
   const usable = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
   for (const message of usable) {
@@ -248,7 +294,8 @@ function buildChatMessages(history: PersistedChatMessage[], userContent: string,
     if (message.role === "assistant") result.push({ role: "assistant", content });
     else if (message.role === "user") result.push({ role: "user", content });
   }
-  result.push({ role: "user", content: userContent });
+  const userMessage = attachmentContext ? `${attachmentContext}\n\nUser request:\n${userContent}` : userContent;
+  result.push({ role: "user", content: userMessage });
   return result;
 }
 
