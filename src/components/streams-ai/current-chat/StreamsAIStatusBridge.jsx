@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./StreamsAIOperationStatusBridge";
 import { canShowStreamsStatus, isVisibleSafeStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 export default function StreamsAIStatusBridge({ chatRuntime }) {
   const [externalStatus, setExternalStatus] = useState(null);
+  const queueRef = useRef([]);
+  const showingRef = useRef(false);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -22,18 +24,38 @@ export default function StreamsAIStatusBridge({ chatRuntime }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const showStatus = (detail = {}) => {
+    const drainQueue = () => {
+      if (showingRef.current) return;
+      const next = queueRef.current.shift();
+      if (!next) {
+        setExternalStatus(null);
+        return;
+      }
+      showingRef.current = true;
+      setExternalStatus({ statusText: next.statusText, visible: true, createdAt: Date.now() });
+      window.clearTimeout(window.__streamsStatusBridgeTimer);
+      const duration = Math.max(900, Math.min(Number(next.durationMs || 1400), 3200));
+      window.__streamsStatusBridgeTimer = window.setTimeout(() => {
+        showingRef.current = false;
+        drainQueue();
+      }, duration);
+    };
+    const enqueueStatus = (detail = {}) => {
       const text = normalizeStatusText(detail.statusText || detail.text || "");
       if (!canShowStreamsStatus(text)) return;
-      setExternalStatus({ statusText: text, visible: true, createdAt: Date.now() });
-      window.clearTimeout(window.__streamsStatusBridgeTimer);
-      window.__streamsStatusBridgeTimer = window.setTimeout(() => setExternalStatus(null), detail.durationMs || 3200);
+      const last = queueRef.current[queueRef.current.length - 1];
+      if (last?.statusText === text) return;
+      queueRef.current.push({ ...detail, statusText: text });
+      drainQueue();
     };
     const buffered = window.__streamsLastLiveStatus;
-    if (buffered && Date.now() - Number(buffered.emittedAt || 0) < 3000) showStatus(buffered);
-    const onStatus = (event) => showStatus(event?.detail || {});
+    if (buffered && Date.now() - Number(buffered.emittedAt || 0) < 3000) enqueueStatus(buffered);
+    const onStatus = (event) => enqueueStatus(event?.detail || {});
     window.addEventListener("streams:live-status", onStatus);
-    return () => window.removeEventListener("streams:live-status", onStatus);
+    return () => {
+      window.removeEventListener("streams:live-status", onStatus);
+      window.clearTimeout(window.__streamsStatusBridgeTimer);
+    };
   }, []);
 
   const runtimeText = normalizeStatusText(chatRuntime?.activity?.statusText || "");
