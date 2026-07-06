@@ -7,7 +7,22 @@ function emitStatus(statusText, detail = {}) {
   if (typeof window === "undefined") return;
   const text = normalizeStatusText(statusText);
   if (!canShowStreamsStatus(text)) return;
-  window.dispatchEvent(new CustomEvent("streams:live-status", { detail: { statusText: text, ...detail } }));
+  const payload = { statusText: text, ...detail, emittedAt: Date.now() };
+  window.__streamsLastLiveStatus = payload;
+  window.dispatchEvent(new CustomEvent("streams:live-status", { detail: payload }));
+}
+
+function requestPath(input) {
+  const value = typeof input === "string" ? input : input?.url || "";
+  try {
+    return new URL(value, window.location.origin).pathname;
+  } catch {
+    return value;
+  }
+}
+
+function requestHref(input) {
+  return typeof input === "string" ? input : input?.url || "";
 }
 
 function firstFileCount(body) {
@@ -36,13 +51,18 @@ function installStreamsOperationStatusBridge() {
   window.__streamsOperationStatusBridgeInstalled = true;
 
   window.fetch = async (input, init = {}) => {
-    const url = typeof input === "string" ? input : input?.url || "";
+    const path = requestPath(input);
+    const href = requestHref(input);
     const method = String(init?.method || "GET").toUpperCase();
 
-    if (url === "/api/streams-ai/assets" && method === "POST") {
+    if (path === "/api/streams-ai/assets" && method === "POST") {
       const count = firstFileCount(init?.body);
-      emitStatus("Checking file limits…", { source: "upload_validator", backendProof: { fileCount: count } });
-      emitStatus(count > 1 ? `Uploading ${count} files…` : "Uploading 1 file…", { source: "upload_request", backendProof: { fileCount: count } });
+      if (count > 0) {
+        emitStatus("Checking file limits…", { source: "upload_validator", backendProof: { fileCount: count } });
+        emitStatus(count > 1 ? `Uploading ${count} files…` : "Uploading 1 file…", { source: "upload_request", backendProof: { fileCount: count } });
+      } else {
+        emitStatus("Processing file…", { source: "upload_request", backendProof: { fileCount: 0, requestBody: "non_formdata" } });
+      }
       const response = await originalFetch(input, init);
       const data = await response.clone().json().catch(() => ({}));
       if (!response.ok || data?.ok === false || data?.success === false) {
@@ -50,7 +70,7 @@ function installStreamsOperationStatusBridge() {
         return response;
       }
       emitStatus("Upload complete", { source: "storage", backendProof: { httpStatus: response.status } });
-      const assets = Array.isArray(data.assets) ? data.assets : Array.isArray(data.files) ? data.files : [];
+      const assets = Array.isArray(data.assets) ? data.assets : Array.isArray(data.files) ? data.files : data.asset ? [data.asset] : [];
       assets.slice(0, 4).forEach((asset) => emitStatus(assetStatus(asset), { source: "asset_processor", backendProof: { assetId: asset.id, fileType: asset.mimeType || asset.mime_type } }));
       if (assets.some((asset) => asset.textPreview || asset.textChunkCount || asset.summary)) emitStatus("Text extracted", { source: "asset_processor" });
       if (assets.some((asset) => asset.textChunkCount || asset.processingStatus === "ready" || asset.extractionStatus === "ready")) emitStatus("Extraction complete", { source: "asset_processor" });
@@ -58,7 +78,7 @@ function installStreamsOperationStatusBridge() {
       return response;
     }
 
-    if (url.startsWith("/api/streams-ai/projects")) {
+    if (path.startsWith("/api/streams-ai/projects")) {
       if (method === "GET") emitStatus("Loading project files…", { source: "project_store" });
       if (method === "POST" || method === "PATCH") emitStatus("Saving to project…", { source: "project_store" });
       const response = await originalFetch(input, init);
@@ -67,14 +87,14 @@ function installStreamsOperationStatusBridge() {
       return response;
     }
 
-    if (url === "/api/admin-browser/check" && method === "POST") {
+    if (path === "/api/admin-browser/check" && method === "POST") {
       emitStatus("Running checks…", { source: "repo_tool" });
       const response = await originalFetch(input, init);
       emitStatus(response.ok ? "Build complete" : "Build failed", { source: "repo_tool", backendProof: { httpStatus: response.status } });
       return response;
     }
 
-    if (/deploy|deployment|vercel/i.test(url) && method !== "GET") {
+    if (/deploy|deployment|vercel/i.test(href || path) && method !== "GET") {
       emitStatus("Deploying…", { source: "deployment_tool" });
       const response = await originalFetch(input, init);
       emitStatus(response.ok ? "Deployment ready" : "Build failed", { source: "deployment_tool", backendProof: { httpStatus: response.status } });
