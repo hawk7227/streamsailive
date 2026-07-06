@@ -25,6 +25,10 @@ function requestHref(input) {
   return typeof input === "string" ? input : input?.url || "";
 }
 
+function requestMethod(input, init = {}) {
+  return String(init?.method || input?.method || "GET").toUpperCase();
+}
+
 function firstFileCount(body) {
   if (!(body instanceof FormData)) return 0;
   return body.getAll("file").length;
@@ -53,10 +57,10 @@ function installStreamsOperationStatusBridge() {
   window.fetch = async (input, init = {}) => {
     const path = requestPath(input);
     const href = requestHref(input);
-    const method = String(init?.method || "GET").toUpperCase();
+    const method = requestMethod(input, init);
 
     if (path === "/api/streams-ai/assets" && method === "POST") {
-      const count = firstFileCount(init?.body);
+      const count = firstFileCount(init?.body || input?.body);
       if (count > 0) {
         emitStatus("Checking file limits…", { source: "upload_validator", backendProof: { fileCount: count } });
         emitStatus(count > 1 ? `Uploading ${count} files…` : "Uploading 1 file…", { source: "upload_request", backendProof: { fileCount: count } });
