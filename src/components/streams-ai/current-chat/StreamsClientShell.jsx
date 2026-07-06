@@ -165,14 +165,19 @@ async function getCapabilitiesText() {
   return PUBLIC_STREAMS_CAPABILITY_TEXT;
 }
 
-function makeSseResponse(text, mode = "admin-browser") {
+function makeSseResponse(text, mode = "admin-browser", options = {}) {
   const encoder = new TextEncoder();
   const startedAt = Date.now();
+  const isToolResult = mode === "admin-browser";
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(encodeSseEvent("activity", { phase: "tool", mode, statusText: mode === "studio-tools" ? "Preparing capability overview…" : "Running admin browser tool…", startedAt })));
+      if (isToolResult) {
+        controller.enqueue(encoder.encode(encodeSseEvent("activity", { phase: "tool.received", mode: "tool", statusText: "Received app response", startedAt, backendProof: { toolResultReceived: true, mode } })));
+      } else {
+        controller.enqueue(encoder.encode(encodeSseEvent("activity", { phase: "openai.started", mode: "chat", statusText: "Writing…", startedAt })));
+      }
       controller.enqueue(encoder.encode(encodeSseEvent("response", { token: text })));
-      controller.enqueue(encoder.encode(encodeSseEvent("complete", { elapsedMs: Date.now() - startedAt, mode, messageLength: text.length })));
+      controller.enqueue(encoder.encode(encodeSseEvent("complete", { elapsedMs: Date.now() - startedAt, mode, messageLength: text.length, ...(options || {}) })));
       controller.close();
     },
   });
@@ -232,10 +237,10 @@ function installAdminBrowserToolFetchBridge() {
       const body = parseChatBody(init);
       const message = String(body?.message || body?.input || body?.prompt || body?.text || body?.content || "").trim();
       if (isStudioToolListIntent(message)) {
-        try { return makeSseResponse(await getCapabilitiesText(), "studio-tools"); } catch (error) { return makeSseResponse(`Capability overview failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
+        try { return makeSseResponse(await getCapabilitiesText(), "studio-tools", { capabilityResponse: true }); } catch (error) { return makeSseResponse(`Capability overview failed: ${error?.message || "Unknown error"}`, "studio-tools"); }
       }
       if (isAdminBrowserToolIntent(message)) {
-        try { const result = await runAdminBrowserTool(message); return makeSseResponse(result.responseText || `${result.tool} completed.`, "admin-browser"); } catch (error) { return makeSseResponse(`Admin browser tool failed: ${error?.message || "Unknown error"}`, "admin-browser"); }
+        try { const result = await runAdminBrowserTool(message); return makeSseResponse(result.responseText || `${result.tool} completed.`, "admin-browser", { tool: result.tool || "admin-browser" }); } catch (error) { return makeSseResponse(`Admin browser tool failed: ${error?.message || "Unknown error"}`, "admin-browser", { toolError: true }); }
       }
       const nextBody = appendFileContextToMessage(body);
       options.headers.set("Content-Type", "application/json");
