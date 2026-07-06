@@ -1,7 +1,6 @@
 import AdmZip from "adm-zip";
 import * as cheerio from "cheerio";
 import mammoth from "mammoth";
-import pdfParse from "pdf-parse";
 import * as XLSX from "xlsx";
 import { createStreamsAIServiceClient, streamsAISchema } from "@/lib/streams-ai/server";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
@@ -131,10 +130,36 @@ function extractRtf(buffer: Buffer) {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+function countPdfPagesFallback(buffer: Buffer) {
+  const raw = buffer.toString("latin1");
+  const matches = raw.match(/\/Type\s*\/Page\b/g);
+  return matches ? matches.length : 0;
+}
+
+function extractPdfFallbackText(buffer: Buffer) {
+  const raw = buffer.toString("latin1");
+  const literalStrings = Array.from(raw.matchAll(/\(([^()]{3,500})\)/g)).map((match) => match[1]);
+  return cleanText(literalStrings.join(" "), MAX_TEXT_BYTES);
+}
+
 async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
-  const parsed = await pdfParse(buffer);
-  const text = cleanText(parsed.text || "", MAX_TEXT_BYTES);
-  const pageCount = Number(parsed.numpages || 0);
+  let text = "";
+  let pageCount = countPdfPagesFallback(buffer);
+
+  try {
+    const pdfModule: any = await import("pdf-parse");
+    if (pdfModule?.PDFParse) {
+      const parser = new pdfModule.PDFParse({ data: buffer });
+      const result = await parser.getText();
+      text = cleanText(result?.text || "", MAX_TEXT_BYTES);
+      pageCount = Number(result?.total || result?.numpages || result?.numPages || pageCount || 0);
+      await parser.destroy?.();
+    }
+  } catch {
+    // Fall back to lightweight literal-string extraction below.
+  }
+
+  if (!text) text = extractPdfFallbackText(buffer);
   const visualAnalysis = pageCount > 1000
     ? "PDF is over 1000 pages; Claude-style behavior treats it as text-only processing."
     : pageCount > 100
