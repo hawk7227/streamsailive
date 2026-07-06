@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -17,6 +17,30 @@ function getSafeHref(href = "") {
   if (/^(https?:|mailto:|tel:)/i.test(value)) return value;
   if (value.startsWith("/") || value.startsWith("#")) return value;
   return "";
+}
+
+function makeReadableChunks(text = "") {
+  const value = String(text || "");
+  const pieces = [];
+  const pattern = /([^.!?\n]{1,180}[.!?]\s+|[^\n]{1,160}\n+|\S.{0,120}(?:\s+|$))/g;
+  let match;
+  while ((match = pattern.exec(value))) pieces.push(match[0]);
+  return pieces.length ? pieces : value.match(/[\s\S]{1,120}/g) || [];
+}
+
+function scrollStreamingMessage() {
+  if (typeof window === "undefined") return;
+  window.requestAnimationFrame(() => {
+    const nodes = [
+      document.querySelector(".startChatSurface"),
+      document.querySelector(".chatScroll"),
+      document.querySelector(".splitChatScroll"),
+    ].filter(Boolean);
+    const node = nodes[0];
+    if (!node) return;
+    const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
+    if (distance < 220) node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  });
 }
 
 function CopyButton({ value }) {
@@ -99,7 +123,59 @@ function Paragraph({ children }) {
 }
 
 function ChatMarkdownMessage({ content }) {
-  const markdown = useMemo(() => normalizeMarkdownContent(content), [content]);
+  const fullMarkdown = useMemo(() => normalizeMarkdownContent(content), [content]);
+  const [displayMarkdown, setDisplayMarkdown] = useState(fullMarkdown);
+  const initializedRef = useRef(false);
+  const previousFullRef = useRef(fullMarkdown);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    window.clearTimeout(timerRef.current);
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      previousFullRef.current = fullMarkdown;
+      setDisplayMarkdown(fullMarkdown);
+      return undefined;
+    }
+
+    const previous = previousFullRef.current || "";
+    previousFullRef.current = fullMarkdown;
+
+    if (!fullMarkdown.startsWith(previous)) {
+      setDisplayMarkdown(fullMarkdown);
+      return undefined;
+    }
+
+    const delta = fullMarkdown.slice(previous.length);
+    if (!delta) return undefined;
+
+    if (delta.length < 220) {
+      setDisplayMarkdown(fullMarkdown);
+      scrollStreamingMessage();
+      return undefined;
+    }
+
+    const chunks = makeReadableChunks(delta);
+    let index = 0;
+    let current = previous;
+
+    const step = () => {
+      const next = chunks[index];
+      if (!next) return;
+      current += next;
+      index += 1;
+      setDisplayMarkdown(current);
+      scrollStreamingMessage();
+      if (index < chunks.length) {
+        const delay = Math.max(24, Math.min(72, next.length * 0.55));
+        timerRef.current = window.setTimeout(step, delay);
+      }
+    };
+
+    step();
+    return () => window.clearTimeout(timerRef.current);
+  }, [fullMarkdown]);
 
   return (
     <div className="chatMarkdown">
@@ -121,7 +197,7 @@ function ChatMarkdownMessage({ content }) {
           blockquote: ({ children }) => <blockquote>{children}</blockquote>,
         }}
       >
-        {markdown}
+        {displayMarkdown}
       </ReactMarkdown>
     </div>
   );
