@@ -13,10 +13,7 @@ const APPROX_CHARS_PER_TOKEN = 4;
 const ROLLING_UPLOAD_MAX = 80;
 const ROLLING_UPLOAD_WINDOW_MS = 3 * 60 * 60 * 1000;
 const STORAGE_CAP_BYTES = 2 * 1024 * 1024 * 1024;
-const PROJECT_KEY = "streams-ai.projects.v1";
 const ROLLING_KEY = "streams-ai.uploads.rolling.v1";
-const STORAGE_KEY = "streams-ai.uploads.storage.v1";
-const ACTIVE_PROJECT_KEY = "streams-ai.active-project.v1";
 
 const ACCEPTED_EXTENSIONS = new Set([
   "pdf", "doc", "docx", "csv", "txt", "html", "htm", "odt", "rtf", "epub", "json", "xls", "xlsx", "ppt", "pptx", "md",
@@ -48,34 +45,8 @@ function isPdf(file) { return fileExtension(file) === "pdf" || file?.type === "a
 function currentSessionId() {
   try {
     const parts = window.location.pathname.split("/").filter(Boolean);
-    return parts[0] === "streams-ai" && parts[1] ? parts[1] : "general";
-  } catch { return "general"; }
-}
-function activeProjectId() {
-  try { return window.localStorage.getItem(ACTIVE_PROJECT_KEY) || "general"; } catch { return "general"; }
-}
-function readProjects() {
-  const data = readJson(PROJECT_KEY, []);
-  return Array.isArray(data) ? data : [];
-}
-function writeProjects(projects) {
-  writeJson(PROJECT_KEY, projects);
-  window.dispatchEvent(new Event("streams:projects-changed"));
-}
-function ensureProject() {
-  const projects = readProjects();
-  const active = activeProjectId();
-  let project = projects.find((item) => item.id === active);
-  if (!project) {
-    project = { id: active === "general" ? "project_general" : active, name: active === "general" ? "General project" : "Current project", instructions: "", files: [], chatIds: [], createdAt: nowIso(), updatedAt: nowIso() };
-    writeProjects([project, ...projects]);
-  }
-  return project;
-}
-function updateProject(project) {
-  const projects = readProjects();
-  const next = [{ ...project, updatedAt: nowIso() }, ...projects.filter((item) => item.id !== project.id)];
-  writeProjects(next);
+    return parts[0] === "streams-ai" && parts[1] ? parts[1] : "";
+  } catch { return ""; }
 }
 function recentRollingUploads() {
   const cutoff = Date.now() - ROLLING_UPLOAD_WINDOW_MS;
@@ -84,14 +55,6 @@ function recentRollingUploads() {
 function recordRollingUploads(count) {
   const next = [...recentRollingUploads(), ...Array.from({ length: count }, () => ({ time: Date.now() }))];
   writeJson(ROLLING_KEY, next);
-  return next;
-}
-function storageUsedBytes() {
-  return Number(readJson(STORAGE_KEY, { used: 0 })?.used || 0);
-}
-function addStorageBytes(bytes) {
-  const next = Math.max(0, storageUsedBytes() + Number(bytes || 0));
-  writeJson(STORAGE_KEY, { used: next, cap: STORAGE_CAP_BYTES, updatedAt: nowIso() });
   return next;
 }
 function countPdfPagesFromText(text) {
@@ -116,8 +79,25 @@ function imageDimensions(file) {
     img.src = url;
   });
 }
+async function projectApi(method = "GET", body = null) {
+  const options = { method, headers: {} };
+  if (body) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch("/api/streams-ai/projects", options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Project persistence failed");
+  return data.project || null;
+}
+async function loadProject() {
+  return projectApi("GET");
+}
+async function saveProjectPatch(patch) {
+  return projectApi("PATCH", patch);
+}
 
-async function validateFiles(files, existingCount = 0, context = "chat") {
+async function validateFiles(files, existingCount = 0, context = "chat", projectStorageUsedBytes = 0) {
   const accepted = [];
   const rejected = [];
   const warnings = [];
@@ -131,7 +111,7 @@ async function validateFiles(files, existingCount = 0, context = "chat") {
     rejected.push(`Rolling upload limit reached: ${ROLLING_UPLOAD_MAX} uploads per 3 hours. Try again later or remove files.`);
     return { accepted, rejected, warnings };
   }
-  const projectedStorage = storageUsedBytes() + files.reduce((sum, file) => sum + (file.size || 0), 0);
+  const projectedStorage = projectStorageUsedBytes + files.reduce((sum, file) => sum + (file.size || 0), 0);
   if (projectedStorage > STORAGE_CAP_BYTES) {
     rejected.push(`Storage cap reached: ${bytesLabel(projectedStorage)} would exceed ${bytesLabel(STORAGE_CAP_BYTES)}.`);
     return { accepted, rejected, warnings };
@@ -182,7 +162,7 @@ async function validateFiles(files, existingCount = 0, context = "chat") {
     }
     accepted.push(file);
   }
-  return { accepted, rejected, warnings };
+  return { accepted, rejected, warnings, projectedStorage };
 }
 
 function addBridgeStyle() {
@@ -193,11 +173,10 @@ function addBridgeStyle() {
     .streamsDropTarget{position:fixed;inset:14px;z-index:9999;border:2px dashed rgba(34,211,238,.78);border-radius:24px;background:rgba(2,7,19,.78);display:grid;place-items:center;color:#fff;font:900 18px/1.25 Inter,system-ui;pointer-events:none;box-shadow:0 0 42px rgba(124,58,237,.36)}
     .streamsComposerParityToast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;max-width:min(620px,calc(100vw - 24px));border:1px solid rgba(168,85,247,.38);border-radius:16px;background:rgba(15,23,42,.96);color:#fff;padding:10px 12px;font:750 12px/1.4 Inter,system-ui;box-shadow:0 18px 60px rgba(0,0,0,.36)}
     .streamsComposerParityToast b{display:block;color:#fff;margin-bottom:4px}.streamsComposerParityToast p{margin:4px 0;color:#e2e8f0}.streamsComposerParityToast button{margin-top:8px;border:0;border-radius:999px;background:#7c3aed;color:#fff;font-weight:900;padding:7px 10px}
-    .streamsProjectFilesPanel{margin-top:14px;border:1px solid rgba(148,163,184,.16);border-radius:18px;background:rgba(15,23,42,.58);padding:12px;color:#eaf2ff}.streamsProjectFilesPanel h2{margin:0 0 8px;font-size:16px}.streamsProjectFilesPanel textarea,.streamsProjectFilesPanel input{width:100%;box-sizing:border-box;border:1px solid rgba(168,85,247,.32);border-radius:12px;background:rgba(2,7,19,.72);color:#fff;padding:9px;font:700 12px/1.35 Inter,system-ui}.streamsProjectFilesPanel button{border:0;border-radius:12px;background:#7c3aed;color:#fff;font-weight:900;padding:8px 10px}.streamsProjectFilesPanel .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.streamsProjectFilesPanel .file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid rgba(148,163,184,.14);border-radius:12px;padding:8px;background:rgba(2,7,19,.44);margin-top:6px}.streamsProjectFilesPanel small{display:block;color:#9fb3d6;margin-top:3px}.streamsProjectFilesPanel .warn{color:#fbbf24}.streamsProjectFilesPanel .storage{font-size:11px;color:#cbd5e1;margin:8px 0}
+    .streamsProjectFilesPanel{margin-top:14px;border:1px solid rgba(148,163,184,.16);border-radius:18px;background:rgba(15,23,42,.58);padding:12px;color:#eaf2ff}.streamsProjectFilesPanel h2{margin:0 0 8px;font-size:16px}.streamsProjectFilesPanel textarea,.streamsProjectFilesPanel input{width:100%;box-sizing:border-box;border:1px solid rgba(168,85,247,.32);border-radius:12px;background:rgba(2,7,19,.72);color:#fff;padding:9px;font:700 12px/1.35 Inter,system-ui}.streamsProjectFilesPanel button{border:0;border-radius:12px;background:#7c3aed;color:#fff;font-weight:900;padding:8px 10px}.streamsProjectFilesPanel .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.streamsProjectFilesPanel .file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid rgba(148,163,184,.14);border-radius:12px;padding:8px;background:rgba(2,7,19,.44);margin-top:6px}.streamsProjectFilesPanel small{display:block;color:#9fb3d6;margin-top:3px}.streamsProjectFilesPanel .warn{color:#fbbf24}.streamsProjectFilesPanel .storage{font-size:11px;color:#cbd5e1;margin:8px 0}.streamsProjectFilesPanel .error{color:#fca5a5}
   `;
   document.head.appendChild(style);
 }
-
 function showToast(lines, title = "Upload notice", retryFiles = null, onUpload = null) {
   document.querySelector(".streamsComposerParityToast")?.remove();
   const el = document.createElement("div");
@@ -213,57 +192,69 @@ function showToast(lines, title = "Upload notice", retryFiles = null, onUpload =
   document.body.appendChild(el);
   window.setTimeout(() => el.remove(), retryFiles?.length ? 12000 : 8000);
 }
-
+function projectFileRecord(file) {
+  return {
+    id: createId("project_file"),
+    name: file.name,
+    mimeType: file.type || "application/octet-stream",
+    kind: isImage(file) ? "image" : isPdf(file) ? "pdf" : isSpreadsheet(file) ? "spreadsheet" : "file",
+    sizeBytes: file.size,
+    createdAt: nowIso(),
+    pdfNote: isPdf(file) ? "PDF page rules checked before upload" : "",
+  };
+}
 function renderProjectPanel(chatRuntime, uploadToProject) {
   const module = Array.from(document.querySelectorAll(".module")).find((node) => /Open a brand or project/i.test(node.textContent || ""));
   if (!module || module.querySelector(".streamsProjectFilesPanel")) return;
-  const project = ensureProject();
   const panel = document.createElement("section");
   panel.className = "streamsProjectFilesPanel";
-  const currentChat = currentSessionId();
-  const storageUsed = storageUsedBytes();
-  panel.innerHTML = `
-    <h2>Project files + instructions</h2>
-    <div class="storage">Storage: ${bytesLabel(storageUsed)} / ${bytesLabel(STORAGE_CAP_BYTES)} · Rolling uploads: ${recentRollingUploads().length}/${ROLLING_UPLOAD_MAX}</div>
-    <label><small>Project name</small><input data-project-name value="${project.name || "Current project"}" /></label>
-    <label><small>Custom project instructions</small><textarea data-project-instructions rows="4" placeholder="Instructions that apply to future chats in this project">${project.instructions || ""}</textarea></label>
-    <div class="row"><button type="button" data-save-project>Save project</button><button type="button" data-move-chat>Move current chat into project</button><button type="button" data-add-project-files>Add project files</button><button type="button" data-delete-project>Delete project files</button></div>
-    <div data-project-list>${(project.files || []).length ? project.files.map((file) => `<div class="file"><div><b>${file.name}</b><small>${file.kind || "file"} · ${bytesLabel(file.sizeBytes || 0)}${file.pdfNote ? ` · <span class="warn">${file.pdfNote}</span>` : ""}</small></div><button type="button" data-remove-file="${file.id}">Remove</button></div>`).join("") : "<small>No project files yet.</small>"}</div>
-  `;
+  panel.innerHTML = `<h2>Project files + instructions</h2><div class="storage">Loading Supabase project…</div>`;
   module.appendChild(panel);
-  panel.querySelector("[data-save-project]")?.addEventListener("click", () => {
-    const next = { ...project, name: panel.querySelector("[data-project-name]")?.value || project.name, instructions: panel.querySelector("[data-project-instructions]")?.value || "" };
-    updateProject(next);
-    showToast(["Project name and custom instructions saved. They persist for future project chats."], "Project saved");
+
+  loadProject().then((project) => {
+    if (!panel.isConnected) return;
+    const files = Array.isArray(project?.files) ? project.files : [];
+    const storageUsed = Number(project?.storageUsedBytes || files.reduce((sum, file) => sum + Number(file?.sizeBytes || 0), 0));
+    panel.innerHTML = `
+      <h2>Project files + instructions</h2>
+      <div class="storage">Supabase project: ${project?.id || "default"} · Storage: ${bytesLabel(storageUsed)} / ${bytesLabel(STORAGE_CAP_BYTES)} · Rolling uploads: ${recentRollingUploads().length}/${ROLLING_UPLOAD_MAX}</div>
+      <label><small>Project name</small><input data-project-name value="${project?.name || "Current project"}" /></label>
+      <label><small>Custom project instructions</small><textarea data-project-instructions rows="4" placeholder="Instructions that apply to future chats in this project">${project?.instructions || ""}</textarea></label>
+      <div class="row"><button type="button" data-save-project>Save project</button><button type="button" data-move-chat>Move current chat into project</button><button type="button" data-add-project-files>Add project files</button><button type="button" data-delete-project>Delete project files</button></div>
+      <div data-project-list>${files.length ? files.map((file) => `<div class="file"><div><b>${file.name}</b><small>${file.kind || "file"} · ${bytesLabel(file.sizeBytes || 0)}${file.pdfNote ? ` · <span class="warn">${file.pdfNote}</span>` : ""}</small></div><button type="button" data-remove-file="${file.id || file.assetId}">Remove</button></div>`).join("") : "<small>No project files yet.</small>"}</div>
+    `;
+    panel.querySelector("[data-save-project]")?.addEventListener("click", async () => {
+      const next = await saveProjectPatch({ name: panel.querySelector("[data-project-name]")?.value || project.name, instructions: panel.querySelector("[data-project-instructions]")?.value || "" });
+      showToast([`Project saved to Supabase: ${next?.name || "Current project"}`], "Project saved");
+    });
+    panel.querySelector("[data-move-chat]")?.addEventListener("click", async () => {
+      const sessionId = currentSessionId();
+      if (!sessionId) return showToast(["Open or create a saved chat session before moving it into a project."], "No saved chat yet");
+      await saveProjectPatch({ moveSessionId: sessionId });
+      showToast([`Current chat ${sessionId} moved into the Supabase project.`], "Chat moved");
+    });
+    panel.querySelector("[data-add-project-files]")?.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      input.accept = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
+      input.onchange = () => uploadToProject(Array.from(input.files || []), project);
+      input.click();
+    });
+    panel.querySelector("[data-delete-project]")?.addEventListener("click", async () => {
+      await saveProjectPatch({ clearFiles: true });
+      panel.remove();
+      renderProjectPanel(chatRuntime, uploadToProject);
+      showToast(["Project files removed from Supabase project metadata. Chat uploads remain in their individual chat history."], "Project files deleted");
+    });
+    panel.querySelectorAll("[data-remove-file]").forEach((button) => button.addEventListener("click", async () => {
+      await saveProjectPatch({ removeFileId: button.getAttribute("data-remove-file") });
+      panel.remove();
+      renderProjectPanel(chatRuntime, uploadToProject);
+    }));
+  }).catch((error) => {
+    panel.innerHTML = `<h2>Project files + instructions</h2><div class="error">Supabase project load failed: ${String(error?.message || error)}</div>`;
   });
-  panel.querySelector("[data-move-chat]")?.addEventListener("click", () => {
-    const next = { ...ensureProject() };
-    next.chatIds = Array.from(new Set([...(next.chatIds || []), currentChat]));
-    updateProject(next);
-    showToast([`Current chat ${currentChat} moved into this project context.`], "Chat moved");
-  });
-  panel.querySelector("[data-add-project-files]")?.addEventListener("click", () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
-    input.onchange = () => uploadToProject(Array.from(input.files || []));
-    input.click();
-  });
-  panel.querySelector("[data-delete-project]")?.addEventListener("click", () => {
-    const next = { ...ensureProject(), files: [] };
-    updateProject(next);
-    panel.remove();
-    renderProjectPanel(chatRuntime, uploadToProject);
-    showToast(["Project files removed. Chat uploads remain in their individual chat history."], "Project files deleted");
-  });
-  panel.querySelectorAll("[data-remove-file]").forEach((button) => button.addEventListener("click", () => {
-    const id = button.getAttribute("data-remove-file");
-    const next = { ...ensureProject(), files: (ensureProject().files || []).filter((file) => file.id !== id) };
-    updateProject(next);
-    panel.remove();
-    renderProjectPanel(chatRuntime, uploadToProject);
-  }));
 }
 
 export default function StreamsAIComposerParityBridge({ chatRuntime }) {
@@ -275,24 +266,22 @@ export default function StreamsAIComposerParityBridge({ chatRuntime }) {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     addBridgeStyle();
-    const uploadFiles = async (files, context = "chat") => {
+    const uploadFiles = async (files, context = "chat", project = null) => {
       const list = Array.from(files || []);
       if (!list.length) return;
       const existing = runtimeRef.current?.composerAttachments?.length || 0;
-      const result = await validateFiles(list, existing, context);
+      const projectStorage = context === "project" ? Number(project?.storageUsedBytes || 0) : 0;
+      const result = await validateFiles(list, existing, context, projectStorage);
       if (result.rejected.length || result.warnings.length) showToast([...result.rejected, ...result.warnings], result.rejected.length ? "Upload blocked" : "Upload rules", result.accepted, uploadFiles);
       if (!result.accepted.length) return;
       lastAcceptedRef.current = result.accepted;
       recordRollingUploads(result.accepted.length);
-      addStorageBytes(result.accepted.reduce((sum, file) => sum + (file.size || 0), 0));
       if (context === "project") {
-        const nextProject = { ...ensureProject() };
-        const projectFiles = result.accepted.map((file) => ({ id: createId("project_file"), name: file.name, mimeType: file.type || "application/octet-stream", kind: isImage(file) ? "image" : isPdf(file) ? "pdf" : isSpreadsheet(file) ? "spreadsheet" : "file", sizeBytes: file.size, createdAt: nowIso(), pdfNote: isPdf(file) ? "PDF page rules checked before upload" : "" }));
-        nextProject.files = [...projectFiles, ...(nextProject.files || [])];
-        updateProject(nextProject);
+        const records = result.accepted.map(projectFileRecord);
+        await saveProjectPatch({ files: records });
         runtimeRef.current?.uploadFiles?.(result.accepted);
         window.setTimeout(() => document.querySelector(".streamsProjectFilesPanel")?.remove(), 50);
-        window.setTimeout(() => renderProjectPanel(runtimeRef.current, (f) => uploadFiles(f, "project")), 80);
+        window.setTimeout(() => renderProjectPanel(runtimeRef.current, (f, p) => uploadFiles(f, "project", p)), 80);
         return;
       }
       runtimeRef.current?.uploadFiles?.(result.accepted);
@@ -325,7 +314,7 @@ export default function StreamsAIComposerParityBridge({ chatRuntime }) {
         uploadFiles(lastAcceptedRef.current, "chat");
       }
     };
-    const renderInterval = window.setInterval(() => renderProjectPanel(runtimeRef.current, (f) => uploadFiles(f, "project")), 600);
+    const renderInterval = window.setInterval(() => renderProjectPanel(runtimeRef.current, (f, p) => uploadFiles(f, "project", p)), 600);
     document.addEventListener("paste", onPaste, true);
     document.addEventListener("dragover", onDragOver, true);
     document.addEventListener("dragleave", onDragLeave, true);
