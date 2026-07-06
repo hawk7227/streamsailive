@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import "./StreamsAIOperationStatusBridge";
 import { canShowStreamsStatus, isVisibleSafeStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 export default function StreamsAIStatusBridge({ chatRuntime }) {
