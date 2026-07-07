@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import "./StreamsAIComposerMobileEnterBridge";
 import { canShowStreamsStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 function emitStatus(statusText, detail = {}) {
