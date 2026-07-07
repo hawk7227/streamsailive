@@ -1,11 +1,13 @@
-/* StreamsAI real two-row composer contract.
-   JSX is now split into a text row and an action row, so textarea growth is not fighting buttons. */
+/* StreamsAI composer layout repair.
+   Keep the base composer contract from streams-composer.css:
+   - .streamsComposer min-height: 104px
+   - original compact visual frame/glow/radius
+   This file only positions the clean JSX rows inside that existing frame. */
+
 .streamsComposer {
-  min-height: 72px !important;
   height: auto !important;
   max-height: none !important;
   overflow: visible !important;
-  padding: 10px 12px !important;
   box-sizing: border-box !important;
 }
 
@@ -14,21 +16,24 @@
   z-index: 3 !important;
   width: 100% !important;
   display: block !important;
-  min-height: 34px !important;
-  margin: 0 0 8px 0 !important;
+  min-height: 30px !important;
+  margin: 0 !important;
+  padding: 0 2px !important;
+  box-sizing: border-box !important;
 }
 
 .streamsComposerActionRow {
   position: relative !important;
   z-index: 3 !important;
   width: 100% !important;
-  min-height: 48px !important;
+  min-height: 46px !important;
   display: grid !important;
   grid-template-columns: 46px minmax(0, 1fr) auto auto 58px !important;
   grid-template-areas: "add spacer model mic send" !important;
   align-items: center !important;
   gap: 8px !important;
-  padding: 0 !important;
+  padding: 2px 0 0 !important;
+  box-sizing: border-box !important;
 }
 
 .streamsComposerTextRow::before,
@@ -40,8 +45,8 @@
   display: block !important;
   width: 100% !important;
   min-width: 0 !important;
-  min-height: 34px !important;
-  max-height: 220px !important;
+  min-height: 30px !important;
+  max-height: 168px !important;
   height: auto;
   resize: none !important;
   overflow-x: hidden !important;
@@ -51,10 +56,10 @@
   word-break: break-word !important;
   appearance: none !important;
   -webkit-appearance: none !important;
-  padding: 7px 4px 8px !important;
+  padding: 4px 0 4px !important;
   margin: 0 !important;
   box-sizing: border-box !important;
-  line-height: 1.34 !important;
+  line-height: 1.24 !important;
   scrollbar-width: thin;
 }
 
@@ -108,7 +113,7 @@
   max-width: min(360px, calc(100vw - 120px)) !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  margin: 0 0 8px 54px !important;
+  margin: 0 0 6px 54px !important;
 }
 
 .streamsComposerToolPill strong {
@@ -117,33 +122,32 @@
 }
 
 .startWorkspaceActive .startComposerWrap {
-  bottom: max(28px, env(safe-area-inset-bottom)) !important;
+  bottom: max(38px, env(safe-area-inset-bottom)) !important;
 }
 
 @media (max-width: 760px) {
   .streamsComposer {
-    min-height: 68px !important;
-    padding: 8px 9px !important;
     border-radius: 24px !important;
   }
 
   .streamsComposerTextRow {
-    margin-bottom: 7px !important;
+    min-height: 30px !important;
+    padding: 0 1px !important;
   }
 
   .streamsComposerActionRow {
-    min-height: 46px !important;
+    min-height: 44px !important;
     grid-template-columns: 42px minmax(0, 1fr) 48px !important;
     grid-template-areas: "add spacer send" !important;
     gap: 7px !important;
   }
 
   .streamsComposerInput {
-    min-height: 32px !important;
-    max-height: min(160px, 34dvh) !important;
+    min-height: 30px !important;
+    max-height: min(150px, 32dvh) !important;
     font-size: 16px !important;
-    line-height: 1.34 !important;
-    padding: 7px 2px 7px !important;
+    line-height: 1.28 !important;
+    padding: 4px 0 !important;
   }
 
   .streamsComposerPill,
@@ -168,12 +172,6 @@
 }
 
 @media (max-width: 430px) {
-  .streamsComposer {
-    min-height: 66px !important;
-    padding: 7px 8px !important;
-    border-radius: 22px !important;
-  }
-
   .streamsComposerActionRow {
     grid-template-columns: 40px minmax(0, 1fr) 46px !important;
     gap: 6px !important;
@@ -181,7 +179,7 @@
 
   .streamsComposerInput {
     font-size: 15px !important;
-    max-height: min(148px, 32dvh) !important;
+    max-height: min(138px, 30dvh) !important;
   }
 
   .streamsComposerIconButton { width: 40px !important; height: 40px !important; }
