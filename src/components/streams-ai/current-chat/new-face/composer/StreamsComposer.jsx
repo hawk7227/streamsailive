@@ -5,8 +5,9 @@ import "./chat-message-text-fix.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 
 const MODES = ["Thinking", "Configure..."];
-const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
-const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
+const COMPOSER_TEXTAREA_MIN_HEIGHT = 34;
+const COMPOSER_TEXTAREA_MAX_HEIGHT = 220;
+const MOBILE_TEXTAREA_MAX_HEIGHT = 160;
 const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
 
 const BASE_TOOL_ITEMS = [
@@ -22,12 +23,17 @@ const MOBILE_TOOL_ITEMS = [
   { id: "voice_mic", icon: "🎙", label: "Voice / Mic", shortcut: "Realtime", enabled: true },
 ];
 
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.innerWidth < 900;
+}
+
 function autosizeComposerTextarea(node) {
   if (!node) return;
+  const max = isMobileViewport() ? MOBILE_TEXTAREA_MAX_HEIGHT : COMPOSER_TEXTAREA_MAX_HEIGHT;
   node.style.height = "0px";
-  const nextHeight = Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT, Math.max(COMPOSER_TEXTAREA_MIN_HEIGHT, node.scrollHeight));
+  const nextHeight = Math.min(max, Math.max(COMPOSER_TEXTAREA_MIN_HEIGHT, node.scrollHeight));
   node.style.height = `${nextHeight}px`;
-  node.style.overflowY = node.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+  node.style.overflowY = node.scrollHeight > max ? "auto" : "hidden";
 }
 
 export default function StreamsComposer({
@@ -97,19 +103,15 @@ export default function StreamsComposer({
 
   useEffect(() => {
     if (!activeMenu) return undefined;
-
     const closeOnEscape = (event) => {
       if (event.key === "Escape") setActiveMenu("");
     };
-
     const closeOnOutside = (event) => {
       if (!composerRef.current) return;
       if (!composerRef.current.contains(event.target)) setActiveMenu("");
     };
-
     window.addEventListener("keydown", closeOnEscape);
     window.addEventListener("pointerdown", closeOnOutside);
-
     return () => {
       window.removeEventListener("keydown", closeOnEscape);
       window.removeEventListener("pointerdown", closeOnOutside);
@@ -157,34 +159,24 @@ export default function StreamsComposer({
 
   function handleModeSelection(nextMode) {
     setActiveMenu("");
-
     if (nextMode === "Configure...") {
       window.location.assign("/account/personalization");
       return;
     }
-
     setMode(nextMode);
     onModeChange?.(nextMode);
   }
 
   function submit() {
     if (isDisabled) return;
-
     const value = message.trim();
     const readyAttachments = Array.isArray(libraryFiles) ? libraryFiles.filter((file) => file.status !== "uploading") : [];
     const hasAttachments = readyAttachments.length > 0;
     if (!value && !hasAttachments) return;
 
     let finalMessage = value || `Review the attached file${readyAttachments.length === 1 ? "" : "s"}.`;
-
-    if (selectedTool?.id === "create_image") {
-      finalMessage = "Create an image of " + finalMessage;
-    }
-
-    if (selectedTool?.id === "url") {
-      finalMessage = "Read the URL: " + finalMessage;
-    }
-
+    if (selectedTool?.id === "create_image") finalMessage = "Create an image of " + finalMessage;
+    if (selectedTool?.id === "url") finalMessage = "Read the URL: " + finalMessage;
     if (selectedTool?.id === "web_search") {
       if (!webSearchStatus.configured) {
         setBlockedNotice(webSearchStatus.blockedReason);
@@ -192,7 +184,6 @@ export default function StreamsComposer({
         setActiveMenu("");
         return;
       }
-
       finalMessage = value;
     }
 
@@ -200,7 +191,6 @@ export default function StreamsComposer({
     setSelectedTool(null);
     setActiveMenu("");
     setBlockedNotice("");
-
     onSubmit?.({
       message: finalMessage,
       composerMode: selectedTool?.id === "url" ? "url" : "chat",
@@ -222,36 +212,30 @@ export default function StreamsComposer({
       setActiveMenu("");
       return;
     }
-
     if (item.id === "files") {
       setActiveMenu("");
       setTimeout(() => fileInputRef.current?.click(), 50);
       return;
     }
-
     if (item.id === "url" || item.id === "create_image" || item.id === "web_search") {
       setSelectedTool((current) => (current?.id === item.id ? null : item));
       setBlockedNotice("");
       setActiveMenu("");
       return;
     }
-
     if (item.id === "mode_thinking") {
       handleModeSelection("Thinking");
       return;
     }
-
     if (item.id === "configure") {
       handleModeSelection("Configure...");
       return;
     }
-
     if (item.id === "voice_mic") {
       setActiveMenu("");
       setVoicePanelOpen(true);
       return;
     }
-
     onToolSelect?.(item.id);
     setActiveMenu("");
   }
@@ -269,11 +253,7 @@ export default function StreamsComposer({
           {isUploading ? <span className="streamsComposerAttachmentOverlay">Uploading</span> : null}
           {isError ? <span className="streamsComposerAttachmentOverlay">⚠️ Retry from upload notice</span> : null}
           {!isUploading ? (
-            <button
-              type="button"
-              aria-label={`Remove ${file.name || "attachment"}`}
-              onClick={() => onRemoveFile?.(file.id)}
-            >
+            <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>
               ×
             </button>
           ) : null}
@@ -287,11 +267,7 @@ export default function StreamsComposer({
         <strong>{file.name || "File"}</strong>
         {isError ? <em>Retry from upload notice</em> : null}
         {!isUploading ? (
-          <button
-            type="button"
-            aria-label={`Remove ${file.name || "attachment"}`}
-            onClick={() => onRemoveFile?.(file.id)}
-          >
+          <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>
             ×
           </button>
         ) : null}
@@ -302,42 +278,24 @@ export default function StreamsComposer({
   return (
     <section ref={composerRef} className="streamsComposer" aria-label="Streams composer">
       {libraryFiles && libraryFiles.length > 0 ? (
-        <div className="streamsComposerAttachments">
-          {libraryFiles.map(renderFileAttachment)}
-        </div>
+        <div className="streamsComposerAttachments">{libraryFiles.map(renderFileAttachment)}</div>
       ) : null}
 
       {blockedNotice ? (
-        <div className="streamsComposerBlockedNotice" role="status">
-          {blockedNotice}
+        <div className="streamsComposerBlockedNotice" role="status">{blockedNotice}</div>
+      ) : null}
+
+      {selectedTool ? (
+        <div className="streamsComposerToolPill">
+          <span>{selectedTool.icon}</span>
+          <strong>{selectedTool.label}</strong>
+          <button type="button" className="streamsComposerToolPillClose" aria-label={`Clear ${selectedTool.label}`} onClick={() => setSelectedTool(null)}>
+            ×
+          </button>
         </div>
       ) : null}
 
-      <div className="streamsComposerRow">
-        <button
-          type="button"
-          className="streamsComposerIconButton"
-          aria-label="Open tools"
-          onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}
-        >
-          +
-        </button>
-
-        {selectedTool ? (
-          <div className="streamsComposerToolPill">
-            <span>{selectedTool.icon}</span>
-            <strong>{selectedTool.label}</strong>
-            <button
-              type="button"
-              className="streamsComposerToolPillClose"
-              aria-label={`Clear ${selectedTool.label}`}
-              onClick={() => setSelectedTool(null)}
-            >
-              ×
-            </button>
-          </div>
-        ) : null}
-
+      <div className="streamsComposerTextRow">
         <textarea
           ref={inputRef}
           className="streamsComposerInput"
@@ -352,59 +310,28 @@ export default function StreamsComposer({
           }}
           onInput={(event) => autosizeComposerTextarea(event.currentTarget)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && !event.shiftKey && !isMobileViewport()) {
               event.preventDefault();
               submit();
             }
           }}
         />
-
-        <button
-          type="button"
-          className="streamsComposerPill"
-          aria-label="Open model menu"
-          onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}
-        >
-          {mode}⌄
-        </button>
-
-        <button
-          type="button"
-          className="streamsComposerMicButton"
-          aria-label="Start realtime voice conversation"
-          onClick={() => {
-            setActiveMenu("");
-            setVoicePanelOpen(true);
-          }}
-        >
-          🎙
-        </button>
-
-        <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>
-          ↑
-        </button>
       </div>
 
-      <input
-        aria-label="Add photos and files"
-        type="file"
-        multiple
-        accept={ACCEPTED_UPLOAD_TYPES}
-        hidden
-        ref={fileInputRef}
-        onChange={handleFileChange}
-      />
+      <div className="streamsComposerActionRow">
+        <button type="button" className="streamsComposerIconButton" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
+        <div className="streamsComposerActionSpacer" />
+        <button type="button" className="streamsComposerPill" aria-label="Open model menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
+        <button type="button" className="streamsComposerMicButton" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
+        <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>↑</button>
+      </div>
+
+      <input aria-label="Add photos and files" type="file" multiple accept={ACCEPTED_UPLOAD_TYPES} hidden ref={fileInputRef} onChange={handleFileChange} />
 
       {activeMenu === "tools" ? (
         <div className="streamsComposerMenu toolsMenu" role="menu">
           {toolItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={!item.enabled}
-              aria-disabled={!item.enabled}
-              onClick={() => handleTool(item)}
-            >
+            <button key={item.id} type="button" disabled={!item.enabled} aria-disabled={!item.enabled} onClick={() => handleTool(item)}>
               <span>{item.icon}</span>
               <strong>{item.label}</strong>
               <em>{item.enabled ? item.shortcut || "" : "Not configured"}</em>
