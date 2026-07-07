@@ -9,6 +9,7 @@ import StreamingRecoveryBanner from "./StreamingRecoveryBanner";
 import MemoryControlsPanel from "./MemoryControlsPanel";
 import StreamsAIComposerParityBridge from "./StreamsAIComposerParityBridge";
 import StreamsAIStatusBridge from "./StreamsAIStatusBridge";
+import StreamsAIInlineActivityBridge from "./StreamsAIInlineActivityBridge";
 import { isAdminBrowserToolIntent, runAdminBrowserTool } from "./runtime/adminBrowserToolsClient";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -267,5 +268,5 @@ export default function StreamsClientShell() {
   useEffect(() => installComposerUploadBridge(), []);
 
   if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
-  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><StreamsAIComposerParityBridge chatRuntime={chatRuntime} /><StreamsAIStatusBridge chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><StreamsAIComposerParityBridge chatRuntime={chatRuntime} /><StreamsAIInlineActivityBridge chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
 }
