@@ -9,6 +9,8 @@ const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
 const SOURCE = "streams-ai-openai-responses-live";
 const MAX_HISTORY_MESSAGES = 16;
+const DEFAULT_TIME_ZONE = "America/Phoenix";
+const DEFAULT_TIME_ZONE_LABEL = "MST";
 
 type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
 type Send = (event: string, payload: Record<string, unknown>) => void;
@@ -25,6 +27,16 @@ function chunks(text: string, size = 180) {
   const out: string[] = [];
   for (let i = 0; i < String(text || "").length; i += size) out.push(String(text || "").slice(i, i + size));
   return out.length ? out : [""];
+}
+
+function isTimeIntent(text: string) {
+  const value = String(text || "").trim().toLowerCase();
+  if (!value) return false;
+  return /\b(what time is it|time now|current time|my time|time in my location|what'?s the time|show me the time)\b/.test(value);
+}
+
+function formatLocalTime(date: Date, timeZone = DEFAULT_TIME_ZONE) {
+  return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }).format(date);
 }
 
 function extractResponseText(json: any) {
@@ -104,6 +116,15 @@ export async function memoryMessagesPOST(request: NextRequest) {
       let sessionId = body.sessionId || "";
       try {
         send("activity", { phase: "server.timestamp", statusText: serverTimestamp, source: "streams-server-clock", sessionId, backendProof: { serverTimestamp } });
+        if (isTimeIntent(userContent)) {
+          const localTime = formatLocalTime(new Date(startedAt));
+          const content = `Your current time in Arizona is ${localTime} ${DEFAULT_TIME_ZONE_LABEL}.\n\nServer timestamp: ${serverTimestamp}\nTimezone: ${DEFAULT_TIME_ZONE}`;
+          for (const token of chunks(content)) send("response", { token });
+          const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: content, body, assistantStatus: "complete", assistantMetadata: { source: "streams-server-clock", provider: "server-clock", providerRoute: "server-time-fast-path", providerStatus: "ok", webGrounded: false, ungroundedFallbackUsed: false, serverTimestamp, timeZone: DEFAULT_TIME_ZONE } });
+          sessionId = persisted.sessionId;
+          send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: "server-clock", providerRoute: "server-time-fast-path", providerStatus: "ok", webGrounded: false, ungroundedFallbackUsed: false, serverTimestamp, timeZone: DEFAULT_TIME_ZONE, elapsedMs: Date.now() - startedAt });
+          return;
+        }
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) throw new Error("OPENAI_API_KEY is required");
         const history = await getHistoryForPrompt(scope, sessionId, userContent);
