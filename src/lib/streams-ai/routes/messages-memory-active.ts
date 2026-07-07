@@ -92,7 +92,7 @@ export async function memoryMessagesGET(request: NextRequest) {
     const sessionId = request.nextUrl.searchParams.get("sessionId");
     if (!sessionId) return streamsAIJson({ ok: false, error: "sessionId is required" }, 400);
     const session = await sessions.get(scope, sessionId);
-    if (!session) return streamsAIJson({ ok: false, error: "Session not found" }, 404);
+    if (!session) return streamsAIJson({ ok: true, messages: [], missingSession: true, sessionId });
     return streamsAIJson({ ok: true, messages: await messages.list(scope, sessionId) });
   } catch (error) {
     return streamsAIError(error);
@@ -228,7 +228,7 @@ async function openaiAnswer(input: { apiKey: string; scope: StreamsAIScope; body
 async function anthropicAnswer(input: { apiKey: string; scope: StreamsAIScope; body: Body; history: any[]; userContent: string; attachmentContext: any; memoryContext: StreamsMemoryContext }): Promise<ProviderResult> {
   const model = resolveAnthropicModel(input.body.mode);
   const text = [input.memoryContext.promptBlock, input.attachmentContext.text, `User request:\n${input.userContent}`].filter(Boolean).join("\n\n");
-  const history = input.history.slice(-MAX_HISTORY_MESSAGES).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "") })).filter((m) => m.content.trim());
+  const history = input.history.slice(MAX_HISTORY_MESSAGES * -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "") })).filter((m) => m.content.trim());
   const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": input.apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model, max_tokens: 1800, system: systemPrompt(input.scope), messages: [...history, { role: "user", content: text }] }) });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.error?.message || json?.message || `Anthropic request failed: ${res.status}`);
