@@ -35,6 +35,12 @@ function isTimeIntent(text: string) {
   return /\b(what time is it|time now|current time|my time|time in my location|what'?s the time|show me the time)\b/.test(value);
 }
 
+function isOpenAILiveProofIntent(text: string) {
+  const value = String(text || "").trim().toLowerCase();
+  if (!value) return false;
+  return /(openai.*live|live.*openai|api.*live|live.*api|server timestamp.*openai|openai.*server timestamp|web grounding.*test|live proof|prove.*openai|responses.*live)/i.test(value);
+}
+
 function formatLocalTime(date: Date, timeZone = DEFAULT_TIME_ZONE) {
   return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }).format(date);
 }
@@ -60,7 +66,8 @@ function systemPrompt(serverTimestamp: string) {
     "StreamsAI is a general ChatGPT/Claude-style AI assistant platform with chat, uploads, files, writing, research, generation, coding, tools, workspaces, saved projects, and project flow.",
     "Use web search for current facts. Do not invent citations.",
     `Server request timestamp: ${serverTimestamp}`,
-    "When the user asks for the current date or time, use the server request timestamp above. Do not guess, reuse, or invent time.",
+    "When asked for the server timestamp, repeat the exact ISO timestamp above. Do not convert it unless explicitly asked.",
+    "For OpenAI live proof tests, first print the exact server timestamp supplied by the backend, then answer using web_search_preview.",
   ].join("\n");
 }
 
@@ -116,7 +123,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
       let sessionId = body.sessionId || "";
       try {
         send("activity", { phase: "server.timestamp", statusText: serverTimestamp, source: "streams-server-clock", sessionId, backendProof: { serverTimestamp } });
-        if (isTimeIntent(userContent)) {
+        if (isTimeIntent(userContent) && !isOpenAILiveProofIntent(userContent)) {
           const localTime = formatLocalTime(new Date(startedAt));
           const content = `Your current time in Arizona is ${localTime} ${DEFAULT_TIME_ZONE_LABEL}.\n\nServer timestamp: ${serverTimestamp}\nTimezone: ${DEFAULT_TIME_ZONE}`;
           for (const token of chunks(content)) send("response", { token });
