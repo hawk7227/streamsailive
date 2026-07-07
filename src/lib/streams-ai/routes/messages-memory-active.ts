@@ -2,8 +2,7 @@ import { type NextRequest } from "next/server";
 import OpenAI from "openai";
 import { requireStreamsAIScope, type StreamsAIScope } from "../auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "../api";
-import { buildCanonicalCapabilityAnswer, buildRuntimeCapabilityRegistry, isCanonicalCapabilityQuestion } from "../capabilities/canonical-capabilities";
-import { buildDeterministicFallbackAnswer, learnFromStreamsTurn, retrieveStreamsMemoryContext, type StreamsMemoryContext } from "../intelligence/memory-engine";
+import { learnFromStreamsTurn, retrieveStreamsMemoryContext, type StreamsMemoryContext } from "../intelligence/memory-engine";
 import { StreamsAIMessagesRepository } from "../repositories/messages-repository";
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
 import { buildAttachmentContext, buildChatMessages, buildUserMetadata, ensureSession, getHistoryForPrompt, persistChatTurn, resolveAnthropicModel, resolveOpenAIModel } from "./messages-memory-provider-support";
@@ -16,7 +15,7 @@ const MEMORY_RETRIEVAL_TIMEOUT_MS = 350;
 
 type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
 type Send = (event: string, payload: Record<string, unknown>) => void;
-type ProviderResult = { content: string; provider: "openai" | "anthropic" | "streams-memory" | "streams"; model?: string | null; providerStatus: "ok" | "fallback" };
+type ProviderResult = { content: string; provider: "openai" | "anthropic" | "streams-memory"; model?: string | null; providerStatus: "ok" | "fallback" };
 
 function sse(stream: ReadableStream<Uint8Array>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
@@ -35,16 +34,6 @@ function chunks(text: string, size = 120) {
 
 function duration(ms: number) {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
-}
-
-function authPresent(request: NextRequest) {
-  const a = request.headers.get("authorization") || request.headers.get("Authorization") || "";
-  const c = request.headers.get("cookie") || "";
-  return /^Bearer\s+\S+/i.test(a) || /(?:^|;\s*)access_token=/.test(c) || /sb-[^=;]*-auth-token/.test(c);
-}
-
-function greeting(text: string) {
-  return /^(hi|hello|hey|yo|sup|good morning|good afternoon|good evening)[.!?\s]*$/i.test(text.trim());
 }
 
 function emptyMemory(query: string): StreamsMemoryContext {
@@ -78,20 +67,25 @@ function rememberTurn(scope: StreamsAIScope, input: { sessionId: string; userCon
 function systemPrompt(scope: StreamsAIScope) {
   const first = String(scope.userFirstName || "").trim();
   return [
-    "You are Streams AI, Marcus Hawkins' AI business operator and product-building copilot inside the StreamsAI platform.",
-    "You are not a generic chatbot. Answer as StreamsAI with the user's current product, repo, launch, and builder context in mind.",
-    "Current product context: StreamsAI helps everyday small business owners, creators, and entrepreneurs turn ideas into business plans, visuals, content, websites, apps, automations, and launch actions.",
-    "Core positioning: StreamsAI is for people who want to start or grow a business but do not know what to do next. It should act like an AI operator, not just a Q&A bot.",
-    "When the user asks for marketing, launch, business, or product strategy for StreamsAI, give StreamsAI-specific actions, not generic market-research templates.",
-    "When the user asks about development work, give direct answers with exact repo paths, file names, commits, status, and what is wired vs not verified whenever that context is available.",
-    "Use retrieved Streams memory, project memory, file context, chat history, and tool results when supplied. If they are missing, say what is not verified instead of inventing.",
-    "Project memory beats general memory. Recent user corrections beat older inferred preferences. Source documents beat summaries.",
-    "Prefer concise, direct, practical answers. Avoid filler phrases, generic startup advice, and broad textbook steps unless the user explicitly asks for a general overview.",
-    "For launch plans, include offer, target buyer, content angles, outreach motion, proof/demo assets, onboarding path, pricing test, and next execution steps.",
-    "For Marcus, default to direct answers with exact files and commits when discussing implementation. Do not overclaim that something is working unless it is tested or verified.",
-    "Do not ask which project when the active route/context is StreamsAI unless there is a real ambiguity. Assume the project is StreamsAI unless the user names another project.",
-    "Do not pretend to run tools, builds, deployments, searches, generations, or image vision unless proof exists.",
-    first ? `The signed-in account holder's first name is ${first}. Use it only at key personal moments.` : "No reliable first name is available. Do not invent one.",
+    "You are a general-purpose AI assistant running inside StreamsAI.",
+    "Behave like a capable general assistant that combines broad ChatGPT-style usefulness with Claude-style careful reasoning, honesty, and context awareness.",
+    "You are not a narrow product persona, support macro, scripted workflow, or menu bot.",
+    "Answer the user's actual message directly whenever a useful answer can be given.",
+    "You can handle ordinary conversation, technical work, business strategy, creative work, writing, analysis, planning, debugging, product thinking, and open-ended questions within the applicable rules.",
+    "Use active StreamsAI project context only when it is relevant to the user's question. Do not force every answer to be about StreamsAI.",
+    "When the question is about StreamsAI, use available StreamsAI project context, repo context, chat history, memory, uploaded files, and tool results.",
+    "When the question is not about StreamsAI, answer normally as a general assistant.",
+    "If the user is broad or vague, infer the most likely intent from the conversation and give a useful answer. Ask for clarification only when the answer would be materially wrong without it.",
+    "Do not default to saying that more details are needed when current context, reasoning, or a useful assumption-labeled answer is possible.",
+    "When context is missing, state what is missing, then still provide the best useful answer from what is available.",
+    "For implementation work, include exact files, functions, routes, commits, current status, likely cause, fix, and verification steps when that evidence is available.",
+    "For business or marketing work, give specific actionable strategy and examples instead of broad textbook templates.",
+    "For large prompts, organize the answer and complete the task instead of reducing the answer to a generic limitation statement.",
+    "Never claim browser testing, builds, deployment, database access, file inspection, repo changes, web research, tool execution, or runtime verification unless there is actual evidence in the supplied context or tool results.",
+    "Separate verified facts from assumptions. Use labels such as verified, not verified, likely, and blocked when helpful.",
+    "Be direct, practical, calm, non-defensive, and specific. Avoid generic filler, unnecessary disclaimers, and repeated apologies.",
+    "Follow recent user corrections over older memory. Verified tool or file evidence beats memory. Current user intent beats stale project assumptions unless higher-priority rules require otherwise.",
+    first ? `The signed-in account holder's first name is ${first}. Use it only when naturally helpful.` : "No reliable first name is available. Do not invent one.",
   ].join("\n");
 }
 
@@ -113,60 +107,16 @@ export async function memoryMessagesPOST(request: NextRequest) {
     const body = await readJsonBody<Body>(request);
     const userContent = (body.content || body.message || "").trim();
     if (!userContent) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
-    if (authPresent(request) && body.runAssistant !== false && greeting(userContent)) return streamGreeting(request, body, userContent);
     const scope = await requireStreamsAIScope(request);
     if (body.runAssistant === false) {
       const sessionId = await ensureSession(scope, body.sessionId || "", userContent);
       const userMessage = await messages.create(scope, { sessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
       return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
     }
-    if (isCanonicalCapabilityQuestion(userContent)) return streamCapabilities(scope, body, userContent);
     return streamProvider(scope, body, userContent);
   } catch (error) {
     return streamsAIError(error);
   }
-}
-
-function streamGreeting(request: NextRequest, body: Body, userContent: string) {
-  const startedAt = Date.now();
-  const answer = "Hey — I’m here. What are we building or fixing next?";
-  return sse(new ReadableStream<Uint8Array>({ async start(controller) {
-    let sessionId = body.sessionId || "";
-    emit(controller, "activity", { phase: "simple-greeting.started", statusText: "Writing…", source: SOURCE, startedAt, sessionId });
-    emit(controller, "response", { token: answer });
-    try {
-      const scope = await requireStreamsAIScope(request);
-      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: answer, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: "streams", providerStatus: "ok" } });
-      sessionId = persisted.sessionId;
-      emit(controller, "complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok", elapsedMs: Date.now() - startedAt });
-      rememberTurn(scope, { sessionId, userContent, assistantContent: answer, sourceMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok" });
-    } catch (e) {
-      emit(controller, "error", { message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      controller.close();
-    }
-  }}));
-}
-
-function streamCapabilities(scope: StreamsAIScope, body: Body, userContent: string) {
-  const startedAt = Date.now();
-  const answer = buildCanonicalCapabilityAnswer(userContent);
-  const registry = buildRuntimeCapabilityRegistry();
-  return sse(new ReadableStream<Uint8Array>({ async start(controller) {
-    let sessionId = body.sessionId || "";
-    emit(controller, "activity", { phase: "capabilities.started", statusText: "Writing…", source: SOURCE, startedAt, sessionId });
-    for (const token of chunks(answer)) emit(controller, "response", { token });
-    try {
-      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: answer, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: "streams", providerStatus: "ok", registryVersion: registry.version, capabilityCount: registry.total } });
-      sessionId = persisted.sessionId;
-      emit(controller, "complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok", elapsedMs: Date.now() - startedAt });
-      rememberTurn(scope, { sessionId, userContent, assistantContent: answer, sourceMessageId: persisted.assistantMessageId, provider: "streams", providerStatus: "ok" });
-    } catch (e) {
-      emit(controller, "error", { message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      controller.close();
-    }
-  }}));
 }
 
 function streamProvider(scope: StreamsAIScope, body: Body, userContent: string) {
@@ -181,15 +131,14 @@ function streamProvider(scope: StreamsAIScope, body: Body, userContent: string) 
       const memoryContext = await retrieveMemoryWithTimeout(scope, userContent, 12);
       if (memoryContext.memories.length) send("activity", { phase: "memory.loaded", statusText: "Context ready", source: "streams-memory", sessionId, backendProof: memoryContext.retrieval });
       const result = await providerChain({ scope, body, history, userContent, attachmentContext, memoryContext, send, startedAt, sessionId });
-      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: result.content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, fileContextUsed: Boolean(body.attachments?.length), deterministicFallback: result.provider === "streams-memory" } });
+      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: result.content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, fileContextUsed: Boolean(body.attachments?.length), providerGenerated: result.providerStatus === "ok" } });
       sessionId = persisted.sessionId;
       send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, elapsedMs: Date.now() - startedAt });
       rememberTurn(scope, { sessionId, userContent, assistantContent: result.content, sourceMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, metadata: { memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval } });
     } catch (e) {
-      const memoryContext = await retrieveMemoryWithTimeout(scope, userContent, 12);
-      const fallback = buildDeterministicFallbackAnswer({ userContent, memoryContext, providerStatus: "failed", providerName: "streams-memory", errorMessage: e instanceof Error ? e.message : String(e) });
-      for (const token of chunks(fallback)) send("response", { token });
-      send("complete", { ok: true, sessionId, provider: "streams-memory", providerStatus: "fallback", memoryRetrieval: memoryContext.retrieval, elapsedMs: Date.now() - startedAt });
+      const message = "The live provider route could not complete this response. This is a service fallback notice, not a substitute answer. Retry the message or check provider/server logs for the exact failure.";
+      for (const token of chunks(message)) send("response", { token });
+      send("complete", { ok: true, sessionId, provider: "streams-memory", providerStatus: "fallback", elapsedMs: Date.now() - startedAt, error: e instanceof Error ? e.message : String(e) });
     } finally {
       controller.close();
     }
@@ -214,9 +163,13 @@ async function providerChain(input: { scope: StreamsAIScope; body: Body; history
       } catch (e) { failures.push(`anthropic: ${e instanceof Error ? e.message : String(e)}`); }
     }
   }
-  const fallback = buildDeterministicFallbackAnswer({ userContent: input.userContent, memoryContext: input.memoryContext, attachmentText: input.attachmentContext.text, hasImageParts: input.attachmentContext.imageParts.length > 0, providerStatus: openAIKey || anthropicKey ? "failed" : "not_configured", providerName: "streams-memory", errorMessage: failures.join("\n") });
-  for (const token of chunks(fallback)) input.send("response", { token });
-  return { content: fallback, provider: "streams-memory", providerStatus: "fallback" };
+  const message = [
+    "The live provider route is not available for this message.",
+    "No OpenAI or Claude provider completed successfully.",
+    failures.length ? `Provider errors:\n${failures.join("\n")}` : "No provider key appeared to be configured for this request.",
+  ].join("\n\n");
+  for (const token of chunks(message)) input.send("response", { token });
+  return { content: message, provider: "streams-memory", providerStatus: "fallback" };
 }
 
 async function openaiAnswer(input: { apiKey: string; scope: StreamsAIScope; body: Body; history: any[]; userContent: string; attachmentContext: any; memoryContext: StreamsMemoryContext; send: Send; startedAt: number; sessionId: string }): Promise<ProviderResult> {
