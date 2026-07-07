@@ -42,19 +42,25 @@ function modelList() {
   return [process.env.OPENAI_RESPONSES_MODEL_NEXT, process.env.OPENAI_RESPONSES_MODEL, process.env.OPENAI_SEARCH_MODEL, "gpt-4.1-mini"].filter((v, i, a): v is string => Boolean(v) && a.indexOf(v) === i);
 }
 
-function systemPrompt() {
-  return "You are a general-purpose AI assistant running inside StreamsAI. StreamsAI is a general ChatGPT/Claude-style AI assistant platform with chat, uploads, files, writing, research, generation, coding, tools, workspaces, saved projects, and project flow. Use web search for current facts. Do not invent citations.";
+function systemPrompt(serverTimestamp: string) {
+  return [
+    "You are a general-purpose AI assistant running inside StreamsAI.",
+    "StreamsAI is a general ChatGPT/Claude-style AI assistant platform with chat, uploads, files, writing, research, generation, coding, tools, workspaces, saved projects, and project flow.",
+    "Use web search for current facts. Do not invent citations.",
+    `Server request timestamp: ${serverTimestamp}`,
+    "When the user asks for the current date or time, use the server request timestamp above. Do not guess, reuse, or invent time.",
+  ].join("\n");
 }
 
-async function callOpenAI(input: { apiKey: string; model: string; text: string; send: Send; sessionId: string }) {
-  input.send("activity", { phase: "openai.responses.model", statusText: `Trying ${input.model} with web search…`, source: SOURCE, sessionId: input.sessionId, backendProof: { provider: "openai", providerRoute: "openai-responses", model: input.model, webGrounded: true } });
+async function callOpenAI(input: { apiKey: string; model: string; text: string; send: Send; sessionId: string; serverTimestamp: string }) {
+  input.send("activity", { phase: "openai.responses.model", statusText: `Trying ${input.model} with web search…`, source: SOURCE, sessionId: input.sessionId, backendProof: { provider: "openai", providerRoute: "openai-responses", model: input.model, webGrounded: true, serverTimestamp: input.serverTimestamp } });
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${input.apiKey}` },
     body: JSON.stringify({
       model: input.model,
       input: [
-        { role: "system", content: systemPrompt() },
+        { role: "system", content: systemPrompt(input.serverTimestamp) },
         { role: "user", content: input.text },
       ],
       tools: [{ type: "web_search_preview" }],
@@ -94,21 +100,23 @@ export async function memoryMessagesPOST(request: NextRequest) {
     return sse(new ReadableStream<Uint8Array>({ async start(controller) {
       const send: Send = (event, payload) => emit(controller, event, payload);
       const startedAt = Date.now();
+      const serverTimestamp = new Date(startedAt).toISOString();
       let sessionId = body.sessionId || "";
       try {
+        send("activity", { phase: "server.timestamp", statusText: serverTimestamp, source: "streams-server-clock", sessionId, backendProof: { serverTimestamp } });
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) throw new Error("OPENAI_API_KEY is required");
         const history = await getHistoryForPrompt(scope, sessionId, userContent);
         const attachmentContext = await buildAttachmentContext(scope, body, sessionId, send);
         const historyText = history.slice(-MAX_HISTORY_MESSAGES).map((m: any) => `${m.role}: ${String(m.content || "")}`).join("\n");
-        const fullText = [historyText, attachmentContext.text, `User request:\n${userContent}`].filter(Boolean).join("\n\n");
+        const fullText = [historyText, attachmentContext.text, `Server request timestamp: ${serverTimestamp}`, `User request:\n${userContent}`].filter(Boolean).join("\n\n");
         const failures: string[] = [];
         let model = "";
         let content = "";
         for (const candidate of modelList()) {
           try {
             model = candidate;
-            content = await callOpenAI({ apiKey, model, text: fullText, send, sessionId });
+            content = await callOpenAI({ apiKey, model, text: fullText, send, sessionId, serverTimestamp });
             break;
           } catch (e) {
             failures.push(`${candidate}: ${e instanceof Error ? e.message : String(e)}`);
@@ -116,14 +124,14 @@ export async function memoryMessagesPOST(request: NextRequest) {
         }
         if (!content) throw new Error(failures.join(" | ") || "No OpenAI Responses model completed.");
         for (const token of chunks(content)) send("response", { token });
-        const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, webGrounded: true, ungroundedFallbackUsed: false, providerGenerated: true } });
+        const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, webGrounded: true, ungroundedFallbackUsed: false, providerGenerated: true, serverTimestamp } });
         sessionId = persisted.sessionId;
-        send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, webGrounded: true, ungroundedFallbackUsed: false, elapsedMs: Date.now() - startedAt });
+        send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, webGrounded: true, ungroundedFallbackUsed: false, serverTimestamp, elapsedMs: Date.now() - startedAt });
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
         const message = `Live OpenAI Responses failed. No ungrounded answer path was used. Detail: ${detail}`;
         for (const token of chunks(message)) send("response", { token });
-        send("complete", { ok: false, sessionId, provider: "openai", providerRoute: "openai-responses", providerStatus: "failed", webGrounded: false, ungroundedFallbackUsed: false, error: detail, elapsedMs: Date.now() - startedAt });
+        send("complete", { ok: false, sessionId, provider: "openai", providerRoute: "openai-responses", providerStatus: "failed", webGrounded: false, ungroundedFallbackUsed: false, error: detail, serverTimestamp, elapsedMs: Date.now() - startedAt });
       } finally {
         controller.close();
       }
