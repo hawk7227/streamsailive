@@ -66,15 +66,26 @@ export async function PATCH(request: NextRequest) {
       return streamsAIJson({ ok: false, error: "sessionId is required" }, 400);
     }
 
-    if (body.summary) await writeSessionSummary(scope, sessionId, body.summary, { source: "sessions-api" });
+    if (body.summary) await writeSessionSummary(scope, sessionId, body.summary, { source: "sessions-api" }).catch(() => null);
 
-    const session = await sessions.update(scope, sessionId, {
-      title: body.title,
-      status: body.status,
-      metadata: body.metadata,
-    });
+    let session = null;
+    try {
+      session = await sessions.update(scope, sessionId, {
+        title: body.title,
+        status: body.status,
+        metadata: body.metadata,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "");
+      const missingRow = /0 rows|no rows|multiple \(or no\) rows|single/i.test(message);
+      if (!missingRow) throw error;
+      session = await sessions.create(scope, {
+        title: body.title || "New STREAMS AI chat",
+        metadata: { ...(body.metadata || {}), recoveredFromLocalSessionId: sessionId, source: "sessions-api-patch-upsert", recentChat: true, autosave: true },
+      });
+    }
 
-    return streamsAIJson({ ok: true, session, thread: session, summaryUpdated: Boolean(body.summary) });
+    return streamsAIJson({ ok: true, session, thread: session, summaryUpdated: Boolean(body.summary), recovered: session?.metadata?.recoveredFromLocalSessionId === sessionId });
   } catch (error) {
     return streamsAIError(error);
   }
