@@ -15,7 +15,7 @@ const MEMORY_RETRIEVAL_TIMEOUT_MS = 350;
 
 type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
 type Send = (event: string, payload: Record<string, unknown>) => void;
-type ProviderResult = { content: string; provider: "openai" | "anthropic" | "streams-memory"; model?: string | null; providerStatus: "ok" | "fallback" };
+type ProviderResult = { content: string; provider: "openai" | "anthropic" | "streams-memory"; model?: string | null; providerStatus: "ok" | "fallback"; webGrounded?: boolean };
 
 function sse(stream: ReadableStream<Uint8Array>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } });
@@ -131,10 +131,10 @@ function streamProvider(scope: StreamsAIScope, body: Body, userContent: string) 
       const memoryContext = await retrieveMemoryWithTimeout(scope, userContent, 12);
       if (memoryContext.memories.length) send("activity", { phase: "memory.loaded", statusText: "Context ready", source: "streams-memory", sessionId, backendProof: memoryContext.retrieval });
       const result = await providerChain({ scope, body, history, userContent, attachmentContext, memoryContext, send, startedAt, sessionId });
-      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: result.content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, fileContextUsed: Boolean(body.attachments?.length), providerGenerated: result.providerStatus === "ok" } });
+      const persisted = await persistChatTurn({ scope, sessionId, userContent, assistantContent: result.content, body, assistantStatus: "complete", assistantMetadata: { source: SOURCE, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, fileContextUsed: Boolean(body.attachments?.length), providerGenerated: result.providerStatus === "ok", webGrounded: Boolean(result.webGrounded) } });
       sessionId = persisted.sessionId;
-      send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, elapsedMs: Date.now() - startedAt });
-      rememberTurn(scope, { sessionId, userContent, assistantContent: result.content, sourceMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, metadata: { memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval } });
+      send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, model: result.model || null, webGrounded: Boolean(result.webGrounded), memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, elapsedMs: Date.now() - startedAt });
+      rememberTurn(scope, { sessionId, userContent, assistantContent: result.content, sourceMessageId: persisted.assistantMessageId, provider: result.provider, providerStatus: result.providerStatus, metadata: { memoryCount: memoryContext.memories.length, memoryRetrieval: memoryContext.retrieval, webGrounded: Boolean(result.webGrounded) } });
     } catch (e) {
       const message = "The live provider route could not complete this response. This is a service fallback notice, not a substitute answer. Retry the message or check provider/server logs for the exact failure.";
       for (const token of chunks(message)) send("response", { token });
@@ -172,7 +172,72 @@ async function providerChain(input: { scope: StreamsAIScope; body: Body; history
   return { content: message, provider: "streams-memory", providerStatus: "fallback" };
 }
 
+function shouldUseWebGrounding(userContent: string) {
+  return /\b(current|latest|recent|today|this year|2025|2026|market|research|sources?|citations?|trends?|statistics?|adoption|competitors?|launch|marketing|small business|business owners|industry|news|pricing|compare|recommendations?)\b/i.test(userContent);
+}
+
+function extractResponseText(json: any) {
+  if (typeof json?.output_text === "string" && json.output_text.trim()) return json.output_text.trim();
+  const parts: string[] = [];
+  for (const item of Array.isArray(json?.output) ? json.output : []) {
+    for (const content of Array.isArray(item?.content) ? item.content : []) {
+      const text = content?.text || content?.output_text || content?.summary;
+      if (typeof text === "string" && text.trim()) parts.push(text.trim());
+    }
+  }
+  return parts.join("\n\n").trim();
+}
+
+function emitResponseSources(json: any, send: Send, sessionId: string) {
+  const seen = new Set<string>();
+  const walk = (value: any) => {
+    if (!value || typeof value !== "object") return;
+    const url = typeof value.url === "string" ? value.url : typeof value.uri === "string" ? value.uri : "";
+    if (url && /^https?:\/\//i.test(url) && !seen.has(url)) {
+      seen.add(url);
+      send("source", { title: String(value.title || value.name || url), url, source: "openai-web-search", sessionId });
+    }
+    for (const child of Array.isArray(value) ? value : Object.values(value)) walk(child);
+  };
+  walk(json);
+}
+
+function responseInputFromChatMessages(messages: any[]) {
+  return messages.map((message) => ({
+    role: message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user",
+    content: [{ type: "input_text", text: typeof message.content === "string" ? message.content : JSON.stringify(message.content || "") }],
+  }));
+}
+
+async function openaiResponsesAnswer(input: { apiKey: string; scope: StreamsAIScope; body: Body; history: any[]; userContent: string; attachmentContext: any; memoryContext: StreamsMemoryContext; send: Send; startedAt: number; sessionId: string }): Promise<ProviderResult> {
+  const model = process.env.OPENAI_RESPONSES_MODEL || resolveOpenAIModel(input.body.mode);
+  input.send("activity", { phase: "web_search.started", statusText: "Evaluating current context…", source: "openai-responses", sessionId: input.sessionId, backendProof: { provider: "openai", webGrounded: true } });
+  const chatMessages = buildChatMessages(input.history, input.userContent, input.scope, input.attachmentContext, input.memoryContext);
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${input.apiKey}` },
+    body: JSON.stringify({
+      model,
+      input: responseInputFromChatMessages(chatMessages as any[]),
+      tools: [{ type: "web_search_preview" }],
+      temperature: 0.7,
+      max_output_tokens: 2200,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error?.message || json?.message || `OpenAI Responses request failed: ${res.status}`);
+  emitResponseSources(json, input.send, input.sessionId);
+  const content = extractResponseText(json);
+  if (!content) throw new Error("OpenAI Responses returned no text output");
+  for (const token of chunks(content)) input.send("response", { token });
+  input.send("activity", { phase: "reasoning.duration", statusText: `Thought for ${duration(Date.now() - input.startedAt)}`, source: SOURCE, sessionId: input.sessionId, backendProof: { provider: "openai", webGrounded: true } });
+  return { content, provider: "openai", model, providerStatus: "ok", webGrounded: true };
+}
+
 async function openaiAnswer(input: { apiKey: string; scope: StreamsAIScope; body: Body; history: any[]; userContent: string; attachmentContext: any; memoryContext: StreamsMemoryContext; send: Send; startedAt: number; sessionId: string }): Promise<ProviderResult> {
+  if (!input.attachmentContext.imageParts.length && shouldUseWebGrounding(input.userContent)) {
+    try { return await openaiResponsesAnswer(input); } catch (e) { input.send("activity", { phase: "web_search.fallback", statusText: "Continuing without web grounding…", source: "openai-responses", sessionId: input.sessionId, backendProof: { error: e instanceof Error ? e.message : String(e) } }); }
+  }
   const model = resolveOpenAIModel(input.body.mode);
   const client = new OpenAI({ apiKey: input.apiKey });
   const stream = await client.chat.completions.create({ model, messages: buildChatMessages(input.history, input.userContent, input.scope, input.attachmentContext, input.memoryContext), stream: true, temperature: 0.7 });
