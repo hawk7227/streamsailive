@@ -1,6 +1,5 @@
-/* StreamsAI composer ChatGPT/Claude-style autosize contract.
-   Compact at rest, textarea owns the full top row, grows with text, caps at max height,
-   then scrolls internally. Controls stay pinned in a bottom action row. */
+/* StreamsAI real two-row composer contract.
+   JSX is now split into a text row and an action row, so textarea growth is not fighting buttons. */
 .streamsComposer {
   min-height: 72px !important;
   height: auto !important;
@@ -10,38 +9,35 @@
   box-sizing: border-box !important;
 }
 
-.streamsComposerRow {
-  min-height: 52px !important;
-  height: auto !important;
+.streamsComposerTextRow {
+  position: relative !important;
+  z-index: 3 !important;
+  width: 100% !important;
+  display: block !important;
+  min-height: 34px !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.streamsComposerActionRow {
+  position: relative !important;
+  z-index: 3 !important;
+  width: 100% !important;
+  min-height: 48px !important;
   display: grid !important;
-  grid-template-columns: 46px auto auto minmax(0, 1fr) 58px !important;
-  grid-template-rows: auto auto !important;
-  grid-template-areas:
-    "input input input input input"
-    "add model mic spacer send" !important;
-  align-items: end !important;
+  grid-template-columns: 46px minmax(0, 1fr) auto auto 58px !important;
+  grid-template-areas: "add spacer model mic send" !important;
+  align-items: center !important;
   gap: 8px !important;
-  flex-wrap: nowrap !important;
   padding: 0 !important;
 }
 
-.streamsComposerRow::before {
-  inset: -1px -3px -1px -3px !important;
-  border-radius: 24px !important;
-}
-
-.streamsComposerIconButton {
-  grid-area: add !important;
-  align-self: end !important;
-  justify-self: start !important;
-  margin: 0 !important;
-  flex: none !important;
+.streamsComposerTextRow::before,
+.streamsComposerActionRow::before {
+  content: none !important;
 }
 
 .streamsComposerInput {
-  grid-area: input !important;
   display: block !important;
-  align-self: stretch !important;
   width: 100% !important;
   min-width: 0 !important;
   min-height: 34px !important;
@@ -62,22 +58,26 @@
   scrollbar-width: thin;
 }
 
-.streamsComposerInput::-webkit-scrollbar {
-  width: 6px;
+.streamsComposerInput::-webkit-scrollbar { width: 6px; }
+.streamsComposerInput::-webkit-scrollbar-thumb { background: rgba(192, 132, 252, 0.34); border-radius: 999px; }
+.streamsComposerInput::-webkit-scrollbar-track { background: transparent; }
+
+.streamsComposerIconButton {
+  grid-area: add !important;
+  align-self: center !important;
+  justify-self: start !important;
+  margin: 0 !important;
+  flex: none !important;
 }
 
-.streamsComposerInput::-webkit-scrollbar-thumb {
-  background: rgba(192, 132, 252, 0.34);
-  border-radius: 999px;
-}
-
-.streamsComposerInput::-webkit-scrollbar-track {
-  background: transparent;
+.streamsComposerActionSpacer {
+  grid-area: spacer !important;
+  min-width: 0 !important;
 }
 
 .streamsComposerSendButton {
   grid-area: send !important;
-  align-self: end !important;
+  align-self: center !important;
   justify-self: end !important;
   margin: 0 !important;
   flex: none !important;
@@ -86,7 +86,7 @@
 .streamsComposerPill {
   grid-area: model !important;
   align-self: center !important;
-  justify-self: start !important;
+  justify-self: end !important;
   margin: 0 !important;
   flex: none !important;
 }
@@ -94,19 +94,21 @@
 .streamsComposerMicButton {
   grid-area: mic !important;
   align-self: center !important;
-  justify-self: start !important;
+  justify-self: end !important;
   margin: 0 !important;
   flex: none !important;
 }
 
 .streamsComposerToolPill {
-  position: absolute !important;
-  left: 54px !important;
-  top: -34px !important;
+  position: relative !important;
+  z-index: 3 !important;
+  left: auto !important;
+  top: auto !important;
+  align-self: flex-start !important;
   max-width: min(360px, calc(100vw - 120px)) !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  z-index: 8 !important;
+  margin: 0 0 8px 54px !important;
 }
 
 .streamsComposerToolPill strong {
@@ -125,13 +127,14 @@
     border-radius: 24px !important;
   }
 
-  .streamsComposerRow {
-    min-height: 50px !important;
+  .streamsComposerTextRow {
+    margin-bottom: 7px !important;
+  }
+
+  .streamsComposerActionRow {
+    min-height: 46px !important;
     grid-template-columns: 42px minmax(0, 1fr) 48px !important;
-    grid-template-rows: auto auto !important;
-    grid-template-areas:
-      "input input input"
-      "add spacer send" !important;
+    grid-template-areas: "add spacer send" !important;
     gap: 7px !important;
   }
 
@@ -159,8 +162,7 @@
   }
 
   .streamsComposerToolPill {
-    left: 48px !important;
-    top: -32px !important;
+    margin-left: 48px !important;
     max-width: calc(100vw - 112px) !important;
   }
 }
@@ -172,7 +174,7 @@
     border-radius: 22px !important;
   }
 
-  .streamsComposerRow {
+  .streamsComposerActionRow {
     grid-template-columns: 40px minmax(0, 1fr) 46px !important;
     gap: 6px !important;
   }
@@ -182,13 +184,6 @@
     max-height: min(148px, 32dvh) !important;
   }
 
-  .streamsComposerIconButton {
-    width: 40px !important;
-    height: 40px !important;
-  }
-
-  .streamsComposerSendButton {
-    width: 46px !important;
-    height: 46px !important;
-  }
+  .streamsComposerIconButton { width: 40px !important; height: 40px !important; }
+  .streamsComposerSendButton { width: 46px !important; height: 46px !important; }
 }
