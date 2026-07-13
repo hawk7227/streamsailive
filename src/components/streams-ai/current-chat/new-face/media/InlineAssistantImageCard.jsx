@@ -27,8 +27,8 @@ export default function InlineAssistantImageCard({
         : image?.statusText || "Preparing image…";
 
   return (
-    <div className="inlineAssistantImageCard">
-      <div className="inlineAssistantImageCardFrame">
+    <div className="inlineAssistantImageCard" data-feature="image" data-status={image?.status || "working"}>
+      <div className="inlineAssistantImageCardFrame" role="status" aria-live="polite" aria-label={statusText}>
         {mediaSrc ? (
           <img
             src={mediaSrc}
@@ -44,6 +44,7 @@ export default function InlineAssistantImageCard({
           />
         ) : (
           <div className="inlineAssistantImageSkeleton">
+            <div className="inlineAssistantImageDots" aria-hidden="true" />
             <div className="inlineAssistantImageSkeletonLabel">{statusText}</div>
           </div>
         )}
