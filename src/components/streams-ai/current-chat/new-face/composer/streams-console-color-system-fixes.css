@@ -25,14 +25,12 @@
   --streams-feature-error: #f47287;
 }
 
-/* Scope generic control overrides to the Streams workspace. */
 .preview button:disabled,
 .preview [aria-disabled="true"] {
   color: var(--streams-console-text-disabled) !important;
   border-color: var(--streams-console-border) !important;
 }
 
-/* Tool menu identities stay subtle: icon/edge accents, never bright full cards. */
 .preview [data-feature="research"] { --streams-feature-accent: var(--streams-feature-research); }
 .preview [data-feature="image"] { --streams-feature-accent: var(--streams-feature-image); }
 .preview [data-feature="video"] { --streams-feature-accent: var(--streams-feature-video); }
@@ -53,7 +51,73 @@
   text-shadow: 0 0 12px color-mix(in srgb, var(--streams-feature-accent) 45%, transparent);
 }
 
-/* Real generation activity gets feature and state colors from actual runtime props. */
+.preview .streamsComposerLiveStatus {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 10px 7px;
+  color: var(--streams-console-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.preview .streamsComposerLiveStatusDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: var(--streams-console-purple-bright);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.78);
+  animation: streamsStatusPulse 1.2s ease-in-out infinite;
+}
+
+.preview .streamsComposerLiveStatus.isError {
+  color: var(--streams-feature-error);
+}
+
+.preview .streamsComposerLiveStatus.isError .streamsComposerLiveStatusDot {
+  background: var(--streams-feature-error);
+  box-shadow: 0 0 14px rgba(244, 114, 135, 0.65);
+  animation: none;
+}
+
+.preview .streamsComposerAttachmentImage.isUploading {
+  outline: 2px solid color-mix(in srgb, var(--streams-feature-image) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.preview .streamsComposerAttachmentOverlay {
+  background: rgba(4, 11, 23, 0.76) !important;
+  color: #f8fafc !important;
+  font-weight: 800;
+  backdrop-filter: blur(4px);
+}
+
+.preview .streamsComposerAttachmentOverlay.isError {
+  background: rgba(62, 14, 28, 0.82) !important;
+  color: #fecdd3 !important;
+}
+
+.preview .streamsComposerAttachmentFile {
+  border: 1px solid color-mix(in srgb, var(--streams-feature-files) 36%, var(--streams-console-border));
+}
+
+.preview .streamsComposerAttachmentFile em {
+  margin-left: auto;
+  color: var(--streams-console-text-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.preview .streamsComposerAttachmentFile.isError em {
+  color: var(--streams-feature-error);
+}
+
 .preview .generationActivityStrip {
   --streams-feature-accent: var(--streams-console-purple-bright);
   --streams-status-accent: var(--streams-console-purple-bright);
@@ -65,108 +129,54 @@
 }
 
 .preview .generationActivityStrip[data-domain="image"],
-.preview .generationActivityStrip[data-domain="image_to_image"] {
-  --streams-feature-accent: var(--streams-feature-image);
-}
-
+.preview .generationActivityStrip[data-domain="image_to_image"] { --streams-feature-accent: var(--streams-feature-image); }
 .preview .generationActivityStrip[data-domain="video"],
-.preview .generationActivityStrip[data-domain="image_to_video"] {
-  --streams-feature-accent: var(--streams-feature-video);
-}
-
-.preview .generationActivityStrip[data-domain="voice"] {
-  --streams-feature-accent: var(--streams-feature-voice);
-}
-
-.preview .generationActivityStrip[data-domain="files"] {
-  --streams-feature-accent: var(--streams-feature-files);
-}
-
+.preview .generationActivityStrip[data-domain="image_to_video"] { --streams-feature-accent: var(--streams-feature-video); }
+.preview .generationActivityStrip[data-domain="voice"] { --streams-feature-accent: var(--streams-feature-voice); }
+.preview .generationActivityStrip[data-domain="files"] { --streams-feature-accent: var(--streams-feature-files); }
 .preview .generationActivityStrip[data-domain="web_search"],
-.preview .generationActivityStrip[data-domain="research"] {
-  --streams-feature-accent: var(--streams-feature-research);
-}
-
+.preview .generationActivityStrip[data-domain="research"] { --streams-feature-accent: var(--streams-feature-research); }
 .preview .generationActivityStrip[data-domain="github"],
 .preview .generationActivityStrip[data-domain="job"],
-.preview .generationActivityStrip[data-domain="code"] {
-  --streams-feature-accent: var(--streams-feature-code);
-}
-
-.preview .generationActivityStrip[data-phase="complete"] {
-  --streams-status-accent: var(--streams-feature-success);
-}
-
-.preview .generationActivityStrip[data-phase="failed"] {
-  --streams-status-accent: var(--streams-feature-error);
-}
-
+.preview .generationActivityStrip[data-domain="code"] { --streams-feature-accent: var(--streams-feature-code); }
+.preview .generationActivityStrip[data-phase="complete"] { --streams-status-accent: var(--streams-feature-success); }
+.preview .generationActivityStrip[data-phase="failed"] { --streams-status-accent: var(--streams-feature-error); }
 .preview .generationActivityStrip[data-phase="waiting"],
-.preview .generationActivityStrip[data-phase="blocked"] {
-  --streams-status-accent: var(--streams-feature-warning);
-}
+.preview .generationActivityStrip[data-phase="blocked"] { --streams-status-accent: var(--streams-feature-warning); }
+.preview .generationActivityLabel { color: var(--streams-status-accent) !important; }
+.preview .generationActivityTitle { color: var(--streams-console-text) !important; }
+.preview .generationActivitySub { color: var(--streams-console-text-secondary) !important; }
 
-.preview .generationActivityLabel {
-  color: var(--streams-status-accent) !important;
-}
-
-.preview .generationActivityTitle {
-  color: var(--streams-console-text) !important;
-}
-
-.preview .generationActivitySub {
-  color: var(--streams-console-text-secondary) !important;
-}
-
-/* Image card lifecycle: stable ratio, clear state, smooth placeholder-to-output transition. */
-.preview .inlineAssistantImageCard[data-status="working"] {
-  --streams-status-accent: var(--streams-feature-image);
-}
-
-.preview .inlineAssistantImageCard[data-status="success"] {
-  --streams-status-accent: var(--streams-feature-success);
-}
-
-.preview .inlineAssistantImageCard[data-status="error"] {
-  --streams-status-accent: var(--streams-feature-error);
-}
-
+.preview .inlineAssistantImageCard[data-status="working"] { --streams-status-accent: var(--streams-feature-image); }
+.preview .inlineAssistantImageCard[data-status="success"] { --streams-status-accent: var(--streams-feature-success); }
+.preview .inlineAssistantImageCard[data-status="error"] { --streams-status-accent: var(--streams-feature-error); }
 .preview .inlineAssistantImageCardFrame {
   aspect-ratio: var(--streams-image-aspect-ratio, 1 / 1);
   min-height: 0;
   border-left-color: var(--streams-status-accent, var(--streams-feature-image)) !important;
 }
-
-.preview .inlineAssistantImageSkeleton {
-  width: 100%;
-  height: 100%;
-  min-height: 260px;
-}
-
+.preview .inlineAssistantImageSkeleton { width: 100%; height: 100%; min-height: 260px; }
 .preview .inlineAssistantImage,
-.preview .inlineAssistantImageSkeleton {
-  animation: streamsMediaReveal 180ms ease-out;
-}
-
-.preview .inlineAssistantImageStatus[role="status"] {
-  color: var(--streams-status-accent, #d9c4ee) !important;
-}
-
-.preview .inlineAssistantImageActions button:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
+.preview .inlineAssistantImageSkeleton { animation: streamsMediaReveal 180ms ease-out; }
+.preview .inlineAssistantImageStatus[role="status"] { color: var(--streams-status-accent, #d9c4ee) !important; }
+.preview .inlineAssistantImageActions button:disabled { opacity: 0.48; cursor: not-allowed; }
 
 @keyframes streamsMediaReveal {
   from { opacity: 0.35; transform: scale(0.995); }
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes streamsStatusPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.88); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .preview .inlineAssistantImage,
   .preview .inlineAssistantImageSkeleton,
   .preview .generationActivityGrid,
-  .preview .generationActivityOverlay {
+  .preview .generationActivityOverlay,
+  .preview .streamsComposerLiveStatusDot {
     animation: none !important;
     transition: none !important;
   }
