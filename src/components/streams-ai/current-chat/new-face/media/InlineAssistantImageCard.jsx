@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import "./inline-assistant-image-card.css";
+import "../composer/streams-console-color-system-fixes.css";
 
 function formatSizeLabel(image) {
   if (image?.width && image?.height) return `${image.width} × ${image.height}`;
@@ -8,31 +9,56 @@ function formatSizeLabel(image) {
   return "";
 }
 
+function normalizeVisualStatus(status) {
+  if (status === "ready" || status === "completed") return "success";
+  if (status === "failed" || status === "error") return "error";
+  return "working";
+}
+
+function normalizeAspectRatio(value) {
+  const match = String(value || "1:1").match(/^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/);
+  if (!match) return "1 / 1";
+  return `${match[1]} / ${match[2]}`;
+}
+
 export default function InlineAssistantImageCard({
   image,
   onLoaded,
   onOpen,
   onCopy,
+  onCopyUrl,
   onSave,
+  onDownload,
   onShare,
   onEdit,
 }) {
   const mediaSrc = image?.partialUrl || image?.url || "";
   const sizeLabel = useMemo(() => formatSizeLabel(image), [image]);
+  const visualStatus = normalizeVisualStatus(image?.status);
   const statusText =
     image?.status === "streaming"
       ? image?.statusText || "Generating image…"
-      : image?.status === "ready"
+      : image?.status === "ready" || image?.status === "completed"
         ? sizeLabel || "Image ready"
-        : image?.statusText || "Preparing image…";
+        : image?.status === "failed" || image?.status === "error"
+          ? image?.statusText || "Image generation failed"
+          : image?.statusText || "Preparing image…";
+  const copyHandler = onCopy || onCopyUrl;
+  const saveHandler = onSave || onDownload;
 
   return (
-    <div className="inlineAssistantImageCard" data-feature="image" data-status={image?.status || "working"}>
-      <div className="inlineAssistantImageCardFrame" role="status" aria-live="polite" aria-label={statusText}>
+    <div
+      className="inlineAssistantImageCard"
+      data-feature="image"
+      data-status={visualStatus}
+      aria-busy={visualStatus === "working" ? "true" : "false"}
+      style={{ "--streams-image-aspect-ratio": normalizeAspectRatio(image?.aspectRatio) }}
+    >
+      <div className="inlineAssistantImageCardFrame">
         {mediaSrc ? (
           <img
             src={mediaSrc}
-            alt={image?.alt || "Generated image"}
+            alt={image?.alt || image?.prompt || "Generated image"}
             className="inlineAssistantImage"
             onLoad={(event) => {
               const target = event.currentTarget;
@@ -45,25 +71,25 @@ export default function InlineAssistantImageCard({
         ) : (
           <div className="inlineAssistantImageSkeleton">
             <div className="inlineAssistantImageDots" aria-hidden="true" />
-            <div className="inlineAssistantImageSkeletonLabel">{statusText}</div>
+            <div className="inlineAssistantImageSkeletonLabel">Generating a detailed image — hang tight.</div>
           </div>
         )}
       </div>
 
       <div className="inlineAssistantImageMetaRow">
         <div className="inlineAssistantImageMetaLeft">
-          <span className="inlineAssistantImageStatus">{statusText}</span>
-          {sizeLabel ? (
-            <span className="inlineAssistantImageSize">{sizeLabel}</span>
-          ) : null}
+          <span className="inlineAssistantImageStatus" role="status" aria-live="polite" aria-atomic="true">
+            {statusText}
+          </span>
+          {sizeLabel ? <span className="inlineAssistantImageSize">{sizeLabel}</span> : null}
         </div>
 
         <div className="inlineAssistantImageActions">
-          <button type="button" onClick={onOpen}>Open</button>
-          <button type="button" onClick={onCopy}>Copy</button>
-          <button type="button" onClick={onSave}>Save</button>
-          <button type="button" onClick={onShare}>Share</button>
-          <button type="button" onClick={onEdit}>Edit</button>
+          <button type="button" disabled={!onOpen || !mediaSrc} onClick={onOpen}>Open</button>
+          <button type="button" disabled={!copyHandler || !mediaSrc} onClick={copyHandler}>Copy</button>
+          <button type="button" disabled={!saveHandler || !mediaSrc} onClick={saveHandler}>Save</button>
+          <button type="button" disabled={!onShare || !mediaSrc} onClick={onShare}>Share</button>
+          <button type="button" disabled={!onEdit || !mediaSrc} onClick={onEdit}>Edit</button>
         </div>
       </div>
     </div>
