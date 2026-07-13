@@ -1,6 +1,6 @@
 import { canShowStreamsStatus, normalizeStatusText } from "./streamsStatusRegistry";
 
-const ACTIVITY_LABELS = {
+const LABELS = {
   chat: {
     created: ["Thinking…", "The request was accepted."],
     thinking: ["Thinking…", "The request is being prepared."],
@@ -27,9 +27,9 @@ const ACTIVITY_LABELS = {
     understanding: ["Preparing image request…", "Streams is determining the requested image operation."],
     reviewing: ["Checking the reference image…", "The supplied visual reference is being inspected."],
     preparing: ["Preparing image request…", "The image request is being prepared."],
-    checking: ["Checking image request…", "The request and applicable settings are being validated."],
-    starting: ["Starting image generation…", "The image job is starting."],
-    rendering: ["Generating image…", "Your image is actively being created."],
+    checking: ["Checking image request…", "The request is being validated."],
+    starting: ["Starting image generation…", "The image request is starting."],
+    rendering: ["Generating image…", "Your image is being created."],
     polling: ["Receiving preview…", "Streams is waiting for the latest image output."],
     saving: ["Saving image…", "The completed image is being saved."],
     complete: ["Image ready", "Your generated image is ready."],
@@ -38,8 +38,8 @@ const ACTIVITY_LABELS = {
   },
   video: {
     preparing: ["Preparing video request…", "The video request is being prepared."],
-    starting: ["Starting video generation…", "The video job is starting."],
-    rendering: ["Rendering video…", "Your video is actively being created."],
+    starting: ["Starting video generation…", "The video request is starting."],
+    rendering: ["Rendering video…", "Your video is being created."],
     polling: ["Rendering video…", "Streams is waiting for the latest video output."],
     frames: ["Sampling frames…", "Video frame sampling is active."],
     saving: ["Saving video…", "The completed video is being saved."],
@@ -68,8 +68,8 @@ const ACTIVITY_LABELS = {
   build: {
     starting: ["Planning build…", "The build request is being prepared."],
     reading: ["Reading repository…", "The repository is being inspected."],
-    applying: ["Applying patch…", "The requested code change is being applied."],
-    checking: ["Running checks…", "Build or verification checks are running."],
+    applying: ["Applying patch…", "The requested change is being applied."],
+    checking: ["Running checks…", "Verification checks are running."],
     verifying: ["Verifying result…", "The result is being verified."],
     deploying: ["Deploying…", "Deployment has started."],
     complete: ["Ready", "The build step is complete."],
@@ -89,90 +89,59 @@ const ACTIVITY_LABELS = {
   },
 };
 
-const INTERNAL_STATUS_PATTERNS = [
+const INTERNAL = [
   /loading chat history/i,
   /server timestamp/i,
-  /backend/i,
-  /provider/i,
-  /model\b/i,
-  /request id/i,
-  /route\b/i,
-  /api[_ -]?key/i,
-  /openai|anthropic|claude|gpt|fal\b|runway|kling|veo|elevenlabs/i,
+  /backend|provider|model\b|request id|provider route/i,
+  /api[_ -]?key|openai|anthropic|claude|gpt|fal\b|runway|kling|veo|elevenlabs/i,
   /cost[_ -]?usd|\busd\b|margin|latency|retry count/i,
   /stack trace|traceback|exception|sqlstate|postgres|supabase/i,
   /streams-ai-memory-provider-router|responses-live|provider-router/i,
 ];
 
-function parseCreateActivityArgs(arg1, arg2, arg3) {
+function args(arg1, arg2, arg3) {
   if (arg1 && typeof arg1 === "object") return arg1;
-  if (typeof arg1 === "string" || typeof arg2 === "string" || typeof arg3 === "string") {
-    return { phase: arg1 || "starting", mode: arg2 || "chat", statusText: arg3 };
-  }
-  return {};
+  return { phase: arg1 || "starting", mode: arg2 || "chat", statusText: arg3 };
 }
 
-function statusStyle(phase) {
-  if (phase === "error" || phase === "failed") return "error";
+function style(phase) {
+  if (["error", "failed"].includes(phase)) return "error";
   if (phase === "complete") return "success";
-  if (phase === "waiting" || phase === "blocked") return "warning";
+  if (["waiting", "blocked"].includes(phase)) return "warning";
   return "subtle";
+}
+
+function isInternal(text = "", source = "") {
+  return String(source).toLowerCase().includes("history") || INTERNAL.some((pattern) => pattern.test(String(text)));
 }
 
 export function isPublicStreamsActivity(activity = {}) {
   const text = normalizeStatusText(activity?.statusText);
-  if (!text || !canShowStreamsStatus(text)) return false;
-  if (INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(text))) return false;
-  if (String(activity?.source || "").toLowerCase().includes("history")) return false;
-  return activity?.visible !== false;
+  return Boolean(text && canShowStreamsStatus(text) && !isInternal(text, activity?.source) && activity?.visible !== false);
 }
 
-function publicActivity(activity) {
-  return {
-    id: activity.id,
-    taskId: activity.taskId,
-    turnId: activity.turnId,
-    messageId: activity.messageId,
-    jobId: activity.jobId,
-    mode: activity.mode,
-    phase: activity.phase,
-    title: activity.title,
-    statusText: activity.statusText,
-    detail: activity.detail,
-    nextStep: activity.nextStep,
-    completedStep: activity.completedStep,
-    approvalRequired: activity.approvalRequired,
-    proofRequired: activity.proofRequired,
-    visible: activity.visible,
-    style: activity.style,
-    createdAt: activity.createdAt,
-  };
-}
-
-function publishActivity(activity) {
+function publish(activity) {
   if (typeof window === "undefined" || !isPublicStreamsActivity(activity)) return;
-  window.dispatchEvent(new CustomEvent("streams:chat-activity", { detail: publicActivity(activity) }));
+  const { backendProof, source, subtitle, ...safe } = activity;
+  window.dispatchEvent(new CustomEvent("streams:chat-activity", { detail: safe }));
 }
 
 export function createActivity(arg1 = {}, arg2, arg3) {
-  const input = parseCreateActivityArgs(arg1, arg2, arg3);
-  const mode = input.mode || "chat";
+  const input = args(arg1, arg2, arg3);
+  const mode = LABELS[input.mode] ? input.mode : "chat";
   const phase = input.phase || "starting";
-  const safeMode = ACTIVITY_LABELS[mode] ? mode : "chat";
-  const group = ACTIVITY_LABELS[safeMode];
-  const [fallbackTitle, subtitle] = group[phase] || group.starting;
-  const requested = normalizeStatusText(input.statusText || fallbackTitle);
-  const statusText = canShowStreamsStatus(requested) && !INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(requested)) ? requested : fallbackTitle;
-  const visible = canShowStreamsStatus(statusText) && !INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(statusText));
-
+  const [fallback, subtitle] = LABELS[mode][phase] || LABELS[mode].starting;
+  const requested = normalizeStatusText(input.statusText || fallback);
+  const internal = isInternal(requested, input.source);
+  const statusText = internal ? requested : canShowStreamsStatus(requested) ? requested : fallback;
   const activity = {
     id: input.id || `activity_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     taskId: input.taskId || null,
     turnId: input.turnId || null,
     messageId: input.messageId || null,
     jobId: input.jobId || null,
-    mode: safeMode,
-    source: input.source || safeMode,
+    mode,
+    source: input.source || mode,
     phase,
     title: statusText,
     subtitle,
@@ -183,12 +152,11 @@ export function createActivity(arg1 = {}, arg2, arg3) {
     approvalRequired: Boolean(input.approvalRequired),
     proofRequired: Boolean(input.proofRequired),
     backendProof: input.backendProof || null,
-    visible,
-    style: input.style || statusStyle(phase),
+    visible: !internal && canShowStreamsStatus(statusText) && input.visible !== false,
+    style: input.style || style(phase),
     createdAt: input.createdAt || new Date().toISOString(),
   };
-
-  publishActivity(activity);
+  publish(activity);
   return activity;
 }
 
