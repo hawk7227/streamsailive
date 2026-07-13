@@ -1,0 +1,271 @@
+:root {
+  --streams-console-canvas: #020611;
+  --streams-console-chat: #040b17;
+  --streams-console-footer: #08080d;
+  --streams-console-panel: #091322;
+  --streams-console-panel-raised: #0e1a2c;
+  --streams-console-panel-hover: #15233a;
+  --streams-console-text: #f8fafc;
+  --streams-console-text-secondary: #d5dae4;
+  --streams-console-text-muted: #a3acbc;
+  --streams-console-text-disabled: #737e91;
+  --streams-console-border: #273a55;
+  --streams-console-border-strong: #405777;
+  --streams-console-purple-deep: #2b0d4b;
+  --streams-console-purple: #7c3aed;
+  --streams-console-purple-hover: #8b5cf6;
+  --streams-console-purple-bright: #a855f7;
+  --streams-feature-research: #60a5fa;
+  --streams-feature-image: #c084fc;
+  --streams-feature-video: #f47287;
+  --streams-feature-voice: #38d5e8;
+  --streams-feature-code: #52d98a;
+  --streams-feature-files: #f0b84b;
+  --streams-feature-workspace: #818cf8;
+  --streams-feature-automation: #39c6b4;
+  --streams-feature-success: #52d98a;
+  --streams-feature-warning: #f0b84b;
+  --streams-feature-error: #f47287;
+}
+
+/* Preserve the existing console identity while separating dark surfaces. */
+.startWorkspace,
+.startWorkspaceActive,
+.startChatSurface,
+.splitChatContext {
+  background: var(--streams-console-chat) !important;
+  color: var(--streams-console-text) !important;
+}
+
+.startConversationColumn,
+.startAssistantBody,
+.chatMarkdown,
+.chatMarkdown p,
+.chatMarkdown li,
+.chatMarkdown blockquote {
+  color: var(--streams-console-text) !important;
+}
+
+.chatMarkdown p,
+.chatMarkdown li {
+  line-height: 1.68;
+}
+
+.chatMarkdown a {
+  color: var(--streams-feature-research) !important;
+  text-decoration-color: color-mix(in srgb, var(--streams-feature-research) 62%, transparent);
+}
+
+.chatMarkdown blockquote {
+  border-left-color: var(--streams-console-purple-bright) !important;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.chatMarkdown table,
+.chatTableWrap,
+.chatCodeBlock,
+.streamsGeneratedMediaCard,
+.inlineAssistantImageCardFrame,
+.assistantMessageMenu,
+.globalOverflowMenu,
+.sharePopover {
+  background: var(--streams-console-panel) !important;
+  border-color: var(--streams-console-border) !important;
+  color: var(--streams-console-text) !important;
+}
+
+.chatMarkdown th,
+.chatCodeHeader,
+.assistantMessageMenu button,
+.globalOverflowMenu button {
+  color: var(--streams-console-text-secondary) !important;
+}
+
+.chatMarkdown td,
+.chatMarkdown code,
+.chatCodePre {
+  color: var(--streams-console-text) !important;
+}
+
+.chatInlineCode {
+  color: #e9d5ff !important;
+  background: rgba(124, 58, 237, 0.18) !important;
+  border: 1px solid rgba(168, 85, 247, 0.28);
+}
+
+.startUserBubble {
+  background: #10172f !important;
+  border: 1px solid #263568 !important;
+  color: #fff !important;
+}
+
+.assistantMessageActions button,
+.inlineAssistantImageOverflowButton,
+.imageViewerToolbar button,
+.imageViewerToolbar select {
+  color: var(--streams-console-text-secondary) !important;
+  border-color: var(--streams-console-border) !important;
+}
+
+.assistantMessageActions button:hover,
+.inlineAssistantImageOverflowMenu button:hover:not(:disabled),
+.globalOverflowMenu button:hover,
+.assistantMessageMenu button:hover {
+  background: var(--streams-console-panel-hover) !important;
+  color: #fff !important;
+}
+
+/* Feature accents: small identity cues, never full bright surfaces. */
+[data-feature="research"],
+[data-domain="web_search"] {
+  --streams-feature-accent: var(--streams-feature-research);
+}
+
+[data-feature="image"],
+[data-domain="image"] {
+  --streams-feature-accent: var(--streams-feature-image);
+}
+
+[data-feature="video"],
+[data-domain="video"] {
+  --streams-feature-accent: var(--streams-feature-video);
+}
+
+[data-feature="voice"],
+[data-domain="voice"] {
+  --streams-feature-accent: var(--streams-feature-voice);
+}
+
+[data-feature="code"],
+[data-domain="github"],
+[data-domain="job"] {
+  --streams-feature-accent: var(--streams-feature-code);
+}
+
+[data-feature="files"],
+[data-domain="files"] {
+  --streams-feature-accent: var(--streams-feature-files);
+}
+
+[data-feature="workspace"] {
+  --streams-feature-accent: var(--streams-feature-workspace);
+}
+
+[data-feature="automation"] {
+  --streams-feature-accent: var(--streams-feature-automation);
+}
+
+.streamsFeatureCard,
+.streamsActivityRow,
+.streamsGeneratedMediaCard,
+.inlineAssistantImageCardFrame {
+  position: relative;
+  background: var(--streams-console-panel) !important;
+  border: 1px solid var(--streams-console-border) !important;
+}
+
+.streamsFeatureCard[data-feature],
+.streamsGeneratedMediaCard[data-feature],
+.inlineAssistantImageCard[data-feature] .inlineAssistantImageCardFrame {
+  border-left: 3px solid var(--streams-feature-accent, var(--streams-console-purple)) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--streams-feature-accent, var(--streams-console-purple)) 10%, transparent), transparent 30%),
+    var(--streams-console-panel) !important;
+}
+
+.streamsActivityRow[data-domain]::before,
+.streamsFeatureDot,
+.streamsActivityDot {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: var(--streams-feature-accent, var(--streams-console-purple-bright));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--streams-feature-accent, var(--streams-console-purple-bright)) 52%, transparent);
+}
+
+/* Inline image generation keeps the console dark and uses lavender as an accent. */
+.inlineAssistantImageCard[data-feature="image"] {
+  color: var(--streams-console-text);
+}
+
+.inlineAssistantImageCardFrame {
+  background: #09111d !important;
+  border-color: #302342 !important;
+}
+
+.inlineAssistantImageSkeleton {
+  background: #09111d !important;
+}
+
+.inlineAssistantImageDots {
+  background-image: radial-gradient(circle, #9c7bc4 0 1.5px, transparent 2px) !important;
+  opacity: 0.48;
+}
+
+.inlineAssistantImageSkeletonLabel,
+.inlineAssistantImageStatus {
+  color: #d9c4ee !important;
+}
+
+.inlineAssistantImageSize,
+.inlineAssistantImageMetaRow {
+  color: var(--streams-console-text-muted) !important;
+}
+
+/* Status colors remain restrained and readable. */
+[data-status="working"],
+[data-phase="running"],
+[data-phase="streaming"] {
+  --streams-status-accent: var(--streams-console-purple-bright);
+}
+
+[data-status="success"],
+[data-phase="complete"] {
+  --streams-status-accent: var(--streams-feature-success);
+}
+
+[data-status="warning"],
+[data-phase="waiting"],
+[data-phase="blocked"] {
+  --streams-status-accent: var(--streams-feature-warning);
+}
+
+[data-status="error"],
+[data-phase="failed"] {
+  --streams-status-accent: var(--streams-feature-error);
+}
+
+.streamsStatusBadge,
+.streamsActivityBadge {
+  color: var(--streams-status-accent, var(--streams-console-text-secondary)) !important;
+  background: color-mix(in srgb, var(--streams-status-accent, var(--streams-console-purple)) 10%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--streams-status-accent, var(--streams-console-purple)) 35%, transparent) !important;
+}
+
+/* Menus and disabled controls stay visible instead of disappearing into black. */
+.streamsComposerMenu,
+.inlineAssistantImageOverflowMenu,
+.assistantMessageMenu,
+.globalOverflowMenu,
+.sharePopover {
+  background: var(--streams-console-panel-raised) !important;
+  border-color: var(--streams-console-border-strong) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48) !important;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  color: var(--streams-console-text-disabled) !important;
+  border-color: var(--streams-console-border) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inlineAssistantImageDots,
+  .streamsComposer::before,
+  .streamsComposer::after,
+  .streamsComposerSendButton:disabled {
+    animation: none !important;
+  }
+}
