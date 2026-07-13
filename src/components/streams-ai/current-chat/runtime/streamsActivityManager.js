@@ -2,33 +2,50 @@ import { canShowStreamsStatus, normalizeStatusText } from "./streamsStatusRegist
 
 const ACTIVITY_LABELS = {
   chat: {
+    created: ["Thinking…", "The request was accepted."],
+    thinking: ["Thinking…", "The request is being prepared."],
+    understanding: ["Understanding your request…", "Streams is identifying the requested outcome."],
+    reviewing: ["Reviewing your request…", "Relevant conversation, project, memory, and attachment context is being reviewed."],
+    preparing: ["Preparing response…", "The response is being prepared."],
     starting: ["Writing…", "The live assistant is preparing a response."],
     streaming: ["Writing…", "The answer is streaming."],
     complete: ["Ready", "The response is ready."],
-    error: ["Ready", "The request did not complete successfully."],
+    error: ["Something went wrong", "The request did not complete successfully."],
+    cancelled: ["Request cancelled", "The active response was cancelled."],
   },
   file: {
-    starting: ["Reading attached file…", "The attachment is being prepared."],
-    uploading: ["Reading attached file…", "The attachment is being uploaded."],
+    starting: ["Uploading…", "The attachment is being prepared."],
+    thinking: ["Uploading…", "The attachment is being prepared."],
+    uploading: ["Uploading…", "The attachment is being uploaded."],
     reading: ["Reading attached file…", "The attachment is being read."],
+    reviewing: ["Reviewing uploaded files…", "Relevant uploaded content is being reviewed."],
     extracting: ["Text extracted", "Readable attachment text is available."],
     complete: ["Files ready", "The file is ready."],
     error: ["Upload failed", "The upload did not complete successfully."],
   },
   image: {
-    starting: ["Generating image…", "I’m setting up your image request now."],
+    understanding: ["Preparing image request…", "Streams is determining the requested image operation."],
+    reviewing: ["Checking the reference image…", "The supplied visual reference is being inspected."],
+    preparing: ["Preparing image request…", "The image request is being prepared."],
+    checking: ["Checking image request…", "The request and applicable settings are being validated."],
+    starting: ["Starting image generation…", "The image job is starting."],
     rendering: ["Generating image…", "Your image is actively being created."],
-    polling: ["Generating image…", "I’m preparing the finished image output."],
+    polling: ["Receiving preview…", "Streams is waiting for the latest image output."],
+    saving: ["Saving image…", "The completed image is being saved."],
     complete: ["Image ready", "Your generated image is ready."],
     error: ["Image failed", "The image request did not complete successfully."],
+    cancelled: ["Request cancelled", "The image request was cancelled."],
   },
   video: {
-    starting: ["Rendering video…", "I’m setting up your video request now."],
+    preparing: ["Preparing video request…", "The video request is being prepared."],
+    starting: ["Starting video generation…", "The video job is starting."],
     rendering: ["Rendering video…", "Your video is actively being created."],
-    polling: ["Rendering video…", "I’m preparing the finished video output."],
+    polling: ["Rendering video…", "Streams is waiting for the latest video output."],
     frames: ["Sampling frames…", "Video frame sampling is active."],
+    saving: ["Saving video…", "The completed video is being saved."],
     complete: ["Video ready", "Your generated video is ready."],
     error: ["Video failed", "The video request did not complete successfully."],
+    cancelled: ["Request cancelled", "The video request was cancelled."],
   },
   audio: {
     starting: ["Transcribing audio…", "Audio transcription is active."],
@@ -39,28 +56,36 @@ const ACTIVITY_LABELS = {
   tool: {
     starting: ["Searching the web…", "The web search is starting."],
     thinking: ["Searching the web…", "The web search is running."],
+    searching: ["Searching sources…", "Streams is locating relevant sources."],
+    opening: ["Opening source…", "A selected source is being opened."],
+    reading: ["Reading source…", "The selected source is being reviewed."],
+    reviewing: ["Reviewing sources…", "The collected sources are being compared."],
+    citations: ["Checking citations…", "Source references are being checked."],
     received: ["Received app response", "A tool or app response was received."],
     complete: ["Search complete", "The web search is complete."],
     error: ["Search failed", "The web search did not complete successfully."],
   },
   build: {
-    starting: ["Running checks…", "Build or verification checks are running."],
+    starting: ["Planning build…", "The build request is being prepared."],
+    reading: ["Reading repository…", "The repository is being inspected."],
+    applying: ["Applying patch…", "The requested code change is being applied."],
     checking: ["Running checks…", "Build or verification checks are running."],
+    verifying: ["Verifying result…", "The result is being verified."],
     deploying: ["Deploying…", "Deployment has started."],
     complete: ["Ready", "The build step is complete."],
-    error: ["Ready", "The build step failed."],
+    error: ["Something went wrong", "The build step failed."],
   },
   link: {
-    starting: ["Writing…", "The link request is being handled."],
-    thinking: ["Writing…", "The link request is being handled."],
+    starting: ["Reading source…", "The link request is being handled."],
+    thinking: ["Reading source…", "The link request is being handled."],
     complete: ["Ready", "The link request is complete."],
-    error: ["Ready", "The link request did not complete successfully."],
+    error: ["Something went wrong", "The link request did not complete successfully."],
   },
   artifact: {
-    starting: ["Writing…", "The artifact request is starting."],
+    starting: ["Preparing response…", "The artifact request is starting."],
     rendering: ["Writing…", "The artifact request is running."],
     complete: ["Ready", "The artifact is ready."],
-    error: ["Ready", "The artifact request did not complete successfully."],
+    error: ["Something went wrong", "The artifact request did not complete successfully."],
   },
 };
 
@@ -75,7 +100,13 @@ function parseCreateActivityArgs(arg1, arg2, arg3) {
 function statusStyle(phase) {
   if (phase === "error" || phase === "failed") return "error";
   if (phase === "complete") return "success";
+  if (phase === "waiting" || phase === "blocked") return "warning";
   return "subtle";
+}
+
+function publishActivity(activity) {
+  if (typeof window === "undefined" || !activity?.visible) return;
+  window.dispatchEvent(new CustomEvent("streams:chat-activity", { detail: activity }));
 }
 
 export function createActivity(arg1 = {}, arg2, arg3) {
@@ -89,8 +120,12 @@ export function createActivity(arg1 = {}, arg2, arg3) {
   const statusText = canShowStreamsStatus(requested) ? requested : fallbackTitle;
   const visible = canShowStreamsStatus(statusText);
 
-  return {
-    id: `activity_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+  const activity = {
+    id: input.id || `activity_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    taskId: input.taskId || null,
+    turnId: input.turnId || null,
+    messageId: input.messageId || null,
+    jobId: input.jobId || null,
     mode: safeMode,
     source: input.source || safeMode,
     phase,
@@ -98,11 +133,18 @@ export function createActivity(arg1 = {}, arg2, arg3) {
     subtitle,
     statusText,
     detail: input.detail || "",
+    nextStep: input.nextStep || "",
+    completedStep: input.completedStep || "",
+    approvalRequired: Boolean(input.approvalRequired),
+    proofRequired: Boolean(input.proofRequired),
     backendProof: input.backendProof || null,
     visible,
     style: input.style || statusStyle(phase),
-    createdAt: new Date().toISOString(),
+    createdAt: input.createdAt || new Date().toISOString(),
   };
+
+  publishActivity(activity);
+  return activity;
 }
 
 export function isGenerationActivity(activity) {
