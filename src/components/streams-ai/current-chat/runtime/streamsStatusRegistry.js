@@ -49,18 +49,12 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Checking the reference image…$/,
   /^Using uploaded image as reference…$/,
   /^Image ready for review$/,
-  /^Image URL invalid$/,
   /^Vision unavailable for this image$/,
   /^Looking for text in the image…$/,
   /^No visible text found$/,
   /^Checking PDF pages…$/,
   /^PDF text extracted$/,
-  /^PDF under 100 pages$/,
-  /^PDF visual review limited$/,
-  /^PDF text-only mode$/,
-  /^Use PDF viewer page numbers$/,
   /^Reading DOCX…$/,
-  /^Legacy DOC stored$/,
   /^Reading CSV…$/,
   /^Reading workbook…$/,
   /^Reading sheet: .+$/,
@@ -99,7 +93,6 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Reading app response…$/,
   /^Tool failed$/,
   /^Retrying tool…$/,
-  /^Tool result too large$/,
   /^Resuming answer…$/,
   /^Searching the web…$/,
   /^Searching sources…$/,
@@ -123,7 +116,6 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Project context loaded$/,
   /^Moving chat to project…$/,
   /^Chat moved to project$/,
-  /^Loading chat history…$/,
   /^Restoring context…$/,
   /^Context ready$/,
   /^Context compacted$/,
@@ -131,18 +123,15 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Preparing image request…$/,
   /^Preparing image prompt…$/,
   /^Checking image request…$/,
-  /^Checking usage…$/,
-  /^Checking usage approval…$/,
+  /^Checking access…$/,
   /^Starting image generation…$/,
-  /^Submitting image generation…$/,
   /^Generating image…$/,
-  /^Generating image… \(\d+\)$/,
   /^Receiving preview…$/,
   /^Saving image…$/,
   /^Image ready$/,
-  /^Rendering video…$/,
   /^Preparing video request…$/,
   /^Starting video generation…$/,
+  /^Rendering video…$/,
   /^Saving video…$/,
   /^Video ready$/,
   /^Generation failed$/,
@@ -163,8 +152,7 @@ export const SAFE_STREAMS_STATUS_PATTERNS = [
   /^Syncing…$/,
   /^Sync complete$/,
   /^Something went wrong$/,
-  /^Provider error$/,
-  /^Invalid image URL$/,
+  /^Invalid image$/,
   /^File unavailable$/,
   /^File still processing$/,
   /^Please try again$/,
@@ -191,7 +179,7 @@ export function canShowStreamsStatus(value = "") {
 export function isVisibleSafeStatus(activity = {}, isStreaming = false) {
   const text = normalizeStatusText(activity?.statusText);
   if (!canShowStreamsStatus(text)) return false;
-  if (text === "Ready" || text === "Ask anything" || text === "Chat is ready") return false;
+  if (["Ready", "Ask anything", "Chat is ready"].includes(text)) return false;
   if (isStreaming) return true;
-  return /(?:failed|ready|complete|extracted|saved|loaded|connected|cancelled|stopped)$/i.test(text) || text.startsWith("Thought for ") || text.startsWith("Received ") || text === "Upload failed" || text === "File ready" || text === "Files ready";
+  return /(?:failed|ready|complete|extracted|saved|loaded|connected|cancelled|stopped)$/i.test(text) || text.startsWith("Thought for ") || text.startsWith("Received ") || ["Upload failed", "File ready", "Files ready"].includes(text);
 }
