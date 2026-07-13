@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./streams-composer.css";
+import "./streams-console-color-system.css";
 import "./streams-composer-layout-fix.css";
 import "./chat-message-text-fix.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
