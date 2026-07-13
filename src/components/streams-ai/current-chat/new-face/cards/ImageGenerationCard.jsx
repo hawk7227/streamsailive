@@ -42,18 +42,17 @@ export default function ImageGenerationCard({
       <div className="streamsGeneratedMediaMeta">
         <span>{statusText}</span>
         {size ? <span>{size}</span> : null}
-        {image?.provider ? <span>Provider: {image.provider}</span> : null}
       </div>
 
       <div className="streamsGeneratedMediaActions">
         <button type="button" disabled={!isReady} onClick={onOpen}>Open</button>
         <button type="button" disabled={!isReady} onClick={onDownload}>Download</button>
-        <button type="button" disabled={!shareable} title={shareable ? "Copy image link" : "Copy link unavailable until autosave has a durable URL"} onClick={onCopyUrl}>Copy link</button>
+        <button type="button" disabled={!shareable} title={shareable ? "Copy image link" : "Copy link unavailable until the image is saved"} onClick={onCopyUrl}>Copy link</button>
         <button type="button" disabled={!isReady} onClick={onAnalyze}>Analyze</button>
         <button type="button" disabled={!isReady} onClick={onEdit}>Edit</button>
         <button type="button" disabled={!isReady} onClick={onAnimate}>Animate</button>
         {typeof navigator !== "undefined" && navigator.share ? (
-          <button type="button" disabled={!shareable} title={shareable ? "Share image" : "Share unavailable until autosave has a durable URL"} onClick={onShare}>Share</button>
+          <button type="button" disabled={!shareable} title={shareable ? "Share image" : "Share unavailable until the image is saved"} onClick={onShare}>Share</button>
         ) : null}
       </div>
     </article>
