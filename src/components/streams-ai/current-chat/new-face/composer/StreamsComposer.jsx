@@ -27,6 +27,10 @@ function autosizeComposerTextarea(node) {
   node.style.overflowY = node.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
 }
 
+function isTerminalActivity(activity) {
+  return ["complete", "error", "failed", "cancelled"].includes(String(activity?.phase || "").toLowerCase());
+}
+
 export default function StreamsComposer({
   onSubmit,
   onFilesSelected,
@@ -41,6 +45,7 @@ export default function StreamsComposer({
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+  const [liveActivity, setLiveActivity] = useState(null);
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
@@ -48,6 +53,26 @@ export default function StreamsComposer({
   useEffect(() => {
     autosizeComposerTextarea(inputRef.current);
   }, [message, selectedTool]);
+
+  useEffect(() => {
+    const handleActivity = (event) => {
+      const next = event?.detail;
+      if (!next?.statusText || next.visible === false) return;
+      if (["Ready", "Ask anything", "Chat is ready"].includes(next.statusText)) {
+        setLiveActivity(null);
+        return;
+      }
+      setLiveActivity(next);
+    };
+    window.addEventListener("streams:chat-activity", handleActivity);
+    return () => window.removeEventListener("streams:chat-activity", handleActivity);
+  }, []);
+
+  useEffect(() => {
+    if (!liveActivity || !isTerminalActivity(liveActivity)) return undefined;
+    const timer = window.setTimeout(() => setLiveActivity(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [liveActivity]);
 
   useEffect(() => {
     if (!activeMenu) return undefined;
@@ -103,6 +128,7 @@ export default function StreamsComposer({
     if (selectedTool?.id === "create_image") finalMessage = `Create an image of ${value || "the attached reference"}`;
     if (selectedTool?.id === "url") finalMessage = `Read the URL: ${value}`;
 
+    setLiveActivity({ phase: "created", mode: "chat", statusText: "Thinking…", visible: true });
     clearInput();
     setSelectedTool(null);
     setActiveMenu("");
@@ -167,14 +193,13 @@ export default function StreamsComposer({
     ? `Uploading ${uploadingCount} file${uploadingCount === 1 ? "" : "s"}…`
     : failedCount > 0
       ? `${failedCount} upload${failedCount === 1 ? "" : "s"} failed`
-      : isStreaming
-        ? "Thinking…"
-        : "";
+      : liveActivity?.statusText || (isStreaming ? "Thinking…" : "");
+  const liveStatusError = failedCount > 0 && !hasUploadingFiles || ["error", "failed"].includes(String(liveActivity?.phase || "").toLowerCase());
 
   return (
     <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={hasUploadingFiles || isStreaming ? "true" : "false"}>
       {liveStatus ? (
-        <div className={`streamsComposerLiveStatus${failedCount > 0 && !hasUploadingFiles ? " isError" : ""}`} role="status" aria-live="polite" aria-atomic="true">
+        <div className={`streamsComposerLiveStatus${liveStatusError ? " isError" : ""}`} data-domain={liveActivity?.mode || (hasUploadingFiles ? "files" : "chat")} data-phase={liveActivity?.phase || (hasUploadingFiles ? "uploading" : "thinking")} role="status" aria-live="polite" aria-atomic="true">
           <span className="streamsComposerLiveStatusDot" aria-hidden="true" />
           <span>{liveStatus}</span>
         </div>
