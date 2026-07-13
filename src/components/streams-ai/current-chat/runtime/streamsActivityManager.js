@@ -5,9 +5,9 @@ const ACTIVITY_LABELS = {
     created: ["Thinking…", "The request was accepted."],
     thinking: ["Thinking…", "The request is being prepared."],
     understanding: ["Understanding your request…", "Streams is identifying the requested outcome."],
-    reviewing: ["Reviewing your request…", "Relevant conversation, project, memory, and attachment context is being reviewed."],
+    reviewing: ["Reviewing your request…", "Relevant context is being reviewed."],
     preparing: ["Preparing response…", "The response is being prepared."],
-    starting: ["Writing…", "The live assistant is preparing a response."],
+    starting: ["Writing…", "The response is being prepared."],
     streaming: ["Writing…", "The answer is streaming."],
     complete: ["Ready", "The response is ready."],
     error: ["Something went wrong", "The request did not complete successfully."],
@@ -61,7 +61,7 @@ const ACTIVITY_LABELS = {
     reading: ["Reading source…", "The selected source is being reviewed."],
     reviewing: ["Reviewing sources…", "The collected sources are being compared."],
     citations: ["Checking citations…", "Source references are being checked."],
-    received: ["Received app response", "A tool or app response was received."],
+    received: ["Received app response", "A connected tool response was received."],
     complete: ["Search complete", "The web search is complete."],
     error: ["Search failed", "The web search did not complete successfully."],
   },
@@ -76,18 +76,33 @@ const ACTIVITY_LABELS = {
     error: ["Something went wrong", "The build step failed."],
   },
   link: {
-    starting: ["Reading source…", "The link request is being handled."],
-    thinking: ["Reading source…", "The link request is being handled."],
+    starting: ["Reading source…", "The link is being reviewed."],
+    thinking: ["Reading source…", "The link is being reviewed."],
     complete: ["Ready", "The link request is complete."],
     error: ["Something went wrong", "The link request did not complete successfully."],
   },
   artifact: {
-    starting: ["Preparing response…", "The artifact request is starting."],
-    rendering: ["Writing…", "The artifact request is running."],
-    complete: ["Ready", "The artifact is ready."],
-    error: ["Something went wrong", "The artifact request did not complete successfully."],
+    starting: ["Preparing response…", "The requested content is being prepared."],
+    rendering: ["Writing…", "The requested content is being prepared."],
+    complete: ["Ready", "The content is ready."],
+    error: ["Something went wrong", "The request did not complete successfully."],
   },
 };
+
+const INTERNAL_STATUS_PATTERNS = [
+  /loading chat history/i,
+  /server timestamp/i,
+  /backend/i,
+  /provider/i,
+  /model\b/i,
+  /request id/i,
+  /route\b/i,
+  /api[_ -]?key/i,
+  /openai|anthropic|claude|gpt|fal\b|runway|kling|veo|elevenlabs/i,
+  /cost[_ -]?usd|\busd\b|margin|latency|retry count/i,
+  /stack trace|traceback|exception|sqlstate|postgres|supabase/i,
+  /streams-ai-memory-provider-router|responses-live|provider-router/i,
+];
 
 function parseCreateActivityArgs(arg1, arg2, arg3) {
   if (arg1 && typeof arg1 === "object") return arg1;
@@ -104,9 +119,39 @@ function statusStyle(phase) {
   return "subtle";
 }
 
+export function isPublicStreamsActivity(activity = {}) {
+  const text = normalizeStatusText(activity?.statusText);
+  if (!text || !canShowStreamsStatus(text)) return false;
+  if (INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(text))) return false;
+  if (String(activity?.source || "").toLowerCase().includes("history")) return false;
+  return activity?.visible !== false;
+}
+
+function publicActivity(activity) {
+  return {
+    id: activity.id,
+    taskId: activity.taskId,
+    turnId: activity.turnId,
+    messageId: activity.messageId,
+    jobId: activity.jobId,
+    mode: activity.mode,
+    phase: activity.phase,
+    title: activity.title,
+    statusText: activity.statusText,
+    detail: activity.detail,
+    nextStep: activity.nextStep,
+    completedStep: activity.completedStep,
+    approvalRequired: activity.approvalRequired,
+    proofRequired: activity.proofRequired,
+    visible: activity.visible,
+    style: activity.style,
+    createdAt: activity.createdAt,
+  };
+}
+
 function publishActivity(activity) {
-  if (typeof window === "undefined" || !activity?.visible) return;
-  window.dispatchEvent(new CustomEvent("streams:chat-activity", { detail: activity }));
+  if (typeof window === "undefined" || !isPublicStreamsActivity(activity)) return;
+  window.dispatchEvent(new CustomEvent("streams:chat-activity", { detail: publicActivity(activity) }));
 }
 
 export function createActivity(arg1 = {}, arg2, arg3) {
@@ -117,8 +162,8 @@ export function createActivity(arg1 = {}, arg2, arg3) {
   const group = ACTIVITY_LABELS[safeMode];
   const [fallbackTitle, subtitle] = group[phase] || group.starting;
   const requested = normalizeStatusText(input.statusText || fallbackTitle);
-  const statusText = canShowStreamsStatus(requested) ? requested : fallbackTitle;
-  const visible = canShowStreamsStatus(statusText);
+  const statusText = canShowStreamsStatus(requested) && !INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(requested)) ? requested : fallbackTitle;
+  const visible = canShowStreamsStatus(statusText) && !INTERNAL_STATUS_PATTERNS.some((pattern) => pattern.test(statusText));
 
   const activity = {
     id: input.id || `activity_${Date.now()}_${Math.random().toString(16).slice(2)}`,
