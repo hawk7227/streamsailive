@@ -11,10 +11,10 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
 const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
 
 const TOOL_ITEMS = [
-  { id: "files", icon: "↥", label: "Add photos & files", enabled: true },
-  { id: "url", icon: "▣", label: "Add link", enabled: true },
-  { id: "create_image", icon: "✦", label: "Create image", enabled: true },
-  { id: "web_search", icon: "◎", label: "Web search", enabled: true },
+  { id: "files", icon: "↥", label: "Add photos & files", enabled: true, feature: "files" },
+  { id: "url", icon: "▣", label: "Add link", enabled: true, feature: "research" },
+  { id: "create_image", icon: "✦", label: "Create image", enabled: true, feature: "image" },
+  { id: "web_search", icon: "◎", label: "Web search", enabled: true, feature: "research" },
 ];
 
 function autosizeComposerTextarea(node) {
@@ -136,14 +136,14 @@ export default function StreamsComposer({
     const previewUrl = file.url || file.storageUrl || file.publicUrl || file.previewUrl;
     if (isImage && previewUrl) {
       return (
-        <div key={file.id} className="streamsComposerAttachmentImage">
+        <div key={file.id} className="streamsComposerAttachmentImage" data-feature="image">
           <img src={previewUrl} alt={file.name || "Image"} />
           <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button>
         </div>
       );
     }
     return (
-      <div key={file.id} className="streamsComposerAttachmentFile">
+      <div key={file.id} className="streamsComposerAttachmentFile" data-feature="files">
         <span>📄</span>
         <strong>{file.name || "File"}</strong>
         <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button>
@@ -152,14 +152,14 @@ export default function StreamsComposer({
   }
 
   return (
-    <section ref={composerRef} className="streamsComposer" aria-label="Streams composer">
+    <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer">
       {libraryFiles?.length ? <div className="streamsComposerAttachments">{libraryFiles.map(renderAttachment)}</div> : null}
 
       <div className="streamsComposerRow">
         <button type="button" className="streamsComposerIconButton" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
 
         {selectedTool ? (
-          <div className="streamsComposerToolPill">
+          <div className="streamsComposerToolPill" data-feature={selectedTool.feature}>
             <span>{selectedTool.icon}</span>
             <strong>{selectedTool.label}</strong>
             <button type="button" className="streamsComposerToolPillClose" aria-label={`Clear ${selectedTool.label}`} onClick={() => setSelectedTool(null)}>×</button>
@@ -188,7 +188,7 @@ export default function StreamsComposer({
         />
 
         <button type="button" className="streamsComposerPill" aria-label="Open model menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
-        <button type="button" className="streamsComposerMicButton" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
+        <button type="button" className="streamsComposerMicButton" data-feature="voice" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
         <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>↑</button>
       </div>
 
@@ -197,7 +197,7 @@ export default function StreamsComposer({
       {activeMenu === "tools" ? (
         <div className="streamsComposerMenu toolsMenu" role="menu">
           {TOOL_ITEMS.map((item) => (
-            <button key={item.id} type="button" onClick={() => handleTool(item)}>
+            <button key={item.id} type="button" data-feature={item.feature} onClick={() => handleTool(item)}>
               <span>{item.icon}</span>
               <strong>{item.label}</strong>
               <em>{item.id === "web_search" ? "Live" : ""}</em>
@@ -207,7 +207,7 @@ export default function StreamsComposer({
       ) : null}
 
       {activeMenu === "model" ? (
-        <div className="streamsComposerMenu modelMenu" role="menu">
+        <div className="streamsComposerMenu modelMenu" role="menu" data-feature="chat">
           {MODES.map((item) => (
             <button key={item} type="button" onClick={() => {
               setActiveMenu("");
