@@ -13,7 +13,6 @@ function extractJsonError(raw) {
   const text = String(raw || "").trim();
   const firstBrace = text.indexOf("{");
   if (firstBrace < 0) return "";
-
   try {
     const parsed = JSON.parse(text.slice(firstBrace));
     return parsed?.error || parsed?.message || parsed?.blockedReason || "";
@@ -23,57 +22,51 @@ function extractJsonError(raw) {
 }
 
 const USER_ERROR_COPY = {
-  provider_unavailable: {
-    title: "The assistant is temporarily unavailable",
-    message: "I’m having trouble reaching the AI provider right now. Your message is safe here. Please try again in a moment.",
+  service_unavailable: {
+    title: "Streams is temporarily unavailable",
+    message: "Your message is safe. Please try again in a moment.",
     retryable: true,
   },
-  provider_not_configured: {
-    title: "The assistant is not ready yet",
-    message: "This workspace is still being connected to its AI provider. File uploads, project storage, and saved chat features can still work, but live AI responses need the provider connection restored.",
+  service_not_ready: {
+    title: "Streams is not ready yet",
+    message: "This workspace is still being connected. Please try again shortly.",
     retryable: false,
   },
   generation_unavailable: {
     title: "Generation is temporarily unavailable",
-    message: "The generation service could not be reached right now. Your prompt was not lost. Please retry in a moment.",
+    message: "Your prompt was not lost. Please try again in a moment.",
     retryable: true,
   },
   access_issue: {
     title: "Permission needed",
-    message: "This workspace could not verify access for that request. Sign in again or refresh the page, then retry.",
+    message: "Streams could not verify access for that request. Refresh the page or sign in again, then retry.",
     retryable: true,
   },
   network_failed: {
     title: "Connection interrupted",
-    message: "The app could not reach Streams for this request. Check your connection and try again.",
+    message: "Streams could not complete the request. Check your connection and try again.",
     retryable: true,
   },
   timeout: {
     title: "This is taking longer than expected",
-    message: "The request did not finish in time. You can retry, and I’ll pick it up again.",
+    message: "The request did not finish in time. Please try again.",
     retryable: true,
   },
   invalid_request: {
     title: "That request needs an adjustment",
-    message: "Something about the request format was not accepted. Adjust the prompt or selected mode and try again.",
+    message: "Adjust the prompt or selected mode and try again.",
     retryable: false,
   },
   unknown: {
     title: "Something went wrong",
-    message: "The request did not complete. Please try again. If it keeps happening, open the details for support.",
+    message: "The request did not complete. Please try again.",
     retryable: true,
   },
 };
 
 function makeUserError(code, raw, extra = {}) {
   const base = USER_ERROR_COPY[code] || USER_ERROR_COPY.unknown;
-  return {
-    ...base,
-    ...extra,
-    code,
-    raw,
-    userFacing: true,
-  };
+  return { ...base, ...extra, code, raw, userFacing: true };
 }
 
 export function normalizeStreamsError(error, mode = "chat") {
@@ -82,11 +75,11 @@ export function normalizeStreamsError(error, mode = "chat") {
   const joined = `${raw}\n${jsonError}`;
   const lower = joined.toLowerCase();
 
-  if (lower.includes("openai_api_key") || lower.includes("openai api key") || lower.includes("api key") || lower.includes("not configured")) {
-    return makeUserError("provider_not_configured", raw);
+  if (lower.includes("api key") || lower.includes("not configured") || lower.includes("missing configuration")) {
+    return makeUserError("service_not_ready", raw);
   }
 
-  if (lower.includes("fal_key") || lower.includes("fal key") || lower.includes("generation provider") || lower.includes("image failed") || lower.includes("video failed")) {
+  if (lower.includes("generation provider") || lower.includes("image failed") || lower.includes("video failed") || lower.includes("generation failed")) {
     return makeUserError("generation_unavailable", raw, {
       title: mode === "image" ? "Image generation is temporarily unavailable" : mode === "video" ? "Video generation is temporarily unavailable" : USER_ERROR_COPY.generation_unavailable.title,
     });
@@ -109,7 +102,7 @@ export function normalizeStreamsError(error, mode = "chat") {
   }
 
   if (lower.includes("provider error") || lower.includes("provider response") || raw.includes("429") || raw.includes("500") || raw.includes("502") || raw.includes("503")) {
-    return makeUserError("provider_unavailable", raw);
+    return makeUserError("service_unavailable", raw);
   }
 
   return makeUserError("unknown", raw);
