@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./streams-composer.css";
 import "./streams-console-color-system.css";
+import "./streams-console-color-system-fixes.css";
 import "./streams-composer-layout-fix.css";
 import "./chat-message-text-fix.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
@@ -9,6 +10,7 @@ const MODES = ["Thinking", "Configure..."];
 const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
 const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
+const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
 const TOOL_ITEMS = [
   { id: "files", icon: "↥", label: "Add photos & files", enabled: true, feature: "files" },
@@ -64,8 +66,11 @@ export default function StreamsComposer({
     };
   }, [activeMenu]);
 
-  const readyAttachments = Array.isArray(libraryFiles) ? libraryFiles.filter((file) => file.status !== "uploading") : [];
-  const hasUploadingFiles = Array.isArray(libraryFiles) && libraryFiles.some((file) => file.status === "uploading");
+  const files = Array.isArray(libraryFiles) ? libraryFiles : [];
+  const readyAttachments = files.filter((file) => file.status !== "uploading" && file.status !== "error");
+  const uploadingCount = files.filter((file) => file.status === "uploading").length;
+  const failedCount = files.filter((file) => file.status === "error").length;
+  const hasUploadingFiles = uploadingCount > 0;
   const isDisabled = isStreaming || hasUploadingFiles;
 
   const placeholder = selectedTool
@@ -94,9 +99,9 @@ export default function StreamsComposer({
     const hasAttachments = readyAttachments.length > 0;
     if (!value && !hasAttachments) return;
 
-    let finalMessage = value || `Review the attached file${readyAttachments.length === 1 ? "" : "s"}.`;
-    if (selectedTool?.id === "create_image") finalMessage = `Create an image of ${finalMessage}`;
-    if (selectedTool?.id === "url") finalMessage = `Read the URL: ${finalMessage}`;
+    let finalMessage = value || ATTACHMENT_ONLY_SENTINEL;
+    if (selectedTool?.id === "create_image") finalMessage = `Create an image of ${value || "the attached reference"}`;
+    if (selectedTool?.id === "url") finalMessage = `Read the URL: ${value}`;
 
     clearInput();
     setSelectedTool(null);
@@ -110,8 +115,8 @@ export default function StreamsComposer({
   }
 
   function handleFileChange(event) {
-    const files = Array.from(event.target.files || []);
-    if (files.length) onFilesSelected?.(files);
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length) onFilesSelected?.(selectedFiles);
     event.target.value = "";
     setActiveMenu("");
   }
@@ -134,26 +139,48 @@ export default function StreamsComposer({
   function renderAttachment(file) {
     const isImage = file.kind === "image" || String(file.mimeType || "").startsWith("image/");
     const previewUrl = file.url || file.storageUrl || file.publicUrl || file.previewUrl;
+    const isUploading = file.status === "uploading";
+    const isError = file.status === "error";
+
     if (isImage && previewUrl) {
       return (
-        <div key={file.id} className="streamsComposerAttachmentImage" data-feature="image">
+        <div key={file.id} className={`streamsComposerAttachmentImage${isUploading ? " isUploading" : ""}${isError ? " isError" : ""}`} data-feature="image">
           <img src={previewUrl} alt={file.name || "Image"} />
+          {isUploading ? <div className="streamsComposerAttachmentOverlay" role="status" aria-live="polite">Uploading…</div> : null}
+          {isError ? <div className="streamsComposerAttachmentOverlay isError" role="status">Upload failed</div> : null}
           <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button>
         </div>
       );
     }
+
     return (
-      <div key={file.id} className="streamsComposerAttachmentFile" data-feature="files">
+      <div key={file.id} className={`streamsComposerAttachmentFile${isError ? " isError" : ""}`} data-feature="files">
         <span>📄</span>
         <strong>{file.name || "File"}</strong>
+        <em>{isUploading ? "Uploading…" : isError ? "Failed" : "Ready"}</em>
         <button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button>
       </div>
     );
   }
 
+  const liveStatus = hasUploadingFiles
+    ? `Uploading ${uploadingCount} file${uploadingCount === 1 ? "" : "s"}…`
+    : failedCount > 0
+      ? `${failedCount} upload${failedCount === 1 ? "" : "s"} failed`
+      : isStreaming
+        ? "Thinking…"
+        : "";
+
   return (
-    <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer">
-      {libraryFiles?.length ? <div className="streamsComposerAttachments">{libraryFiles.map(renderAttachment)}</div> : null}
+    <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={hasUploadingFiles || isStreaming ? "true" : "false"}>
+      {liveStatus ? (
+        <div className={`streamsComposerLiveStatus${failedCount > 0 && !hasUploadingFiles ? " isError" : ""}`} role="status" aria-live="polite" aria-atomic="true">
+          <span className="streamsComposerLiveStatusDot" aria-hidden="true" />
+          <span>{liveStatus}</span>
+        </div>
+      ) : null}
+
+      {files.length ? <div className="streamsComposerAttachments">{files.map(renderAttachment)}</div> : null}
 
       <div className="streamsComposerRow">
         <button type="button" className="streamsComposerIconButton" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
@@ -187,9 +214,9 @@ export default function StreamsComposer({
           }}
         />
 
-        <button type="button" className="streamsComposerPill" aria-label="Open model menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
+        <button type="button" className="streamsComposerPill" aria-label="Open mode menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
         <button type="button" className="streamsComposerMicButton" data-feature="voice" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
-        <button type="button" className="streamsComposerSendButton" aria-label="Send" onClick={submit} disabled={isDisabled}>↑</button>
+        <button type="button" className="streamsComposerSendButton" aria-label={isStreaming ? "Response in progress" : "Send"} onClick={submit} disabled={isDisabled}>{isStreaming ? "■" : "↑"}</button>
       </div>
 
       <input aria-label="Add photos and files" type="file" multiple accept={ACCEPTED_UPLOAD_TYPES} hidden ref={fileInputRef} onChange={handleFileChange} />
