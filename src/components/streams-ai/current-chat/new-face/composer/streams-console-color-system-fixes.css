@@ -1,0 +1,173 @@
+.preview {
+  --streams-console-canvas: #020611;
+  --streams-console-chat: #040b17;
+  --streams-console-panel: #091322;
+  --streams-console-panel-raised: #0e1a2c;
+  --streams-console-panel-hover: #15233a;
+  --streams-console-text: #f8fafc;
+  --streams-console-text-secondary: #d5dae4;
+  --streams-console-text-muted: #a3acbc;
+  --streams-console-text-disabled: #737e91;
+  --streams-console-border: #273a55;
+  --streams-console-border-strong: #405777;
+  --streams-console-purple: #7c3aed;
+  --streams-console-purple-bright: #a855f7;
+  --streams-feature-research: #60a5fa;
+  --streams-feature-image: #c084fc;
+  --streams-feature-video: #f47287;
+  --streams-feature-voice: #38d5e8;
+  --streams-feature-code: #52d98a;
+  --streams-feature-files: #f0b84b;
+  --streams-feature-workspace: #818cf8;
+  --streams-feature-automation: #39c6b4;
+  --streams-feature-success: #52d98a;
+  --streams-feature-warning: #f0b84b;
+  --streams-feature-error: #f47287;
+}
+
+/* Scope generic control overrides to the Streams workspace. */
+.preview button:disabled,
+.preview [aria-disabled="true"] {
+  color: var(--streams-console-text-disabled) !important;
+  border-color: var(--streams-console-border) !important;
+}
+
+/* Tool menu identities stay subtle: icon/edge accents, never bright full cards. */
+.preview [data-feature="research"] { --streams-feature-accent: var(--streams-feature-research); }
+.preview [data-feature="image"] { --streams-feature-accent: var(--streams-feature-image); }
+.preview [data-feature="video"] { --streams-feature-accent: var(--streams-feature-video); }
+.preview [data-feature="voice"] { --streams-feature-accent: var(--streams-feature-voice); }
+.preview [data-feature="code"] { --streams-feature-accent: var(--streams-feature-code); }
+.preview [data-feature="files"] { --streams-feature-accent: var(--streams-feature-files); }
+.preview [data-feature="workspace"] { --streams-feature-accent: var(--streams-feature-workspace); }
+.preview [data-feature="automation"] { --streams-feature-accent: var(--streams-feature-automation); }
+
+.preview .streamsComposerMenu > button[data-feature] {
+  position: relative;
+  border-left: 2px solid color-mix(in srgb, var(--streams-feature-accent) 70%, transparent) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--streams-feature-accent) 8%, transparent), transparent 34%) !important;
+}
+
+.preview .streamsComposerMenu > button[data-feature] > span:first-child {
+  color: var(--streams-feature-accent) !important;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--streams-feature-accent) 45%, transparent);
+}
+
+/* Real generation activity gets feature and state colors from actual runtime props. */
+.preview .generationActivityStrip {
+  --streams-feature-accent: var(--streams-console-purple-bright);
+  --streams-status-accent: var(--streams-console-purple-bright);
+  border: 1px solid color-mix(in srgb, var(--streams-feature-accent) 38%, var(--streams-console-border)) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--streams-feature-accent) 8%, transparent), transparent 35%),
+    var(--streams-console-panel) !important;
+  color: var(--streams-console-text) !important;
+}
+
+.preview .generationActivityStrip[data-domain="image"],
+.preview .generationActivityStrip[data-domain="image_to_image"] {
+  --streams-feature-accent: var(--streams-feature-image);
+}
+
+.preview .generationActivityStrip[data-domain="video"],
+.preview .generationActivityStrip[data-domain="image_to_video"] {
+  --streams-feature-accent: var(--streams-feature-video);
+}
+
+.preview .generationActivityStrip[data-domain="voice"] {
+  --streams-feature-accent: var(--streams-feature-voice);
+}
+
+.preview .generationActivityStrip[data-domain="files"] {
+  --streams-feature-accent: var(--streams-feature-files);
+}
+
+.preview .generationActivityStrip[data-domain="web_search"],
+.preview .generationActivityStrip[data-domain="research"] {
+  --streams-feature-accent: var(--streams-feature-research);
+}
+
+.preview .generationActivityStrip[data-domain="github"],
+.preview .generationActivityStrip[data-domain="job"],
+.preview .generationActivityStrip[data-domain="code"] {
+  --streams-feature-accent: var(--streams-feature-code);
+}
+
+.preview .generationActivityStrip[data-phase="complete"] {
+  --streams-status-accent: var(--streams-feature-success);
+}
+
+.preview .generationActivityStrip[data-phase="failed"] {
+  --streams-status-accent: var(--streams-feature-error);
+}
+
+.preview .generationActivityStrip[data-phase="waiting"],
+.preview .generationActivityStrip[data-phase="blocked"] {
+  --streams-status-accent: var(--streams-feature-warning);
+}
+
+.preview .generationActivityLabel {
+  color: var(--streams-status-accent) !important;
+}
+
+.preview .generationActivityTitle {
+  color: var(--streams-console-text) !important;
+}
+
+.preview .generationActivitySub {
+  color: var(--streams-console-text-secondary) !important;
+}
+
+/* Image card lifecycle: stable ratio, clear state, smooth placeholder-to-output transition. */
+.preview .inlineAssistantImageCard[data-status="working"] {
+  --streams-status-accent: var(--streams-feature-image);
+}
+
+.preview .inlineAssistantImageCard[data-status="success"] {
+  --streams-status-accent: var(--streams-feature-success);
+}
+
+.preview .inlineAssistantImageCard[data-status="error"] {
+  --streams-status-accent: var(--streams-feature-error);
+}
+
+.preview .inlineAssistantImageCardFrame {
+  aspect-ratio: var(--streams-image-aspect-ratio, 1 / 1);
+  min-height: 0;
+  border-left-color: var(--streams-status-accent, var(--streams-feature-image)) !important;
+}
+
+.preview .inlineAssistantImageSkeleton {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+}
+
+.preview .inlineAssistantImage,
+.preview .inlineAssistantImageSkeleton {
+  animation: streamsMediaReveal 180ms ease-out;
+}
+
+.preview .inlineAssistantImageStatus[role="status"] {
+  color: var(--streams-status-accent, #d9c4ee) !important;
+}
+
+.preview .inlineAssistantImageActions button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+@keyframes streamsMediaReveal {
+  from { opacity: 0.35; transform: scale(0.995); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview .inlineAssistantImage,
+  .preview .inlineAssistantImageSkeleton,
+  .preview .generationActivityGrid,
+  .preview .generationActivityOverlay {
+    animation: none !important;
+    transition: none !important;
+  }
+}
