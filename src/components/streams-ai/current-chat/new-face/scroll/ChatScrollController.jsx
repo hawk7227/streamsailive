@@ -14,7 +14,8 @@ const SESSION_CACHE_KEYS = [
 ];
 
 function findSurface() {
-  return document.querySelector(".startChatSurface")
+  return document.querySelector(".operatorChatScroll")
+    || document.querySelector(".startChatSurface")
     || document.querySelector(".chatScroll")
     || document.querySelector(".splitChatScroll");
 }
@@ -186,10 +187,6 @@ export default function ChatScrollController() {
         wireMedia(surface);
         if (initialRestoreRef.current) {
           jumpToBottom(surface);
-          return;
-        }
-        if (nearBottomRef.current && !userMovedRef.current) {
-          smoothToBottom(surface);
           return;
         }
         if (nearBottomRef.current) {
