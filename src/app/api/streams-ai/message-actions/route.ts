@@ -3,46 +3,53 @@ import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 import { StreamsAIUsageEventsRepository } from "@/lib/streams-ai/repositories/usage-events-repository";
-import { buildAttachmentContext } from "@/lib/streams-ai/routes/messages-memory-provider-support";
-import { validateResponseStructure } from "@/lib/streams-ai/routes/response-structure-validator";
+import { MESSAGE_ACTIONS, StreamsAIMessageActionsRepository, type MessageActionName } from "@/lib/streams-ai/repositories/message-actions-repository";
+import { memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
+import { collectSseResponse, validateAndRepairResponse } from "@/lib/streams-ai/routes/structured-response-service";
 
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
 const usage = new StreamsAIUsageEventsRepository();
+const actions = new StreamsAIMessageActionsRepository();
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status });
 }
 
-function extractText(payload: any) {
-  if (typeof payload?.output_text === "string") return payload.output_text.trim();
-  const parts: string[] = [];
-  for (const item of Array.isArray(payload?.output) ? payload.output : []) {
-    for (const block of Array.isArray(item?.content) ? item.content : []) {
-      if (typeof block?.text === "string") parts.push(block.text);
-    }
-  }
-  return parts.join("\n\n").trim();
+function canonicalValidationInstruction(userContent: string, attachments: any[]) {
+  const hasImage = attachments.some((attachment) => {
+    const mime = String(attachment?.mimeType || attachment?.mime_type || "").toLowerCase();
+    const kind = String(attachment?.kind || "").toLowerCase();
+    return kind === "image" || mime.startsWith("image/");
+  });
+  if (!hasImage) return userContent;
+  return [
+    userContent || "Review the attached screenshot.",
+    "This request includes an image attachment and must use the canonical screenshot-review structure.",
+    "Include a short summary, a Markdown table with exactly these columns: Visible claim | Verified by screenshot? | Evidence still required, a fenced code block, a blockquote warning, explicit screenshot attribution, and a verification note. Do not add a generic follow-up closing.",
+  ].join("\n\n");
 }
 
-function findMessage(rows: any[], messageId?: string, content?: string) {
-  if (messageId) {
-    const exact = rows.find((row) => String(row.id) === String(messageId));
-    if (exact) return exact;
-  }
-  const needle = String(content || "").trim();
-  if (!needle) return null;
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const row = rows[index];
-    if (row?.role === "assistant" && String(row?.content || "").trim() === needle) return row;
-  }
-  return null;
+function requireString(value: unknown, name: string) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error(`${name} is required`);
+  return text;
 }
 
-async function logAction(scope: any, input: any) {
+async function getSource(scope: any, sessionId: string, messageId: string) {
+  const rows = await messages.list(scope, sessionId);
+  const sourceIndex = rows.findIndex((row: any) => String(row.id) === messageId && row.role === "assistant");
+  if (sourceIndex < 0) throw new Error("Source response was not found");
+  let userIndex = sourceIndex - 1;
+  while (userIndex >= 0 && rows[userIndex]?.role !== "user") userIndex -= 1;
+  if (userIndex < 0) throw new Error("The source user request was not found");
+  return { rows, source: rows[sourceIndex], sourceIndex, userMessage: rows[userIndex], userIndex };
+}
+
+async function logAction(scope: any, input: any, action: MessageActionName) {
   await usage.create(scope, {
     sessionId: input.sessionId || null,
-    eventType: `message.${String(input.action || "unknown")}`,
+    eventType: `message.${action}`,
     productId: scope.productId,
     metadata: {
       messageId: input.messageId || null,
@@ -54,134 +61,192 @@ async function logAction(scope: any, input: any) {
   });
 }
 
-async function branch(scope: any, input: any) {
-  const sourceSessionId = String(input.sessionId || "");
-  if (!sourceSessionId) throw new Error("sessionId is required");
-  const rows = await messages.list(scope, sourceSessionId);
-  const source = findMessage(rows, input.messageId, input.content);
-  if (!source) throw new Error("Source response was not found");
-
-  const existingBranch = (await sessions.list(scope)).find((row: any) =>
-    row?.metadata?.branchedFromSessionId === sourceSessionId && row?.metadata?.branchedFromMessageId === source.id,
-  );
-  if (existingBranch) {
-    await logAction(scope, { ...input, action: "branch_duplicate_prevented", messageId: source.id, metadata: { existingSessionId: existingBranch.id } });
-    return { sessionId: existingBranch.id, href: `/streams-ai/${existingBranch.id}`, duplicatePrevented: true };
-  }
-
-  const sourceIndex = rows.findIndex((row: any) => row.id === source.id);
-  const copied = rows.slice(0, sourceIndex + 1);
-  const created = await sessions.create(scope, {
-    title: `Branch: ${String(copied.find((row: any) => row.role === "user")?.content || "Conversation").slice(0, 48)}`,
-    metadata: {
-      branchedFromSessionId: sourceSessionId,
-      branchedFromMessageId: source.id,
-    },
+async function acquireAction(scope: any, input: any, action: MessageActionName) {
+  const idempotencyKey = requireString(input.idempotencyKey, "idempotencyKey");
+  const acquired = await actions.beginReceipt(scope, {
+    sessionId: input.sessionId || null,
+    messageId: input.messageId || null,
+    action,
+    idempotencyKey,
   });
-  for (const row of copied) {
-    await messages.create(scope, {
-      sessionId: created.id,
-      role: row.role,
-      content: row.content || "",
-      status: row.status || "complete",
-      metadata: {
-        ...(row.metadata || {}),
-        branchedCopy: true,
-        sourceMessageId: row.id,
-      },
-    });
+  if (!acquired.acquired) {
+    if (acquired.receipt?.status === "completed") {
+      return { idempotencyKey, duplicateResult: acquired.receipt.result || {} };
+    }
+    throw new Error("The same message action is already in progress");
   }
-  await logAction(scope, { ...input, action: "branch_created", messageId: source.id, metadata: { newSessionId: created.id } });
-  return { sessionId: created.id, href: `/streams-ai/${created.id}`, duplicatePrevented: false };
+  return { idempotencyKey, duplicateResult: null };
 }
 
-async function regenerate(scope: any, input: any) {
-  const sessionId = String(input.sessionId || "");
-  if (!sessionId) throw new Error("sessionId is required");
-  const rows = await messages.list(scope, sessionId);
-  const source = findMessage(rows, input.messageId, input.content);
-  if (!source) throw new Error("Source response was not found");
-  const sourceIndex = rows.findIndex((row: any) => row.id === source.id);
-  let userIndex = sourceIndex - 1;
-  while (userIndex >= 0 && rows[userIndex]?.role !== "user") userIndex -= 1;
-  if (userIndex < 0) throw new Error("The source user request was not found");
-  const userMessage = rows[userIndex];
-  const idempotencyKey = String(input.idempotencyKey || `regenerate:${source.id}`);
-  const existing = rows.find((row: any) => row?.role === "assistant" && row?.metadata?.regenerateIdempotencyKey === idempotencyKey);
-  if (existing) {
-    await logAction(scope, { ...input, action: "regenerate_duplicate_prevented", messageId: source.id, metadata: { existingMessageId: existing.id } });
-    return { message: existing, duplicatePrevented: true };
-  }
+async function branch(scope: any, input: any) {
+  const sourceSessionId = requireString(input.sessionId, "sessionId");
+  const messageId = requireString(input.messageId, "messageId");
+  const { idempotencyKey, duplicateResult } = await acquireAction(scope, input, "branch");
+  if (duplicateResult) return { ...duplicateResult, duplicatePrevented: true };
 
-  await logAction(scope, { ...input, action: "regenerate_started", messageId: source.id });
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("The assistant service is unavailable");
-  const attachmentContext = await buildAttachmentContext(scope, {
-    sessionId,
-    attachments: userMessage?.metadata?.attachments || [],
-  } as any, sessionId);
-  const historyText = rows.slice(Math.max(0, userIndex - 12), userIndex).map((row: any) => `${row.role}: ${row.content || ""}`).join("\n");
-  const text = [
-    "Answer the user request again as a fresh alternative. Preserve conversation context, attachments, screenshot attribution rules, and every explicit output-format requirement. Do not mention regeneration.",
-    historyText ? `<conversation_history>\n${historyText}\n</conversation_history>` : "",
-    attachmentContext.text,
-    `<user_request>\n${userMessage.content || ""}\n</user_request>`,
-  ].filter(Boolean).join("\n\n");
-  const userContent: any[] = [{ type: "input_text", text }];
-  for (const image of attachmentContext.imageParts as any[]) {
-    userContent.push({ type: "input_image", image_url: image.image_url?.url, detail: "high" });
-  }
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: process.env.OPENAI_RESPONSES_MODEL_NEXT || process.env.OPENAI_RESPONSES_MODEL || "gpt-4.1-mini",
-      input: [{ role: "user", content: userContent }],
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error("Regeneration did not complete");
-  const content = extractText(payload);
-  if (!content) throw new Error("Regeneration returned no response");
-
-  const validation = validateResponseStructure(String(userMessage.content || ""), content);
-  if (!validation.valid) {
-    await logAction(scope, {
-      ...input,
-      action: "regenerate_structure_rejected",
-      messageId: source.id,
-      metadata: { missing: validation.missing },
+  try {
+    const { rows, source, sourceIndex } = await getSource(scope, sourceSessionId, messageId);
+    const copied = rows.slice(0, sourceIndex + 1);
+    const created = await sessions.create(scope, {
+      title: `Branch: ${String(copied.find((row: any) => row.role === "user")?.content || "Conversation").slice(0, 48)}`,
+      metadata: {
+        branchedFromSessionId: sourceSessionId,
+        branchedFromMessageId: source.id,
+        branchIdempotencyKey: idempotencyKey,
+      },
     });
-    throw new Error("The regenerated response did not satisfy the requested format");
-  }
 
-  const created = await messages.create(scope, {
+    for (const row of copied) {
+      await messages.create(scope, {
+        sessionId: created.id,
+        role: row.role,
+        content: row.content || "",
+        status: row.status || "complete",
+        metadata: {
+          ...(row.metadata || {}),
+          branchedCopy: true,
+          sourceMessageId: row.id,
+        },
+        turnId: row.turn_id || row.metadata?.turnId || null,
+        idempotencyKey: `branch:${created.id}:${row.id}`,
+      });
+    }
+
+    const result = { sessionId: created.id, href: `/streams-ai/${created.id}`, duplicatePrevented: false };
+    await actions.completeReceipt(scope, idempotencyKey, result);
+    await logAction(scope, { ...input, metadata: { newSessionId: created.id } }, "branch_created");
+    return result;
+  } catch (error) {
+    await actions.failReceipt(scope, idempotencyKey, { error: error instanceof Error ? error.message : "Branch failed" }).catch(() => null);
+    throw error;
+  }
+}
+
+async function regenerate(scope: any, request: NextRequest, input: any) {
+  const sessionId = requireString(input.sessionId, "sessionId");
+  const messageId = requireString(input.messageId, "messageId");
+  const { idempotencyKey, duplicateResult } = await acquireAction(scope, input, "regenerate");
+  if (duplicateResult) return { ...duplicateResult, duplicatePrevented: true };
+
+  try {
+    const { source, userMessage } = await getSource(scope, sessionId, messageId);
+    const attachments = Array.isArray(userMessage?.metadata?.attachments) ? userMessage.metadata.attachments : [];
+    const turnId = crypto.randomUUID();
+    await logAction(scope, input, "regenerate_started");
+
+    const headers = new Headers(request.headers);
+    headers.set("Content-Type", "application/json");
+    const internalRequest = new NextRequest(request.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        sessionId,
+        content: userMessage.content || "",
+        message: userMessage.content || "",
+        role: "user",
+        userId: idempotencyKey,
+        idempotencyKey,
+        turnId,
+        attachments,
+        metadata: {
+          skipUserPersistence: true,
+          sourceUserMessageId: userMessage.id,
+          regeneratedFromMessageId: source.id,
+          regenerationAttemptId: idempotencyKey,
+        },
+      }),
+    });
+
+    const upstream = await memoryMessagesPOST(internalRequest);
+    const collected = await collectSseResponse(upstream);
+    if (collected.errorPayload || !collected.content.trim()) {
+      throw new Error(String(collected.errorPayload?.message || "Regeneration did not complete"));
+    }
+
+    const validationInstruction = canonicalValidationInstruction(String(userMessage.content || ""), attachments);
+    const validated = await validateAndRepairResponse({
+      instruction: validationInstruction,
+      draft: collected.content,
+      forceRepair: !collected.completePayload?.ok,
+    });
+
+    let assistantMessageId = String(collected.completePayload?.assistantMessageId || "");
+    if (validated.repaired || !assistantMessageId) {
+      const created = await messages.create(scope, {
+        sessionId,
+        role: "assistant",
+        content: validated.content,
+        status: "complete",
+        turnId,
+        idempotencyKey: `${idempotencyKey}:assistant-repaired`,
+        metadata: {
+          regeneratedFromMessageId: source.id,
+          regenerationAttemptId: idempotencyKey,
+          sourceUserMessageId: userMessage.id,
+          attachmentsPreserved: attachments.length > 0,
+          structureValidated: true,
+          structureRepaired: validated.repaired,
+          turnId,
+        },
+      });
+      assistantMessageId = created.id;
+    }
+
+    const result = {
+      messageId: assistantMessageId,
+      sessionId,
+      duplicatePrevented: false,
+      structureRepaired: validated.repaired,
+    };
+    await actions.completeReceipt(scope, idempotencyKey, result);
+    await logAction(scope, { ...input, metadata: { newMessageId: assistantMessageId, structureRepaired: validated.repaired } }, "regenerate_completed");
+    return result;
+  } catch (error) {
+    await actions.failReceipt(scope, idempotencyKey, { error: error instanceof Error ? error.message : "Regeneration failed" }).catch(() => null);
+    throw error;
+  }
+}
+
+async function feedback(scope: any, input: any, action: MessageActionName) {
+  const sessionId = requireString(input.sessionId, "sessionId");
+  const messageId = requireString(input.messageId, "messageId");
+  await getSource(scope, sessionId, messageId);
+  const rating = action === "feedback_up" ? 1 : action === "feedback_down" ? -1 : null;
+  const saved = await actions.setFeedback(scope, {
     sessionId,
-    role: "assistant",
-    content,
-    status: "complete",
-    metadata: {
-      regeneratedFromMessageId: source.id,
-      regenerateIdempotencyKey: idempotencyKey,
-      attachmentsPreserved: Boolean((userMessage?.metadata?.attachments || []).length),
-      structureValidated: true,
-    },
+    messageId,
+    rating,
+    metadata: input.metadata || {},
   });
-  const session = await sessions.get(scope, sessionId);
-  await sessions.update(scope, sessionId, { metadata: { ...(session?.metadata || {}), lastRegeneratedAt: new Date().toISOString() } });
-  await logAction(scope, { ...input, action: "regenerate_completed", messageId: source.id, metadata: { newMessageId: created.id } });
-  return { message: created, duplicatePrevented: false };
+  await logAction(scope, input, action);
+  return { rating: saved?.rating ?? null };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const scope = await requireStreamsAIScope(request);
+    const messageId = requireString(request.nextUrl.searchParams.get("messageId"), "messageId");
+    const row = await actions.getFeedback(scope, messageId);
+    return json({ ok: true, rating: row?.rating ?? null });
+  } catch (error) {
+    return json({ ok: false, error: error instanceof Error ? error.message : "Unable to load feedback" }, 400);
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
     const input = await request.json().catch(() => ({}));
-    const action = String(input.action || "");
-    if (!action) return json({ ok: false, error: "Action is required." }, 400);
+    const action = String(input.action || "") as MessageActionName;
+    if (!MESSAGE_ACTIONS.has(action)) return json({ ok: false, error: "Unsupported message action." }, 400);
+
     if (action === "branch") return json({ ok: true, ...(await branch(scope, input)) });
-    if (action === "regenerate") return json({ ok: true, ...(await regenerate(scope, input)) });
-    await logAction(scope, input);
+    if (action === "regenerate") return json({ ok: true, ...(await regenerate(scope, request, input)) });
+    if (action === "feedback_up" || action === "feedback_down" || action === "feedback_cleared") {
+      return json({ ok: true, ...(await feedback(scope, input, action)) });
+    }
+
+    await logAction(scope, input, action);
     return json({ ok: true });
   } catch (error) {
     console.error("[streams-ai/message-actions] failed", error);
