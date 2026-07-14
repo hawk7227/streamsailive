@@ -1,11 +1,21 @@
 // @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { classifyStreamsIntent } from "../src/lib/streams-ai/runtime/intent-engine";
 import { routeStreamsModels } from "../src/lib/streams-ai/runtime/model-router";
 import { judgeStreamsResponse } from "../src/lib/streams-ai/quality/semantic-judge";
+import { executeAuthoritativeStreamsTurn, prepareAuthoritativeStreamsTurn } from "../src/lib/streams-ai/runtime/authoritative-turn-controller";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+const scope = {
+  tenantId: "tenant-1",
+  userId: "user-1",
+  defaultProjectId: "project-default",
+  workspaceId: "streams-ai" as const,
+  moduleId: "streams-ai-core" as const,
+  productId: "streams-ai" as const,
+};
 
 describe("Streams authoritative runtime", () => {
   it("classifies exhaustive image analysis with exact structure", () => {
@@ -20,11 +30,18 @@ describe("Streams authoritative runtime", () => {
     expect(intent.needsImages).toBe(true);
   });
 
-  it("routes complex research to a capable tool model", () => {
+  it("classifies connected actions before repository actions", () => {
+    expect(classifyStreamsIntent({ userMessage: "Send this email to the customer." }).primaryIntent).toBe("connected_action");
+    expect(classifyStreamsIntent({ userMessage: "Delete the calendar event." }).primaryIntent).toBe("connected_action");
+    expect(classifyStreamsIntent({ userMessage: "Commit and push the repository changes." }).primaryIntent).toBe("repository_action");
+  });
+
+  it("routes complex research to a verified capable tool model", () => {
     const intent = classifyStreamsIntent({ userMessage: "Research the latest current API changes and compare the official sources in detail." });
-    const route = routeStreamsModels({ intent, hasImages: false, contextChars: 50000 });
+    const route = routeStreamsModels({ intent, hasImages: false, contextTokens: 12500 });
     expect(route.primary.supportsTools).toBe(true);
     expect(route.primary.researchTier).toBeGreaterThanOrEqual(3);
+    expect(route.primary.capabilitySource).not.toBe("conservative-fallback");
     expect(route.judge.role).toBe("judge");
     expect(route.repair.role).toBe("repair");
   });
@@ -53,13 +70,46 @@ describe("Streams authoritative runtime", () => {
     expect(result.defects.some((defect) => defect.code === "INVALID_JSON")).toBe(true);
   });
 
-  it("routes active chat through the authoritative controller", () => {
+  it("never persists or completes a rejected response", async () => {
+    const turn = await prepareAuthoritativeStreamsTurn({
+      scope,
+      sessionId: "",
+      userMessage: "Return only valid JSON with the answer.",
+      recentMessages: [],
+    });
+    const persistAccepted = vi.fn();
+    await expect(executeAuthoritativeStreamsTurn({
+      turn,
+      generate: async () => ({ content: "not json", citationCount: 0, webSearchUsed: false }),
+      judgeWithModel: async () => 0,
+      repairWithModel: async () => ({ content: "still not json", citationCount: 0, webSearchUsed: false }),
+      persistAccepted,
+    })).rejects.toThrow("STREAMS_RESPONSE_REJECTED");
+    expect(persistAccepted).not.toHaveBeenCalled();
+  });
+
+  it("uses default project context and server-only evidence", async () => {
+    const turn = await prepareAuthoritativeStreamsTurn({
+      scope,
+      sessionId: "",
+      userMessage: "Explain the project status.",
+      recentMessages: [],
+    });
+    expect(turn.projectId).toBe("project-default");
+    expect(turn.context.toolEvidence).toEqual([]);
+    expect(turn.context.tokenBudget.maxTokens).toBeGreaterThan(10000);
+  });
+
+  it("routes active chat through the authoritative execution controller", () => {
     const source = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-active.ts"), "utf8");
+    const apiRoute = readFileSync(resolve(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
     expect(source).toContain("prepareAuthoritativeStreamsTurn");
-    expect(source).toContain("buildAuthoritativeTurnPrompt");
-    expect(source).toContain("judgeStreamsResponse");
-    expect(source).toContain("modelRoute.primary.id");
-    expect(source).toContain("contextSnapshot");
-    expect(source).toContain("qualityAccepted");
+    expect(source).toContain("executeAuthoritativeStreamsTurn");
+    expect(source).toContain("judgeCandidatesWithModel");
+    expect(source).toContain("repairCandidateWithModel");
+    expect(source).toContain("persistAccepted");
+    expect(source).not.toContain("metadata?.toolEvidence");
+    expect(apiRoute).not.toContain("collectSseResponse");
+    expect(apiRoute).not.toContain("persistRepairedTurn");
   });
 });
