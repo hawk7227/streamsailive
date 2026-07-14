@@ -121,10 +121,11 @@ function structuredResponse(
       try {
         const upstream = await memoryMessagesPOST(buildInternalRequest(request, body));
         const collected = await collectSseResponse(upstream, (payload) => send("activity", payload));
+        const upstreamOk = Boolean(collected.completePayload?.ok) && !collected.errorPayload;
         const validated = await validateAndRepairResponse({
           instruction: validationInstruction,
           draft: collected.content,
-          upstreamOk: Boolean(collected.completePayload?.ok) && !collected.errorPayload,
+          forceRepair: !upstreamOk,
         });
 
         let sessionId = String(collected.completePayload?.sessionId || "");
