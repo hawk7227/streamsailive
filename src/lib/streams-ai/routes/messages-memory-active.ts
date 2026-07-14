@@ -3,7 +3,7 @@ import { requireStreamsAIScope } from "../auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "../api";
 import { StreamsAIMessagesRepository } from "../repositories/messages-repository";
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
-import { buildAttachmentContext, buildUserMetadata, ensureSession, getHistoryForPrompt, persistChatTurn } from "./messages-memory-provider-support";
+import { buildAttachmentContext, buildUserMetadata, ensureSession, getHistoryForPrompt, persistChatTurn, resolveIdempotencyBase, resolveTurnId } from "./messages-memory-provider-support";
 
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
@@ -13,7 +13,7 @@ const DEFAULT_TIME_ZONE = "America/Phoenix";
 const DEFAULT_TIME_ZONE_LABEL = "MST";
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
-type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; mode?: string; provider?: string; attachments?: any[] };
+type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
 type Send = (event: string, payload: Record<string, unknown>) => void;
 
 function sse(stream: ReadableStream<Uint8Array>) {
@@ -35,6 +35,23 @@ function chunks(text: string, size = 180) {
   const out: string[] = [];
   for (let i = 0; i < String(text || "").length; i += size) out.push(String(text || "").slice(i, i + size));
   return out.length ? out : [""];
+}
+
+function streamExistingMessage(message: any) {
+  return sse(new ReadableStream<Uint8Array>({
+    start(controller) {
+      emit(controller, "activity", { phase: "complete", statusText: "Ready", sessionId: message.session_id });
+      for (const token of chunks(String(message.content || ""))) emit(controller, "response", { token });
+      emit(controller, "complete", {
+        ok: true,
+        sessionId: message.session_id,
+        assistantMessageId: message.id,
+        duplicatePrevented: true,
+        idempotencyKey: message.idempotency_key || null,
+      });
+      controller.close();
+    },
+  }));
 }
 
 function isTimeIntent(text: string) {
@@ -197,18 +214,37 @@ export async function memoryMessagesPOST(request: NextRequest) {
       : userContent;
 
     const scope = await requireStreamsAIScope(request);
+    const idempotencyBase = resolveIdempotencyBase(body);
+    const turnId = resolveTurnId(body);
+
     if (body.runAssistant === false) {
       const sessionId = await ensureSession(scope, body.sessionId || "", userContent);
-      const userMessage = await messages.create(scope, { sessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
-      return streamsAIJson({ ok: true, sessionId, message: userMessage, messages: [userMessage] }, 201);
+      const role = body.role || "user";
+      const message = await messages.create(scope, {
+        sessionId,
+        role,
+        content: userContent,
+        status: body.status || "complete",
+        metadata: { ...buildUserMetadata(body), turnId },
+        turnId,
+        idempotencyKey: idempotencyBase ? `${idempotencyBase}:${role}` : null,
+      });
+      return streamsAIJson({ ok: true, sessionId, message, messages: [message] }, 201);
     }
+
+    if (idempotencyBase) {
+      const existingAssistant = await messages.findByIdempotencyKey(scope, `${idempotencyBase}:assistant`);
+      if (existingAssistant) return streamExistingMessage(existingAssistant);
+    }
+
+    const normalizedBody: Body = { ...body, turnId, idempotencyKey: idempotencyBase || undefined };
 
     return sse(new ReadableStream<Uint8Array>({
       async start(controller) {
         const send: Send = (event, payload) => emit(controller, event, payload);
         const startedAt = Date.now();
         const serverTimestamp = new Date(startedAt).toISOString();
-        let sessionId = body.sessionId || "";
+        let sessionId = normalizedBody.sessionId || "";
 
         try {
           send("activity", { phase: "created", statusText: "Thinking…", source: "streams-server", sessionId });
@@ -222,12 +258,12 @@ export async function memoryMessagesPOST(request: NextRequest) {
               sessionId,
               userContent,
               assistantContent: content,
-              body,
+              body: normalizedBody,
               assistantStatus: "complete",
               assistantMetadata: { source: "streams-server-clock", provider: "server-clock", providerRoute: "server-time-fast-path", providerStatus: "ok", webGrounded: false, ungroundedFallbackUsed: false, serverTimestamp, timeZone: DEFAULT_TIME_ZONE },
             });
             sessionId = persisted.sessionId;
-            send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, serverTimestamp, elapsedMs: Date.now() - startedAt });
+            send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, turnId: persisted.turnId, serverTimestamp, elapsedMs: Date.now() - startedAt });
             return;
           }
 
@@ -236,7 +272,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
 
           send("activity", { phase: "loading", statusText: "Reviewing your request…", source: SOURCE, sessionId });
           const history = await getHistoryForPrompt(scope, sessionId, userContent);
-          const attachmentContext = await buildAttachmentContext(scope, body, sessionId, send);
+          const attachmentContext = await buildAttachmentContext(scope, normalizedBody, sessionId, send);
           const imageUrls = attachmentContext.imageParts.map((part: any) => String(part?.image_url?.url || "")).filter(Boolean);
           const historyText = history.slice(-MAX_HISTORY_MESSAGES).map((m: any) => `${m.role}: ${String(m.content || "")}`).join("\n");
           const fullText = [
@@ -267,12 +303,12 @@ export async function memoryMessagesPOST(request: NextRequest) {
             sessionId,
             userContent,
             assistantContent: content,
-            body,
+            body: normalizedBody,
             assistantStatus: "complete",
             assistantMetadata: { source: SOURCE, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, webGrounded: false, ungroundedFallbackUsed: false, providerGenerated: true, serverTimestamp },
           });
           sessionId = persisted.sessionId;
-          send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, serverTimestamp, elapsedMs: Date.now() - startedAt });
+          send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, turnId: persisted.turnId, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, serverTimestamp, elapsedMs: Date.now() - startedAt });
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
           send("error", { message: "Streams could not complete this response. Please retry.", detailCode: "STREAMS_RESPONSE_FAILED", sessionId, elapsedMs: Date.now() - startedAt });
