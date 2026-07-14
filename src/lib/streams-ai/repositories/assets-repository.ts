@@ -53,6 +53,31 @@ export class StreamsAIAssetsRepository {
     return data || [];
   }
 
+  async listByIds(scope: StreamsAIScope, assetIds: string[]) {
+    const ids = Array.from(new Set(assetIds.map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 50);
+    if (!ids.length) return [];
+    const { data, error } = await this.db()
+      .from(streamsAITables.assets)
+      .select("*")
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .in("id", ids);
+    if (error) throw new Error(`Failed to retrieve attached STREAMS AI assets: ${error.message}`);
+    return data || [];
+  }
+
+  async attachToSession(scope: StreamsAIScope, assetIds: string[], sessionId: string) {
+    const ids = Array.from(new Set(assetIds.map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 50);
+    if (!ids.length || !sessionId) return;
+    const { error } = await this.db()
+      .from(streamsAITables.assets)
+      .update({ session_id: sessionId, updated_at: new Date().toISOString() })
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .in("id", ids);
+    if (error) throw new Error(`Failed to attach STREAMS AI assets to session: ${error.message}`);
+  }
+
   async create(scope: StreamsAIScope, input: CreateAssetInput) {
     const { data, error } = await this.db()
       .from(streamsAITables.assets)
