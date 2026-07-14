@@ -27,7 +27,7 @@ const canonicalScreenshotResponse = [
 ].join("\n");
 
 describe("STREAMS AI response integrity", () => {
-  it("forces attachment-only screenshot reviews through the deterministic gate", () => {
+  it("recognizes attachment-only screenshot structure when explicitly validated", () => {
     expect(requiresDeterministicStructureCheck("\u200B")).toBe(true);
     expect(validateResponseStructure("\u200B", canonicalScreenshotResponse)).toEqual({ valid: true, missing: [] });
   });
@@ -74,11 +74,16 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("ChatScrollController");
   });
 
-  it("keeps image detection and idempotency server-side", () => {
+  it("restores direct streaming for image and attachment-only reviews", () => {
     const messagesRoute = readFileSync(resolve(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
+    const providerSupport = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-provider-support.ts"), "utf8");
     const repository = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/repositories/messages-repository.ts"), "utf8");
-    expect(messagesRoute).toContain("hasImageAttachment");
-    expect(messagesRoute).toContain("structuredResponse");
+
+    expect(messagesRoute).toContain("explicitlyRequestsDeterministicStructure");
+    expect(messagesRoute).toContain("text === ATTACHMENT_ONLY_SENTINEL");
+    expect(messagesRoute).not.toContain("if (imageAttached ||");
+    expect(providerSupport).toContain("enforceDeterministicStructure");
+    expect(providerSupport).toContain("if (structureEnforced) assertResponseStructure");
     expect(repository).toContain("findByIdempotencyKey");
     expect(repository).toContain("idempotency_key");
     expect(repository).toContain("isIntegritySchemaDrift");
