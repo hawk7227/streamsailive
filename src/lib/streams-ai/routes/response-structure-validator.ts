@@ -41,6 +41,15 @@ function requestedColumns(instruction: string) {
   return line.split("|").map((value) => value.trim()).filter(Boolean);
 }
 
+export function requiresDeterministicStructureCheck(instruction: string) {
+  const request = String(instruction || "");
+  return asksForTable(request)
+    || asksForCodeBlock(request)
+    || asksForBlockquote(request)
+    || asksForNumberedSections(request)
+    || requestedColumns(request).length > 0;
+}
+
 export function validateResponseStructure(instruction: string, response: string): ResponseStructureValidation {
   const request = String(instruction || "");
   const output = String(response || "");
