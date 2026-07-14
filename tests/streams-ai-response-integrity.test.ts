@@ -76,7 +76,7 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("ChatScrollController");
   });
 
-  it("keeps authoritative image handling and deterministic validation", () => {
+  it("keeps authoritative image and file handling with deterministic validation", () => {
     const messagesRoute = readFileSync(resolve(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
     const providerSupport = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-provider-support.ts"), "utf8");
     const repository = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/repositories/messages-repository.ts"), "utf8");
@@ -85,10 +85,11 @@ describe("STREAMS AI response integrity", () => {
     expect(messagesRoute).toContain("enforceDeterministicStructure");
     expect(messagesRoute).not.toContain("collectSseResponse");
     expect(messagesRoute).not.toContain("persistRepairedTurn");
-    expect(providerSupport).toContain("Direct-stream screenshot and image review contract");
-    expect(providerSupport).toContain("Visible Content, Interpretation, Verification Note");
-    expect(providerSupport).toContain("Every factual statement about visible screenshot content must be attributed");
-    expect(providerSupport).toContain("Never end a screenshot or image review with 'Let me know'");
+    expect(providerSupport).toContain("Attached-file evidence contract");
+    expect(providerSupport).toContain("authoritative file names and extracted content");
+    expect(providerSupport).toContain("Visible Content, Interpretation, and Verification Note");
+    expect(providerSupport).toContain("Never infer unsupported file contents from sibling files");
+    expect(providerSupport).toContain("STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE");
     expect(repository).toContain("findByIdempotencyKey");
     expect(repository).toContain("idempotency_key");
     expect(repository).toContain("isIntegritySchemaDrift");
