@@ -12,6 +12,8 @@ describe("Streams Stage 1 context guarantee", () => {
   it("preserves the full controlling instruction before trimming lower-priority context", () => {
     expect(contextSource).toContain('name: "current_instruction"');
     expect(contextSource).toContain("preserveWhole: true");
+    expect(contextSource).toContain("INSTRUCTION_RESERVE_TOKENS");
+    expect(contextSource).toContain("instructionTokens + INSTRUCTION_RESERVE_TOKENS");
     expect(contextSource).toContain("Priority: current instruction > recent explicit correction");
   });
 
@@ -21,10 +23,11 @@ describe("Streams Stage 1 context guarantee", () => {
     expect(contextSource).not.toContain("Math.floor(maxTokens * 0.22)");
   });
 
-  it("accepts only fresh successful same-session server runtime evidence", () => {
-    expect(contextSource).toContain("same-session-successful-fresh-server-events");
+  it("accepts only fresh successful same-session exact-task server runtime evidence", () => {
+    expect(contextSource).toContain("same-session-exact-task-successful-fresh-server-events");
     expect(contextSource).toContain("EVIDENCE_MAX_AGE_MS");
     expect(contextSource).toContain("sessionId !== input.sessionId");
+    expect(contextSource).toContain("input.taskId && taskId !== input.taskId");
     expect(contextSource).toContain("isSuccessfulEvidence");
     expect(contextSource).not.toContain("input.toolEvidence");
   });
