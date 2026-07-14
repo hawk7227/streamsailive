@@ -1,0 +1,72 @@
+// @vitest-environment node
+
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { buildStreamsResearchPlan } from "../src/lib/streams-ai/research/research-agent";
+import { classifyStreamsIntent } from "../src/lib/streams-ai/runtime/intent-engine";
+import { executeStreamsTool } from "../src/lib/streams-ai/tools/tool-runtime-contract";
+
+const read = (file: string) => readFileSync(resolve(process.cwd(), file), "utf8");
+
+describe("Streams Stage 3-5 production foundations", () => {
+  it("creates a multi-query research contract for current information", () => {
+    const instruction = "What are the latest 3 OpenAI API changes from the last 7 days?";
+    const intent = classifyStreamsIntent({ userMessage: instruction });
+    const plan = buildStreamsResearchPlan({ instruction, intent });
+    expect(plan.required).toBe(true);
+    expect(plan.queries.length).toBeGreaterThan(1);
+    expect(plan.minimumSources).toBeGreaterThanOrEqual(3);
+    expect(plan.requireClaimCitationMapping).toBe(true);
+  });
+
+  it("never marks a tool receipt verified until verification succeeds", async () => {
+    const receipt = await executeStreamsTool({
+      definition: {
+        name: "test-tool",
+        description: "test",
+        risk: "write",
+        requiresApproval: true,
+        validate: () => ({ value: true }),
+        authorize: async () => {},
+        execute: async () => ({ changed: true }),
+        verify: async () => { throw new Error("verification failed"); },
+      },
+      rawInput: {},
+      taskId: "task-1",
+      toolCallId: "tool-1",
+      idempotencyKey: "idem-1",
+      approvalGranted: true,
+    });
+    expect(receipt.status).toBe("failed");
+    expect(receipt.verified).toBe(false);
+  });
+
+  it("persists authoritative task states and validates transitions", () => {
+    const lifecycle = read("src/lib/streams-ai/runtime/task-lifecycle.ts");
+    const controller = read("src/lib/streams-ai/runtime/authoritative-turn-controller.ts");
+    expect(lifecycle).toContain("Invalid Streams task transition");
+    expect(lifecycle).toContain("jobs.createEvent");
+    expect(controller).toContain("new StreamsTaskLifecycle");
+    expect(controller).toContain("await lifecycle.create()");
+    expect(controller).toContain("await lifecycle.fail(error)");
+    expect(controller).toContain("await lifecycle.cancel()");
+  });
+
+  it("requires authentication and session ownership for runtime events", () => {
+    const route = read("src/app/api/streams-ai/runtime-events/route.ts");
+    expect(route).toContain("requireStreamsAIScope");
+    expect(route).toContain("requireOwnedSession");
+    expect(route).toContain("Cross-session runtime events are not allowed");
+    expect(route).not.toContain('|| "agent-1"');
+  });
+
+  it("ships a generated 1000-case benchmark and drift release gate", () => {
+    const benchmark = read("scripts/streams-ai-parity-benchmark.mjs");
+    const drift = read("scripts/streams-ai-parity-drift-gate.mjs");
+    expect(benchmark).toContain("index < 1000");
+    expect(benchmark).toContain("thresholds");
+    expect(drift).toContain("release blocked");
+    expect(drift).toContain("criticalFailures");
+  });
+});
