@@ -111,6 +111,23 @@ export default function ChatScrollController() {
     nearBottomRef.current = true;
     setShowNewMessages(false);
 
+    const shouldShowJump = (surface) => userMovedRef.current && !isNearBottom(surface);
+
+    const followOrNotify = (surface, smooth = false) => {
+      const near = isNearBottom(surface);
+      nearBottomRef.current = near;
+
+      if (initialRestoreRef.current || near || !userMovedRef.current) {
+        if (smooth && !initialRestoreRef.current) smoothToBottom(surface);
+        else jumpToBottom(surface);
+        nearBottomRef.current = true;
+        setShowNewMessages(false);
+        return;
+      }
+
+      setShowNewMessages(shouldShowJump(surface));
+    };
+
     const wireMedia = (surface) => {
       const current = new Set(surface.querySelectorAll("img, video"));
       for (const [node, cleanup] of mediaCleanup.entries()) {
@@ -123,8 +140,7 @@ export default function ChatScrollController() {
         if (mediaCleanup.has(media)) return;
         const onLoad = () => {
           if (cancelled) return;
-          if (initialRestoreRef.current || nearBottomRef.current) jumpToBottom(surface);
-          else setShowNewMessages(true);
+          followOrNotify(surface, false);
         };
         media.addEventListener("load", onLoad);
         media.addEventListener("loadedmetadata", onLoad);
@@ -148,6 +164,7 @@ export default function ChatScrollController() {
       jumpToBottom(surface);
       nearBottomRef.current = true;
       initialRestoreRef.current = false;
+      userMovedRef.current = false;
       setShowNewMessages(false);
     };
 
@@ -171,40 +188,35 @@ export default function ChatScrollController() {
         if (near) {
           userMovedRef.current = false;
           setShowNewMessages(false);
+        } else if (userMovedRef.current) {
+          setShowNewMessages(false);
         }
       };
+
       const markUserMovement = () => {
-        userMovedRef.current = true;
-        if (!isNearBottom(surface)) nearBottomRef.current = false;
+        if (initialRestoreRef.current) return;
+        window.requestAnimationFrame(() => {
+          const near = isNearBottom(surface);
+          nearBottomRef.current = near;
+          userMovedRef.current = !near;
+          if (near) setShowNewMessages(false);
+        });
       };
 
       surface.addEventListener("scroll", onScroll, { passive: true });
       surface.addEventListener("wheel", markUserMovement, { passive: true });
       surface.addEventListener("touchmove", markUserMovement, { passive: true });
-      surface.addEventListener("pointerdown", markUserMovement, { passive: true });
 
       const handleGrowth = () => {
         wireMedia(surface);
-        if (initialRestoreRef.current) {
-          jumpToBottom(surface);
-          return;
-        }
-        if (nearBottomRef.current) {
-          smoothToBottom(surface);
-          return;
-        }
-        setShowNewMessages(true);
+        followOrNotify(surface, true);
       };
 
       mutationObserver = new MutationObserver(handleGrowth);
       mutationObserver.observe(surface, { childList: true, subtree: true, characterData: true });
 
       if (typeof ResizeObserver !== "undefined") {
-        resizeObserver = new ResizeObserver(() => {
-          if (initialRestoreRef.current) jumpToBottom(surface);
-          else if (nearBottomRef.current && !userMovedRef.current) jumpToBottom(surface);
-          else if (!nearBottomRef.current) setShowNewMessages(true);
-        });
+        resizeObserver = new ResizeObserver(() => followOrNotify(surface, false));
         resizeObserver.observe(surface);
       }
 
@@ -217,7 +229,6 @@ export default function ChatScrollController() {
         surface.removeEventListener("scroll", onScroll);
         surface.removeEventListener("wheel", markUserMovement);
         surface.removeEventListener("touchmove", markUserMovement);
-        surface.removeEventListener("pointerdown", markUserMovement);
       };
     };
 
