@@ -28,7 +28,11 @@ async function postAction(payload) {
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Message action failed");
+  if (!response.ok || data?.ok === false) {
+    const error = new Error(data?.error || "Message action failed");
+    error.code = data?.code || "MESSAGE_ACTION_FAILED";
+    throw error;
+  }
   return data;
 }
 
@@ -52,14 +56,15 @@ export default function MessageActions({ message, chatRuntime }) {
   const timestamp = useMemo(() => formatTimestamp(message?.createdAt || message?.created_at), [message?.createdAt, message?.created_at]);
 
   useEffect(() => {
-    if (!persisted) return;
+    if (!persisted || !sessionId) return;
     let cancelled = false;
-    fetch(`/api/streams-ai/message-actions?messageId=${encodeURIComponent(messageId)}`, { credentials: "same-origin", cache: "no-store" })
+    const params = new URLSearchParams({ messageId, sessionId });
+    fetch(`/api/streams-ai/message-actions?${params.toString()}`, { credentials: "same-origin", cache: "no-store" })
       .then((response) => response.json())
       .then((data) => { if (!cancelled && data?.ok) setFeedback(data.rating ?? null); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [messageId, persisted]);
+  }, [messageId, persisted, sessionId]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -88,7 +93,7 @@ export default function MessageActions({ message, chatRuntime }) {
 
   const log = async (action, metadata = {}) => {
     if (!persisted || !sessionId) return;
-    await postAction({ action, sessionId, messageId, idempotencyKey: actionId(action, messageId), metadata });
+    await postAction({ action, sessionId, messageId, content: text, idempotencyKey: actionId(action, messageId), metadata });
   };
 
   const copy = async () => {
@@ -105,7 +110,7 @@ export default function MessageActions({ message, chatRuntime }) {
     const prior = feedback;
     setFeedback(optimistic);
     try {
-      const data = await postAction({ action, sessionId, messageId, idempotencyKey: actionId(action, messageId) });
+      const data = await postAction({ action, sessionId, messageId, content: text, idempotencyKey: actionId(action, messageId) });
       setFeedback(data.rating ?? optimistic);
     } catch {
       setFeedback(prior);
@@ -133,7 +138,7 @@ export default function MessageActions({ message, chatRuntime }) {
     const key = actionId("regenerate", messageId);
     operationRef.current.set("regenerate", key);
     try {
-      await postAction({ action: "regenerate", sessionId, messageId, idempotencyKey: key });
+      await postAction({ action: "regenerate", sessionId, messageId, content: text, idempotencyKey: key });
       await chatRuntime?.refreshMessages?.();
       window.dispatchEvent(new Event("streams:chat-refresh-requested"));
       transient("New response ready");
@@ -150,7 +155,7 @@ export default function MessageActions({ message, chatRuntime }) {
     setBusy("branch");
     setStatus("Creating branch…");
     try {
-      const data = await postAction({ action: "branch", sessionId, messageId, idempotencyKey: actionId("branch", messageId) });
+      const data = await postAction({ action: "branch", sessionId, messageId, content: text, idempotencyKey: actionId("branch", messageId) });
       window.location.assign(data.href || `/streams-ai/${data.sessionId}`);
     } catch {
       transient("Branch could not be created");
