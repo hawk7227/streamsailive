@@ -1,6 +1,6 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
 
-export const STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION = "streams-deterministic-output-validator-v1";
+export const STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION = "streams-deterministic-output-validator-v2";
 
 export type StreamsDeterministicDefect = {
   code: string;
@@ -16,15 +16,15 @@ export type StreamsDeterministicValidation = {
 };
 
 function stripFence(value: string, language?: string) {
-  const lang = language ? `${language}?` : "[a-zA-Z0-9_-]*";
-  return String(value || "").trim().replace(new RegExp(`^\\`\\`\\`${lang}\\s*|\\s*\\`\\`\\`$`, "gi"), "").trim();
+  let text = String(value || "").trim();
+  const opening = language ? new RegExp("^```" + language + "\\s*", "i") : /^```[a-zA-Z0-9_-]*\s*/;
+  text = text.replace(opening, "").replace(/\s*```$/, "");
+  return text.trim();
 }
 
 function requestedJsonKeys(instruction: string) {
-  const source = String(instruction || "");
-  const block = source.match(/\{[\s\S]*?\}/)?.[0];
-  if (!block) return [];
-  return Array.from(block.matchAll(/["']([^"']+)["']\s*:/g)).map((match) => match[1]);
+  const block = String(instruction || "").match(/\{[\s\S]*?\}/)?.[0];
+  return block ? Array.from(block.matchAll(/["']([^"']+)["']\s*:/g)).map((match) => match[1]) : [];
 }
 
 function requestedTableColumns(instruction: string) {
@@ -32,8 +32,7 @@ function requestedTableColumns(instruction: string) {
   const marker = lines.findIndex((line) => /columns?\s*(?:in\s+this\s+order)?\s*:?\s*$/i.test(line.trim()));
   const candidates = marker >= 0 ? lines.slice(marker + 1) : lines;
   const row = candidates.find((line) => line.includes("|") && !/^\s*\|?\s*:?-{3,}/.test(line));
-  if (!row) return [];
-  return row.split("|").map((value) => value.trim()).filter(Boolean);
+  return row ? row.split("|").map((value) => value.trim()).filter(Boolean) : [];
 }
 
 function requestedDataRowCount(instruction: string) {
@@ -44,14 +43,12 @@ function requestedDataRowCount(instruction: string) {
 function parseMarkdownTable(response: string) {
   const lines = String(response || "").replace(/\r\n/g, "\n").split("\n").filter((line) => line.trim());
   for (let index = 0; index < lines.length - 1; index += 1) {
-    if (!lines[index].includes("|")) continue;
-    if (!/^\s*\|?\s*:?-{3,}/.test(lines[index + 1])) continue;
+    if (!lines[index].includes("|") || !/^\s*\|?\s*:?-{3,}/.test(lines[index + 1])) continue;
     const columns = lines[index].split("|").map((value) => value.trim()).filter(Boolean);
     const rows: string[][] = [];
-    for (let cursor = index + 2; cursor < lines.length && lines[cursor].includes("|"); cursor += 1) {
-      rows.push(lines[cursor].split("|").map((value) => value.trim()).filter(Boolean));
-    }
-    return { columns, rows, start: index, end: index + 2 + rows.length, allLines: lines };
+    let cursor = index + 2;
+    for (; cursor < lines.length && lines[cursor].includes("|"); cursor += 1) rows.push(lines[cursor].split("|").map((value) => value.trim()).filter(Boolean));
+    return { columns, rows, start: index, end: cursor, allLines: lines };
   }
   return null;
 }
@@ -64,22 +61,23 @@ function countFormatKinds(intent: StreamsIntentDecision) {
   return [intent.requestedFormat.json, intent.requestedFormat.xml, intent.requestedFormat.csv, intent.requestedFormat.table].filter(Boolean).length;
 }
 
-export function validateDeterministicStreamsOutput(input: {
-  instruction: string;
-  responseText: string;
-  intent: StreamsIntentDecision;
-}): StreamsDeterministicValidation {
+function explainsFormatConflict(response: string) {
+  return /\b(?:cannot|can't|mutually exclusive|conflicting requirements|choose one|which format)\b/i.test(response);
+}
+
+export function validateDeterministicStreamsOutput(input: { instruction: string; responseText: string; intent: StreamsIntentDecision }): StreamsDeterministicValidation {
   const instruction = String(input.instruction || "");
-  const response = String(input.responseText || "");
-  const trimmed = response.trim();
+  const trimmed = String(input.responseText || "").trim();
   const format = input.intent.requestedFormat;
   const defects: StreamsDeterministicDefect[] = [];
 
   if (!trimmed) defects.push({ code: "EMPTY_RESPONSE", message: "The response is empty.", repairHint: "Return a complete response." });
 
-  if (format.exact && countFormatKinds(input.intent) > 1) {
-    defects.push({ code: "CONFLICTING_EXACT_FORMATS", message: "The request requires multiple mutually exclusive exact output formats.", repairHint: "Do not guess. Explain the conflict and ask which single exact format should control." });
+  const conflictingFormats = format.exact && countFormatKinds(input.intent) > 1;
+  if (conflictingFormats && !explainsFormatConflict(trimmed)) {
+    defects.push({ code: "CONFLICTING_EXACT_FORMATS", message: "The request requires mutually exclusive exact output formats.", repairHint: "Explain that both exact formats cannot be satisfied simultaneously and ask which format should control." });
   }
+  if (conflictingFormats && explainsFormatConflict(trimmed)) return { version: STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION, accepted: defects.length === 0, critical: defects.length > 0, defects };
 
   if (format.json) {
     const raw = stripFence(trimmed, "json");
@@ -91,9 +89,7 @@ export function validateDeterministicStreamsOutput(input: {
       const actualKeys = Object.keys(parsed as Record<string, unknown>);
       if (expectedKeys.length && !sameList(actualKeys, expectedKeys)) defects.push({ code: "WRONG_JSON_KEYS", message: "The JSON keys or key order do not match the requested structure.", repairHint: `Use exactly these keys in order: ${expectedKeys.join(", ")}.` });
     }
-    if (/return\s+only\s+valid\s+json|do\s+not\s+include\s+markdown|no\s+text\s+outside/i.test(instruction) && raw !== trimmed) {
-      defects.push({ code: "JSON_HAS_WRAPPER", message: "The JSON response includes a Markdown fence or surrounding text.", repairHint: "Return the raw JSON object only." });
-    }
+    if (/return\s+only\s+valid\s+json|do\s+not\s+include\s+markdown|no\s+text\s+outside/i.test(instruction) && raw !== trimmed) defects.push({ code: "JSON_HAS_WRAPPER", message: "The JSON response includes a Markdown fence or surrounding text.", repairHint: "Return the raw JSON object only." });
   }
 
   if (format.table) {
@@ -111,6 +107,5 @@ export function validateDeterministicStreamsOutput(input: {
   if (format.codeBlock && !/```[\s\S]*```/.test(trimmed)) defects.push({ code: "MISSING_CODE_BLOCK", message: "The requested fenced code block is missing.", repairHint: "Wrap the requested code in a fenced code block." });
   if (format.blockquote && !/(^|\n)\s*>\s+\S/.test(trimmed)) defects.push({ code: "MISSING_BLOCKQUOTE", message: "The requested blockquote is missing.", repairHint: "Use Markdown blockquote syntax for the requested content." });
 
-  const critical = defects.length > 0;
-  return { version: STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION, accepted: defects.length === 0, critical, defects };
+  return { version: STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION, accepted: defects.length === 0, critical: defects.length > 0, defects };
 }
