@@ -79,4 +79,13 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("waitForCurrentMedia");
     expect(source).toContain("New messages ↓");
   });
+
+  it("preserves the full two-row console on the new-chat landing", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx"), "utf8");
+    expect(source).toContain(".operatorNewChatLanding .operatorLandingComposer .streamsComposer");
+    expect(source).toContain("min-height: 96px !important");
+    expect(source).toContain('grid-template-areas:\n            "tools input input send"\n            ". mode mic send"');
+    expect(source).toContain("width: 58px !important");
+    expect(source).toContain("height: 58px !important");
+  });
 });
