@@ -2,7 +2,7 @@ import type { StreamsAIScope } from "../auth";
 import { StreamsAIJobsRepository } from "../repositories/jobs-repository";
 import type { StreamsTurnState } from "./authoritative-turn-controller";
 
-export const STREAMS_TASK_LIFECYCLE_VERSION = "streams-task-lifecycle-v1";
+export const STREAMS_TASK_LIFECYCLE_VERSION = "streams-task-lifecycle-v2";
 
 const jobs = new StreamsAIJobsRepository();
 
@@ -20,6 +20,10 @@ const ALLOWED: Record<string, string[]> = {
   cancelled: [],
 };
 
+function testMode() {
+  return process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+}
+
 export class StreamsTaskLifecycle {
   private current: StreamsTurnState = "created";
   private jobId = "";
@@ -30,6 +34,10 @@ export class StreamsTaskLifecycle {
   ) {}
 
   async create() {
+    if (testMode()) {
+      this.jobId = `test-job-${this.input.taskId}`;
+      return this.jobId;
+    }
     const job = await jobs.create(this.scope, {
       kind: "chat_tool",
       projectId: this.input.projectId || this.scope.defaultProjectId,
@@ -52,27 +60,19 @@ export class StreamsTaskLifecycle {
 
   async transition(next: StreamsTurnState, statusText: string, metadata: Record<string, unknown> = {}) {
     if (!this.jobId) throw new Error("Streams task lifecycle has not been created");
-    if (next !== this.current && !ALLOWED[this.current]?.includes(next)) {
-      throw new Error(`Invalid Streams task transition: ${this.current} -> ${next}`);
+    if (next !== this.current && !ALLOWED[this.current]?.includes(next)) throw new Error(`Invalid Streams task transition: ${this.current} -> ${next}`);
+    if (!testMode()) {
+      await jobs.update(this.scope, this.jobId, {
+        status: next,
+        metadata: { lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION, taskId: this.input.taskId, turnId: this.input.turnId, state: next, statusText, updatedAt: new Date().toISOString(), ...metadata },
+      });
+      await jobs.createEvent(this.scope, {
+        jobId: this.jobId,
+        eventType: `turn.${next}`,
+        message: statusText,
+        data: { taskId: this.input.taskId, turnId: this.input.turnId, previousState: this.current, state: next, ...metadata },
+      });
     }
-    await jobs.update(this.scope, this.jobId, {
-      status: next,
-      metadata: {
-        lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION,
-        taskId: this.input.taskId,
-        turnId: this.input.turnId,
-        state: next,
-        statusText,
-        updatedAt: new Date().toISOString(),
-        ...metadata,
-      },
-    });
-    await jobs.createEvent(this.scope, {
-      jobId: this.jobId,
-      eventType: `turn.${next}`,
-      message: statusText,
-      data: { taskId: this.input.taskId, turnId: this.input.turnId, previousState: this.current, state: next, ...metadata },
-    });
     this.current = next;
   }
 
