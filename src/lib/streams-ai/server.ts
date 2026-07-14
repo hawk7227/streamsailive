@@ -69,6 +69,8 @@ export const streamsAITables = {
   chatSessions: "streams_ai_chat_sessions",
   chatMessages: "streams_ai_chat_messages",
   chatToolCalls: "streams_ai_chat_tool_calls",
+  messageFeedback: "streams_ai_message_feedback",
+  messageActionReceipts: "streams_ai_message_action_receipts",
   assets: "streams_ai_assets",
   jobs: "streams_ai_jobs",
   jobEvents: "streams_ai_job_events",
