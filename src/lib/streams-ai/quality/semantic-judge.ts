@@ -1,6 +1,6 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
 
-export const STREAMS_SEMANTIC_JUDGE_VERSION = "streams-semantic-judge-v1";
+export const STREAMS_SEMANTIC_JUDGE_VERSION = "streams-semantic-judge-v2";
 
 export type StreamsSemanticJudgment = {
   version: string;
@@ -52,6 +52,57 @@ function screenshotOverclaim(text: string, hasImages: boolean) {
   return operationalClaim && !hasQualification;
 }
 
+function normalizeLine(value: string) {
+  return String(value || "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/__+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function exactHeadingPositions(text: string, headings: string[]) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n").map(normalizeLine);
+  return headings.map((heading) => {
+    const expected = normalizeLine(heading);
+    return lines.findIndex((line) => line === expected);
+  });
+}
+
+function literalHeadingDefects(text: string, intent: StreamsIntentDecision) {
+  const defects: StreamsSemanticJudgment["defects"] = [];
+  const headings = intent.requestedFormat.headings || [];
+  if (!headings.length) return defects;
+
+  const positions = exactHeadingPositions(text, headings);
+  headings.forEach((heading, index) => {
+    if (positions[index] < 0) {
+      defects.push({
+        code: "MISSING_LITERAL_HEADING",
+        severity: "critical",
+        message: `The response did not reproduce the exact requested heading: ${heading}`,
+        repairHint: `Insert the literal heading exactly as written, including its numbering or letter prefix: ${heading}`,
+      });
+    }
+  });
+
+  if (intent.requestedFormat.requestedOrder && positions.every((position) => position >= 0)) {
+    for (let index = 1; index < positions.length; index += 1) {
+      if (positions[index] <= positions[index - 1]) {
+        defects.push({
+          code: "WRONG_LITERAL_HEADING_ORDER",
+          severity: "critical",
+          message: "The exact requested headings were not kept in the requested order.",
+          repairHint: `Use these headings in this exact order:\n${headings.join("\n")}`,
+        });
+        break;
+      }
+    }
+  }
+
+  return defects;
+}
+
 function formatDefects(text: string, intent: StreamsIntentDecision) {
   const defects: StreamsSemanticJudgment["defects"] = [];
   const format = intent.requestedFormat;
@@ -64,10 +115,8 @@ function formatDefects(text: string, intent: StreamsIntentDecision) {
   if (format.csv && !/^[^\n,]+(?:,[^\n,]+)+/m.test(text)) defects.push({ code: "INVALID_CSV", severity: "warning", message: "The response does not appear to be CSV.", repairHint: "Return the requested comma-separated rows." });
   if (format.codeBlock && !/```[\s\S]*```/.test(text)) defects.push({ code: "MISSING_CODE_BLOCK", severity: "critical", message: "The response omitted the requested fenced code block.", repairHint: "Wrap the requested content in a fenced code block." });
   if (format.blockquote && !/^>\s+/m.test(text)) defects.push({ code: "MISSING_BLOCKQUOTE", severity: "warning", message: "The response omitted the requested blockquote.", repairHint: "Add the requested blockquote." });
-  if (format.numberedSections && !/^\s*1[.)]\s+/m.test(text)) defects.push({ code: "MISSING_NUMBERED_STRUCTURE", severity: "warning", message: "The response omitted the requested numbered structure.", repairHint: "Use numbered sections in the requested order." });
-  for (const heading of format.headings) {
-    if (heading.length > 1 && !text.toLowerCase().includes(heading.toLowerCase())) defects.push({ code: "MISSING_HEADING", severity: "warning", message: `The response omitted the requested heading: ${heading}.`, repairHint: `Add the heading '${heading}' in the requested order.` });
-  }
+  if (format.numberedSections && !/^\s*(?:#{1,6}\s*)?1[.)]\s+/m.test(text)) defects.push({ code: "MISSING_NUMBERED_STRUCTURE", severity: "critical", message: "The response omitted the requested numbered structure.", repairHint: "Use the exact numbered section headings in the requested order." });
+  defects.push(...literalHeadingDefects(text, intent));
   return defects;
 }
 
@@ -97,7 +146,7 @@ export function judgeStreamsResponse(input: {
   const infoCount = defects.filter((defect) => defect.severity === "info").length;
   const penalty = criticalCount * 0.28 + warningCount * 0.1 + infoCount * 0.03;
   const base = clamp(1 - penalty);
-  const formatPenalty = defects.some((defect) => /TABLE|JSON|XML|CSV|CODE_BLOCK|BLOCKQUOTE|NUMBERED|HEADING/.test(defect.code)) ? 0.2 : 0;
+  const formatPenalty = defects.some((defect) => /TABLE|JSON|XML|CSV|CODE_BLOCK|BLOCKQUOTE|NUMBERED|HEADING/.test(defect.code)) ? 0.35 : 0;
 
   const dimensions = {
     intentMatch: clamp(text ? 0.95 - (defects.some((defect) => defect.code === "UNDER_ANSWERED_EXHAUSTIVE") ? 0.18 : 0) : 0),
