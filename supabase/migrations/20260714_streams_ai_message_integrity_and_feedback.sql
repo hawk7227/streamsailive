@@ -5,9 +5,10 @@ alter table streams.streams_ai_chat_messages
   add column if not exists turn_id uuid,
   add column if not exists idempotency_key text;
 
+-- PostgreSQL unique indexes allow multiple NULL values, so this supports
+-- ordinary messages while remaining directly usable by ON CONFLICT upserts.
 create unique index if not exists streams_ai_messages_idempotency_unique
-  on streams.streams_ai_chat_messages (tenant_id, user_id, idempotency_key)
-  where idempotency_key is not null;
+  on streams.streams_ai_chat_messages (tenant_id, user_id, idempotency_key);
 
 create index if not exists streams_ai_messages_turn_idx
   on streams.streams_ai_chat_messages (tenant_id, user_id, session_id, turn_id, created_at asc)
