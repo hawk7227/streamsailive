@@ -95,4 +95,17 @@ describe("STREAMS AI response integrity", () => {
     expect(activeCss).toContain(".operatorLandingComposer .streamsComposer");
     expect(activeCss).toContain("min-height:52px!important");
   });
+
+  it("targets the active operator shell on mobile", () => {
+    const mobileCss = readFileSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIMobileChat.module.css"), "utf8");
+    const keyboardBridge = readFileSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIMobileKeyboardBridge.jsx"), "utf8");
+
+    expect(mobileCss).toContain(":global(.streamsOperator)");
+    expect(mobileCss).toContain("env(safe-area-inset-bottom)");
+    expect(mobileCss).toContain("operatorMobileDrawer");
+    expect(mobileCss).not.toContain(".shell.mobile");
+    expect(keyboardBridge).toContain(".streamsOperator");
+    expect(keyboardBridge).toContain("visualViewport");
+    expect(keyboardBridge).not.toContain(".shell.mobile");
+  });
 });
