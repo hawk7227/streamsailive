@@ -58,6 +58,24 @@ function buildStreamsAuditResponse() {
   return "Audit fast path disabled. Normal chat requests are delegated to the active assistant route.";
 }
 
+function hasImageAttachment(attachments: unknown) {
+  if (!Array.isArray(attachments)) return false;
+  return attachments.some((attachment: any) => {
+    const mime = String(attachment?.mimeType || attachment?.mime_type || "").toLowerCase();
+    const kind = String(attachment?.kind || "").toLowerCase();
+    const name = String(attachment?.name || "").toLowerCase();
+    return kind === "image" || mime.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|bmp|tiff?)$/.test(name);
+  });
+}
+
+function screenshotValidationInstruction(userContent: string) {
+  return [
+    userContent || "Review the attached screenshot.",
+    "This request includes an image attachment and must use the canonical screenshot-review structure.",
+    "Include a short summary, a Markdown table with exactly these columns: Visible claim | Verified by screenshot? | Evidence still required, a fenced code block, a blockquote warning, explicit screenshot attribution, and a verification note. Do not add a generic follow-up closing.",
+  ].join("\n\n");
+}
+
 type ParsedSseEvent = { eventName: string; payload: Record<string, any> };
 
 function parseSseBuffer(buffer: string) {
@@ -219,7 +237,12 @@ async function persistRepairedTurn(request: NextRequest, body: Record<string, an
   return userData.sessionId as string;
 }
 
-function structuredResponse(request: NextRequest, body: Record<string, any>, userContent: string) {
+function structuredResponse(
+  request: NextRequest,
+  body: Record<string, any>,
+  userContent: string,
+  validationInstruction: string,
+) {
   const encoder = new TextEncoder();
 
   return new Response(new ReadableStream<Uint8Array>({
@@ -232,18 +255,18 @@ function structuredResponse(request: NextRequest, body: Record<string, any>, use
         const upstream = await memoryMessagesPOST(request);
         const collected = await collectUpstreamResponse(upstream, (payload) => send("activity", payload));
         let finalContent = collected.content;
-        let validation = validateResponseStructure(userContent, finalContent);
+        let validation = validateResponseStructure(validationInstruction, finalContent);
         let repaired = false;
         let sessionId = String(collected.completePayload?.sessionId || "");
 
         if (!validation.valid || !collected.completePayload?.ok || collected.errorPayload) {
           send("activity", { phase: "checking", statusText: "Preparing response…" });
           finalContent = await repairStructuredResponse({
-            instruction: userContent,
+            instruction: validationInstruction,
             draft: finalContent,
             missing: validation.missing.length ? validation.missing : ["valid completed response"],
           });
-          validation = validateResponseStructure(userContent, finalContent);
+          validation = validateResponseStructure(validationInstruction, finalContent);
           if (!validation.valid) throw new Error("Repaired response did not satisfy requested structure");
           sessionId = await persistRepairedTurn(request, body, userContent, finalContent);
           repaired = true;
@@ -288,6 +311,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.clone().json().catch(() => ({}));
     const userContent = String(body?.content || body?.message || "").trim();
+    const imageAttached = hasImageAttachment(body?.attachments);
+    const validationInstruction = imageAttached
+      ? screenshotValidationInstruction(userContent)
+      : userContent;
 
     if (isSimpleGreeting(userContent)) {
       return streamTextResponse("Hey — I’m here. What are we building or fixing next?", {
@@ -301,8 +328,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (requiresDeterministicStructureCheck(userContent)) {
-      return structuredResponse(request, body, userContent);
+    if (imageAttached || requiresDeterministicStructureCheck(validationInstruction)) {
+      return structuredResponse(request, body, userContent, validationInstruction);
     }
 
     const response = await memoryMessagesPOST(request);
