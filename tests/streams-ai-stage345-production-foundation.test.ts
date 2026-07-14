@@ -42,7 +42,8 @@ describe("Streams Stage 3-5 production foundations", () => {
     const route = read("src/app/api/streams-ai/assets/route.ts");
     const repository = read("src/lib/streams-ai/repositories/assets-repository.ts");
     expect(route).toContain("isUploadFileLike");
-    expect(route).toContain('typeof (value as any)?.arrayBuffer === "function"');
+    expect(route).toContain('function isUploadFileLike(value: FormDataEntryValue): value is File');
+    expect(route).toContain('typeof (value as File)?.arrayBuffer === "function"');
     expect(route).not.toContain("item instanceof File");
     expect(route).toContain("STREAMS_UPLOAD_FILE_MISSING");
     expect(route).toContain("STREAMS_UPLOAD_STORAGE_FAILED");
