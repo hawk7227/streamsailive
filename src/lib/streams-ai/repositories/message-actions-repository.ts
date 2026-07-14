@@ -85,7 +85,8 @@ export class StreamsAIMessageActionsRepository {
       .maybeSingle();
 
     if (error) throw new Error(`Failed to begin message action receipt: ${error.message}`);
-    return data || await this.getReceipt(scope, input.idempotencyKey);
+    if (data) return { receipt: data, acquired: true };
+    return { receipt: await this.getReceipt(scope, input.idempotencyKey), acquired: false };
   }
 
   async completeReceipt(scope: StreamsAIScope, idempotencyKey: string, result: Record<string, unknown>) {
