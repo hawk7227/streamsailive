@@ -32,30 +32,28 @@ function isScreenshotReviewRequest(text: string) {
     || /^(?:what is|what's|describe|review|analy[sz]e|inspect)\s+(?:this|it)\??$/i.test(value);
 }
 
-function hasMarkdownTable(text: string) {
+function parseMarkdownTable(text: string) {
   const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length - 1; index += 1) {
     const header = lines[index];
     const divider = lines[index + 1];
-    if (/^\s*\|.*\|\s*$/.test(header) && /^\s*\|?\s*:?-{3,}/.test(divider) && divider.includes("|")) return true;
+    if (/^\s*\|.*\|\s*$/.test(header) && /^\s*\|?\s*:?-{3,}/.test(divider) && divider.includes("|")) {
+      return header.split("|").map((value) => value.trim()).filter(Boolean);
+    }
   }
-  return false;
-}
-
-function hasRequestedColumn(content: string, column: string) {
-  return content.toLowerCase().includes(column.trim().toLowerCase());
+  return null;
 }
 
 function requestedColumns(instruction: string) {
-  const match = instruction.match(/columns?\s*:?\s*\n?\s*([^\n]+)/i);
-  if (!match) return [];
-  const line = match[1];
-  if (!line.includes("|")) return [];
-  return line.split("|").map((value) => value.trim()).filter(Boolean);
+  const lines = String(instruction || "").replace(/\r\n/g, "\n").split("\n");
+  const marker = lines.findIndex((line) => /columns?\s*(?:in\s+this\s+order)?\s*:?\s*$/i.test(line.trim()));
+  const candidates = marker >= 0 ? lines.slice(marker + 1) : lines;
+  const row = candidates.find((line) => line.includes("|") && !/^\s*\|?\s*:?-{3,}/.test(line));
+  return row ? row.split("|").map((value) => value.trim()).filter(Boolean) : [];
 }
 
-function screenshotColumns() {
-  return ["Visible claim", "Verified by screenshot?", "Evidence still required"];
+function sameColumns(actual: string[], expected: string[]) {
+  return actual.length === expected.length && actual.every((value, index) => value.toLowerCase() === expected[index]?.toLowerCase());
 }
 
 function hasScreenshotAttribution(output: string) {
@@ -63,7 +61,7 @@ function hasScreenshotAttribution(output: string) {
 }
 
 function hasVerificationLanguage(output: string) {
-  return /\bdoes not (?:independently )?verify\b|\bnot independently verified\b|\bverification requires\b/i.test(output);
+  return /\bdoes not (?:independently )?verify\b|\bnot independently verified\b|\bverification requires\b|\bcannot independently verify\b/i.test(output);
 }
 
 function hasGenericFollowupFiller(output: string) {
@@ -78,7 +76,8 @@ export function requiresDeterministicStructureCheck(instruction: string) {
     || asksForCodeBlock(request)
     || asksForBlockquote(request)
     || asksForNumberedSections(request)
-    || requestedColumns(request).length > 0;
+    || requestedColumns(request).length > 0
+    || /\bjson\b|\bxml\b|\bcsv\b/i.test(request);
 }
 
 export function validateResponseStructure(instruction: string, response: string): ResponseStructureValidation {
@@ -88,16 +87,17 @@ export function validateResponseStructure(instruction: string, response: string)
   const screenshotReview = isScreenshotReviewRequest(request);
 
   if (!output.trim()) missing.push("non-empty response");
-  if ((asksForTable(request) || screenshotReview) && !hasMarkdownTable(output)) missing.push("Markdown table");
-  if ((asksForCodeBlock(request) || screenshotReview) && !/```[\s\S]*?```/.test(output)) missing.push("fenced code block");
-  if ((asksForBlockquote(request) || screenshotReview) && !/(^|\n)\s*>\s+\S/.test(output)) missing.push("blockquote");
-  if (asksForNumberedSections(request) && !/(^|\n)\s*1[.)]\s+/.test(output)) missing.push("numbered sections");
 
-  const columns = requestedColumns(request);
-  const expectedColumns = columns.length ? columns : screenshotReview ? screenshotColumns() : [];
-  for (const column of expectedColumns) {
-    if (!hasRequestedColumn(output, column)) missing.push(`table column: ${column}`);
+  if (asksForTable(request)) {
+    const actualColumns = parseMarkdownTable(output);
+    if (!actualColumns) missing.push("Markdown table");
+    const expectedColumns = requestedColumns(request);
+    if (actualColumns && expectedColumns.length && !sameColumns(actualColumns, expectedColumns)) missing.push(`exact table columns in order: ${expectedColumns.join(" | ")}`);
   }
+
+  if (asksForCodeBlock(request) && !/```[\s\S]*?```/.test(output)) missing.push("fenced code block");
+  if (asksForBlockquote(request) && !/(^|\n)\s*>\s+\S/.test(output)) missing.push("blockquote");
+  if (asksForNumberedSections(request) && !/(^|\n)\s*1[.)]\s+/.test(output)) missing.push("numbered sections");
 
   if (screenshotReview && !hasScreenshotAttribution(output)) missing.push("screenshot attribution language");
   if (screenshotReview && !hasVerificationLanguage(output)) missing.push("verification note");
