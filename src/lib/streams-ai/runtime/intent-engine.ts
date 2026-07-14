@@ -34,6 +34,7 @@ export type StreamsFormatContract = {
 
 export type StreamsIntentDecision = {
   primaryIntent: StreamsPrimaryIntent;
+  secondaryIntents: StreamsPrimaryIntent[];
   requestedOutcome: string;
   requestedFormat: StreamsFormatContract;
   requestedDepth: StreamsRequestedDepth;
@@ -66,7 +67,7 @@ function detectHeadings(text: string) {
 export function detectFormatContract(userMessage: string): StreamsFormatContract {
   const text = lower(userMessage);
   return {
-    exact: /\b(exact|exactly|only|same order|do not change|preserve.*format|must include)\b/.test(text),
+    exact: /\b(exact|exactly|only|same order|do not change|preserve.*format|must include|return only)\b/.test(text),
     table: /\b(markdown table|table|columns?)\b/.test(text),
     json: /\bjson\b/.test(text),
     xml: /\bxml\b/.test(text),
@@ -86,23 +87,57 @@ function resolveDepth(text: string): StreamsRequestedDepth {
   return "standard";
 }
 
-function resolvePrimaryIntent(text: string, hasFiles: boolean, hasImages: boolean): StreamsPrimaryIntent {
-  if (/\b(delete|remove permanently|destroy|wipe|drop table|revoke|send|publish|deploy|merge|commit|push|update repo|edit file|change code)\b/.test(text)) return "repository_action";
-  if (/\b(email|calendar|schedule|contact|slack|drive|github)\b/.test(text) && /\b(send|create|update|delete|forward|archive|label|invite|book|schedule)\b/.test(text)) return "connected_action";
-  if (/\b(generate|create image|create video|image to video|text to video|voice|audio|song|music|render)\b/.test(text)) return "generation";
-  if (/\b(fix|broken|error|failed|bug|troubleshoot|debug|repair|not working|still wrong)\b/.test(text)) return "troubleshooting";
-  if (/\b(build|implement|patch|wire|refactor|component|function|typescript|javascript|react|next\.js|code)\b/.test(text)) return "coding";
-  if (hasImages || /\b(image|screenshot|photo|picture|diagram|see attached)\b/.test(text)) return "image_analysis";
-  if (hasFiles || /\b(file|document|pdf|spreadsheet|presentation|attachment|uploaded)\b/.test(text)) return "file_analysis";
-  if (/\b(search|research|latest|current|today|recent|news|price|law|schedule|who is|what is the current)\b/.test(text)) return "research";
-  if (/\b(rewrite|reword|polish|improve this writing)\b/.test(text)) return "rewriting";
-  if (/\b(summarize|summary|condense)\b/.test(text)) return "summarization";
-  if (/\b(translate|translation)\b/.test(text)) return "translation";
-  if (/\b(write|draft|script|email copy|proposal|article|post|caption)\b/.test(text)) return "writing";
-  if (/\b(plan|strategy|roadmap|architecture|checklist|steps|todo)\b/.test(text)) return "planning";
-  if (/\b(why|how|compare|analyze|reason|explain|should)\b/.test(text)) return "reasoning";
-  if (/\b(who|what|when|where|which)\b/.test(text)) return "factual_answer";
-  return "conversation";
+function hasConnectedAction(text: string) {
+  const connectedTarget = /\b(email|gmail|calendar|event|contact|slack|drive|github issue|github pull request|message|appointment|invite)\b/.test(text);
+  const action = /\b(send|draft|create|update|delete|forward|archive|label|invite|book|schedule|cancel|reply|move|trash)\b/.test(text);
+  return connectedTarget && action;
+}
+
+function hasRepositoryAction(text: string) {
+  const repositoryTarget = /\b(repo|repository|branch|commit|pull request|github file|source file|codebase|deployment|vercel|production build|main branch)\b/.test(text);
+  const action = /\b(delete|remove|revoke|publish|deploy|merge|commit|push|update|edit|change|patch|revert)\b/.test(text);
+  return repositoryTarget && action;
+}
+
+function collectIntentCandidates(text: string, hasFiles: boolean, hasImages: boolean): StreamsPrimaryIntent[] {
+  const intents: StreamsPrimaryIntent[] = [];
+  if (hasConnectedAction(text)) intents.push("connected_action");
+  if (hasRepositoryAction(text)) intents.push("repository_action");
+  if (/\b(generate|create image|create video|image to video|text to video|voice|audio|song|music|render)\b/.test(text)) intents.push("generation");
+  if (/\b(fix|broken|error|failed|bug|troubleshoot|debug|repair|not working|still wrong)\b/.test(text)) intents.push("troubleshooting");
+  if (/\b(build|implement|patch|wire|refactor|component|function|typescript|javascript|react|next\.js|code)\b/.test(text)) intents.push("coding");
+  if (hasImages || /\b(image|screenshot|photo|picture|diagram|see attached)\b/.test(text)) intents.push("image_analysis");
+  if (hasFiles || /\b(file|document|pdf|spreadsheet|presentation|attachment|uploaded)\b/.test(text)) intents.push("file_analysis");
+  if (/\b(search|research|latest|current|today|recent|news|price|law|schedule|who is|what is the current)\b/.test(text)) intents.push("research");
+  if (/\b(rewrite|reword|polish|improve this writing)\b/.test(text)) intents.push("rewriting");
+  if (/\b(summarize|summary|condense)\b/.test(text)) intents.push("summarization");
+  if (/\b(translate|translation)\b/.test(text)) intents.push("translation");
+  if (/\b(write|draft|script|email copy|proposal|article|post|caption)\b/.test(text)) intents.push("writing");
+  if (/\b(plan|strategy|roadmap|architecture|checklist|steps|todo)\b/.test(text)) intents.push("planning");
+  if (/\b(why|how|compare|analyze|reason|explain|should)\b/.test(text)) intents.push("reasoning");
+  if (/\b(who|what|when|where|which)\b/.test(text)) intents.push("factual_answer");
+  return Array.from(new Set(intents));
+}
+
+function choosePrimaryIntent(candidates: StreamsPrimaryIntent[]): StreamsPrimaryIntent {
+  const precedence: StreamsPrimaryIntent[] = [
+    "connected_action",
+    "repository_action",
+    "generation",
+    "troubleshooting",
+    "coding",
+    "image_analysis",
+    "file_analysis",
+    "research",
+    "rewriting",
+    "summarization",
+    "translation",
+    "writing",
+    "planning",
+    "reasoning",
+    "factual_answer",
+  ];
+  return precedence.find((intent) => candidates.includes(intent)) || "conversation";
 }
 
 function detectCurrentInformation(text: string) {
@@ -131,7 +166,9 @@ export function classifyStreamsIntent(input: {
   const text = lower(input.userMessage);
   const hasFiles = Boolean(input.hasFiles);
   const hasImages = Boolean(input.hasImages);
-  const primaryIntent = resolvePrimaryIntent(text, hasFiles, hasImages);
+  const candidates = collectIntentCandidates(text, hasFiles, hasImages);
+  const primaryIntent = choosePrimaryIntent(candidates);
+  const secondaryIntents = candidates.filter((intent) => intent !== primaryIntent);
   const requestedDepth = resolveDepth(text);
   const requestedFormat = detectFormatContract(input.userMessage);
   const needsCurrentInformation = detectCurrentInformation(text) || primaryIntent === "research";
@@ -139,8 +176,12 @@ export function classifyStreamsIntent(input: {
   const needsArtifact = Boolean(input.hasSelectedArtifact) || ["artifact_edit", "generation"].includes(primaryIntent) || /\b(canvas|workspace|artifact|document|spreadsheet|slides|website|app)\b/.test(text);
   const riskLevel = detectRisk(text, primaryIntent);
   const complexity = resolveComplexity(text, requestedDepth, primaryIntent, hasFiles, hasImages);
+  const ambiguousAction = /\b(fix it|do it|change it|update it|remove it|send it)\b/.test(text) && !hasFiles && !hasImages && text.split(/\s+/).length < 8;
+  const needsClarification = ambiguousAction && ["repository_action", "connected_action", "coding", "troubleshooting"].includes(primaryIntent);
+  const confidence = needsClarification ? 0.55 : candidates.length > 3 ? 0.78 : candidates.length > 0 ? 0.92 : 0.86;
   const signals = [
     primaryIntent,
+    ...secondaryIntents.map((intent) => `secondary:${intent}`),
     requestedDepth,
     needsCurrentInformation ? "current_information" : "stable_information",
     hasFiles ? "files" : "no_files",
@@ -150,11 +191,9 @@ export function classifyStreamsIntent(input: {
     complexity,
   ];
 
-  const ambiguousAction = /\b(fix it|do it|change it|update it|remove it|send it)\b/.test(text) && !hasFiles && !hasImages && text.split(/\s+/).length < 8;
-  const needsClarification = ambiguousAction && ["repository_action", "connected_action", "coding", "troubleshooting"].includes(primaryIntent);
-
   return {
     primaryIntent,
+    secondaryIntents,
     requestedOutcome: String(input.userMessage || "").trim(),
     requestedFormat,
     requestedDepth,
@@ -167,7 +206,7 @@ export function classifyStreamsIntent(input: {
     clarificationReason: needsClarification ? "The requested action does not identify a safe, verifiable target." : undefined,
     riskLevel,
     complexity,
-    confidence: needsClarification ? 0.58 : 0.9,
+    confidence,
     signals,
   };
 }
