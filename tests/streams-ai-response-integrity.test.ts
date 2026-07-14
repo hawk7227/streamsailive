@@ -100,8 +100,9 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("document.fonts?.ready");
     expect(source).toContain("waitForCurrentMedia");
     expect(source).toContain("New messages ↓");
-    expect(source).toContain("userMovedRef.current && !isNearBottom(surface)");
-    expect(source).toContain("if (initialRestoreRef.current || near || !userMovedRef.current)");
+    expect(source).toContain("autoFollowRef.current");
+    expect(source).toContain("userScrolledAwayRef.current && !near");
+    expect(source).toContain("if (initialRestoreRef.current || autoFollowRef.current || near)");
     expect(source).not.toContain('surface.addEventListener("pointerdown", markUserMovement');
   });
 
