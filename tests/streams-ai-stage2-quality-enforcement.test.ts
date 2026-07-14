@@ -27,12 +27,23 @@ describe("Streams Stage 2 quality enforcement", () => {
     expect(falseClaim.defects.some((defect) => defect.code === "ACTION_WITHOUT_VERIFIED_RECEIPT")).toBe(true);
   });
 
-  it("requires search and citation coverage for current multi-item requests", () => {
+  it("requires search and visible citation coverage for current multi-item requests", () => {
     const intent = classifyStreamsIntent({ userMessage: "What are the three most important AI announcements from the last 7 days?" });
     expect(validateStreamsEvidence({ intent, responseText: "Three announcements.", webSearchUsed: false, citationCount: 0, verifiedToolEvidenceCount: 0 }).accepted).toBe(false);
-    const insufficient = validateStreamsEvidence({ intent, responseText: "Three announcements.", webSearchUsed: true, citationCount: 1, verifiedToolEvidenceCount: 0 });
+    const insufficient = validateStreamsEvidence({ intent, responseText: "One announcement [Source](https://example.com/a).", webSearchUsed: true, citationCount: 1, verifiedToolEvidenceCount: 0 });
     expect(insufficient.defects.some((defect) => defect.code === "INSUFFICIENT_CITATION_COVERAGE")).toBe(true);
-    expect(validateStreamsEvidence({ intent, responseText: "Three announcements.", webSearchUsed: true, citationCount: 3, verifiedToolEvidenceCount: 0 }).accepted).toBe(true);
+    const accepted = validateStreamsEvidence({
+      intent,
+      responseText: [
+        "1. First [Source A](https://example.com/a)",
+        "2. Second [Source B](https://example.com/b)",
+        "3. Third [Source C](https://example.com/c)",
+      ].join("\n"),
+      webSearchUsed: true,
+      citationCount: 3,
+      verifiedToolEvidenceCount: 0,
+    });
+    expect(accepted.accepted).toBe(true);
   });
 
   it("accepts an explicit current-information limitation instead of fabricated recency", () => {
