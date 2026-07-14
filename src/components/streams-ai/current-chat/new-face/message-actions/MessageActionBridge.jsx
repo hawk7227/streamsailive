@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import "./message-action-bridge.css";
+import ChatScrollController from "../scroll/ChatScrollController";
+import "../scroll/chat-scroll-controller.css";
 
 function sessionIdFromPath() {
   if (typeof window === "undefined") return "";
@@ -221,5 +223,5 @@ export default function MessageActionBridge() {
     };
   }, []);
 
-  return null;
+  return <ChatScrollController />;
 }
