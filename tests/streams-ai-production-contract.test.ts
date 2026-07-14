@@ -15,11 +15,11 @@ describe("STREAMS AI production contracts", () => {
     expect(wantsNonCompressedCapabilities("Give me the full non consolidated answer")).toBe(true);
   });
 
-  it("keeps the canonical capability registry proof-classified", () => {
+  it("keeps the canonical capability registry proof-classified without unproven entries", () => {
     const registry = buildRuntimeCapabilityRegistry();
     expect(registry.total).toBeGreaterThan(20);
     expect(registry.statusCounts.wired).toBeGreaterThan(0);
-    expect(registry.statusCounts.implemented_unproven).toBeGreaterThan(0);
+    expect(registry.statusCounts.implemented_unproven).toBe(0);
     expect(registry.capabilities.every((capability) => capability.id && capability.title && capability.summary && capability.status && capability.proof)).toBe(true);
   });
 
