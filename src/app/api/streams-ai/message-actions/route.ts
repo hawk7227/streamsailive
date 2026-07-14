@@ -4,6 +4,7 @@ import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messa
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 import { StreamsAIUsageEventsRepository } from "@/lib/streams-ai/repositories/usage-events-repository";
 import { buildAttachmentContext } from "@/lib/streams-ai/routes/messages-memory-provider-support";
+import { validateResponseStructure } from "@/lib/streams-ai/routes/response-structure-validator";
 
 const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
@@ -47,6 +48,7 @@ async function logAction(scope: any, input: any) {
       messageId: input.messageId || null,
       source: "streams-chat-message-actions",
       freeAllowance: true,
+      idempotencyKey: input.idempotencyKey || null,
       ...(input.metadata || {}),
     },
   });
@@ -58,6 +60,15 @@ async function branch(scope: any, input: any) {
   const rows = await messages.list(scope, sourceSessionId);
   const source = findMessage(rows, input.messageId, input.content);
   if (!source) throw new Error("Source response was not found");
+
+  const existingBranch = (await sessions.list(scope)).find((row: any) =>
+    row?.metadata?.branchedFromSessionId === sourceSessionId && row?.metadata?.branchedFromMessageId === source.id,
+  );
+  if (existingBranch) {
+    await logAction(scope, { ...input, action: "branch_duplicate_prevented", messageId: source.id, metadata: { existingSessionId: existingBranch.id } });
+    return { sessionId: existingBranch.id, href: `/streams-ai/${existingBranch.id}`, duplicatePrevented: true };
+  }
+
   const sourceIndex = rows.findIndex((row: any) => row.id === source.id);
   const copied = rows.slice(0, sourceIndex + 1);
   const created = await sessions.create(scope, {
@@ -81,7 +92,7 @@ async function branch(scope: any, input: any) {
     });
   }
   await logAction(scope, { ...input, action: "branch_created", messageId: source.id, metadata: { newSessionId: created.id } });
-  return { sessionId: created.id, href: `/streams-ai/${created.id}` };
+  return { sessionId: created.id, href: `/streams-ai/${created.id}`, duplicatePrevented: false };
 }
 
 async function regenerate(scope: any, input: any) {
@@ -97,8 +108,12 @@ async function regenerate(scope: any, input: any) {
   const userMessage = rows[userIndex];
   const idempotencyKey = String(input.idempotencyKey || `regenerate:${source.id}`);
   const existing = rows.find((row: any) => row?.role === "assistant" && row?.metadata?.regenerateIdempotencyKey === idempotencyKey);
-  if (existing) return { message: existing, duplicatePrevented: true };
+  if (existing) {
+    await logAction(scope, { ...input, action: "regenerate_duplicate_prevented", messageId: source.id, metadata: { existingMessageId: existing.id } });
+    return { message: existing, duplicatePrevented: true };
+  }
 
+  await logAction(scope, { ...input, action: "regenerate_started", messageId: source.id });
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("The assistant service is unavailable");
   const attachmentContext = await buildAttachmentContext(scope, {
@@ -107,7 +122,7 @@ async function regenerate(scope: any, input: any) {
   } as any, sessionId);
   const historyText = rows.slice(Math.max(0, userIndex - 12), userIndex).map((row: any) => `${row.role}: ${row.content || ""}`).join("\n");
   const text = [
-    "Answer the user request again as a fresh alternative. Preserve the conversation context and explicit output-format requirements. Do not mention regeneration.",
+    "Answer the user request again as a fresh alternative. Preserve conversation context, attachments, screenshot attribution rules, and every explicit output-format requirement. Do not mention regeneration.",
     historyText ? `<conversation_history>\n${historyText}\n</conversation_history>` : "",
     attachmentContext.text,
     `<user_request>\n${userMessage.content || ""}\n</user_request>`,
@@ -128,6 +143,18 @@ async function regenerate(scope: any, input: any) {
   if (!response.ok) throw new Error("Regeneration did not complete");
   const content = extractText(payload);
   if (!content) throw new Error("Regeneration returned no response");
+
+  const validation = validateResponseStructure(String(userMessage.content || ""), content);
+  if (!validation.valid) {
+    await logAction(scope, {
+      ...input,
+      action: "regenerate_structure_rejected",
+      messageId: source.id,
+      metadata: { missing: validation.missing },
+    });
+    throw new Error("The regenerated response did not satisfy the requested format");
+  }
+
   const created = await messages.create(scope, {
     sessionId,
     role: "assistant",
@@ -137,9 +164,11 @@ async function regenerate(scope: any, input: any) {
       regeneratedFromMessageId: source.id,
       regenerateIdempotencyKey: idempotencyKey,
       attachmentsPreserved: Boolean((userMessage?.metadata?.attachments || []).length),
+      structureValidated: true,
     },
   });
-  await sessions.update(scope, sessionId, { metadata: { ...(await sessions.get(scope, sessionId))?.metadata, lastRegeneratedAt: new Date().toISOString() } });
+  const session = await sessions.get(scope, sessionId);
+  await sessions.update(scope, sessionId, { metadata: { ...(session?.metadata || {}), lastRegeneratedAt: new Date().toISOString() } });
   await logAction(scope, { ...input, action: "regenerate_completed", messageId: source.id, metadata: { newMessageId: created.id } });
   return { message: created, duplicatePrevented: false };
 }
@@ -149,6 +178,7 @@ export async function POST(request: NextRequest) {
     const scope = await requireStreamsAIScope(request);
     const input = await request.json().catch(() => ({}));
     const action = String(input.action || "");
+    if (!action) return json({ ok: false, error: "Action is required." }, 400);
     if (action === "branch") return json({ ok: true, ...(await branch(scope, input)) });
     if (action === "regenerate") return json({ ok: true, ...(await regenerate(scope, input)) });
     await logAction(scope, input);
