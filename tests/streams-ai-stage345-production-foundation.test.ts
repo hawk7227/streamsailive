@@ -38,6 +38,19 @@ describe("Streams Stage 3-5 production foundations", () => {
     expect(activeRoute).toContain("citationCount: candidate.citationCount");
   });
 
+  it("accepts browser and server-runtime file objects and uploads stable bytes", () => {
+    const route = read("src/app/api/streams-ai/assets/route.ts");
+    const repository = read("src/lib/streams-ai/repositories/assets-repository.ts");
+    expect(route).toContain("isUploadFileLike");
+    expect(route).toContain('typeof (value as any)?.arrayBuffer === "function"');
+    expect(route).not.toContain("item instanceof File");
+    expect(route).toContain("STREAMS_UPLOAD_FILE_MISSING");
+    expect(route).toContain("STREAMS_UPLOAD_STORAGE_FAILED");
+    expect(repository).toContain("const bytes = await file.arrayBuffer()");
+    expect(repository).toContain(".upload(storagePath, bytes");
+    expect(repository).toContain('file.type === "application/pdf"');
+  });
+
   it("never marks a tool receipt verified until verification succeeds", async () => {
     const receipt = await executeStreamsTool({
       definition: {
