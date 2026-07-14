@@ -1,6 +1,6 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
 
-export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v2";
+export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v3";
 
 export type StreamsEvidenceValidation = {
   version: string;
@@ -18,9 +18,26 @@ function explicitlyDeclinesUnverifiedCurrentClaim(text: string) {
   return /\b(?:cannot|can't|unable to)\s+(?:verify|confirm)\b|\bwithout (?:a )?(?:live |current )?(?:search|source|verification)\b|\bnot verified as current\b/i.test(text);
 }
 
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
 function requestedCurrentItemCount(instruction: string) {
-  const match = String(instruction || "").match(/\b(?:top|latest|most important)?\s*(\d+)\s+(?:headlines?|announcements?|changes?|items?|examples?|sources?)\b/i);
-  return match ? Number(match[1]) : null;
+  const source = String(instruction || "");
+  const match = source.match(/\b(?:top|latest|most important)?\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:headlines?|announcements?|changes?|items?|examples?|sources?)\b/i);
+  if (!match) return null;
+  const token = String(match[1] || "").toLowerCase();
+  const numeric = Number(token);
+  return Number.isFinite(numeric) ? numeric : NUMBER_WORDS[token] || null;
 }
 
 export function validateStreamsEvidence(input: {
@@ -59,6 +76,6 @@ export function validateStreamsEvidence(input: {
     defects.push({ code: "UNVERIFIED_RAW_URL", message: "The response contains a raw URL that is not backed by a provider citation annotation." });
   }
 
-  const critical = defects.some((defect) => ["CURRENT_INFO_WITHOUT_SEARCH", "ACTION_WITHOUT_VERIFIED_RECEIPT", "SEARCH_WITHOUT_CITATIONS"].includes(defect.code));
+  const critical = defects.some((defect) => ["CURRENT_INFO_WITHOUT_SEARCH", "ACTION_WITHOUT_VERIFIED_RECEIPT", "SEARCH_WITHOUT_CITATIONS", "INSUFFICIENT_CITATION_COVERAGE"].includes(defect.code));
   return { version: STREAMS_EVIDENCE_VALIDATOR_VERSION, accepted: defects.length === 0, critical, defects };
 }
