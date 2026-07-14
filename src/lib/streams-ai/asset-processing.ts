@@ -20,17 +20,9 @@ type ExtractResult = {
   mediaNote?: string;
 };
 
-function serviceClient() {
-  return createStreamsAIServiceClient();
-}
-
-function db() {
-  return streamsAISchema(serviceClient());
-}
-
-function now() {
-  return new Date().toISOString();
-}
+function serviceClient() { return createStreamsAIServiceClient(); }
+function db() { return streamsAISchema(serviceClient()); }
+function now() { return new Date().toISOString(); }
 
 function cleanText(value: unknown, max = MAX_PREVIEW_CHARS) {
   return String(value || "")
@@ -41,18 +33,9 @@ function cleanText(value: unknown, max = MAX_PREVIEW_CHARS) {
     .slice(0, max);
 }
 
-function mime(asset: Record<string, any>) {
-  return String(asset.mime_type || asset.mimeType || "application/octet-stream").toLowerCase();
-}
-
-function fileName(asset: Record<string, any>) {
-  return String(asset.name || "uploaded-file");
-}
-
-function ext(asset: Record<string, any>) {
-  const name = fileName(asset).toLowerCase();
-  return name.includes(".") ? name.split(".").pop() || "" : "";
-}
+function mime(asset: Record<string, any>) { return String(asset.mime_type || asset.mimeType || "application/octet-stream").toLowerCase(); }
+function fileName(asset: Record<string, any>) { return String(asset.name || "uploaded-file"); }
+function ext(asset: Record<string, any>) { const name = fileName(asset).toLowerCase(); return name.includes(".") ? name.split(".").pop() || "" : ""; }
 
 function isTextLike(asset: Record<string, any>) {
   const type = mime(asset);
@@ -70,6 +53,7 @@ function isImage(asset: Record<string, any>) { return mime(asset).startsWith("im
 function isAudio(asset: Record<string, any>) { return mime(asset).startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg"].includes(ext(asset)); }
 function isVideo(asset: Record<string, any>) { return mime(asset).startsWith("video/") || ["mp4", "mov", "webm", "mkv"].includes(ext(asset)); }
 function isZipXmlDoc(asset: Record<string, any>) { return ["pptx", "odt", "epub"].includes(ext(asset)); }
+function isLegacyPresentation(asset: Record<string, any>) { return ext(asset) === "ppt" || /ms-powerpoint/.test(mime(asset)); }
 
 function chunkText(text: string) {
   const chunks: string[] = [];
@@ -91,12 +75,8 @@ function summarize(text: string, asset: Record<string, any>, mode = "text") {
 
 async function patchAssetMetadata(scope: StreamsAIScope, assetId: string, metadata: Record<string, unknown>) {
   try {
-    await db()
-      .from("streams_ai_assets")
-      .update({ metadata, updated_at: now() })
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .eq("id", assetId);
+    await db().from("streams_ai_assets").update({ metadata, updated_at: now() })
+      .eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", assetId);
   } catch {
     // Metadata updates are supportive; the stored upload remains valid.
   }
@@ -118,14 +98,39 @@ function extractHtml(buffer: Buffer) {
   return cleanText($("body").text() || $.root().text(), MAX_TEXT_BYTES);
 }
 
+function decodeRtfHex(value: string) {
+  return value.replace(/\\'([0-9a-fA-F]{2})/g, (_match, hex) => Buffer.from([Number.parseInt(hex, 16)]).toString("latin1"));
+}
+
 function extractRtf(buffer: Buffer) {
-  return buffer.toString("utf8")
-    .replace(/\\par[d]?/g, "\n")
-    .replace(/\\'[0-9a-fA-F]{2}/g, " ")
-    .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+  const source = decodeRtfHex(buffer.toString("latin1"));
+  return cleanText(source
+    .replace(/\\u(-?\d+)\??/g, (_match, value) => {
+      const code = Number(value);
+      return String.fromCharCode(code < 0 ? code + 65536 : code);
+    })
+    .replace(/\\(?:par|line|tab)\b\s?/g, (token) => token.startsWith("\\tab") ? "\t" : "\n")
+    .replace(/\\[a-zA-Z]+-?\d*\s?/g, "")
+    .replace(/\\[{}\\]/g, (match) => match.slice(1))
     .replace(/[{}]/g, " ")
     .replace(/\s+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n");
+    .replace(/\n{3,}/g, "\n\n"), MAX_TEXT_BYTES);
+}
+
+function extractPrintableRuns(buffer: Buffer) {
+  const latin = buffer.toString("latin1");
+  const asciiRuns = latin.match(/[\x20-\x7E]{4,}/g) || [];
+  const utf16Runs: string[] = [];
+  const utf16Pattern = /(?:[\x20-\x7E]\x00){4,}/g;
+  for (const match of latin.matchAll(utf16Pattern)) {
+    const bytes = Buffer.from(match[0], "latin1");
+    utf16Runs.push(bytes.toString("utf16le"));
+  }
+  const useful = [...asciiRuns, ...utf16Runs]
+    .map((value) => value.replace(/[^\x20-\x7E\n\r\t]/g, " ").trim())
+    .filter((value) => value.length >= 4 && /[A-Za-z]{2}/.test(value))
+    .filter((value) => !/^(Microsoft|WordDocument|PowerPoint Document|SummaryInformation|DocumentSummaryInformation)$/i.test(value));
+  return cleanText(Array.from(new Set(useful)).join("\n"), MAX_TEXT_BYTES);
 }
 
 function countPdfPagesFallback(buffer: Buffer) {
@@ -134,8 +139,23 @@ function countPdfPagesFallback(buffer: Buffer) {
 }
 
 function extractPdfFallbackText(buffer: Buffer) {
-  const literalStrings = Array.from(buffer.toString("latin1").matchAll(/\(([^()]{3,500})\)/g)).map((match) => match[1]);
-  return cleanText(literalStrings.join(" "), MAX_TEXT_BYTES);
+  const latin = buffer.toString("latin1");
+  const literalStrings = Array.from(latin.matchAll(/\((?:\\.|[^()]){3,1000}\)/g))
+    .map((match) => match[0].slice(1, -1)
+      .replace(/\\([()\\])/g, "$1")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\([0-7]{1,3})/g, (_m, octal) => String.fromCharCode(Number.parseInt(octal, 8))));
+  const printable = extractPrintableRuns(buffer);
+  return cleanText([literalStrings.join(" "), printable].filter(Boolean).join("\n"), MAX_TEXT_BYTES);
+}
+
+function textQuality(value: string) {
+  if (!value) return 0;
+  const sample = value.slice(0, 5000);
+  const readable = (sample.match(/[A-Za-z0-9 $:.,;_\-/]/g) || []).length;
+  return readable / Math.max(1, sample.length);
 }
 
 async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
@@ -143,17 +163,23 @@ async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
   let pageCount = countPdfPagesFallback(buffer);
   try {
     const pdfModule: any = await import("pdf-parse");
-    if (pdfModule?.PDFParse) {
-      const parser = new pdfModule.PDFParse({ data: buffer });
+    const PDFParse = pdfModule?.PDFParse || pdfModule?.default?.PDFParse;
+    if (PDFParse) {
+      const parser = new PDFParse({ data: buffer });
       const result = await parser.getText();
       text = cleanText(result?.text || "", MAX_TEXT_BYTES);
       pageCount = Number(result?.total || result?.numpages || result?.numPages || pageCount || 0);
       await parser.destroy?.();
+    } else if (typeof pdfModule?.default === "function") {
+      const result = await pdfModule.default(buffer);
+      text = cleanText(result?.text || "", MAX_TEXT_BYTES);
+      pageCount = Number(result?.numpages || result?.numPages || pageCount || 0);
     }
   } catch {
     // Use fallback extraction below.
   }
-  if (!text) text = extractPdfFallbackText(buffer);
+  const fallback = extractPdfFallbackText(buffer);
+  if (!text || textQuality(fallback) > textQuality(text)) text = fallback;
   const visualAnalysis = pageCount > 1000
     ? "PDF is over 1000 pages; process as text only."
     : pageCount > 100
@@ -164,17 +190,21 @@ async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
 
 async function extractDoc(buffer: Buffer, asset: Record<string, any>): Promise<ExtractResult> {
   if (ext(asset) === "doc") {
-    return { status: "metadata_only", text: "", extractionMode: "legacy-doc", mediaNote: "Legacy .doc stored; convert to .docx for full extraction." };
+    const text = extractPrintableRuns(buffer);
+    return { status: text ? "ready" : "metadata_only", text, extractionMode: "legacy-doc", mediaNote: text ? "Legacy .doc text recovered from embedded printable runs." : "Legacy .doc stored; no readable embedded text was found." };
   }
   const result = await mammoth.extractRawText({ buffer });
   const text = cleanText(result.value, MAX_TEXT_BYTES);
   return { status: text ? "ready" : "metadata_only", text, extractionMode: "docx" };
 }
 
+function extractLegacyPresentation(buffer: Buffer): ExtractResult {
+  const text = extractPrintableRuns(buffer);
+  return { status: text ? "ready" : "metadata_only", text, extractionMode: "legacy-presentation", mediaNote: text ? "Legacy .ppt text recovered from embedded printable runs." : "Legacy .ppt stored; no readable embedded text was found." };
+}
+
 function extractSheet(buffer: Buffer, asset: Record<string, any>): ExtractResult {
-  if (ext(asset) === "csv" || mime(asset).includes("csv")) {
-    return { status: "ready", text: cleanText(buffer.toString("utf8"), MAX_TEXT_BYTES), extractionMode: "csv" };
-  }
+  if (ext(asset) === "csv" || mime(asset).includes("csv")) return { status: "ready", text: cleanText(buffer.toString("utf8"), MAX_TEXT_BYTES), extractionMode: "csv" };
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const parts: string[] = [];
   for (const sheetName of workbook.SheetNames.slice(0, 12)) {
@@ -186,14 +216,7 @@ function extractSheet(buffer: Buffer, asset: Record<string, any>): ExtractResult
 }
 
 function xmlText(value: string) {
-  return value.replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 }
 
 function extractZipXml(buffer: Buffer, asset: Record<string, any>): ExtractResult {
@@ -227,9 +250,13 @@ async function extractAsset(asset: Record<string, any>): Promise<ExtractResult> 
   if (!bytes) return { status: "metadata_only", text: "", extractionMode: "missing-bytes" };
   if (isPdf(asset)) return extractPdf(bytes);
   if (isDoc(asset)) return extractDoc(bytes, asset);
+  if (isLegacyPresentation(asset)) return extractLegacyPresentation(bytes);
   if (isSheet(asset)) return extractSheet(bytes, asset);
   if (isHtml(asset)) return { status: "ready", text: extractHtml(bytes), extractionMode: "html" };
-  if (ext(asset) === "rtf" || mime(asset).includes("rtf")) return { status: "ready", text: cleanText(extractRtf(bytes), MAX_TEXT_BYTES), extractionMode: "rtf" };
+  if (ext(asset) === "rtf" || mime(asset).includes("rtf")) {
+    const text = extractRtf(bytes);
+    return { status: text ? "ready" : "metadata_only", text, extractionMode: "rtf" };
+  }
   if (isZipXmlDoc(asset)) return extractZipXml(bytes, asset);
   if (isTextLike(asset)) return { status: "ready", text: cleanText(bytes.toString("utf8"), MAX_TEXT_BYTES), extractionMode: "text" };
   return { status: "metadata_only", text: "", extractionMode: "unsupported", mediaNote: "Stored as an attachment; no parser is available for this file type." };
@@ -267,7 +294,6 @@ export async function processUploadedAsset(scope: StreamsAIScope, asset: Record<
   if (!assetId) return { ok: false, status: "failed", error: "asset id missing" };
   const baseMetadata = { ...(asset.metadata || {}), processingStatus: "queued", processingQueuedAt: now() };
   await patchAssetMetadata(scope, assetId, baseMetadata);
-
   try {
     await patchAssetMetadata(scope, assetId, { ...baseMetadata, processingStatus: "processing", extractionStatus: "extracting", processingStartedAt: now() });
     const extracted = await extractAsset(asset);
@@ -275,7 +301,6 @@ export async function processUploadedAsset(scope: StreamsAIScope, asset: Record<
     const chunks = text ? chunkText(text) : [];
     const summary = extracted.summary || summarize(text, asset, extracted.extractionMode);
     const indexing = await persistChunksBestEffort(scope, asset, chunks, summary, extracted.extractionMode);
-
     const metadata = {
       ...baseMetadata,
       processingStatus: "ready",
@@ -292,28 +317,10 @@ export async function processUploadedAsset(scope: StreamsAIScope, asset: Record<
       mediaNote: extracted.mediaNote || null,
     };
     await patchAssetMetadata(scope, assetId, metadata);
-    return {
-      ok: true,
-      status: extracted.status,
-      stored: true,
-      indexed: indexing.indexed,
-      indexingStatus: metadata.indexingStatus,
-      indexingError: metadata.indexingError,
-      chunkCount: chunks.length,
-      summary,
-      textPreview: metadata.textPreview,
-      extractionMode: extracted.extractionMode,
-      pageCount: extracted.pageCount,
-    };
+    return { ok: true, status: extracted.status, stored: true, indexed: indexing.indexed, indexingStatus: metadata.indexingStatus, indexingError: metadata.indexingError, chunkCount: chunks.length, summary, textPreview: metadata.textPreview, extractionMode: extracted.extractionMode, pageCount: extracted.pageCount };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || "Asset processing failed");
-    await patchAssetMetadata(scope, assetId, {
-      ...baseMetadata,
-      processingStatus: "stored",
-      extractionStatus: "failed",
-      processingError: message,
-      processedAt: now(),
-    });
+    await patchAssetMetadata(scope, assetId, { ...baseMetadata, processingStatus: "stored", extractionStatus: "failed", processingError: message, processedAt: now() });
     return { ok: true, status: "metadata_only", stored: true, indexed: false, processingError: message, error: message };
   }
 }
@@ -328,23 +335,16 @@ export async function retrieveAssetContext(scope: StreamsAIScope, sessionId: str
   const limit = Math.max(1, Math.min(12, options.limit || 8));
   const terms = cleanText(query, 400).toLowerCase().split(/\W+/).filter((term) => term.length > 2).slice(0, 24);
   try {
-    const { data, error } = await db()
-      .from("streams_ai_asset_chunks")
+    const { data, error } = await db().from("streams_ai_asset_chunks")
       .select("asset_id, chunk_index, content, summary, metadata, created_at")
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .eq("session_id", sessionId)
-      .order("created_at", { ascending: false })
-      .limit(200);
+      .eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("session_id", sessionId)
+      .order("created_at", { ascending: false }).limit(200);
     if (error) throw error;
-    const ranked = (data || [])
-      .map((row) => {
-        const haystack = `${row.content || ""} ${row.summary || ""}`.toLowerCase();
-        const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
-        return { ...row, score };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    const ranked = (data || []).map((row) => {
+      const haystack = `${row.content || ""} ${row.summary || ""}`.toLowerCase();
+      const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
+      return { ...row, score };
+    }).sort((a, b) => b.score - a.score).slice(0, limit);
     return { ok: true, chunks: ranked };
   } catch {
     return { ok: false, chunks: [] as Record<string, unknown>[] };
