@@ -62,17 +62,24 @@ export class StreamsAIAssetsRepository {
   ) {
     const serviceClient = this.serviceClient();
     const bucket = process.env.STREAMS_AI_ASSETS_BUCKET || "streams-ai-assets";
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeName = String(file.name || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "_");
     const storagePath = `${scope.tenantId}/${scope.userId}/${crypto.randomUUID()}-${safeName}`;
 
-    const { data: buckets } = await serviceClient.storage.listBuckets();
+    const { data: buckets, error: listError } = await serviceClient.storage.listBuckets();
+    if (listError) throw new Error(`Failed to inspect STREAMS AI storage: ${listError.message}`);
     if (!buckets?.some((item) => item.name === bucket)) {
-      await serviceClient.storage.createBucket(bucket, { public: false });
+      const { error: createError } = await serviceClient.storage.createBucket(bucket, { public: false });
+      if (createError && !/already exists|duplicate/i.test(createError.message)) {
+        throw new Error(`Failed to create STREAMS AI asset bucket: ${createError.message}`);
+      }
     }
+
+    const bytes = await file.arrayBuffer();
+    if (!bytes.byteLength) throw new Error("The selected file is empty.");
 
     const { error: uploadError } = await serviceClient.storage
       .from(bucket)
-      .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
+      .upload(storagePath, bytes, { contentType: file.type || "application/octet-stream", upsert: false });
 
     if (uploadError) throw new Error(`Failed to upload STREAMS AI asset: ${uploadError.message}`);
 
@@ -91,7 +98,11 @@ export class StreamsAIAssetsRepository {
             ? "video"
             : file.type.startsWith("audio/")
               ? "audio"
-              : "file"),
+              : file.type === "application/pdf"
+                ? "pdf"
+                : /word|document/i.test(file.type)
+                  ? "document"
+                  : "file"),
     });
   }
 }
