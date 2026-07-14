@@ -1,7 +1,7 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
 import { countVisibleMarkdownCitations } from "../research/provider-citation-renderer";
 
-export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v5";
+export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v6";
 
 export type StreamsEvidenceValidation = {
   version: string;
@@ -32,8 +32,7 @@ const NUMBER_WORDS: Record<string, number> = {
   ten: 10,
 };
 
-const COUNT_TOKEN = "(\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
-const ITEM_TOKEN = "(?:headlines?|announcements?|changes?|items?|examples?|sources?)";
+const ITEM_WORD = /^(?:headline|headlines|announcement|announcements|change|changes|item|items|example|examples|source|sources)$/i;
 
 function parseCountToken(token: string | undefined) {
   const value = String(token || "").toLowerCase();
@@ -42,17 +41,17 @@ function parseCountToken(token: string | undefined) {
 }
 
 export function requestedCurrentItemCount(instruction: string) {
-  const source = String(instruction || "");
-  const patterns = [
-    new RegExp(`\\b(?:top|latest)\\s+${COUNT_TOKEN}\\s+(?:most\\s+important\\s+)?${ITEM_TOKEN}\\b`, "i"),
-    new RegExp(`\\b${COUNT_TOKEN}\\s+(?:most\\s+important\\s+|top\\s+|latest\\s+)?${ITEM_TOKEN}\\b`, "i"),
-    new RegExp(`\\b(?:give|list|show|return|find|what\\s+are)\\s+(?:me\\s+)?(?:the\\s+)?${COUNT_TOKEN}\\b[\\s\\S]{0,50}?\\b${ITEM_TOKEN}\\b`, "i"),
-  ];
+  const words = String(instruction || "")
+    .replace(/[^\p{L}\p{N}-]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-  for (const pattern of patterns) {
-    const match = source.match(pattern);
-    const parsed = parseCountToken(match?.[1]);
-    if (parsed !== null) return parsed;
+  for (let index = 0; index < words.length; index += 1) {
+    const count = parseCountToken(words[index]);
+    if (count === null) continue;
+    const lookahead = words.slice(index + 1, index + 9);
+    if (lookahead.some((word) => ITEM_WORD.test(word))) return count;
   }
   return null;
 }
