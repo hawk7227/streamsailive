@@ -63,19 +63,18 @@ describe("Streams Stage 3-5 production foundations", () => {
     expect(repository).not.toContain("await serviceClient.storage.listBuckets()\n    if");
   });
 
-  it("retrieves uploaded attachments by authoritative asset ID instead of requiring a preexisting session", () => {
+  it("uses attached asset IDs without blocking the whole response when extraction is incomplete", () => {
     const support = read("src/lib/streams-ai/routes/messages-memory-provider-support.ts");
     const repository = read("src/lib/streams-ai/repositories/assets-repository.ts");
     expect(repository).toContain("async listByIds");
     expect(repository).toContain('.in("id", ids)');
     expect(repository).toContain("async attachToSession");
-    expect(support).toContain("resolveAuthoritativeAssetRows");
+    expect(support).toContain("resolveAttachmentRows");
     expect(support).toContain("assets.listByIds(scope, ids)");
-    expect(support).toContain("processRowsBounded");
-    expect(support).toContain("STREAMS_ATTACHED_ASSET_NOT_FOUND");
-    expect(support).toContain("STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE");
     expect(support).toContain("Asset ID:");
-    expect(support).not.toContain("const assetRows = sessionId ? await assets.list");
+    expect(support).not.toContain("STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE");
+    expect(support).not.toContain("STREAMS_ATTACHED_ASSET_NOT_FOUND");
+    expect(support).not.toContain("processRowsBounded");
   });
 
   it("does not mark stored analyzable files failed when chunk indexing is unavailable", () => {
