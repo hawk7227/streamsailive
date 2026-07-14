@@ -13,7 +13,7 @@ const DEFAULT_TIME_ZONE = "America/Phoenix";
 const DEFAULT_TIME_ZONE_LABEL = "MST";
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
-type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; runAssistant?: boolean; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
+type Body = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, any>; runAssistant?: boolean; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
 type Send = (event: string, payload: Record<string, unknown>) => void;
 
 function sse(stream: ReadableStream<Uint8Array>) {
@@ -190,6 +190,32 @@ async function callResponsesStream(input: { apiKey: string; model: string; text:
   return content;
 }
 
+async function verifyAssistantOnlyRequest(scope: any, body: Body, requestedContent: string) {
+  if (body.metadata?.skipUserPersistence !== true) return { content: requestedContent, attachments: body.attachments || [] };
+  const sessionId = String(body.sessionId || "").trim();
+  const sourceUserMessageId = String(body.metadata?.sourceUserMessageId || "").trim();
+  const regeneratedFromMessageId = String(body.metadata?.regeneratedFromMessageId || "").trim();
+  if (!sessionId || !sourceUserMessageId || !regeneratedFromMessageId) {
+    throw new Error("Assistant-only execution requires verified source message identifiers.");
+  }
+
+  const rows = await messages.list(scope, sessionId);
+  const userIndex = rows.findIndex((row: any) => String(row.id) === sourceUserMessageId && row.role === "user");
+  const assistantIndex = rows.findIndex((row: any) => String(row.id) === regeneratedFromMessageId && row.role === "assistant");
+  if (userIndex < 0 || assistantIndex < 0 || userIndex >= assistantIndex) {
+    throw new Error("Assistant-only execution source messages are invalid.");
+  }
+  const sourceUser = rows[userIndex];
+  const content = String(sourceUser.content || "").trim();
+  if (!content || content !== requestedContent.trim()) {
+    throw new Error("Assistant-only execution content does not match the verified source request.");
+  }
+  return {
+    content,
+    attachments: Array.isArray(sourceUser?.metadata?.attachments) ? sourceUser.metadata.attachments : [],
+  };
+}
+
 export async function memoryMessagesGET(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
@@ -207,13 +233,19 @@ export async function memoryMessagesPOST(request: NextRequest) {
   try {
     const body = await readJsonBody<Body>(request);
     const rawUserContent = body.content || body.message || "";
-    const userContent = rawUserContent.trim();
+    let userContent = rawUserContent.trim();
     if (!userContent) return streamsAIJson({ ok: false, error: "content or message is required" }, 400);
+
+    const scope = await requireStreamsAIScope(request);
+    const verified = await verifyAssistantOnlyRequest(scope, body, userContent);
+    userContent = verified.content;
+    body.content = userContent;
+    body.message = userContent;
+    body.attachments = verified.attachments;
+
     const effectiveInstruction = userContent === ATTACHMENT_ONLY_SENTINEL
       ? `Review the attached file${Array.isArray(body.attachments) && body.attachments.length === 1 ? "" : "s"}.`
       : userContent;
-
-    const scope = await requireStreamsAIScope(request);
     const idempotencyBase = resolveIdempotencyBase(body);
     const turnId = resolveTurnId(body);
 
@@ -305,7 +337,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
             assistantContent: content,
             body: normalizedBody,
             assistantStatus: "complete",
-            assistantMetadata: { source: SOURCE, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, webGrounded: false, ungroundedFallbackUsed: false, providerGenerated: true, serverTimestamp },
+            assistantMetadata: { source: SOURCE, provider: "openai", providerRoute: "openai-responses", providerStatus: "ok", model, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, webGrounded: false, ungroundedFallbackUsed: false, providerGenerated: true, serverTimestamp, regeneratedFromMessageId: normalizedBody.metadata?.regeneratedFromMessageId || null },
           });
           sessionId = persisted.sessionId;
           send("complete", { ok: true, sessionId, assistantMessageId: persisted.assistantMessageId, turnId: persisted.turnId, imageGrounded: imageUrls.length > 0, imageCount: imageUrls.length, serverTimestamp, elapsedMs: Date.now() - startedAt });
