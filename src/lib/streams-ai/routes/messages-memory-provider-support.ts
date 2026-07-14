@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { StreamsAIScope } from "../auth";
 import { createStreamsAIServiceClient } from "../server";
+import { processUploadedAsset } from "../asset-processing";
 import { StreamsAIAssetsRepository } from "../repositories/assets-repository";
 import { StreamsAIMessagesRepository } from "../repositories/messages-repository";
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
@@ -17,6 +18,7 @@ const MAX_ATTACHMENT_CONTEXT_CHARS = 36000;
 const DEFAULT_FAST_MODEL = "gpt-4o-mini";
 const DEFAULT_PRO_MODEL = "gpt-4o";
 const DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
+const ANALYZABLE_EXTENSIONS = new Set(["txt", "md", "json", "csv", "xml", "html", "htm", "rtf", "pdf", "docx", "xlsx", "xls", "pptx", "odt", "epub"]);
 
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
 type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, any>; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
@@ -67,6 +69,12 @@ export async function ensureSession(scope: StreamsAIScope, sessionId: string, co
   return created.id;
 }
 
+function attachmentIds(body: ChatPostBody) {
+  return Array.from(new Set((Array.isArray(body.attachments) ? body.attachments : [])
+    .map((attachment: any) => String(attachment?.id || attachment?.assetId || "").trim())
+    .filter(Boolean)));
+}
+
 export async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
   const validationInstruction = resolveValidationInstruction(body, userContent);
   const structureEnforced = shouldAssertStructure(body, validationInstruction);
@@ -81,6 +89,8 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
     exactStructureRequired: structureEnforced,
   });
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
+  const ids = attachmentIds(body);
+  if (ids.length) await assets.attachToSession(scope, ids, persistedSessionId).catch(() => null);
   const turnId = resolveTurnId(body);
   const idempotencyBase = resolveIdempotencyBase(body);
   const skipUserPersistence = body.metadata?.skipUserPersistence === true;
@@ -123,11 +133,55 @@ export function buildUserMetadata(body: ChatPostBody) {
   return { ...metadata, copiedUiUserId: body.userId || null, assistantRuntime: "streams-ai-memory-provider-router", mode: "provider-router-memory", attachments: body.attachments || [] };
 }
 
+function extension(name: string) {
+  const normalized = String(name || "").toLowerCase();
+  return normalized.includes(".") ? normalized.split(".").pop() || "" : "";
+}
+
+function rowHasReadableContext(row: any) {
+  const metadata = row?.metadata || {};
+  return Boolean(String(row?.textPreview || metadata.textPreview || row?.summary || metadata.summary || "").trim());
+}
+
+function rowNeedsProcessing(row: any) {
+  if (!row || rowHasReadableContext(row) || hasImageAttachment([row])) return false;
+  const status = String(row?.metadata?.processingStatus || row?.metadata?.extractionStatus || "queued").toLowerCase();
+  return ["queued", "stored", "processing", "extracting", "unknown", ""].includes(status);
+}
+
+async function processRowsBounded(scope: StreamsAIScope, rows: any[], concurrency = 4) {
+  let cursor = 0;
+  async function worker() {
+    while (cursor < rows.length) {
+      const index = cursor++;
+      await processUploadedAsset(scope, rows[index]).catch(() => null);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, () => worker()));
+}
+
+async function resolveAuthoritativeAssetRows(scope: StreamsAIScope, attachments: any[], sessionId: string) {
+  const ids = Array.from(new Set(attachments.map((attachment) => String(attachment?.id || attachment?.assetId || "").trim()).filter(Boolean)));
+  let rows = ids.length ? await assets.listByIds(scope, ids).catch(() => []) : [];
+  const missingById = ids.filter((id) => !rows.some((row: any) => String(row?.id) === id));
+  if (missingById.length) throw new Error(`STREAMS_ATTACHED_ASSET_NOT_FOUND:${missingById.join(",")}`);
+
+  const pending = rows.filter(rowNeedsProcessing);
+  if (pending.length) {
+    await processRowsBounded(scope, pending);
+    rows = await assets.listByIds(scope, ids).catch(() => rows);
+  }
+
+  if (sessionId && ids.length) await assets.attachToSession(scope, ids, sessionId).catch(() => null);
+  if (!rows.length && sessionId) rows = await assets.list(scope, { sessionId }).catch(() => []);
+  return rows;
+}
+
 export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string, send?: StreamSend): Promise<AttachmentContext> {
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
   if (!attachments.length) return { text: "", imageParts: [], statusText: "", statusEvents: [] };
   if (send) send("activity", { phase: "attachments.reading", statusText: attachments.length === 1 ? "Reading attached file…" : `Reading ${attachments.length} attached files…`, source: "streams-ai-memory-provider-router", sessionId, backendProof: { attachmentCount: attachments.length } });
-  const assetRows = sessionId ? await assets.list(scope, { sessionId }).catch(() => []) : [];
+  const assetRows = await resolveAuthoritativeAssetRows(scope, attachments, sessionId);
   const byId = new Map<string, any>();
   const byName = new Map<string, any>();
   for (const row of assetRows as any[]) { if (row?.id) byId.set(String(row.id), row); if (row?.name) byName.set(String(row.name), row); }
@@ -135,6 +189,7 @@ export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPo
   let imageCount = 0;
   let readableCount = 0;
   let pendingCount = 0;
+  let expectedReadableCount = 0;
   const sections: string[] = [];
   const statusEvents = new Set<string>();
   const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[] = [];
@@ -152,36 +207,42 @@ export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPo
     const mime = String(merged.mimeType || merged.mime_type || input.mimeType || "unknown");
     const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
     const isImage = hasImageAttachment([merged]) || extractionMode === "image";
+    const analyzable = ANALYZABLE_EXTENSIONS.has(extension(name)) || /pdf|word|spreadsheet|excel|presentation|powerpoint|text|json|csv|html|rtf|epub|opendocument/.test(mime.toLowerCase());
+    if (analyzable && !isImage) expectedReadableCount += 1;
     const signedImageUrl = isImage ? await resolveImageUrl(merged).catch(() => "") : "";
     if (signedImageUrl) { imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } }); imageCount += 1; }
     addExtractionStatus(statusEvents, extractionMode, mime, name, metadata);
     const readable = [summary ? `Summary: ${summary}` : "", textPreview ? `Extracted text preview:\n${textPreview}` : ""].filter(Boolean).join("\n\n");
-    if (readable) { readableCount += 1; statusEvents.add("Text extracted"); if (chunkCount > 0 || extractionStatus === "ready") statusEvents.add("Extraction complete"); }
+    if (readable) { readableCount += 1; statusEvents.add("Text extracted"); if (chunkCount > 0 || extractionStatus === "ready" || extractionStatus === "metadata_only") statusEvents.add("Extraction complete"); }
     if (!readable && !signedImageUrl) pendingCount += 1;
     const statusLine = signedImageUrl ? "vision_input_available" : readable ? "readable_context_available" : `no_readable_text_available_status_${extractionStatus}`;
-    let block = [`File ${index + 1}: ${name}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction mode: ${extractionMode || "unknown"}`, `Extraction status: ${statusLine}`].join("\n");
+    let block = [`File ${index + 1}: ${name}`, `Asset ID: ${String(merged.id || input.id || input.assetId || "unavailable")}`, `MIME: ${mime}`, `Size bytes: ${size}`, `Extraction mode: ${extractionMode || "unknown"}`, `Extraction status: ${statusLine}`].join("\n");
     if (signedImageUrl) block += "\n\nImage is attached as a vision input for direct visual review.";
-    block += readable ? `\n\n${readable}` : signedImageUrl ? "" : "\n\nNo extracted text was available for this file at request time.";
+    block += readable ? `\n\n${readable}` : signedImageUrl ? "" : "\n\nNo extracted text was available for this file at request time. Do not infer its contents.";
     const remaining = MAX_ATTACHMENT_CONTEXT_CHARS - used;
     if (remaining <= 0) break;
     if (block.length > remaining) block = `${block.slice(0, remaining)}\n[Attachment context truncated]`;
     used += block.length;
     sections.push(block);
   }
+
+  if (expectedReadableCount > 0 && readableCount === 0) {
+    throw new Error(`STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE:${expectedReadableCount}`);
+  }
+
   const aggregate = imageCount ? `Inspecting ${imageCount} image${imageCount === 1 ? "" : "s"}…` : readableCount ? `Reading ${readableCount} extracted file${readableCount === 1 ? "" : "s"}…` : pendingCount ? `Checking ${pendingCount} attachment${pendingCount === 1 ? "" : "s"}…` : "";
   if (aggregate) statusEvents.add(aggregate);
-  if (send) for (const statusText of statusEvents) send("activity", { phase: "attachments.proof", statusText, source: "streams-ai-memory-provider-router", sessionId, backendProof: { attachmentContextReady: true } });
+  if (send) for (const statusText of statusEvents) send("activity", { phase: "attachments.proof", statusText, source: "streams-ai-memory-provider-router", sessionId, backendProof: { attachmentContextReady: true, readableCount, expectedReadableCount } });
 
   const responseContract = [
-    "Direct-stream screenshot and image review contract:",
-    "- Keep the response live-streamable. Do not mention buffering, validation, repair, internal routing, or providers.",
-    "- The user's explicitly requested format always wins. Preserve requested headings, numbering, tables, exact columns, fenced code blocks, blockquotes, JSON, and section order exactly.",
-    "- When no conflicting exact format was requested, organize a screenshot review under these headings in this order: Visible Content, Interpretation, Verification Note.",
-    "- Every factual statement about visible screenshot content must be attributed with 'The screenshot shows...', 'The screenshot displays...', or 'The visible interface states...'. Do not silently convert displayed text into verified fact.",
-    "- Put inference only in Interpretation and qualify it with language such as 'This may indicate...' or 'This could suggest...'.",
-    "- In Verification Note, state what the screenshot does not independently verify and name the evidence required for verification.",
-    "- Do not append generic follow-up filler. Never end with 'Let me know', 'Please let me know', 'If you need', 'If you want', or a generic offer of more help unless the user explicitly requested follow-up language.",
-    "- Do not substitute a different outline or omit requested sections.",
+    "Attached-file evidence contract:",
+    "- Use the authoritative file names and extracted content supplied above.",
+    "- Cite the supporting file name for factual findings when the user requests file-level grounding.",
+    "- Never claim a file was parsed when its extraction status says no readable text was available.",
+    "- Never infer unsupported file contents from sibling files.",
+    "- The user's explicitly requested format always wins.",
+    "- For screenshots, attribute visible claims and separate Visible Content, Interpretation, and Verification Note unless the user requested another exact structure.",
+    "- Do not append generic follow-up filler.",
   ].join("\n");
 
   return {
