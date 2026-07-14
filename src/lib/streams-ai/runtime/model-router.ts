@@ -20,6 +20,7 @@ export type StreamsModelCapability = {
   latencyClass: "fast" | "standard" | "slow";
   reliabilityScore: number;
   health: "healthy" | "degraded" | "offline";
+  capabilitySource: "explicit-env" | "verified-default" | "conservative-fallback";
 };
 
 export type StreamsModelRoute = {
@@ -31,31 +32,83 @@ export type StreamsModelRoute = {
   reason: string[];
 };
 
-export const STREAMS_MODEL_ROUTE_VERSION = "streams-model-router-v1";
+export const STREAMS_MODEL_ROUTE_VERSION = "streams-model-router-v2";
 
-function unique(values: Array<string | undefined | null>) {
-  return Array.from(new Set(values.filter((value): value is string => Boolean(value && String(value).trim()))));
+function readBoolean(name: string, fallback: boolean) {
+  const raw = process.env[name];
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  return fallback;
 }
 
-function capability(input: Partial<StreamsModelCapability> & Pick<StreamsModelCapability, "id" | "role">): StreamsModelCapability {
+function readNumber(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function modelHealth(id: string) {
+  const normalized = id.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const value = String(process.env[`STREAMS_MODEL_HEALTH_${normalized}`] || "healthy").toLowerCase();
+  return value === "offline" ? "offline" : value === "degraded" ? "degraded" : "healthy";
+}
+
+function explicitCapability(id: string, role: StreamsModelRole, profile: Partial<StreamsModelCapability>): StreamsModelCapability {
+  const normalized = id.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
   return {
-    reasoningTier: 3,
-    writingTier: 3,
-    codingTier: 3,
-    visionTier: 3,
-    longContextTier: 3,
-    toolCallingTier: 3,
-    researchTier: 3,
-    contextWindow: 128000,
-    supportsImages: true,
-    supportsTools: true,
+    id,
+    role,
+    reasoningTier: readNumber(`STREAMS_MODEL_REASONING_${normalized}`, profile.reasoningTier || 3),
+    writingTier: readNumber(`STREAMS_MODEL_WRITING_${normalized}`, profile.writingTier || 3),
+    codingTier: readNumber(`STREAMS_MODEL_CODING_${normalized}`, profile.codingTier || 3),
+    visionTier: readNumber(`STREAMS_MODEL_VISION_${normalized}`, profile.visionTier || 0),
+    longContextTier: readNumber(`STREAMS_MODEL_LONG_CONTEXT_${normalized}`, profile.longContextTier || 2),
+    toolCallingTier: readNumber(`STREAMS_MODEL_TOOLS_${normalized}`, profile.toolCallingTier || 0),
+    researchTier: readNumber(`STREAMS_MODEL_RESEARCH_${normalized}`, profile.researchTier || 0),
+    contextWindow: readNumber(`STREAMS_MODEL_CONTEXT_WINDOW_${normalized}`, profile.contextWindow || 32000),
+    supportsImages: readBoolean(`STREAMS_MODEL_SUPPORTS_IMAGES_${normalized}`, Boolean(profile.supportsImages)),
+    supportsTools: readBoolean(`STREAMS_MODEL_SUPPORTS_TOOLS_${normalized}`, Boolean(profile.supportsTools)),
+    supportsStructuredOutput: readBoolean(`STREAMS_MODEL_SUPPORTS_STRUCTURED_${normalized}`, profile.supportsStructuredOutput !== false),
+    supportsStreaming: readBoolean(`STREAMS_MODEL_SUPPORTS_STREAMING_${normalized}`, profile.supportsStreaming !== false),
+    latencyClass: profile.latencyClass || "standard",
+    reliabilityScore: Math.max(0.5, Math.min(1, Number(profile.reliabilityScore || 0.9))),
+    health: modelHealth(id),
+    capabilitySource: process.env[`STREAMS_MODEL_CONTEXT_WINDOW_${normalized}`] ? "explicit-env" : profile.capabilitySource || "verified-default",
+  };
+}
+
+function openAIKnownProfile(id: string, role: StreamsModelRole): StreamsModelCapability {
+  const lower = id.toLowerCase();
+  const fast = /mini|nano/.test(lower);
+  const strong = /gpt-5|gpt-4\.1|gpt-4o|o3|o4/.test(lower);
+  const supportsVision = /gpt-5|gpt-4\.1|gpt-4o|o3|o4/.test(lower) && !/text-only/.test(lower);
+  const supportsTools = strong;
+  return explicitCapability(id, role, {
+    reasoningTier: fast ? 3 : strong ? 5 : 2,
+    writingTier: fast ? 3 : strong ? 5 : 2,
+    codingTier: fast ? 3 : strong ? 5 : 2,
+    visionTier: supportsVision ? (fast ? 3 : 5) : 0,
+    longContextTier: strong ? 5 : 2,
+    toolCallingTier: supportsTools ? (fast ? 3 : 5) : 0,
+    researchTier: supportsTools ? (fast ? 3 : 5) : 0,
+    contextWindow: strong ? 128000 : 32000,
+    supportsImages: supportsVision,
+    supportsTools,
     supportsStructuredOutput: true,
     supportsStreaming: true,
-    latencyClass: "standard",
-    reliabilityScore: 0.95,
-    health: "healthy",
-    ...input,
-  };
+    latencyClass: fast ? "fast" : "standard",
+    reliabilityScore: fast ? 0.95 : strong ? 0.97 : 0.88,
+    capabilitySource: strong ? "verified-default" : "conservative-fallback",
+  });
+}
+
+function uniqueModels(models: StreamsModelCapability[]) {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    const key = `${model.role}:${model.id}`;
+    if (!model.id || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function buildStreamsModelRegistry(): StreamsModelCapability[] {
@@ -68,37 +121,33 @@ export function buildStreamsModelRegistry(): StreamsModelCapability[] {
   const judge = process.env.OPENAI_JUDGE_MODEL || advanced;
   const repair = process.env.OPENAI_REPAIR_MODEL || advanced;
 
-  const entries = [
-    capability({ id: fast, role: "primary", reasoningTier: 2, writingTier: 3, codingTier: 2, visionTier: 2, longContextTier: 2, researchTier: 2, latencyClass: "fast", reliabilityScore: 0.96 }),
-    capability({ id: advanced, role: "primary", reasoningTier: 5, writingTier: 5, codingTier: 5, visionTier: 5, longContextTier: 4, researchTier: 4, latencyClass: "standard", reliabilityScore: 0.97 }),
-    capability({ id: longContext, role: "primary", reasoningTier: 4, writingTier: 4, codingTier: 4, visionTier: 4, longContextTier: 5, contextWindow: 200000, latencyClass: "slow" }),
-    capability({ id: coding, role: "primary", reasoningTier: 5, codingTier: 5, writingTier: 4, visionTier: 3, researchTier: 3 }),
-    capability({ id: vision, role: "primary", reasoningTier: 4, writingTier: 4, codingTier: 3, visionTier: 5, researchTier: 3 }),
-    capability({ id: research, role: "primary", reasoningTier: 5, writingTier: 4, codingTier: 3, visionTier: 4, researchTier: 5, toolCallingTier: 5 }),
-    capability({ id: judge, role: "judge", reasoningTier: 5, writingTier: 4, codingTier: 4, visionTier: 4, researchTier: 4, supportsStreaming: false, latencyClass: "standard" }),
-    capability({ id: repair, role: "repair", reasoningTier: 5, writingTier: 5, codingTier: 5, visionTier: 4, researchTier: 4, supportsStreaming: false, latencyClass: "standard" }),
-  ];
-
-  const seen = new Set<string>();
-  return entries.filter((entry) => {
-    const key = `${entry.role}:${entry.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return uniqueModels([
+    openAIKnownProfile(fast, "primary"),
+    openAIKnownProfile(advanced, "primary"),
+    openAIKnownProfile(longContext, "primary"),
+    openAIKnownProfile(coding, "primary"),
+    openAIKnownProfile(vision, "primary"),
+    openAIKnownProfile(research, "primary"),
+    { ...openAIKnownProfile(judge, "judge"), supportsStreaming: false },
+    { ...openAIKnownProfile(repair, "repair"), supportsStreaming: false },
+  ]);
 }
 
-function scoreModel(model: StreamsModelCapability, intent: StreamsIntentDecision, input: { hasImages: boolean; contextChars: number }) {
+function scoreModel(model: StreamsModelCapability, intent: StreamsIntentDecision, input: { hasImages: boolean; contextTokens: number }) {
   if (model.health === "offline") return Number.NEGATIVE_INFINITY;
+  if ((input.hasImages || intent.needsImages) && !model.supportsImages) return Number.NEGATIVE_INFINITY;
+  if (intent.needsTools && !model.supportsTools) return Number.NEGATIVE_INFINITY;
+  if (input.contextTokens > model.contextWindow * 0.9) return Number.NEGATIVE_INFINITY;
+
   let score = model.reliabilityScore * 10;
   if (intent.complexity === "simple") score += model.latencyClass === "fast" ? 8 : 0;
   if (intent.complexity === "complex" || intent.complexity === "critical") score += model.reasoningTier * 3;
-  if (intent.primaryIntent === "coding" || intent.primaryIntent === "repository_action" || intent.primaryIntent === "troubleshooting") score += model.codingTier * 4;
-  if (intent.primaryIntent === "writing" || intent.primaryIntent === "rewriting") score += model.writingTier * 3;
+  if (["coding", "repository_action", "troubleshooting"].includes(intent.primaryIntent)) score += model.codingTier * 4;
+  if (["writing", "rewriting"].includes(intent.primaryIntent)) score += model.writingTier * 3;
   if (intent.primaryIntent === "research" || intent.needsCurrentInformation) score += model.researchTier * 4 + model.toolCallingTier * 2;
-  if (input.hasImages || intent.needsImages) score += model.supportsImages ? model.visionTier * 5 : -100;
-  if (input.contextChars > 80000) score += model.longContextTier * 5;
-  if (intent.needsTools) score += model.supportsTools ? model.toolCallingTier * 3 : -100;
+  if (input.hasImages || intent.needsImages) score += model.visionTier * 5;
+  if (input.contextTokens > 64000) score += model.longContextTier * 5;
+  if (intent.needsTools) score += model.toolCallingTier * 3;
   if (intent.requestedFormat.exact) score += model.supportsStructuredOutput ? 6 : -20;
   if (model.health === "degraded") score -= 20;
   return score;
@@ -107,7 +156,7 @@ function scoreModel(model: StreamsModelCapability, intent: StreamsIntentDecision
 export function routeStreamsModels(input: {
   intent: StreamsIntentDecision;
   hasImages: boolean;
-  contextChars: number;
+  contextTokens: number;
 }): StreamsModelRoute {
   const registry = buildStreamsModelRegistry();
   const primaryCandidates = registry
@@ -116,25 +165,19 @@ export function routeStreamsModels(input: {
     .filter((item) => Number.isFinite(item.score))
     .sort((a, b) => b.score - a.score);
 
-  const judge = registry.find((model) => model.role === "judge") || primaryCandidates[0]?.model;
-  const repair = registry.find((model) => model.role === "repair") || primaryCandidates[0]?.model;
   const primary = primaryCandidates[0]?.model;
-  if (!primary || !judge || !repair) throw new Error("No healthy Streams model route is available");
+  const judge = registry.find((model) => model.role === "judge" && model.health !== "offline");
+  const repair = registry.find((model) => model.role === "repair" && model.health !== "offline");
+  if (!primary || !judge || !repair) throw new Error("No verified healthy Streams model route is available");
 
-  const fallbackIds = unique([
-    ...primaryCandidates.slice(1).map((item) => item.model.id),
-    process.env.OPENAI_RESPONSES_MODEL,
-    process.env.OPENAI_SEARCH_MODEL,
-    "gpt-4.1-mini",
-  ]).filter((id) => id !== primary.id);
-
-  const fallbacks = fallbackIds.map((id) => capability({ id, role: "fallback", latencyClass: "standard" }));
+  const fallbacks = primaryCandidates.slice(1).map(({ model }) => ({ ...model, role: "fallback" as const }));
   const reason = [
     `intent:${input.intent.primaryIntent}`,
     `complexity:${input.intent.complexity}`,
     input.hasImages ? "vision-required" : "text-only",
     input.intent.needsCurrentInformation ? "research-required" : "stable-knowledge",
-    input.contextChars > 80000 ? "long-context" : "standard-context",
+    input.contextTokens > 64000 ? "long-context" : "standard-context",
+    `capability-source:${primary.capabilitySource}`,
   ];
 
   return { routeVersion: STREAMS_MODEL_ROUTE_VERSION, primary, fallbacks, judge, repair, reason };
