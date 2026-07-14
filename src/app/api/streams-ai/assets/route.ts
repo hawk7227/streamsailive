@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { processUploadedAssets, processUploadedAsset } from "@/lib/streams-ai/asset-processing";
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       const messageId = stringOrNull(form.get("messageId"));
       const productId = stringOrNull(form.get("productId"));
 
-      const uploaded = [];
+      const uploaded: Record<string, any>[] = [];
       const failures: Array<{ name: string; error: string }> = [];
       for (const file of files) {
         try {
@@ -60,8 +60,13 @@ export async function POST(request: NextRequest) {
               projectId,
               messageId,
               productId,
-              metadata: { source: "streams-ai-upload", uploadStatus: "stored", processingStatus: "queued" },
-            }),
+              metadata: {
+                source: "streams-ai-upload",
+                uploadStatus: "stored",
+                processingStatus: "queued",
+                extractionStatus: "queued",
+              },
+            }) as Record<string, any>,
           );
         } catch (error) {
           failures.push({
@@ -74,39 +79,33 @@ export async function POST(request: NextRequest) {
       if (!uploaded.length) {
         return streamsAIJson({
           ok: false,
-          error: failures[0]?.error || "The file could not be stored.",
+          error: failures[0]?.error || "The files could not be stored.",
           code: "STREAMS_UPLOAD_STORAGE_FAILED",
           failures,
         }, 500);
       }
 
-      const processing = await processUploadedAssets(scope, uploaded as Record<string, any>[]);
-      const normalized = uploaded.map((asset: Record<string, any>, index) => {
-        const result = processing[index] || {};
-        const metadata = {
-          ...(asset.metadata || {}),
-          ...(result?.ok ? {
-            processingStatus: result?.status || "ready",
-            extractionStatus: result?.status || "ready",
-            chunkCount: result?.chunkCount || 0,
-            summary: result?.summary || null,
-            textPreview: result?.textPreview || null,
-            pageCount: result?.pageCount || null,
-          } : {
-            processingStatus: "failed",
-            extractionStatus: "failed",
-            processingError: result?.error || "Processing failed",
-          }),
-        };
-        return withProcessedMetadata({ ...asset, metadata });
+      const storedAssets = uploaded.map((asset) => withProcessedMetadata(asset));
+
+      // Never keep the client request open while parsing PDFs, Office files, EPUBs,
+      // spreadsheets, or building retrieval chunks. The files are already durable.
+      // Processing continues after the response and can be refreshed through GET.
+      after(async () => {
+        try {
+          await processUploadedAssets(scope, uploaded);
+        } catch (error) {
+          console.error("[streams-ai/assets] deferred processing failed", error);
+        }
       });
 
       return streamsAIJson({
         ok: true,
-        assets: normalized,
-        processing,
+        assets: storedAssets,
         failures,
         partial: failures.length > 0,
+        processingDeferred: true,
+        storedCount: uploaded.length,
+        failedCount: failures.length,
       }, failures.length ? 207 : 201);
     }
 
@@ -139,11 +138,22 @@ export async function POST(request: NextRequest) {
       storageBucket: body.storageBucket,
       storagePath: body.storagePath,
       publicUrl: body.publicUrl,
-      metadata: { ...(body.metadata || {}), processingStatus: "queued" },
+      metadata: { ...(body.metadata || {}), processingStatus: "queued", extractionStatus: "queued" },
     });
 
-    const processing = await processUploadedAsset(scope, asset as Record<string, any>);
-    return streamsAIJson({ ok: true, asset: withProcessedMetadata(asset as Record<string, any>), processing }, 201);
+    after(async () => {
+      try {
+        await processUploadedAsset(scope, asset as Record<string, any>);
+      } catch (error) {
+        console.error("[streams-ai/assets] deferred processing failed", error);
+      }
+    });
+
+    return streamsAIJson({
+      ok: true,
+      asset: withProcessedMetadata(asset as Record<string, any>),
+      processingDeferred: true,
+    }, 201);
   } catch (error) {
     return streamsAIError(error);
   }
@@ -166,15 +176,16 @@ function inferSessionIdFromRequest(request: NextRequest) {
 
 function withProcessedMetadata(asset: Record<string, any>) {
   const metadata = asset.metadata || {};
+  const processingStatus = metadata.processingStatus || metadata.extractionStatus || "stored";
   return {
     ...asset,
-    processingStatus: metadata.processingStatus || metadata.extractionStatus || "stored",
-    extractionStatus: metadata.extractionStatus || metadata.processingStatus || "stored",
+    processingStatus,
+    extractionStatus: metadata.extractionStatus || processingStatus,
     textPreview: metadata.textPreview || "",
     textChunkCount: metadata.chunkCount || 0,
     pageCount: metadata.pageCount || null,
     summary: metadata.summary || "",
     extractionError: metadata.processingError || "",
-    status: metadata.processingStatus === "failed" ? "processing_error" : "ready",
+    status: processingStatus === "failed" ? "processing_error" : processingStatus === "ready" ? "ready" : "stored",
   };
 }
