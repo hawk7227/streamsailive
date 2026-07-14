@@ -18,9 +18,20 @@ const DEFAULT_PRO_MODEL = "gpt-4o";
 const DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
 
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
-type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; userId?: string; mode?: string; provider?: string; attachments?: any[] };
+type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
 type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[]; statusText: string; statusEvents: string[] };
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
+
+export function resolveTurnId(body: ChatPostBody) {
+  const candidate = String(body.turnId || body.metadata?.turnId || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)
+    ? candidate
+    : crypto.randomUUID();
+}
+
+export function resolveIdempotencyBase(body: ChatPostBody) {
+  return String(body.idempotencyKey || body.metadata?.idempotencyKey || body.userId || "").trim();
+}
 
 export async function getHistoryForPrompt(scope: StreamsAIScope, sessionId: string, userContent: string) {
   if (!sessionId) return [] as PersistedChatMessage[];
@@ -38,9 +49,27 @@ export async function ensureSession(scope: StreamsAIScope, sessionId: string, co
 export async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
   assertResponseStructure(userContent, assistantContent);
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
-  await messages.create(scope, { sessionId: persistedSessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
-  const assistantMessage = await messages.create(scope, { sessionId: persistedSessionId, role: "assistant", content: assistantContent, status: assistantStatus, metadata: { ...assistantMetadata, structureValidated: true } });
-  return { sessionId: persistedSessionId, assistantMessageId: assistantMessage.id };
+  const turnId = resolveTurnId(body);
+  const idempotencyBase = resolveIdempotencyBase(body);
+  const userMessage = await messages.create(scope, {
+    sessionId: persistedSessionId,
+    role: body.role || "user",
+    content: userContent,
+    status: body.status || "complete",
+    metadata: { ...buildUserMetadata(body), turnId },
+    turnId,
+    idempotencyKey: idempotencyBase ? `${idempotencyBase}:user` : null,
+  });
+  const assistantMessage = await messages.create(scope, {
+    sessionId: persistedSessionId,
+    role: "assistant",
+    content: assistantContent,
+    status: assistantStatus,
+    metadata: { ...assistantMetadata, structureValidated: true, turnId, sourceUserMessageId: userMessage.id },
+    turnId,
+    idempotencyKey: idempotencyBase ? `${idempotencyBase}:assistant` : null,
+  });
+  return { sessionId: persistedSessionId, userMessageId: userMessage.id, assistantMessageId: assistantMessage.id, turnId };
 }
 
 export function buildUserMetadata(body: ChatPostBody) {
