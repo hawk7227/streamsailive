@@ -89,7 +89,7 @@ describe("STREAMS AI response integrity", () => {
     expect(providerSupport).toContain("authoritative file names and extracted content");
     expect(providerSupport).toContain("Visible Content, Interpretation, and Verification Note");
     expect(providerSupport).toContain("Never infer unsupported file contents from sibling files");
-    expect(providerSupport).toContain("STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE");
+    expect(providerSupport).not.toContain("STREAMS_ATTACHED_FILE_CONTEXT_UNAVAILABLE");
     expect(repository).toContain("findByIdempotencyKey");
     expect(repository).toContain("idempotency_key");
     expect(repository).toContain("isIntegritySchemaDrift");
