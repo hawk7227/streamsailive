@@ -3,6 +3,8 @@ export type ResponseStructureValidation = {
   missing: string[];
 };
 
+const ATTACHMENT_ONLY_SENTINEL = "\u200B";
+
 function asksForTable(text: string) {
   return /\b(markdown\s+)?table\b/i.test(text) || /\|\s*[^|]+\s*\|\s*[^|]+\s*\|/.test(text);
 }
@@ -20,11 +22,14 @@ function asksForNumberedSections(text: string) {
 }
 
 function isScreenshotReviewRequest(text: string) {
-  const value = String(text || "").trim();
+  const raw = String(text || "");
+  const value = raw.trim();
+  if (raw === ATTACHMENT_ONLY_SENTINEL || value === ATTACHMENT_ONLY_SENTINEL) return true;
   if (!value) return false;
   return /\b(review|analy[sz]e|describe|inspect|summari[sz]e)\b[\s\S]{0,80}\b(attached|screenshot|image|file|dashboard)\b/i.test(value)
     || /\b(attached|screenshot|image|dashboard)\b[\s\S]{0,80}\b(review|analy[sz]e|describe|inspect|summari[sz]e)\b/i.test(value)
-    || /^review the attached files?\.?$/i.test(value);
+    || /^review the attached files?\.?$/i.test(value)
+    || /^(?:what is|what's|describe|review|analy[sz]e|inspect)\s+(?:this|it)\??$/i.test(value);
 }
 
 function hasMarkdownTable(text: string) {
