@@ -28,6 +28,8 @@ import {
   deleteLibraryFile,
 } from "../../runtime/streamsAssetStore";
 
+const ATTACHMENT_ONLY_SENTINEL = "\u200B";
+
 function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
@@ -39,18 +41,11 @@ function defaultActivity() {
 function scrollActiveChatToBottom() {
   if (typeof window === "undefined") return;
   window.requestAnimationFrame(() => {
-    const activeSurface = document.querySelector(".startChatSurface");
-    if (activeSurface) {
-      activeSurface.scrollTo({ top: activeSurface.scrollHeight, behavior: "smooth" });
-      return;
-    }
-    const chatScroll = document.querySelector(".chatScroll");
-    if (chatScroll) {
-      chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: "smooth" });
-      return;
-    }
-    const splitSurface = document.querySelector(".splitChatScroll");
-    if (splitSurface) splitSurface.scrollTo({ top: splitSurface.scrollHeight, behavior: "smooth" });
+    const activeSurface = document.querySelector(".operatorChatScroll")
+      || document.querySelector(".startChatSurface")
+      || document.querySelector(".chatScroll")
+      || document.querySelector(".splitChatScroll");
+    if (activeSurface) activeSurface.scrollTo({ top: activeSurface.scrollHeight, behavior: "smooth" });
   });
 }
 
@@ -248,7 +243,7 @@ export function useStreamsChatRuntime() {
   }, [sessionId, messages, refreshSidebarData]);
 
   useEffect(() => {
-    const container = document.querySelector(".splitChatScroll");
+    const container = document.querySelector(".operatorChatScroll") || document.querySelector(".splitChatScroll");
     if (!container) return;
     const sentinel = document.createElement("div");
     sentinel.id = "scroll-sentinel";
@@ -274,6 +269,7 @@ export function useStreamsChatRuntime() {
     window.history.pushState(null, "", "/streams-ai");
     setSessionId("");
     setMessages([]);
+    setComposerAttachments([]);
     setActiveArtifact(null);
     setActivity(defaultActivity());
     setIsStreaming(false);
@@ -309,7 +305,7 @@ export function useStreamsChatRuntime() {
     }
     const anchor = document.createElement("a");
     anchor.href = downloadHref;
-    anchor.download = asset.name || asset.fileName || "asset";
+    anchor.download = asset.name || "streams-asset";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -379,7 +375,7 @@ export function useStreamsChatRuntime() {
     setComposerAttachments((current) => current.filter((file) => file.id !== fileId));
   }, []);
 
-  const forceTerminalChatFallback = useCallback((content = "Chat backend is not configured for a live assistant response in this frontend build.") => {
+  const forceTerminalChatFallback = useCallback((content = "The request did not complete. Please try again.") => {
     setMessages((current) => {
       let lastUserIndex = -1;
       for (let index = current.length - 1; index >= 0; index -= 1) if (current[index]?.role === "user") { lastUserIndex = index; break; }
@@ -388,7 +384,7 @@ export function useStreamsChatRuntime() {
       if (hasAssistantAfterLastUser) return current;
       return [...current, { id: createId("assistant"), role: "assistant", content, status: "error", chunks: [content], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() }];
     });
-    setActivity(defaultActivity());
+    setActivity(createActivity("error", "chat", "Request failed"));
     setIsStreaming(false);
   }, []);
 
@@ -402,6 +398,8 @@ export function useStreamsChatRuntime() {
 
     const userId = createId("user");
     const assistantId = createId("assistant");
+    const turnId = crypto.randomUUID?.() || createId("turn");
+    const idempotencyKey = crypto.randomUUID?.() || createId("request");
     const route = detectPreCallRoute(trimmed);
     const userAttachments = composerAttachments.map((file) => ({
       id: file.id,
@@ -414,16 +412,18 @@ export function useStreamsChatRuntime() {
       sizeBytes: file.sizeBytes,
       textPreview: file.textPreview || "",
     }));
+    const attachmentOnly = trimmed === ATTACHMENT_ONLY_SENTINEL;
+    const visibleUserContent = attachmentOnly ? "Review the attached file." : trimmed;
 
     const activeSessionId = sessionId || "";
     setMessages((current) => [
       ...current,
-      { id: userId, role: "user", content: trimmed, attachments: userAttachments, createdAt: new Date().toISOString() },
-      { id: assistantId, role: "assistant", content: "", isStreaming: true, status: "streaming", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() },
+      { id: userId, role: "user", content: visibleUserContent, submittedContent: trimmed, attachments: userAttachments, createdAt: new Date().toISOString(), status: "complete" },
+      { id: assistantId, role: "assistant", content: "", isStreaming: true, status: "streaming", statusText: userAttachments.length ? "Checking the reference image…" : "Thinking…", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() },
     ]);
     setComposerAttachments([]);
     setIsStreaming(true);
-    setActivity(createActivity("thinking", "chat", "Writing…"));
+    setActivity(createActivity("thinking", userAttachments.length ? "file" : "chat", userAttachments.length ? "Checking the reference image…" : "Thinking…"));
     scrollActiveChatToBottom();
 
     if (isLinkIntent(trimmed, composerMode)) {
@@ -475,7 +475,7 @@ export function useStreamsChatRuntime() {
       setActivity(createActivity("rendering", "video", "Rendering video…"));
       try {
         const referenceImage = wantsImageToVideo(trimmed) ? selectLatestUploadedImage() : null;
-        const videoResult = await generateStreamsVideo({ prompt: trimmed, imageUrl: referenceImage?.url || undefined, mode: referenceImage?.url ? "i2v" : "t2v", aspectRatio: referenceImage?.url ? "9:16" : "16:9", signal: abortRef.current.signal, onStatus: (statusText) => { const nextStatusText = statusText || "Rendering video…"; setActivity(createActivity("rendering", "video", nextStatusText)); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: nextStatusText, isStreaming: true } : item)); } });
+        const videoResult = await generateStreamsVideo({ prompt: trimmed, imageUrl: referenceImage?.url || undefined, mode: referenceImage?.url ? "i2v" : "t2v", aspectRatio: referenceImage?.url ? "9:16" : "16:9", signal: abortRef.current.signal, onStatus: (statusText) => { const nextStatusText = statusText || "Rendering video…"; setActivity(createActivity("rendering", "video", nextStatusText)); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, statusText: nextStatusText, content: nextStatusText, isStreaming: true } : item)); } });
         const videoId = createId("video");
         const videoRecord = { id: videoId, kind: "video", source: "generated", name: referenceImage?.url ? "Generated image-to-video" : "Generated video", mimeType: videoResult.mimeType || "video/mp4", url: videoResult.artifactUrl, storageUrl: videoResult.artifactUrl, previewUrl: videoResult.artifactUrl, generationId: videoResult.generationId, prompt: trimmed, sessionId: activeSessionId, sourceImageId: referenceImage?.id || "", createdAt: new Date().toISOString() };
         addGeneratedVideo(videoRecord);
@@ -513,7 +513,7 @@ export function useStreamsChatRuntime() {
     }
 
     try {
-      const requestPayload = { message: trimmed, userId, mode, provider, attachments: userAttachments };
+      const requestPayload = { message: trimmed, userId, mode, provider, attachments: userAttachments, turnId, idempotencyKey };
       if (activeSessionId && !String(activeSessionId).startsWith("pending_chat_")) requestPayload.sessionId = activeSessionId;
       const response = await fetch("/api/streams-ai/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestPayload), signal: abortRef.current.signal });
       if (!response.ok) {
@@ -525,6 +525,8 @@ export function useStreamsChatRuntime() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let receivedText = false;
+      let completed = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -538,15 +540,18 @@ export function useStreamsChatRuntime() {
               window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
               setSessionId(nextSessionId);
             }
-            setActivity(createActivity("thinking", "chat", payload?.statusText || payload?.text || "Writing…"));
+            const statusText = payload?.statusText || payload?.text || "Working…";
+            setActivity(createActivity("thinking", "chat", statusText));
+            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, statusText } : item));
           }
           if (eventName === "response" || eventName === "reasoning") {
             const token = payload?.token || payload?.delta || payload?.text;
             if (token) {
+              receivedText = true;
               setMessages((current) => current.map((item) => {
                 if (item.id !== assistantId) return item;
                 const existing = String(item.content || "");
-                return { ...item, content: `${existing}${token}`, chunks: [...(item.chunks || []), token], isStreaming: true, status: "streaming" };
+                return { ...item, content: `${existing}${token}`, chunks: [...(item.chunks || []), token], isStreaming: true, status: "streaming", statusText: "Writing…" };
               }));
               scrollActiveChatToBottom();
             }
@@ -555,19 +560,22 @@ export function useStreamsChatRuntime() {
           if (eventName === "tool_call") {
             const { name, args } = payload || {};
             if (name === "generate_video") {
+              receivedText = true;
               setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: "Video generation requested. Use the video mode to render this asset.", isStreaming: false, status: "complete" } : item));
             }
             if (name === "generate_image") {
+              receivedText = true;
               setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: `Image generation requested: ${args?.prompt || trimmed}`, isStreaming: false, status: "complete" } : item));
             }
           }
           if (eventName === "complete") {
+            completed = true;
             const nextSessionId = payload?.sessionId;
             if (nextSessionId) {
               window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
               setSessionId(nextSessionId);
             }
-            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, status: "complete" } : item));
+            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, status: "complete", statusText: "" } : item));
             setActivity(createActivity("complete", "chat", "Ready"));
             setIsStreaming(false);
             scrollActiveChatToBottom();
@@ -575,13 +583,14 @@ export function useStreamsChatRuntime() {
           if (eventName === "error") throw new Error(payload?.message || payload?.error || "Chat failed");
         }
       }
-      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, status: "complete" } : item));
+
+      if (!completed || !receivedText) throw new Error("The response stream ended before a complete answer was received");
       setActivity(createActivity("complete", "chat", "Ready"));
       setIsStreaming(false);
     } catch (error) {
       const normalized = normalizeStreamsError(error);
-      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, content: formatErrorForChat(normalized), status: "error" } : item));
-      setActivity(createActivity("error", "chat", "Error"));
+      setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, content: formatErrorForChat(normalized), status: "error", statusText: "" } : item));
+      setActivity(createActivity("error", "chat", "Request failed"));
       setIsStreaming(false);
       scrollActiveChatToBottom();
     }
