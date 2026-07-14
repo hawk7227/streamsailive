@@ -74,8 +74,9 @@ export default function ChatScrollController() {
   const [portalHost, setPortalHost] = useState(null);
   const surfaceRef = useRef(null);
   const nearBottomRef = useRef(true);
+  const autoFollowRef = useRef(true);
   const initialRestoreRef = useRef(true);
-  const userMovedRef = useRef(false);
+  const userScrolledAwayRef = useRef(false);
 
   useEffect(() => {
     setPortalHost(document.body);
@@ -107,25 +108,26 @@ export default function ChatScrollController() {
     const mediaCleanup = new Map();
 
     initialRestoreRef.current = true;
-    userMovedRef.current = false;
+    autoFollowRef.current = true;
+    userScrolledAwayRef.current = false;
     nearBottomRef.current = true;
     setShowNewMessages(false);
-
-    const shouldShowJump = (surface) => userMovedRef.current && !isNearBottom(surface);
 
     const followOrNotify = (surface, smooth = false) => {
       const near = isNearBottom(surface);
       nearBottomRef.current = near;
 
-      if (initialRestoreRef.current || near || !userMovedRef.current) {
+      if (initialRestoreRef.current || autoFollowRef.current || near) {
         if (smooth && !initialRestoreRef.current) smoothToBottom(surface);
         else jumpToBottom(surface);
         nearBottomRef.current = true;
+        autoFollowRef.current = true;
+        userScrolledAwayRef.current = false;
         setShowNewMessages(false);
         return;
       }
 
-      setShowNewMessages(shouldShowJump(surface));
+      setShowNewMessages(userScrolledAwayRef.current && !near);
     };
 
     const wireMedia = (surface) => {
@@ -163,8 +165,9 @@ export default function ChatScrollController() {
       if (cancelled || surfaceRef.current !== surface) return;
       jumpToBottom(surface);
       nearBottomRef.current = true;
+      autoFollowRef.current = true;
+      userScrolledAwayRef.current = false;
       initialRestoreRef.current = false;
-      userMovedRef.current = false;
       setShowNewMessages(false);
     };
 
@@ -179,16 +182,16 @@ export default function ChatScrollController() {
 
       surfaceRef.current = surface;
       initialRestoreRef.current = true;
-      userMovedRef.current = false;
+      autoFollowRef.current = true;
+      userScrolledAwayRef.current = false;
       nearBottomRef.current = true;
 
       const onScroll = () => {
         const near = isNearBottom(surface);
         nearBottomRef.current = near;
         if (near) {
-          userMovedRef.current = false;
-          setShowNewMessages(false);
-        } else if (userMovedRef.current) {
+          autoFollowRef.current = true;
+          userScrolledAwayRef.current = false;
           setShowNewMessages(false);
         }
       };
@@ -198,8 +201,14 @@ export default function ChatScrollController() {
         window.requestAnimationFrame(() => {
           const near = isNearBottom(surface);
           nearBottomRef.current = near;
-          userMovedRef.current = !near;
-          if (near) setShowNewMessages(false);
+          if (!near) {
+            autoFollowRef.current = false;
+            userScrolledAwayRef.current = true;
+          } else {
+            autoFollowRef.current = true;
+            userScrolledAwayRef.current = false;
+            setShowNewMessages(false);
+          }
         });
       };
 
@@ -259,7 +268,8 @@ export default function ChatScrollController() {
     const surface = surfaceRef.current || findSurface();
     jumpToBottom(surface);
     nearBottomRef.current = true;
-    userMovedRef.current = false;
+    autoFollowRef.current = true;
+    userScrolledAwayRef.current = false;
     setShowNewMessages(false);
   };
 
