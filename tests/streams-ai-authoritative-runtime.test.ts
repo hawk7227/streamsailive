@@ -30,6 +30,26 @@ describe("Streams authoritative runtime", () => {
     expect(intent.needsImages).toBe(true);
   });
 
+  it("preserves literal numbered section headings", () => {
+    const intent = classifyStreamsIntent({
+      userMessage: [
+        "Give me a short answer.",
+        "Use exactly these section headings:",
+        "1. Visible Benefit",
+        "2. Operational Benefit",
+        "3. Risk to Watch",
+      ].join("\n"),
+    });
+    expect(intent.requestedFormat.exact).toBe(true);
+    expect(intent.requestedFormat.numberedSections).toBe(true);
+    expect(intent.requestedFormat.requestedOrder).toBe(true);
+    expect(intent.requestedFormat.headings).toEqual([
+      "1. Visible Benefit",
+      "2. Operational Benefit",
+      "3. Risk to Watch",
+    ]);
+  });
+
   it("classifies connected actions before repository actions", () => {
     expect(classifyStreamsIntent({ userMessage: "Send this email to the customer." }).primaryIntent).toBe("connected_action");
     expect(classifyStreamsIntent({ userMessage: "Delete the calendar event." }).primaryIntent).toBe("connected_action");
@@ -57,6 +77,24 @@ describe("Streams authoritative runtime", () => {
     expect(result.accepted).toBe(false);
     expect(result.criticalDefect).toBe(true);
     expect(result.defects.some((defect) => defect.code === "UNSUPPORTED_ACTION_CLAIM")).toBe(true);
+  });
+
+  it("rejects responses that remove literal heading numbering", () => {
+    const intent = classifyStreamsIntent({
+      userMessage: [
+        "Use exactly these section headings:",
+        "1. Visible Benefit",
+        "2. Operational Benefit",
+        "3. Risk to Watch",
+      ].join("\n"),
+    });
+    const result = judgeStreamsResponse({
+      userInstruction: intent.requestedOutcome,
+      responseText: "## Visible Benefit\nUseful.\n\n## Operational Benefit\nFaster.\n\n## Risk to Watch\nErrors.",
+      intent,
+    });
+    expect(result.accepted).toBe(false);
+    expect(result.defects.filter((defect) => defect.code === "MISSING_HEADING")).toHaveLength(3);
   });
 
   it("requires exact requested output structure", () => {
@@ -111,5 +149,14 @@ describe("Streams authoritative runtime", () => {
     expect(source).not.toContain("metadata?.toolEvidence");
     expect(apiRoute).not.toContain("collectSseResponse");
     expect(apiRoute).not.toContain("persistRepairedTurn");
+  });
+
+  it("renders one message action row per assistant message ID", () => {
+    const markdown = readFileSync(resolve(process.cwd(), "src/components/streams-ai/current-chat/new-face/markdown/ChatMarkdownMessage.jsx"), "utf8");
+    const shell = readFileSync(resolve(process.cwd(), "src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx"), "utf8");
+    expect(markdown).not.toContain("ResponseActions");
+    expect(markdown).not.toContain("chatResponseFooter");
+    expect(shell).toContain("<MessageActions message={message}");
+    expect(shell).toContain("seen.has(id)");
   });
 });
