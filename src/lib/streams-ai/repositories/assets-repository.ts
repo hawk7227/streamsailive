@@ -2,6 +2,32 @@ import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "
 import type { StreamsAIScope } from "../auth";
 import type { CreateAssetInput } from "./types";
 
+const bucketReadiness = new Map<string, Promise<void>>();
+
+async function ensureBucket(client: ReturnType<typeof createStreamsAIServiceClient>, bucket: string) {
+  const existing = bucketReadiness.get(bucket);
+  if (existing) return existing;
+
+  const pending = (async () => {
+    const { data: buckets, error: listError } = await client.storage.listBuckets();
+    if (listError) throw new Error(`Failed to inspect STREAMS AI storage: ${listError.message}`);
+    if (buckets?.some((item) => item.name === bucket)) return;
+
+    const { error: createError } = await client.storage.createBucket(bucket, { public: false });
+    if (createError && !/already exists|duplicate/i.test(createError.message)) {
+      throw new Error(`Failed to create STREAMS AI asset bucket: ${createError.message}`);
+    }
+  })();
+
+  bucketReadiness.set(bucket, pending);
+  try {
+    await pending;
+  } catch (error) {
+    bucketReadiness.delete(bucket);
+    throw error;
+  }
+}
+
 export class StreamsAIAssetsRepository {
   private serviceClient() {
     return createStreamsAIServiceClient();
@@ -65,14 +91,7 @@ export class StreamsAIAssetsRepository {
     const safeName = String(file.name || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "_");
     const storagePath = `${scope.tenantId}/${scope.userId}/${crypto.randomUUID()}-${safeName}`;
 
-    const { data: buckets, error: listError } = await serviceClient.storage.listBuckets();
-    if (listError) throw new Error(`Failed to inspect STREAMS AI storage: ${listError.message}`);
-    if (!buckets?.some((item) => item.name === bucket)) {
-      const { error: createError } = await serviceClient.storage.createBucket(bucket, { public: false });
-      if (createError && !/already exists|duplicate/i.test(createError.message)) {
-        throw new Error(`Failed to create STREAMS AI asset bucket: ${createError.message}`);
-      }
-    }
+    await ensureBucket(serviceClient, bucket);
 
     const bytes = await file.arrayBuffer();
     if (!bytes.byteLength) throw new Error("The selected file is empty.");
