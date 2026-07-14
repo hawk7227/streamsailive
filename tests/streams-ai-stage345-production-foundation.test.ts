@@ -52,6 +52,17 @@ describe("Streams Stage 3-5 production foundations", () => {
     expect(repository).toContain('file.type === "application/pdf"');
   });
 
+  it("stores multi-file batches concurrently and reuses bucket readiness", () => {
+    const route = read("src/app/api/streams-ai/assets/route.ts");
+    const repository = read("src/lib/streams-ai/repositories/assets-repository.ts");
+    expect(route).toContain("mapWithConcurrency(files, 5");
+    expect(route).toContain("processingDeferred: true");
+    expect(route).toContain("after(async () =>");
+    expect(repository).toContain("const bucketReadiness = new Map");
+    expect(repository).toContain("await ensureBucket(serviceClient, bucket)");
+    expect(repository).not.toContain("await serviceClient.storage.listBuckets()\n    if");
+  });
+
   it("does not mark stored analyzable files failed when chunk indexing is unavailable", () => {
     const processing = read("src/lib/streams-ai/asset-processing.ts");
     expect(processing).toContain("persistChunksBestEffort");
