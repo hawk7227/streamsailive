@@ -23,6 +23,26 @@ import {
 } from "@/lib/plans";
 import type { WorkspaceRole } from "@/lib/team";
 
+const ACCOUNT_SCOPED_BROWSER_KEYS = [
+  "streams-ai:current-chat-id",
+  "streams-ai:sessions.cache.v1",
+  "streams-ai:cache-owner.v1",
+  "streams:split-preview:last",
+];
+
+function clearAccountScopedBrowserState() {
+  if (typeof window === "undefined") return;
+  try {
+    ACCOUNT_SCOPED_BROWSER_KEYS.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {}
+  try {
+    window.localStorage.removeItem("streams.codeSplit.leftWidth.v1");
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent("streams:auth-cache-cleared"));
+  } catch {}
+}
+
 interface Profile {
   id: string;
   email: string | null;
@@ -97,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const loadedProfileUserId = useRef<string | null>(null);
+  const previousAuthUserId = useRef<string | null>(null);
   const profileSelect =
     "id, email, full_name, avatar_url, org_name, plan_id, current_workspace_id, created_at, updated_at";
 
@@ -165,50 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfileLoading(false);
   };
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      if (session?.user) {
-        void ensureProfile(session.user);
-      } else {
-        setProfile(null);
-        setUsage(null);
-        setWorkspace(null);
-        setMembershipRole(null);
-        setWorkspacePlanKey(null);
-        setWorkspaceLoading(false);
-        loadedProfileUserId.current = null;
-      }
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      if (session?.user) {
-        void ensureProfile(session.user, true);
-      } else {
-        setProfile(null);
-        setUsage(null);
-        setWorkspace(null);
-        setMembershipRole(null);
-        setWorkspacePlanKey(null);
-        setWorkspaceLoading(false);
-        loadedProfileUserId.current = null;
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const resetSignedOutState = useCallback(() => {
+    clearAccountScopedBrowserState();
     setProfile(null);
     setUsage(null);
     setWorkspace(null);
@@ -216,23 +195,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setWorkspacePlanKey(null);
     setWorkspaceLoading(false);
     loadedProfileUserId.current = null;
-    router.push("/");
+    previousAuthUserId.current = null;
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const nextUser = session?.user ?? null;
+      if (previousAuthUserId.current && previousAuthUserId.current !== nextUser?.id) {
+        clearAccountScopedBrowserState();
+      }
+      previousAuthUserId.current = nextUser?.id ?? null;
+      setSession(session);
+      setUser(nextUser);
+      setLoading(false);
+      if (nextUser) {
+        void ensureProfile(nextUser);
+      } else {
+        resetSignedOutState();
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUser = session?.user ?? null;
+      if (previousAuthUserId.current !== nextUser?.id) {
+        clearAccountScopedBrowserState();
+      }
+      previousAuthUserId.current = nextUser?.id ?? null;
+      setSession(session);
+      setUser(nextUser);
+      setLoading(false);
+      if (nextUser) {
+        void ensureProfile(nextUser, true);
+      } else {
+        resetSignedOutState();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth, resetSignedOutState]);
+
+  const signOut = async () => {
+    clearAccountScopedBrowserState();
+    await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
+    resetSignedOutState();
+    router.replace("/");
   };
 
   const refreshSession = async () => {
     const { data: { session } } = await supabase.auth.refreshSession();
+    const nextUser = session?.user ?? null;
+    if (previousAuthUserId.current !== nextUser?.id) {
+      clearAccountScopedBrowserState();
+    }
+    previousAuthUserId.current = nextUser?.id ?? null;
     setSession(session);
-    setUser(session?.user ?? null);
-    if (session?.user) {
-      await ensureProfile(session.user, true);
+    setUser(nextUser);
+    if (nextUser) {
+      await ensureProfile(nextUser, true);
     } else {
-      setProfile(null);
-      setUsage(null);
-      setWorkspace(null);
-      setMembershipRole(null);
-      setWorkspacePlanKey(null);
-      setWorkspaceLoading(false);
-      loadedProfileUserId.current = null;
+      resetSignedOutState();
     }
   };
 
