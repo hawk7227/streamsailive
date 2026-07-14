@@ -3,9 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 const NEAR_BOTTOM_PX = 180;
 const INITIAL_SETTLE_MS = 900;
+const CACHE_OWNER_KEY = "streams-ai:cache-owner.v1";
+const SESSION_CACHE_KEYS = [
+  "streams-ai:current-chat-id",
+  "streams-ai:sessions.cache.v1",
+  "streams:split-preview:last",
+];
 
 function findSurface() {
   return document.querySelector(".startChatSurface")
@@ -28,8 +35,15 @@ function smoothToBottom(node) {
   node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
 }
 
+function clearAccountScopedChatCache() {
+  try {
+    SESSION_CACHE_KEYS.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {}
+}
+
 export default function ChatScrollController() {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
   const [showNewMessages, setShowNewMessages] = useState(false);
   const [portalHost, setPortalHost] = useState(null);
   const surfaceRef = useRef(null);
@@ -43,6 +57,22 @@ export default function ChatScrollController() {
   }, []);
 
   useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+    const nextOwner = user?.id || "signed-out";
+    let previousOwner = "";
+    try {
+      previousOwner = window.sessionStorage.getItem(CACHE_OWNER_KEY) || "";
+    } catch {}
+
+    if (previousOwner && previousOwner !== nextOwner) clearAccountScopedChatCache();
+    try {
+      window.sessionStorage.setItem(CACHE_OWNER_KEY, nextOwner);
+    } catch {}
+  }, [loading, user?.id]);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
     let cancelled = false;
     let mutationObserver;
     let resizeObserver;
@@ -98,10 +128,6 @@ export default function ChatScrollController() {
       const handleGrowth = () => {
         if (initialRestoreRef.current) {
           restoreAfterRender();
-          return;
-        }
-        if (nearBottomRef.current && !userMovedRef.current) {
-          smoothToBottom(surface);
           return;
         }
         if (nearBottomRef.current) {
@@ -170,7 +196,7 @@ export default function ChatScrollController() {
       detachSurface?.();
       surfaceRef.current = null;
     };
-  }, [pathname]);
+  }, [loading, pathname, user?.id]);
 
   const goToLatest = () => {
     const surface = surfaceRef.current || findSurface();
