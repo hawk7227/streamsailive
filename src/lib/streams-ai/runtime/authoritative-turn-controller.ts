@@ -2,12 +2,13 @@ import type { StreamsAIScope } from "../auth";
 import { buildStreamsParityPlan, STREAMS_PARITY_PROFILE_VERSION } from "../intelligence/parity-profile";
 import { judgeStreamsResponse, type StreamsSemanticJudgment } from "../quality/semantic-judge";
 import { validateStreamsEvidence, type StreamsEvidenceValidation } from "../quality/evidence-validator";
+import { enforceLiteralRequestedHeadings } from "../quality/literal-heading-enforcer";
 import { validateResponseStructure } from "../routes/response-structure-validator";
 import { buildStreamsContextPackage, type StreamsContextPackage } from "./context-package";
 import { classifyStreamsIntent, type StreamsIntentDecision } from "./intent-engine";
 import { routeStreamsModels, type StreamsModelRoute } from "./model-router";
 
-export const STREAMS_TURN_CONTROLLER_VERSION = "streams-authoritative-turn-controller-v3";
+export const STREAMS_TURN_CONTROLLER_VERSION = "streams-authoritative-turn-controller-v4";
 
 export type StreamsTurnState =
   | "created"
@@ -162,9 +163,17 @@ export function buildAuthoritativeTurnPrompt(turn: StreamsAuthoritativeTurn) {
     `complexity: ${turn.intent.complexity}`,
     `requestedDepth: ${turn.intent.requestedDepth}`,
     `minimumQualityScore: ${turn.qualityPolicy.minimumScore}`,
+    turn.intent.requestedFormat.headings.length
+      ? `Literal headings required exactly and in order:\n${turn.intent.requestedFormat.headings.join("\n")}`
+      : "",
     "Use the current typed instruction as the controlling request. Use context only when relevant. Never claim tool execution or current facts without evidence.",
     `</authoritative_turn_contract>`,
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
+}
+
+function enforceCandidate(turn: StreamsAuthoritativeTurn, candidate: StreamsGeneratedCandidate): StreamsGeneratedCandidate {
+  const enforced = enforceLiteralRequestedHeadings(candidate.content, turn.intent);
+  return enforced.changed ? { ...candidate, content: enforced.content } : candidate;
 }
 
 function localJudgment(turn: StreamsAuthoritativeTurn, candidate: StreamsGeneratedCandidate) {
@@ -209,7 +218,9 @@ export async function executeAuthoritativeStreamsTurn<TPersisted>(input: {
     if (!route) break;
     try {
       const result = await input.generate({ model: route.id, prompt, imageUrls: turn.context.imageUrls, signal: input.signal, candidateIndex: index });
-      if (result.content.trim()) generated.push({ ...result, model: route.id, candidateIndex: index });
+      if (result.content.trim()) {
+        generated.push(enforceCandidate(turn, { ...result, model: route.id, candidateIndex: index }));
+      }
     } catch (error) {
       if (index === 0 && generated.length === 0 && modelCandidates.length > 1) continue;
       if (input.signal?.aborted) throw error;
@@ -221,7 +232,7 @@ export async function executeAuthoritativeStreamsTurn<TPersisted>(input: {
   const modelSelection = generated.length > 1
     ? await input.judgeWithModel({ model: turn.modelRoute.judge.id, turn, candidates: generated, signal: input.signal }).catch(() => null)
     : 0;
-  let selected = generated[Math.max(0, Math.min(generated.length - 1, modelSelection ?? 0))] || generated[0];
+  let selected = enforceCandidate(turn, generated[Math.max(0, Math.min(generated.length - 1, modelSelection ?? 0))] || generated[0]);
   let judgment = localJudgment(turn, selected);
   let evidence = validateStreamsEvidence({
     intent: turn.intent,
@@ -246,7 +257,7 @@ export async function executeAuthoritativeStreamsTurn<TPersisted>(input: {
       attempt: repairAttempts,
       signal: input.signal,
     });
-    selected = { ...repaired, model: turn.modelRoute.repair.id, candidateIndex: selected.candidateIndex };
+    selected = enforceCandidate(turn, { ...repaired, model: turn.modelRoute.repair.id, candidateIndex: selected.candidateIndex });
     judgment = localJudgment(turn, selected);
     evidence = validateStreamsEvidence({
       intent: turn.intent,
@@ -256,6 +267,9 @@ export async function executeAuthoritativeStreamsTurn<TPersisted>(input: {
       verifiedToolEvidenceCount: turn.context.toolEvidence.length,
     });
   }
+
+  selected = enforceCandidate(turn, selected);
+  judgment = localJudgment(turn, selected);
 
   if (!judgment.accepted || !evidence.accepted || !deterministicAccepted(turn, selected.content)) {
     const codes = [...judgment.defects.map((defect) => defect.code), ...evidence.defects.map((defect) => defect.code)];
