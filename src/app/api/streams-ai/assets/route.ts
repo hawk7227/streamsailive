@@ -10,13 +10,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type UploadFileLike = Blob & { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
-
-function isUploadFileLike(value: FormDataEntryValue): value is UploadFileLike {
+function isUploadFileLike(value: FormDataEntryValue): value is File {
   return typeof value !== "string"
-    && typeof (value as any)?.arrayBuffer === "function"
-    && typeof (value as any)?.name === "string"
-    && Number.isFinite(Number((value as any)?.size));
+    && typeof (value as File)?.arrayBuffer === "function"
+    && typeof (value as File)?.name === "string"
+    && Number.isFinite(Number((value as File)?.size));
 }
 
 export async function GET(request: NextRequest) {
@@ -57,7 +55,7 @@ export async function POST(request: NextRequest) {
       for (const file of files) {
         try {
           uploaded.push(
-            await assets.uploadFile(scope, file as File, {
+            await assets.uploadFile(scope, file, {
               sessionId,
               projectId,
               messageId,
