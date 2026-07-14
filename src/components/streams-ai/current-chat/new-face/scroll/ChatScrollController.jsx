@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
 const NEAR_BOTTOM_PX = 180;
-const INITIAL_SETTLE_MS = 900;
 const CACHE_OWNER_KEY = "streams-ai:cache-owner.v1";
 const SESSION_CACHE_KEYS = [
   "streams-ai:current-chat-id",
@@ -41,6 +40,32 @@ function clearAccountScopedChatCache() {
   } catch {}
 }
 
+function nextPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  });
+}
+
+async function waitForCurrentMedia(surface) {
+  const media = Array.from(surface.querySelectorAll("img, video"));
+  await Promise.all(media.map((node) => {
+    if (node.tagName === "IMG") {
+      if (node.complete) return typeof node.decode === "function" ? node.decode().catch(() => {}) : Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        node.addEventListener("load", done, { once: true });
+        node.addEventListener("error", done, { once: true });
+      });
+    }
+    if (node.readyState >= 1) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      node.addEventListener("loadedmetadata", done, { once: true });
+      node.addEventListener("error", done, { once: true });
+    });
+  }));
+}
+
 export default function ChatScrollController() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
@@ -50,7 +75,6 @@ export default function ChatScrollController() {
   const nearBottomRef = useRef(true);
   const initialRestoreRef = useRef(true);
   const userMovedRef = useRef(false);
-  const settleTimerRef = useRef(0);
 
   useEffect(() => {
     setPortalHost(document.body);
@@ -64,7 +88,7 @@ export default function ChatScrollController() {
       previousOwner = window.sessionStorage.getItem(CACHE_OWNER_KEY) || "";
     } catch {}
 
-    if (previousOwner && previousOwner !== nextOwner) clearAccountScopedChatCache();
+    if (previousOwner !== nextOwner) clearAccountScopedChatCache();
     try {
       window.sessionStorage.setItem(CACHE_OWNER_KEY, nextOwner);
     } catch {}
@@ -74,46 +98,79 @@ export default function ChatScrollController() {
     if (loading) return undefined;
 
     let cancelled = false;
+    let rootObserver;
     let mutationObserver;
     let resizeObserver;
-    let retryTimer = 0;
-    let imageCleanup = [];
+    let mediaObserver;
+    let detachSurface = null;
+    const mediaCleanup = new Map();
 
     initialRestoreRef.current = true;
     userMovedRef.current = false;
     nearBottomRef.current = true;
     setShowNewMessages(false);
 
-    const attach = () => {
-      if (cancelled) return;
-      const surface = findSurface();
-      if (!surface) {
-        retryTimer = window.setTimeout(attach, 50);
-        return;
+    const wireMedia = (surface) => {
+      const current = new Set(surface.querySelectorAll("img, video"));
+      for (const [node, cleanup] of mediaCleanup.entries()) {
+        if (!current.has(node)) {
+          cleanup();
+          mediaCleanup.delete(node);
+        }
       }
+      current.forEach((media) => {
+        if (mediaCleanup.has(media)) return;
+        const onLoad = () => {
+          if (cancelled) return;
+          if (initialRestoreRef.current || nearBottomRef.current) jumpToBottom(surface);
+          else setShowNewMessages(true);
+        };
+        media.addEventListener("load", onLoad);
+        media.addEventListener("loadedmetadata", onLoad);
+        media.addEventListener("error", onLoad);
+        mediaCleanup.set(media, () => {
+          media.removeEventListener("load", onLoad);
+          media.removeEventListener("loadedmetadata", onLoad);
+          media.removeEventListener("error", onLoad);
+        });
+      });
+    };
+
+    const applyInitialRestore = async (surface) => {
+      await nextPaint();
+      if (cancelled || surfaceRef.current !== surface) return;
+      jumpToBottom(surface);
+      if (document.fonts?.ready) await document.fonts.ready.catch(() => {});
+      await waitForCurrentMedia(surface);
+      await nextPaint();
+      if (cancelled || surfaceRef.current !== surface) return;
+      jumpToBottom(surface);
+      nearBottomRef.current = true;
+      initialRestoreRef.current = false;
+      setShowNewMessages(false);
+    };
+
+    const attachSurface = (surface) => {
+      if (surfaceRef.current === surface) return;
+      detachSurface?.();
+      mutationObserver?.disconnect();
+      resizeObserver?.disconnect();
+      mediaObserver?.disconnect();
+      mediaCleanup.forEach((cleanup) => cleanup());
+      mediaCleanup.clear();
 
       surfaceRef.current = surface;
-
-      const restoreAfterRender = () => {
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            if (cancelled || !surfaceRef.current) return;
-            jumpToBottom(surfaceRef.current);
-            nearBottomRef.current = true;
-            setShowNewMessages(false);
-          });
-        });
-      };
-
-      restoreAfterRender();
-      settleTimerRef.current = window.setTimeout(() => {
-        initialRestoreRef.current = false;
-      }, INITIAL_SETTLE_MS);
+      initialRestoreRef.current = true;
+      userMovedRef.current = false;
+      nearBottomRef.current = true;
 
       const onScroll = () => {
         const near = isNearBottom(surface);
         nearBottomRef.current = near;
-        if (near) setShowNewMessages(false);
+        if (near) {
+          userMovedRef.current = false;
+          setShowNewMessages(false);
+        }
       };
       const markUserMovement = () => {
         userMovedRef.current = true;
@@ -126,8 +183,13 @@ export default function ChatScrollController() {
       surface.addEventListener("pointerdown", markUserMovement, { passive: true });
 
       const handleGrowth = () => {
+        wireMedia(surface);
         if (initialRestoreRef.current) {
-          restoreAfterRender();
+          jumpToBottom(surface);
+          return;
+        }
+        if (nearBottomRef.current && !userMovedRef.current) {
+          smoothToBottom(surface);
           return;
         }
         if (nearBottomRef.current) {
@@ -142,36 +204,19 @@ export default function ChatScrollController() {
 
       if (typeof ResizeObserver !== "undefined") {
         resizeObserver = new ResizeObserver(() => {
-          if (initialRestoreRef.current || nearBottomRef.current) jumpToBottom(surface);
-          else setShowNewMessages(true);
+          if (initialRestoreRef.current) jumpToBottom(surface);
+          else if (nearBottomRef.current && !userMovedRef.current) jumpToBottom(surface);
+          else if (!nearBottomRef.current) setShowNewMessages(true);
         });
         resizeObserver.observe(surface);
-        surface.querySelectorAll("img, video").forEach((node) => resizeObserver.observe(node));
       }
 
-      const wireMedia = () => {
-        imageCleanup.forEach((cleanup) => cleanup());
-        imageCleanup = [];
-        surface.querySelectorAll("img, video").forEach((media) => {
-          const onLoad = () => {
-            if (initialRestoreRef.current || nearBottomRef.current) jumpToBottom(surface);
-            else setShowNewMessages(true);
-          };
-          media.addEventListener("load", onLoad);
-          media.addEventListener("loadedmetadata", onLoad);
-          imageCleanup.push(() => {
-            media.removeEventListener("load", onLoad);
-            media.removeEventListener("loadedmetadata", onLoad);
-          });
-        });
-      };
-      wireMedia();
-
-      const mediaObserver = new MutationObserver(wireMedia);
+      mediaObserver = new MutationObserver(() => wireMedia(surface));
       mediaObserver.observe(surface, { childList: true, subtree: true });
-      imageCleanup.push(() => mediaObserver.disconnect());
+      wireMedia(surface);
+      void applyInitialRestore(surface);
 
-      return () => {
+      detachSurface = () => {
         surface.removeEventListener("scroll", onScroll);
         surface.removeEventListener("wheel", markUserMovement);
         surface.removeEventListener("touchmove", markUserMovement);
@@ -179,20 +224,24 @@ export default function ChatScrollController() {
       };
     };
 
-    let detachSurface = null;
-    const start = () => {
-      const result = attach();
-      if (typeof result === "function") detachSurface = result;
+    const discoverSurface = () => {
+      if (cancelled) return;
+      const surface = findSurface();
+      if (surface) attachSurface(surface);
     };
-    start();
+
+    rootObserver = new MutationObserver(discoverSurface);
+    rootObserver.observe(document.body, { childList: true, subtree: true });
+    discoverSurface();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(retryTimer);
-      window.clearTimeout(settleTimerRef.current);
+      rootObserver?.disconnect();
       mutationObserver?.disconnect();
       resizeObserver?.disconnect();
-      imageCleanup.forEach((cleanup) => cleanup());
+      mediaObserver?.disconnect();
+      mediaCleanup.forEach((cleanup) => cleanup());
+      mediaCleanup.clear();
       detachSurface?.();
       surfaceRef.current = null;
     };
