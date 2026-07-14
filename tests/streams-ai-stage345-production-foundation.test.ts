@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildStreamsResearchPlan } from "../src/lib/streams-ai/research/research-agent";
+import { collectProviderCitations, countVisibleMarkdownCitations, renderProviderCitations } from "../src/lib/streams-ai/research/provider-citation-renderer";
 import { classifyStreamsIntent } from "../src/lib/streams-ai/runtime/intent-engine";
 import { executeStreamsTool } from "../src/lib/streams-ai/tools/tool-runtime-contract";
 
@@ -18,6 +19,23 @@ describe("Streams Stage 3-5 production foundations", () => {
     expect(plan.queries.length).toBeGreaterThan(1);
     expect(plan.minimumSources).toBeGreaterThanOrEqual(3);
     expect(plan.requireClaimCitationMapping).toBe(true);
+  });
+
+  it("renders provider citation annotations into the user-visible research answer", () => {
+    const text = "A verified announcement was published.";
+    const citations = collectProviderCitations([
+      { type: "url_citation", url: "https://example.com/official", title: "Official source", start_index: 0, end_index: text.length },
+    ]);
+    const rendered = renderProviderCitations(text, citations);
+    expect(rendered.citationCount).toBe(1);
+    expect(rendered.content).toContain("[Official source](https://example.com/official)");
+    expect(countVisibleMarkdownCitations(rendered.content)).toBe(1);
+
+    const activeRoute = read("src/lib/streams-ai/routes/messages-memory-active.ts");
+    expect(activeRoute).toContain("collectProviderCitations");
+    expect(activeRoute).toContain("renderProviderCitations");
+    expect(activeRoute).toContain("CURRENT_RESEARCH_CONTRACT");
+    expect(activeRoute).toContain("citationCount: candidate.citationCount");
   });
 
   it("never marks a tool receipt verified until verification succeeds", async () => {
