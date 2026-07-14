@@ -1,6 +1,7 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
+import { countVisibleMarkdownCitations } from "../research/provider-citation-renderer";
 
-export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v3";
+export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v4";
 
 export type StreamsEvidenceValidation = {
   version: string;
@@ -50,6 +51,7 @@ export function validateStreamsEvidence(input: {
   const defects: StreamsEvidenceValidation["defects"] = [];
   const text = String(input.responseText || "");
   const currentRefusal = explicitlyDeclinesUnverifiedCurrentClaim(text);
+  const visibleCitationCount = countVisibleMarkdownCitations(text);
 
   if (input.intent.needsCurrentInformation && !input.webSearchUsed && !currentRefusal) {
     defects.push({ code: "CURRENT_INFO_WITHOUT_SEARCH", message: "Current information was presented without a verified live search or an explicit statement that it could not be verified." });
@@ -59,9 +61,16 @@ export function validateStreamsEvidence(input: {
     defects.push({ code: "SEARCH_WITHOUT_CITATIONS", message: "Current research completed, but no provider-backed citation annotation supports the answer." });
   }
 
+  if (input.intent.needsCurrentInformation && input.webSearchUsed && input.citationCount > 0 && visibleCitationCount < 1) {
+    defects.push({ code: "CITATIONS_NOT_RENDERED", message: "Provider citations were returned but were not rendered into the user-visible answer." });
+  }
+
   const requestedCount = requestedCurrentItemCount(input.intent.requestedOutcome);
   if (input.intent.needsCurrentInformation && input.webSearchUsed && requestedCount && input.citationCount < requestedCount) {
-    defects.push({ code: "INSUFFICIENT_CITATION_COVERAGE", message: `The request asks for ${requestedCount} current items, but only ${input.citationCount} citation annotations were available.` });
+    defects.push({ code: "INSUFFICIENT_CITATION_COVERAGE", message: `The request asks for ${requestedCount} current items, but only ${input.citationCount} provider citations were available.` });
+  }
+  if (input.intent.needsCurrentInformation && input.webSearchUsed && requestedCount && visibleCitationCount < requestedCount) {
+    defects.push({ code: "INSUFFICIENT_VISIBLE_CITATION_COVERAGE", message: `The request asks for ${requestedCount} current items, but only ${visibleCitationCount} distinct citations are visible in the answer.` });
   }
 
   if (claimsCompletedAction(text) && input.verifiedToolEvidenceCount < 1) {
@@ -76,6 +85,14 @@ export function validateStreamsEvidence(input: {
     defects.push({ code: "UNVERIFIED_RAW_URL", message: "The response contains a raw URL that is not backed by a provider citation annotation." });
   }
 
-  const critical = defects.some((defect) => ["CURRENT_INFO_WITHOUT_SEARCH", "ACTION_WITHOUT_VERIFIED_RECEIPT", "SEARCH_WITHOUT_CITATIONS", "INSUFFICIENT_CITATION_COVERAGE"].includes(defect.code));
+  const criticalCodes = new Set([
+    "CURRENT_INFO_WITHOUT_SEARCH",
+    "ACTION_WITHOUT_VERIFIED_RECEIPT",
+    "SEARCH_WITHOUT_CITATIONS",
+    "CITATIONS_NOT_RENDERED",
+    "INSUFFICIENT_CITATION_COVERAGE",
+    "INSUFFICIENT_VISIBLE_CITATION_COVERAGE",
+  ]);
+  const critical = defects.some((defect) => criticalCodes.has(defect.code));
   return { version: STREAMS_EVIDENCE_VALIDATOR_VERSION, accepted: defects.length === 0, critical, defects };
 }
