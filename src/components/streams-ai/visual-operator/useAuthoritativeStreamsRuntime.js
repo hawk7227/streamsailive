@@ -13,11 +13,35 @@ function normalizeMessage(row = {}) {
   };
 }
 
+function normalizeSession(row = {}) {
+  return {
+    ...row,
+    id: row.id,
+    title: row.title || "New chat",
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+  };
+}
+
 export default function useAuthoritativeStreamsRuntime(baseRuntime) {
   const [serverMessages, setServerMessages] = useState([]);
+  const [serverSessions, setServerSessions] = useState([]);
   const [isRefreshingMessages, setIsRefreshingMessages] = useState(false);
   const refreshGenerationRef = useRef(0);
   const previousStreamingRef = useRef(Boolean(baseRuntime?.isStreaming));
+
+  const refreshSessions = useCallback(async () => {
+    const response = await fetch("/api/streams-ai/sessions", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) throw new Error(data?.error || "Unable to refresh sessions");
+    const rows = Array.isArray(data?.sessions) ? data.sessions.map(normalizeSession) : [];
+    setServerSessions(rows);
+    return rows;
+  }, []);
 
   const refreshMessages = useCallback(async () => {
     const sessionId = String(baseRuntime?.sessionId || "").trim();
@@ -29,7 +53,7 @@ export default function useAuthoritativeStreamsRuntime(baseRuntime) {
     const generation = ++refreshGenerationRef.current;
     setIsRefreshingMessages(true);
     try {
-      const response = await fetch(`/api/streams-ai/messages?sessionId=${encodeURIComponent(sessionId)}&limit=200`, {
+      const response = await fetch(`/api/streams-ai/messages/page?sessionId=${encodeURIComponent(sessionId)}&limit=200`, {
         method: "GET",
         credentials: "same-origin",
         cache: "no-store",
@@ -44,33 +68,52 @@ export default function useAuthoritativeStreamsRuntime(baseRuntime) {
     }
   }, [baseRuntime?.sessionId]);
 
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([refreshSessions(), refreshMessages()]);
+  }, [refreshMessages, refreshSessions]);
+
   useEffect(() => {
     setServerMessages([]);
-    void refreshMessages().catch(() => {});
-  }, [refreshMessages]);
+    void refreshAll();
+  }, [refreshAll]);
 
   useEffect(() => {
     const wasStreaming = previousStreamingRef.current;
     const isStreaming = Boolean(baseRuntime?.isStreaming);
     previousStreamingRef.current = isStreaming;
-    if (wasStreaming && !isStreaming) void refreshMessages().catch(() => {});
-  }, [baseRuntime?.isStreaming, refreshMessages]);
+    if (wasStreaming && !isStreaming) void refreshAll();
+  }, [baseRuntime?.isStreaming, refreshAll]);
 
   useEffect(() => {
-    const refresh = () => void refreshMessages().catch(() => {});
+    const refresh = () => void refreshAll();
+    const clear = () => {
+      setServerMessages([]);
+      setServerSessions([]);
+    };
     window.addEventListener("streams:chat-refresh-requested", refresh);
-    return () => window.removeEventListener("streams:chat-refresh-requested", refresh);
-  }, [refreshMessages]);
+    window.addEventListener("streams:auth-cache-cleared", clear);
+    return () => {
+      window.removeEventListener("streams:chat-refresh-requested", refresh);
+      window.removeEventListener("streams:auth-cache-cleared", clear);
+    };
+  }, [refreshAll]);
 
   const messages = useMemo(() => {
     if (baseRuntime?.isStreaming) return Array.isArray(baseRuntime?.messages) ? baseRuntime.messages : [];
     return serverMessages.length ? serverMessages : Array.isArray(baseRuntime?.messages) ? baseRuntime.messages : [];
   }, [baseRuntime?.isStreaming, baseRuntime?.messages, serverMessages]);
 
+  const sessions = serverSessions.length
+    ? serverSessions
+    : Array.isArray(baseRuntime?.sessions) ? baseRuntime.sessions : [];
+
   return useMemo(() => ({
     ...baseRuntime,
     messages,
+    sessions,
     refreshMessages,
+    refreshSessions,
+    refreshAll,
     isRefreshingMessages,
-  }), [baseRuntime, messages, refreshMessages, isRefreshingMessages]);
+  }), [baseRuntime, messages, sessions, refreshMessages, refreshSessions, refreshAll, isRefreshingMessages]);
 }
