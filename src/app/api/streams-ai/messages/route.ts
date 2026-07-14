@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
 import { requiresDeterministicStructureCheck, validateResponseStructure } from "@/lib/streams-ai/routes/response-structure-validator";
 
