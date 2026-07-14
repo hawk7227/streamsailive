@@ -87,27 +87,42 @@ function ChatMessage({ message, chatRuntime }) {
   </article>;
 }
 
+function Composer({ chatRuntime }) {
+  return <StreamsComposer
+    onSubmit={(payload) => chatRuntime?.sendMessage?.({ message: payload.message, composerMode: payload.composerMode, mode: payload.mode, webSearchEnabled: payload.webSearchEnabled })}
+    onFilesSelected={(files) => chatRuntime?.uploadFiles?.(files)}
+    onProviderChange={(provider) => chatRuntime?.setSelectedProvider?.(provider)}
+    onModeChange={(mode) => chatRuntime?.setSelectedMode?.(mode)}
+    libraryFiles={chatRuntime?.composerAttachments || []}
+    onRemoveFile={(fileId) => chatRuntime?.removeComposerAttachment?.(fileId)}
+    isStreaming={chatRuntime?.isStreaming}
+  />;
+}
+
 function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
   const messages = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
-  return <section className="operatorChatPanel">
+  const isEmpty = messages.length === 0 && !chatRuntime?.isLoadingMessages && !chatRuntime?.isRefreshingMessages;
+
+  if (isEmpty) {
+    return <section className="operatorChatPanel operatorNewChatLanding">
+      <div className="operatorEmptyLanding">
+        <div className="operatorLandingOrb" aria-hidden="true"><span /></div>
+        <h1>Ask, build, create, launch.</h1>
+        <p>Chat is ready. Open Portfolio when you want project<br className="operatorDesktopBreak" /> memory and inline visual build.</p>
+        <div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} /></div>
+      </div>
+    </section>;
+  }
+
+  return <section className="operatorChatPanel operatorConversationView">
     <header className="operatorTopbar">
       <div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div>
       <div><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Inline Build</button> : null}</div>
     </header>
     <div className="operatorChatScroll">
-      {messages.length ? messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />) : <div className="operatorEmpty"><div><h1>Ask, build, create, launch.</h1><p>Start a conversation or open a project from Portfolio.</p></div></div>}
+      {messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}
     </div>
-    <div className="operatorComposer">
-      <StreamsComposer
-        onSubmit={(payload) => chatRuntime?.sendMessage?.({ message: payload.message, composerMode: payload.composerMode, mode: payload.mode, webSearchEnabled: payload.webSearchEnabled })}
-        onFilesSelected={(files) => chatRuntime?.uploadFiles?.(files)}
-        onProviderChange={(provider) => chatRuntime?.setSelectedProvider?.(provider)}
-        onModeChange={(mode) => chatRuntime?.setSelectedMode?.(mode)}
-        libraryFiles={chatRuntime?.composerAttachments || []}
-        onRemoveFile={(fileId) => chatRuntime?.removeComposerAttachment?.(fileId)}
-        isStreaming={chatRuntime?.isStreaming}
-      />
-    </div>
+    <div className="operatorComposer"><Composer chatRuntime={chatRuntime} /></div>
   </section>;
 }
 
@@ -151,7 +166,13 @@ export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {
   }, [collapsed]);
 
   const shellClass = useMemo(() => ["streamsOperator", collapsed ? "sidebarCollapsed" : "", inlineOpen ? "inlineOpen" : ""].filter(Boolean).join(" "), [collapsed, inlineOpen]);
-  const newGeneralChat = () => { setActiveProject(null); setInlineOpen(false); setActiveSection("home"); chatRuntime?.newChat?.(); };
+  const newGeneralChat = () => {
+    setActiveProject(null);
+    setInlineOpen(false);
+    setActiveSection("home");
+    chatRuntime?.newChat?.();
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/streams-ai");
+  };
   const selectProject = (project) => { setActiveProject(project); setInlineOpen(false); setActiveSection("home"); if (project?.id) chatRuntime?.selectSession?.(project.id); };
   const startCleanProject = () => { chatRuntime?.newChat?.(); setActiveProject({ id: `draft-${Date.now()}`, title: "New clean project", source: "draft" }); setActiveSection("home"); };
 
