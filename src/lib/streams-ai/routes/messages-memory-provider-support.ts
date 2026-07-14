@@ -33,6 +33,27 @@ export function resolveIdempotencyBase(body: ChatPostBody) {
   return String(body.idempotencyKey || body.metadata?.idempotencyKey || body.userId || "").trim();
 }
 
+export function hasImageAttachment(attachments: unknown) {
+  if (!Array.isArray(attachments)) return false;
+  return attachments.some((attachment: any) => {
+    const mime = String(attachment?.mimeType || attachment?.mime_type || "").toLowerCase();
+    const kind = String(attachment?.kind || "").toLowerCase();
+    const name = String(attachment?.name || "").toLowerCase();
+    return kind === "image" || mime.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|bmp|tiff?)$/.test(name);
+  });
+}
+
+export function resolveValidationInstruction(body: ChatPostBody, userContent: string) {
+  const explicit = String(body.metadata?.validationInstruction || "").trim();
+  if (explicit) return explicit;
+  if (!hasImageAttachment(body.attachments)) return userContent;
+  return [
+    userContent || "Review the attached screenshot.",
+    "This request includes an image attachment and must use the canonical screenshot-review structure.",
+    "Include a short summary, a Markdown table with exactly these columns: Visible claim | Verified by screenshot? | Evidence still required, a fenced code block, a blockquote warning, explicit screenshot attribution, and a verification note. Do not add a generic follow-up closing.",
+  ].join("\n\n");
+}
+
 export async function getHistoryForPrompt(scope: StreamsAIScope, sessionId: string, userContent: string) {
   if (!sessionId) return [] as PersistedChatMessage[];
   if (/^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no|cool|great|good morning|good afternoon|good evening)[.!?\s]*$/i.test(userContent.trim())) return [] as PersistedChatMessage[];
@@ -47,7 +68,8 @@ export async function ensureSession(scope: StreamsAIScope, sessionId: string, co
 }
 
 export async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
-  assertResponseStructure(userContent, assistantContent);
+  const validationInstruction = resolveValidationInstruction(body, userContent);
+  assertResponseStructure(validationInstruction, assistantContent);
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   const turnId = resolveTurnId(body);
   const idempotencyBase = resolveIdempotencyBase(body);
@@ -75,7 +97,7 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
     role: "assistant",
     content: assistantContent,
     status: assistantStatus,
-    metadata: { ...assistantMetadata, structureValidated: true, turnId, sourceUserMessageId: userMessageId },
+    metadata: { ...assistantMetadata, structureValidated: true, validationInstruction, turnId, sourceUserMessageId: userMessageId },
     turnId,
     idempotencyKey: idempotencyBase ? `${idempotencyBase}:assistant` : null,
   });
@@ -86,6 +108,7 @@ export function buildUserMetadata(body: ChatPostBody) {
   const metadata = { ...(body.metadata || {}) };
   delete metadata.skipUserPersistence;
   delete metadata.sourceUserMessageId;
+  delete metadata.validationInstruction;
   return { ...metadata, copiedUiUserId: body.userId || null, assistantRuntime: "streams-ai-memory-provider-router", mode: "provider-router-memory", attachments: body.attachments || [] };
 }
 
@@ -117,7 +140,7 @@ export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPo
     const name = String(merged.name || input.name || `Attachment ${index + 1}`);
     const mime = String(merged.mimeType || merged.mime_type || input.mimeType || "unknown");
     const size = Number(merged.sizeBytes || merged.size_bytes || input.sizeBytes || 0);
-    const isImage = String(merged.kind || input.kind || "").toLowerCase() === "image" || mime.startsWith("image/") || extractionMode === "image";
+    const isImage = hasImageAttachment([merged]) || extractionMode === "image";
     const signedImageUrl = isImage ? await resolveImageUrl(merged).catch(() => "") : "";
     if (signedImageUrl) { imageParts.push({ type: "image_url", image_url: { url: signedImageUrl } }); imageCount += 1; }
     addExtractionStatus(statusEvents, extractionMode, mime, name, metadata);
