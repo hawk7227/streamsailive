@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   requiresDeterministicStructureCheck,
@@ -80,13 +80,19 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("New messages ↓");
   });
 
-  it("preserves the compact single-row console used before incognito testing", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx"), "utf8");
-    expect(source).toContain("min-height: 52px !important");
-    expect(source).toContain('grid-template-areas: "tools input mode mic send" !important');
-    expect(source).toContain("width: 42px !important");
-    expect(source).toContain("height: 36px !important");
-    expect(source).not.toContain("operatorNewChatLanding .operatorLandingComposer");
-    expect(source).not.toContain("min-height: 96px !important");
+  it("removes the legacy desktop console runtime completely", () => {
+    const rootPage = readFileSync(resolve(process.cwd(), "src/app/streams-ai/page.tsx"), "utf8");
+    const sessionPage = readFileSync(resolve(process.cwd(), "src/app/streams-ai/[sessionId]/page.tsx"), "utf8");
+    const activeCss = readFileSync(resolve(process.cwd(), "src/components/streams-ai/visual-operator/streams-operator-shell.css"), "utf8");
+
+    expect(existsSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx"))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIEmptyComposerPositionBridge.jsx"))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIDesktopConsole.module.css"))).toBe(false);
+    expect(rootPage).not.toContain("StreamsAIDesktopVisualBridge");
+    expect(rootPage).not.toContain("StreamsAIEmptyComposerPositionBridge");
+    expect(sessionPage).not.toContain("StreamsAIDesktopVisualBridge");
+    expect(sessionPage).not.toContain("StreamsAIEmptyComposerPositionBridge");
+    expect(activeCss).toContain(".operatorLandingComposer .streamsComposer");
+    expect(activeCss).toContain("min-height:52px!important");
   });
 });
