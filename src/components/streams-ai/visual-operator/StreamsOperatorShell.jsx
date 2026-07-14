@@ -64,7 +64,17 @@ function Composer({ chatRuntime }) {
 }
 
 function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
-  const messages = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
+  const messages = useMemo(() => {
+    const source = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
+    const seen = new Set();
+    return source.filter((message, index) => {
+      const id = String(message?.id || "").trim();
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [chatRuntime?.messages]);
   const isEmpty = messages.length === 0 && !chatRuntime?.isLoadingMessages && !chatRuntime?.isRefreshingMessages;
   if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><h1>Ask, build, create, launch.</h1><p>Chat is ready. Open Portfolio when you want project<br className="operatorDesktopBreak" /> memory and inline visual build.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} /></div></div></section>;
   return <section className="operatorChatPanel operatorConversationView"><header className="operatorTopbar"><div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div><div><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Inline Build</button> : null}</div></header><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} /></div></section>;
