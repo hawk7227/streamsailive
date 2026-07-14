@@ -2,12 +2,16 @@ import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "
 import type { StreamsAIScope } from "../auth";
 import type { CreateSessionInput, UpdateSessionInput } from "./types";
 
+const DEFAULT_SESSION_LIMIT = 100;
+const MAX_SESSION_LIMIT = 200;
+
 export class StreamsAISessionsRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
   }
 
-  async list(scope: StreamsAIScope) {
+  async list(scope: StreamsAIScope, limit = DEFAULT_SESSION_LIMIT) {
+    const bounded = Math.max(1, Math.min(MAX_SESSION_LIMIT, Math.trunc(Number(limit) || DEFAULT_SESSION_LIMIT)));
     const { data, error } = await this.db()
       .from(streamsAITables.chatSessions)
       .select("*")
@@ -16,7 +20,8 @@ export class StreamsAISessionsRepository {
       .eq("workspace_id", scope.workspaceId)
       .eq("module_id", scope.moduleId)
       .order("updated_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(bounded);
 
     if (error) throw new Error(`Failed to list STREAMS AI sessions: ${error.message}`);
     return data || [];
