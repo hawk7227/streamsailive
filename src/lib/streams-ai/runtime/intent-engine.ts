@@ -62,12 +62,30 @@ function cleanLiteralHeading(value: string) {
     .trim();
 }
 
-function detectHeadings(text: string) {
+function isLiteralHeadingLine(line: string) {
+  return /^(?:\d+[.)]|[A-Za-z][.)]|[IVXLCDM]+[.)])\s+\S.+$/i.test(line)
+    || /^#{1,6}\s+\S.+$/.test(line)
+    || /^[-*•]\s+\S.+$/.test(line);
+}
+
+function normalizeLiteralHeadingLine(line: string) {
+  const trimmed = line.trim();
+  const markdownHeading = trimmed.match(/^#{1,6}\s+(.+)$/);
+  const bullet = trimmed.match(/^[-*•]\s+(.+)$/);
+  if (markdownHeading) return cleanLiteralHeading(markdownHeading[1]);
+  if (bullet) return cleanLiteralHeading(bullet[1]);
+  return cleanLiteralHeading(trimmed);
+}
+
+export function detectLiteralRequestedHeadings(text: string) {
   const source = String(text || "").replace(/\r\n/g, "\n");
-  const quoted = Array.from(source.matchAll(/[“\"]([^”\"]{2,80})[”\"]/g)).map((match) => cleanLiteralHeading(match[1]));
   const lines = source.split("\n");
   const literal: string[] = [];
-  const markerIndex = lines.findIndex((line) => /(?:section\s+)?headings?\s*:?[\s]*$/i.test(line.trim()));
+
+  const markerIndex = lines.findIndex((line) =>
+    /\b(?:use|keep|preserve|return|include|with)?\s*(?:exactly\s+)?(?:these\s+)?(?:section\s+)?headings?\b\s*:?\s*$/i.test(line.trim())
+    || /\b(?:section\s+)?headings?\s+in\s+this\s+order\b\s*:?\s*$/i.test(line.trim()),
+  );
 
   if (markerIndex >= 0) {
     for (const raw of lines.slice(markerIndex + 1)) {
@@ -76,21 +94,25 @@ function detectHeadings(text: string) {
         if (literal.length) break;
         continue;
       }
-      const numbered = line.match(/^(\d+[.)]\s+.+)$/);
-      const markdownHeading = line.match(/^#{1,6}\s+(.+)$/);
-      const bullet = line.match(/^[-*•]\s+(.+)$/);
-      if (numbered) literal.push(cleanLiteralHeading(numbered[1]));
-      else if (markdownHeading) literal.push(cleanLiteralHeading(markdownHeading[1]));
-      else if (bullet) literal.push(cleanLiteralHeading(bullet[1]));
-      else if (literal.length) break;
+      if (!isLiteralHeadingLine(line)) {
+        if (literal.length) break;
+        continue;
+      }
+      literal.push(normalizeLiteralHeadingLine(line));
     }
   }
 
+  return Array.from(new Set(literal.filter(Boolean))).slice(0, 20);
+}
+
+function detectHeadings(text: string) {
+  const source = String(text || "").replace(/\r\n/g, "\n");
+  const literal = detectLiteralRequestedHeadings(source);
+  const quoted = Array.from(source.matchAll(/[“\"]([^”\"]{2,80})[”\"]/g)).map((match) => cleanLiteralHeading(match[1]));
   const inline = source.match(/headings?\s*:\s*([^\n]+)/i)?.[1]
     ?.split(/,|\band\b/i)
     .map((value) => cleanLiteralHeading(value))
     .filter(Boolean) || [];
-
   return Array.from(new Set([...literal, ...quoted, ...inline].filter(Boolean))).slice(0, 20);
 }
 
@@ -105,7 +127,7 @@ export function detectFormatContract(userMessage: string): StreamsFormatContract
     csv: /\bcsv\b/.test(text),
     codeBlock: /\b(code block|fenced code|```)/.test(text),
     blockquote: /\bblockquote\b|^\s*>/m.test(userMessage),
-    numberedSections: headings.some((heading) => /^\d+[.)]\s+/.test(heading)) || /\b(numbered sections?|numbered list|steps?\s+1|1\.)\b/.test(text),
+    numberedSections: headings.some((heading) => /^(?:\d+[.)]|[A-Za-z][.)]|[IVXLCDM]+[.)])\s+/.test(heading)) || /\b(numbered sections?|numbered list|steps?\s+1|1\.)\b/.test(text),
     headings,
     requestedOrder: /\b(same order|in this order|order below|following order)\b/.test(text) || headings.length > 1,
   };
@@ -152,21 +174,7 @@ function collectIntentCandidates(text: string, hasFiles: boolean, hasImages: boo
 
 function choosePrimaryIntent(candidates: StreamsPrimaryIntent[]): StreamsPrimaryIntent {
   const precedence: StreamsPrimaryIntent[] = [
-    "connected_action",
-    "repository_action",
-    "generation",
-    "troubleshooting",
-    "coding",
-    "image_analysis",
-    "file_analysis",
-    "research",
-    "rewriting",
-    "summarization",
-    "translation",
-    "writing",
-    "planning",
-    "reasoning",
-    "factual_answer",
+    "connected_action", "repository_action", "generation", "troubleshooting", "coding", "image_analysis", "file_analysis", "research", "rewriting", "summarization", "translation", "writing", "planning", "reasoning", "factual_answer",
   ];
   return precedence.find((intent) => candidates.includes(intent)) || "conversation";
 }
@@ -188,12 +196,7 @@ function resolveComplexity(text: string, depth: StreamsRequestedDepth, primaryIn
   return "simple" as const;
 }
 
-export function classifyStreamsIntent(input: {
-  userMessage: string;
-  hasFiles?: boolean;
-  hasImages?: boolean;
-  hasSelectedArtifact?: boolean;
-}): StreamsIntentDecision {
+export function classifyStreamsIntent(input: { userMessage: string; hasFiles?: boolean; hasImages?: boolean; hasSelectedArtifact?: boolean }): StreamsIntentDecision {
   const text = lower(input.userMessage);
   const hasFiles = Boolean(input.hasFiles);
   const hasImages = Boolean(input.hasImages);
@@ -210,17 +213,7 @@ export function classifyStreamsIntent(input: {
   const ambiguousAction = /\b(fix it|do it|change it|update it|remove it|send it)\b/.test(text) && !hasFiles && !hasImages && text.split(/\s+/).length < 8;
   const needsClarification = ambiguousAction && ["repository_action", "connected_action", "coding", "troubleshooting"].includes(primaryIntent);
   const confidence = needsClarification ? 0.55 : candidates.length > 3 ? 0.78 : candidates.length > 0 ? 0.92 : 0.86;
-  const signals = [
-    primaryIntent,
-    ...secondaryIntents.map((intent) => `secondary:${intent}`),
-    requestedDepth,
-    needsCurrentInformation ? "current_information" : "stable_information",
-    hasFiles ? "files" : "no_files",
-    hasImages ? "images" : "no_images",
-    needsTools ? "tools" : "no_tools",
-    riskLevel,
-    complexity,
-  ];
+  const signals = [primaryIntent, ...secondaryIntents.map((intent) => `secondary:${intent}`), requestedDepth, needsCurrentInformation ? "current_information" : "stable_information", hasFiles ? "files" : "no_files", hasImages ? "images" : "no_images", needsTools ? "tools" : "no_tools", riskLevel, complexity];
 
   return {
     primaryIntent,
