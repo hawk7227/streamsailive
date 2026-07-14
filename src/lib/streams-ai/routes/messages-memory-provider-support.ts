@@ -5,6 +5,7 @@ import { StreamsAIAssetsRepository } from "../repositories/assets-repository";
 import { StreamsAIMessagesRepository } from "../repositories/messages-repository";
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
 import type { StreamsMemoryContext } from "../intelligence/memory-engine";
+import { assessStreamsParityQuality } from "../intelligence/parity-quality";
 import { assertResponseStructure } from "./response-structure-validator";
 
 const assets = new StreamsAIAssetsRepository();
@@ -70,6 +71,15 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
   const validationInstruction = resolveValidationInstruction(body, userContent);
   const structureEnforced = shouldAssertStructure(body, validationInstruction);
   if (structureEnforced) assertResponseStructure(validationInstruction, assistantContent);
+  const parityQuality = assessStreamsParityQuality({
+    userInstruction: validationInstruction,
+    assistantContent,
+    hasImages: hasImageAttachment(body.attachments),
+    hasFiles: Array.isArray(body.attachments) && body.attachments.length > 0,
+    usedMemory: Number(assistantMetadata.memoryCount || 0) > 0,
+    usedRuntimeContext: assistantMetadata.runtimeContextUsed === true,
+    exactStructureRequired: structureEnforced,
+  });
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   const turnId = resolveTurnId(body);
   const idempotencyBase = resolveIdempotencyBase(body);
@@ -97,11 +107,11 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
     role: "assistant",
     content: assistantContent,
     status: assistantStatus,
-    metadata: { ...assistantMetadata, structureValidated: structureEnforced, validationInstruction: structureEnforced ? validationInstruction : null, turnId, sourceUserMessageId: userMessageId },
+    metadata: { ...assistantMetadata, parityQuality, structureValidated: structureEnforced, validationInstruction: structureEnforced ? validationInstruction : null, turnId, sourceUserMessageId: userMessageId },
     turnId,
     idempotencyKey: idempotencyBase ? `${idempotencyBase}:assistant` : null,
   });
-  return { sessionId: persistedSessionId, userMessageId, assistantMessageId: assistantMessage.id, turnId };
+  return { sessionId: persistedSessionId, userMessageId, assistantMessageId: assistantMessage.id, turnId, parityQuality };
 }
 
 export function buildUserMetadata(body: ChatPostBody) {
