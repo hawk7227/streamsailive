@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
-import { hasImageAttachment, resolveValidationInstruction } from "@/lib/streams-ai/routes/messages-memory-provider-support";
+import { resolveValidationInstruction } from "@/lib/streams-ai/routes/messages-memory-provider-support";
 import { requiresDeterministicStructureCheck } from "@/lib/streams-ai/routes/response-structure-validator";
 import { collectSseResponse, validateAndRepairResponse } from "@/lib/streams-ai/routes/structured-response-service";
 
@@ -11,7 +11,10 @@ type StreamsMessageRequestBody = Record<string, any> & {
   idempotencyKey?: string;
   turnId?: string;
   userId?: string;
+  metadata?: Record<string, any>;
 };
+
+const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
 function encodeSse(event: string, payload: Record<string, unknown>) {
   return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
@@ -22,7 +25,7 @@ function streamTextResponse(text: string, metadata: Record<string, unknown> = {}
   const startedAt = Date.now();
   return new Response(new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode(encodeSse("activity", { phase: "writing", statusText: "Writing…" })));
+      controller.enqueue(encoder.encode(encodeSse("activity", { phase: "preparing", statusText: "Preparing response…" })));
       for (const token of String(text || "").match(/[\s\S]{1,240}/g) || [""]) {
         controller.enqueue(encoder.encode(encodeSse("response", { token })));
       }
@@ -58,6 +61,14 @@ function normalizedRequestBody(body: StreamsMessageRequestBody): StreamsMessageR
   const idempotencyKey = String(body.idempotencyKey || body.userId || "").trim() || crypto.randomUUID();
   const turnId = String(body.turnId || "").trim() || crypto.randomUUID();
   return { ...body, idempotencyKey, turnId };
+}
+
+function explicitlyRequestsDeterministicStructure(userContent: string, body: StreamsMessageRequestBody) {
+  if (body.metadata?.enforceDeterministicStructure === true) return true;
+  const text = String(userContent || "");
+  if (!text || text === ATTACHMENT_ONLY_SENTINEL) return false;
+  return /\b(markdown\s+table|exact\s+columns?|fenced\s+code\s+block|blockquote|numbered\s+sections?|output\s+exactly|use\s+this\s+exact\s+format)\b/i.test(text)
+    && requiresDeterministicStructureCheck(text);
 }
 
 async function persistRepairedTurn(
@@ -119,7 +130,14 @@ function structuredResponse(
       };
 
       try {
-        const upstream = await memoryMessagesPOST(buildInternalRequest(request, body));
+        const upstreamBody = {
+          ...body,
+          metadata: {
+            ...(body.metadata || {}),
+            enforceDeterministicStructure: false,
+          },
+        };
+        const upstream = await memoryMessagesPOST(buildInternalRequest(request, upstreamBody));
         const collected = await collectSseResponse(upstream, (payload) => send("activity", payload));
         const upstreamOk = Boolean(collected.completePayload?.ok) && !collected.errorPayload;
         const validated = await validateAndRepairResponse({
@@ -138,7 +156,6 @@ function structuredResponse(
           assistantMessageId = persisted.assistantMessageId;
         }
 
-        send("activity", { phase: "streaming", statusText: "Writing…" });
         for (const token of validated.content.match(/[\s\S]{1,240}/g) || [""]) send("response", { token });
         send("complete", {
           ok: true,
@@ -178,10 +195,9 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
-    const validationInstruction = resolveValidationInstruction(body, userContent);
-    const imageAttached = hasImageAttachment(body.attachments);
 
-    if (imageAttached || requiresDeterministicStructureCheck(validationInstruction)) {
+    if (explicitlyRequestsDeterministicStructure(userContent, body)) {
+      const validationInstruction = resolveValidationInstruction(body, userContent);
       return structuredResponse(request, body, userContent, validationInstruction);
     }
 
