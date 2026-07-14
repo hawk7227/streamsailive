@@ -1,0 +1,28 @@
+.streamsNewMessagesButton {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  transform: translateX(-50%);
+  z-index: 120;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid rgba(168, 85, 247, 0.48);
+  border-radius: 999px;
+  background: rgba(17, 10, 30, 0.96);
+  color: #fff;
+  font: 700 13px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.32), 0 0 20px rgba(168, 85, 247, 0.18);
+  cursor: pointer;
+}
+
+.streamsNewMessagesButton:hover,
+.streamsNewMessagesButton:focus-visible {
+  border-color: rgba(196, 181, 253, 0.9);
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .streamsNewMessagesButton {
+    bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+}
