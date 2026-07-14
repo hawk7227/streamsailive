@@ -84,7 +84,8 @@ describe("STREAMS AI response integrity", () => {
     const source = readFileSync(resolve(process.cwd(), "src/app/streams-ai/StreamsAIDesktopVisualBridge.jsx"), "utf8");
     expect(source).toContain(".operatorNewChatLanding .operatorLandingComposer .streamsComposer");
     expect(source).toContain("min-height: 96px !important");
-    expect(source).toContain('grid-template-areas:\n            "tools input input send"\n            ". mode mic send"');
+    expect(source).toContain("grid-template-columns: 44px auto 28px minmax(0,1fr) 58px !important");
+    expect(source).toContain('grid-template-areas:\n            "tools input input input send"\n            ". mode mic . send"');
     expect(source).toContain("width: 58px !important");
     expect(source).toContain("height: 58px !important");
   });
