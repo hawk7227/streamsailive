@@ -3,7 +3,7 @@ import { buildUniversalChatContext } from "../universal-chat-context";
 import { retrieveStreamsMemoryContext, type StreamsMemoryContext } from "../intelligence/memory-engine";
 import type { StreamsIntentDecision } from "./intent-engine";
 
-export const STREAMS_CONTEXT_PACKAGE_VERSION = "streams-context-package-v3";
+export const STREAMS_CONTEXT_PACKAGE_VERSION = "streams-context-package-v4";
 
 export type StreamsContextPackage = {
   version: string;
@@ -31,6 +31,7 @@ export type StreamsContextPackage = {
 
 const MIN_CONTEXT_TOKENS = 12000;
 const DEFAULT_CONTEXT_TOKENS = 30000;
+const INSTRUCTION_RESERVE_TOKENS = 2048;
 const EVIDENCE_MAX_AGE_MS = 30 * 60 * 1000;
 
 function estimateTokens(value: string) {
@@ -70,13 +71,15 @@ function recentCorrections(messages: StreamsContextPackage["recentMessages"]) {
 }
 
 function eventTimestamp(value: Record<string, unknown>) {
-  const raw = value.createdAt || value.created_at || value.timestamp || value.occurredAt || value.occurred_at;
+  const metadata = value.metadata && typeof value.metadata === "object" ? value.metadata as Record<string, unknown> : {};
+  const raw = value.createdAt || value.created_at || value.timestamp || value.occurredAt || value.occurred_at || metadata.createdAt || metadata.created_at || metadata.timestamp;
   const parsed = raw ? Date.parse(String(raw)) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isSuccessfulEvidence(value: Record<string, unknown>) {
-  const status = String(value.status || value.state || value.result || value.outcome || "").toLowerCase();
+  const metadata = value.metadata && typeof value.metadata === "object" ? value.metadata as Record<string, unknown> : {};
+  const status = String(value.status || value.state || value.result || value.outcome || metadata.status || metadata.state || metadata.result || metadata.outcome || "").toLowerCase();
   return /^(ok|success|succeeded|complete|completed|ready|passed)$/.test(status);
 }
 
@@ -91,10 +94,11 @@ function extractVerifiedToolEvidence(
     .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object"));
 
   return candidates.filter((value) => {
-    const sessionId = String(value.sessionId || value.session_id || "");
-    const taskId = String(value.taskId || value.task_id || "");
+    const metadata = value.metadata && typeof value.metadata === "object" ? value.metadata as Record<string, unknown> : {};
+    const sessionId = String(value.sessionId || value.session_id || metadata.sessionId || metadata.session_id || "");
+    const taskId = String(value.taskId || value.task_id || metadata.taskId || metadata.task_id || "");
     if (!sessionId || sessionId !== input.sessionId) return false;
-    if (input.taskId && taskId && taskId !== input.taskId) return false;
+    if (input.taskId && taskId !== input.taskId) return false;
     if (!isSuccessfulEvidence(value)) return false;
     const timestamp = eventTimestamp(value);
     if (timestamp === null || now - timestamp > EVIDENCE_MAX_AGE_MS || timestamp > now + 60_000) return false;
@@ -180,10 +184,11 @@ export async function buildStreamsContextPackage(input: {
 
   const verifiedToolEvidence = extractVerifiedToolEvidence(runtimeContext, { sessionId: input.sessionId, taskId: input.taskId });
   const corrections = recentCorrections(normalizedMessages);
-  const maxTokens = Math.max(MIN_CONTEXT_TOKENS, input.maxTokens || DEFAULT_CONTEXT_TOKENS);
+  const instructionTokens = estimateTokens(input.userInstruction);
+  const maxTokens = Math.max(MIN_CONTEXT_TOKENS, input.maxTokens || DEFAULT_CONTEXT_TOKENS, instructionTokens + INSTRUCTION_RESERVE_TOKENS);
 
   const sectionInputs: ContextSection[] = [
-    { name: "current_instruction", value: input.userInstruction, priority: 0, minimumTokens: estimateTokens(input.userInstruction), requestedTokens: estimateTokens(input.userInstruction), preserveWhole: true },
+    { name: "current_instruction", value: input.userInstruction, priority: 0, minimumTokens: instructionTokens, requestedTokens: instructionTokens, preserveWhole: true },
     { name: "recent_user_corrections", value: corrections.join("\n---\n"), priority: 1, minimumTokens: 800, requestedTokens: 2400, preserveTail: true },
     { name: "verified_tool_evidence", value: verifiedToolEvidence.length ? JSON.stringify(verifiedToolEvidence) : "", priority: 2, minimumTokens: 800, requestedTokens: 3000 },
     { name: "selected_context", value: input.selectedContext ? JSON.stringify(input.selectedContext) : "", priority: 3, minimumTokens: 600, requestedTokens: 2200 },
@@ -231,7 +236,7 @@ export async function buildStreamsContextPackage(input: {
     hasAttachmentContext: Boolean(input.attachmentText),
     correctionCount: corrections.length,
     toolEvidenceCount: verifiedToolEvidence.length,
-    evidencePolicy: "same-session-successful-fresh-server-events",
+    evidencePolicy: "same-session-exact-task-successful-fresh-server-events",
     createdAt: new Date().toISOString(),
   };
 
