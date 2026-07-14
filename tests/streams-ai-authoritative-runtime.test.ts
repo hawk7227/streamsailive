@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
-import { classifyStreamsIntent } from "../src/lib/streams-ai/runtime/intent-engine";
+import { classifyStreamsIntent, detectLiteralRequestedHeadings } from "../src/lib/streams-ai/runtime/intent-engine";
 import { routeStreamsModels } from "../src/lib/streams-ai/runtime/model-router";
 import { judgeStreamsResponse } from "../src/lib/streams-ai/quality/semantic-judge";
 import { executeAuthoritativeStreamsTurn, prepareAuthoritativeStreamsTurn } from "../src/lib/streams-ai/runtime/authoritative-turn-controller";
@@ -30,16 +30,21 @@ describe("Streams authoritative runtime", () => {
     expect(intent.needsImages).toBe(true);
   });
 
-  it("preserves literal numbered section headings", () => {
-    const intent = classifyStreamsIntent({
-      userMessage: [
-        "Give me a short answer.",
-        "Use exactly these section headings:",
-        "1. Visible Benefit",
-        "2. Operational Benefit",
-        "3. Risk to Watch",
-      ].join("\n"),
-    });
+  it("preserves literal numbered section headings after natural marker wording", () => {
+    const instruction = [
+      "Give me a short answer.",
+      "Use exactly these section headings:",
+      "1. Visible Benefit",
+      "2. Operational Benefit",
+      "3. Risk to Watch",
+      "Keep it concise.",
+    ].join("\n");
+    expect(detectLiteralRequestedHeadings(instruction)).toEqual([
+      "1. Visible Benefit",
+      "2. Operational Benefit",
+      "3. Risk to Watch",
+    ]);
+    const intent = classifyStreamsIntent({ userMessage: instruction });
     expect(intent.requestedFormat.exact).toBe(true);
     expect(intent.requestedFormat.numberedSections).toBe(true);
     expect(intent.requestedFormat.requestedOrder).toBe(true);
@@ -79,22 +84,56 @@ describe("Streams authoritative runtime", () => {
     expect(result.defects.some((defect) => defect.code === "UNSUPPORTED_ACTION_CLAIM")).toBe(true);
   });
 
-  it("rejects responses that remove literal heading numbering", () => {
-    const intent = classifyStreamsIntent({
-      userMessage: [
-        "Use exactly these section headings:",
-        "1. Visible Benefit",
-        "2. Operational Benefit",
-        "3. Risk to Watch",
-      ].join("\n"),
-    });
+  it("makes removed literal heading numbering a critical rejection", () => {
+    const instruction = [
+      "Use exactly these section headings:",
+      "1. Visible Benefit",
+      "2. Operational Benefit",
+      "3. Risk to Watch",
+    ].join("\n");
+    const intent = classifyStreamsIntent({ userMessage: instruction });
     const result = judgeStreamsResponse({
       userInstruction: intent.requestedOutcome,
       responseText: "## Visible Benefit\nUseful.\n\n## Operational Benefit\nFaster.\n\n## Risk to Watch\nErrors.",
       intent,
     });
     expect(result.accepted).toBe(false);
-    expect(result.defects.filter((defect) => defect.code === "MISSING_HEADING")).toHaveLength(3);
+    expect(result.criticalDefect).toBe(true);
+    expect(result.defects.filter((defect) => defect.code === "MISSING_LITERAL_HEADING")).toHaveLength(3);
+  });
+
+  it("rejects exact literal headings in the wrong order", () => {
+    const instruction = [
+      "Use exactly these headings in this order:",
+      "1. First",
+      "2. Second",
+      "3. Third",
+    ].join("\n");
+    const intent = classifyStreamsIntent({ userMessage: instruction });
+    const result = judgeStreamsResponse({
+      userInstruction: instruction,
+      responseText: "2. Second\nB\n\n1. First\nA\n\n3. Third\nC",
+      intent,
+    });
+    expect(result.accepted).toBe(false);
+    expect(result.defects.some((defect) => defect.code === "WRONG_LITERAL_HEADING_ORDER")).toBe(true);
+  });
+
+  it("accepts exact literal numbered headings in the requested order", () => {
+    const instruction = [
+      "Use exactly these section headings:",
+      "1. Visible Benefit",
+      "2. Operational Benefit",
+      "3. Risk to Watch",
+    ].join("\n");
+    const intent = classifyStreamsIntent({ userMessage: instruction });
+    const result = judgeStreamsResponse({
+      userInstruction: instruction,
+      responseText: "1. Visible Benefit\nUseful.\n\n2. Operational Benefit\nFaster.\n\n3. Risk to Watch\nErrors.",
+      intent,
+    });
+    expect(result.defects.some((defect) => defect.code === "MISSING_LITERAL_HEADING")).toBe(false);
+    expect(result.defects.some((defect) => defect.code === "WRONG_LITERAL_HEADING_ORDER")).toBe(false);
   });
 
   it("requires exact requested output structure", () => {
