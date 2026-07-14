@@ -7,7 +7,7 @@ import { buildStreamsContextPackage, type StreamsContextPackage } from "./contex
 import { classifyStreamsIntent, type StreamsIntentDecision } from "./intent-engine";
 import { routeStreamsModels, type StreamsModelRoute } from "./model-router";
 
-export const STREAMS_TURN_CONTROLLER_VERSION = "streams-authoritative-turn-controller-v2";
+export const STREAMS_TURN_CONTROLLER_VERSION = "streams-authoritative-turn-controller-v3";
 
 export type StreamsTurnState =
   | "created"
@@ -108,6 +108,7 @@ export async function prepareAuthoritativeStreamsTurn(input: {
   const context = await buildStreamsContextPackage({
     scope: input.scope,
     sessionId: input.sessionId,
+    taskId,
     projectId,
     userInstruction: input.userMessage,
     intent,
