@@ -278,11 +278,11 @@ export default function StreamsAIDesktopVisualBridge() {
         .operatorNewChatLanding .operatorLandingComposer .streamsComposerRow {
           min-height: 78px !important;
           display: grid !important;
-          grid-template-columns: 44px minmax(0,1fr) 34px 58px !important;
+          grid-template-columns: 44px auto 28px minmax(0,1fr) 58px !important;
           grid-template-rows: 48px 24px !important;
           grid-template-areas:
-            "tools input input send"
-            ". mode mic send" !important;
+            "tools input input input send"
+            ". mode mic . send" !important;
           align-items: center !important;
           gap: 0 8px !important;
           padding: 0 !important;
@@ -321,6 +321,8 @@ export default function StreamsAIDesktopVisualBridge() {
           grid-area: mode !important;
           justify-self: start !important;
           align-self: center !important;
+          width: auto !important;
+          min-width: max-content !important;
           height: 22px !important;
           padding: 0 !important;
           font-size: 14px !important;
