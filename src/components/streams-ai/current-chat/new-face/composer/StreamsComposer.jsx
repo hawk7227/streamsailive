@@ -5,6 +5,7 @@ import "./streams-console-color-system-fixes.css";
 import "./streams-composer-layout-fix.css";
 import "./chat-message-text-fix.css";
 import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
+import MessageActionBridge from "../message-actions/MessageActionBridge";
 
 const MODES = ["Thinking", "Configure..."];
 const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
@@ -197,86 +198,89 @@ export default function StreamsComposer({
   const liveStatusError = failedCount > 0 && !hasUploadingFiles || ["error", "failed"].includes(String(liveActivity?.phase || "").toLowerCase());
 
   return (
-    <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={hasUploadingFiles || isStreaming ? "true" : "false"}>
-      {liveStatus ? (
-        <div className={`streamsComposerLiveStatus${liveStatusError ? " isError" : ""}`} data-domain={liveActivity?.mode || (hasUploadingFiles ? "files" : "chat")} data-phase={liveActivity?.phase || (hasUploadingFiles ? "uploading" : "thinking")} role="status" aria-live="polite" aria-atomic="true">
-          <span className="streamsComposerLiveStatusDot" aria-hidden="true" />
-          <span>{liveStatus}</span>
-        </div>
-      ) : null}
-
-      {files.length ? <div className="streamsComposerAttachments">{files.map(renderAttachment)}</div> : null}
-
-      <div className="streamsComposerRow">
-        <button type="button" className="streamsComposerIconButton" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
-
-        {selectedTool ? (
-          <div className="streamsComposerToolPill" data-feature={selectedTool.feature}>
-            <span>{selectedTool.icon}</span>
-            <strong>{selectedTool.label}</strong>
-            <button type="button" className="streamsComposerToolPillClose" aria-label={`Clear ${selectedTool.label}`} onClick={() => setSelectedTool(null)}>×</button>
+    <>
+      <MessageActionBridge />
+      <section ref={composerRef} className="streamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={hasUploadingFiles || isStreaming ? "true" : "false"}>
+        {liveStatus ? (
+          <div className={`streamsComposerLiveStatus${liveStatusError ? " isError" : ""}`} data-domain={liveActivity?.mode || (hasUploadingFiles ? "files" : "chat")} data-phase={liveActivity?.phase || (hasUploadingFiles ? "uploading" : "thinking")} role="status" aria-live="polite" aria-atomic="true">
+            <span className="streamsComposerLiveStatusDot" aria-hidden="true" />
+            <span>{liveStatus}</span>
           </div>
         ) : null}
 
-        <textarea
-          ref={inputRef}
-          className="streamsComposerInput"
-          value={message}
-          placeholder={placeholder}
-          rows={1}
-          aria-label="Message Streams AI"
-          spellCheck="true"
-          onChange={(event) => {
-            setMessage(event.target.value);
-            autosizeComposerTextarea(event.target);
-          }}
-          onInput={(event) => autosizeComposerTextarea(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
-            }
-          }}
-        />
+        {files.length ? <div className="streamsComposerAttachments">{files.map(renderAttachment)}</div> : null}
 
-        <button type="button" className="streamsComposerPill" aria-label="Open mode menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
-        <button type="button" className="streamsComposerMicButton" data-feature="voice" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
-        <button type="button" className="streamsComposerSendButton" aria-label={isStreaming ? "Response in progress" : "Send"} onClick={submit} disabled={isDisabled}>{isStreaming ? "■" : "↑"}</button>
-      </div>
+        <div className="streamsComposerRow">
+          <button type="button" className="streamsComposerIconButton" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
 
-      <input aria-label="Add photos and files" type="file" multiple accept={ACCEPTED_UPLOAD_TYPES} hidden ref={fileInputRef} onChange={handleFileChange} />
+          {selectedTool ? (
+            <div className="streamsComposerToolPill" data-feature={selectedTool.feature}>
+              <span>{selectedTool.icon}</span>
+              <strong>{selectedTool.label}</strong>
+              <button type="button" className="streamsComposerToolPillClose" aria-label={`Clear ${selectedTool.label}`} onClick={() => setSelectedTool(null)}>×</button>
+            </div>
+          ) : null}
 
-      {activeMenu === "tools" ? (
-        <div className="streamsComposerMenu toolsMenu" role="menu">
-          {TOOL_ITEMS.map((item) => (
-            <button key={item.id} type="button" data-feature={item.feature} onClick={() => handleTool(item)}>
-              <span>{item.icon}</span>
-              <strong>{item.label}</strong>
-              <em>{item.id === "web_search" ? "Live" : ""}</em>
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {activeMenu === "model" ? (
-        <div className="streamsComposerMenu modelMenu" role="menu" data-feature="chat">
-          {MODES.map((item) => (
-            <button key={item} type="button" onClick={() => {
-              setActiveMenu("");
-              if (item === "Configure...") window.location.assign("/account/personalization");
-              else {
-                setMode(item);
-                onModeChange?.(item);
+          <textarea
+            ref={inputRef}
+            className="streamsComposerInput"
+            value={message}
+            placeholder={placeholder}
+            rows={1}
+            aria-label="Message Streams AI"
+            spellCheck="true"
+            onChange={(event) => {
+              setMessage(event.target.value);
+              autosizeComposerTextarea(event.target);
+            }}
+            onInput={(event) => autosizeComposerTextarea(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
               }
-            }}>
-              <strong>{item}</strong>
-              <em>{item === mode ? "Active" : ""}</em>
-            </button>
-          ))}
-        </div>
-      ) : null}
+            }}
+          />
 
-      {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
-    </section>
+          <button type="button" className="streamsComposerPill" aria-label="Open mode menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}⌄</button>
+          <button type="button" className="streamsComposerMicButton" data-feature="voice" aria-label="Start realtime voice conversation" onClick={() => { setActiveMenu(""); setVoicePanelOpen(true); }}>🎙</button>
+          <button type="button" className="streamsComposerSendButton" aria-label={isStreaming ? "Response in progress" : "Send"} onClick={submit} disabled={isDisabled}>{isStreaming ? "■" : "↑"}</button>
+        </div>
+
+        <input aria-label="Add photos and files" type="file" multiple accept={ACCEPTED_UPLOAD_TYPES} hidden ref={fileInputRef} onChange={handleFileChange} />
+
+        {activeMenu === "tools" ? (
+          <div className="streamsComposerMenu toolsMenu" role="menu">
+            {TOOL_ITEMS.map((item) => (
+              <button key={item.id} type="button" data-feature={item.feature} onClick={() => handleTool(item)}>
+                <span>{item.icon}</span>
+                <strong>{item.label}</strong>
+                <em>{item.id === "web_search" ? "Live" : ""}</em>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {activeMenu === "model" ? (
+          <div className="streamsComposerMenu modelMenu" role="menu" data-feature="chat">
+            {MODES.map((item) => (
+              <button key={item} type="button" onClick={() => {
+                setActiveMenu("");
+                if (item === "Configure...") window.location.assign("/account/personalization");
+                else {
+                  setMode(item);
+                  onModeChange?.(item);
+                }
+              }}>
+                <strong>{item}</strong>
+                <em>{item === mode ? "Active" : ""}</em>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
+      </section>
+    </>
   );
 }
