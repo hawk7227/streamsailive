@@ -33,12 +33,13 @@ describe("STREAMS AI response integrity", () => {
     expect(validateResponseStructure("\u200B", canonicalScreenshotResponse)).toEqual({ valid: true, missing: [] });
   });
 
-  it("rejects screenshot responses missing canonical structure", () => {
-    const result = validateResponseStructure("Review the attached screenshot.", "The screenshot shows a dashboard.");
+  it("rejects screenshot responses missing attribution or verification limits without forcing unrelated formats", () => {
+    const result = validateResponseStructure("Review the attached screenshot.", "This dashboard is definitely live and operational.");
     expect(result.valid).toBe(false);
-    expect(result.missing).toContain("Markdown table");
-    expect(result.missing).toContain("fenced code block");
-    expect(result.missing).toContain("blockquote");
+    expect(result.missing).not.toContain("Markdown table");
+    expect(result.missing).not.toContain("fenced code block");
+    expect(result.missing).not.toContain("blockquote");
+    expect(result.missing).toContain("screenshot attribution language");
     expect(result.missing).toContain("verification note");
   });
 
