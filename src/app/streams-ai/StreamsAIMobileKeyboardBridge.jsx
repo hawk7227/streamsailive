@@ -2,6 +2,10 @@
 
 import { useEffect } from "react";
 
+function activeMobileShell() {
+  return document.querySelector(".streamsOperator");
+}
+
 export default function StreamsAIMobileKeyboardBridge() {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -11,14 +15,18 @@ export default function StreamsAIMobileKeyboardBridge() {
     const update = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const shell = document.querySelector(".shell.mobile");
-        if (!shell) return;
-        const vv = window.visualViewport;
-        const height = vv?.height || window.innerHeight;
-        const offsetTop = vv?.offsetTop || 0;
-        const keyboard = Math.max(0, Math.round(window.innerHeight - height - offsetTop));
-        shell.classList.toggle("keyboardOpen", keyboard > 80);
-        shell.style.setProperty("--keyboard", `${keyboard}px`);
+        const shell = activeMobileShell();
+        if (!shell || window.innerWidth >= 900) return;
+
+        const viewport = window.visualViewport;
+        const visibleHeight = viewport?.height || window.innerHeight;
+        const offsetTop = viewport?.offsetTop || 0;
+        const keyboardHeight = Math.max(0, Math.round(window.innerHeight - visibleHeight - offsetTop));
+
+        shell.classList.toggle("keyboardOpen", keyboardHeight > 80);
+        shell.style.setProperty("--streams-mobile-vh", `${Math.round(visibleHeight)}px`);
+        shell.style.setProperty("--streams-keyboard-height", `${keyboardHeight}px`);
+        shell.style.setProperty("--streams-viewport-offset-top", `${Math.round(offsetTop)}px`);
       });
     };
 
@@ -38,7 +46,11 @@ export default function StreamsAIMobileKeyboardBridge() {
       window.visualViewport?.removeEventListener("scroll", update);
       document.removeEventListener("focusin", update, true);
       document.removeEventListener("focusout", update, true);
-      document.querySelector(".shell.mobile")?.classList.remove("keyboardOpen");
+      const shell = activeMobileShell();
+      shell?.classList.remove("keyboardOpen");
+      shell?.style.removeProperty("--streams-mobile-vh");
+      shell?.style.removeProperty("--streams-keyboard-height");
+      shell?.style.removeProperty("--streams-viewport-offset-top");
     };
   }, []);
 
