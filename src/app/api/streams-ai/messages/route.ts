@@ -4,6 +4,15 @@ import { hasImageAttachment, resolveValidationInstruction } from "@/lib/streams-
 import { requiresDeterministicStructureCheck } from "@/lib/streams-ai/routes/response-structure-validator";
 import { collectSseResponse, validateAndRepairResponse } from "@/lib/streams-ai/routes/structured-response-service";
 
+type StreamsMessageRequestBody = Record<string, any> & {
+  content?: string;
+  message?: string;
+  attachments?: any[];
+  idempotencyKey?: string;
+  turnId?: string;
+  userId?: string;
+};
+
 function encodeSse(event: string, payload: Record<string, unknown>) {
   return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
 }
@@ -35,7 +44,7 @@ function safeFallbackStream() {
   return streamTextResponse("Streams could not complete that response. Please retry.", { status: "error" });
 }
 
-function buildInternalRequest(request: NextRequest, body: Record<string, any>) {
+function buildInternalRequest(request: NextRequest, body: StreamsMessageRequestBody) {
   const headers = new Headers(request.headers);
   headers.set("Content-Type", "application/json");
   return new NextRequest(request.url, {
@@ -45,7 +54,7 @@ function buildInternalRequest(request: NextRequest, body: Record<string, any>) {
   });
 }
 
-function normalizedRequestBody(body: Record<string, any>) {
+function normalizedRequestBody(body: StreamsMessageRequestBody): StreamsMessageRequestBody {
   const idempotencyKey = String(body.idempotencyKey || body.userId || "").trim() || crypto.randomUUID();
   const turnId = String(body.turnId || "").trim() || crypto.randomUUID();
   return { ...body, idempotencyKey, turnId };
@@ -53,7 +62,7 @@ function normalizedRequestBody(body: Record<string, any>) {
 
 async function persistRepairedTurn(
   request: NextRequest,
-  body: Record<string, any>,
+  body: StreamsMessageRequestBody,
   userContent: string,
   repaired: string,
 ) {
@@ -90,18 +99,19 @@ async function persistRepairedTurn(
   }
 
   return {
-    sessionId: userData.sessionId as string,
-    assistantMessageId: assistantData.message.id as string,
+    sessionId: String(userData.sessionId),
+    assistantMessageId: String(assistantData.message.id),
   };
 }
 
 function structuredResponse(
   request: NextRequest,
-  body: Record<string, any>,
+  body: StreamsMessageRequestBody,
   userContent: string,
   validationInstruction: string,
 ) {
   const encoder = new TextEncoder();
+
   return new Response(new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, payload: Record<string, unknown>) => {
@@ -111,19 +121,17 @@ function structuredResponse(
       try {
         const upstream = await memoryMessagesPOST(buildInternalRequest(request, body));
         const collected = await collectSseResponse(upstream, (payload) => send("activity", payload));
-        if (!collected.content.trim()) {
-          throw new Error(String(collected.errorPayload?.message || "The assistant returned no response to validate"));
-        }
-
         const validated = await validateAndRepairResponse({
           instruction: validationInstruction,
           draft: collected.content,
-          forceRepair: Boolean(collected.errorPayload || !collected.completePayload?.ok),
+          upstreamOk: Boolean(collected.completePayload?.ok) && !collected.errorPayload,
         });
 
         let sessionId = String(collected.completePayload?.sessionId || "");
         let assistantMessageId = String(collected.completePayload?.assistantMessageId || "");
-        if (validated.repaired || !sessionId || !assistantMessageId) {
+
+        if (validated.repaired) {
+          send("activity", { phase: "checking", statusText: "Preparing response…" });
           const persisted = await persistRepairedTurn(request, body, userContent, validated.content);
           sessionId = persisted.sessionId;
           assistantMessageId = persisted.assistantMessageId;
@@ -166,8 +174,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rawBody = await request.clone().json().catch(() => ({}));
-    const body = normalizedRequestBody(rawBody);
+    const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
+    const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
     const validationInstruction = resolveValidationInstruction(body, userContent);
     const imageAttached = hasImageAttachment(body.attachments);
