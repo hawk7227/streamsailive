@@ -5,6 +5,7 @@ import { StreamsAIAssetsRepository } from "../repositories/assets-repository";
 import { StreamsAIMessagesRepository } from "../repositories/messages-repository";
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
 import type { StreamsMemoryContext } from "../intelligence/memory-engine";
+import { assertResponseStructure } from "./response-structure-validator";
 
 const assets = new StreamsAIAssetsRepository();
 const messages = new StreamsAIMessagesRepository();
@@ -35,9 +36,10 @@ export async function ensureSession(scope: StreamsAIScope, sessionId: string, co
 }
 
 export async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
+  assertResponseStructure(userContent, assistantContent);
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   await messages.create(scope, { sessionId: persistedSessionId, role: body.role || "user", content: userContent, status: body.status || "complete", metadata: buildUserMetadata(body) });
-  const assistantMessage = await messages.create(scope, { sessionId: persistedSessionId, role: "assistant", content: assistantContent, status: assistantStatus, metadata: assistantMetadata });
+  const assistantMessage = await messages.create(scope, { sessionId: persistedSessionId, role: "assistant", content: assistantContent, status: assistantStatus, metadata: { ...assistantMetadata, structureValidated: true } });
   return { sessionId: persistedSessionId, assistantMessageId: assistantMessage.id };
 }
 
@@ -105,9 +107,7 @@ export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPo
   ].join("\n");
 
   return {
-    text: sections.length
-      ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\n${responseContract}\n\nUse the attached file context above when answering.`
-      : responseContract,
+    text: sections.length ? `[Attached file context supplied by Streams backend]\n${sections.join("\n\n---\n\n")}\n[/Attached file context]\n\n${responseContract}\n\nUse the attached file context above when answering.` : responseContract,
     imageParts,
     statusText: aggregate,
     statusEvents: Array.from(statusEvents),
