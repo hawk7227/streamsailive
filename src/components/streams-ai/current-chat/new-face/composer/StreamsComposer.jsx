@@ -50,10 +50,23 @@ export default function StreamsComposer({
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
+  const submitLockRef = useRef(false);
+  const sawStreamingRef = useRef(false);
 
   useEffect(() => {
     autosizeComposerTextarea(inputRef.current);
   }, [message, selectedTool]);
+
+  useEffect(() => {
+    if (isStreaming) {
+      sawStreamingRef.current = true;
+      return;
+    }
+    if (sawStreamingRef.current) {
+      submitLockRef.current = false;
+      sawStreamingRef.current = false;
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     const handleActivity = (event) => {
@@ -120,11 +133,12 @@ export default function StreamsComposer({
   }
 
   function submit() {
-    if (isDisabled) return;
+    if (isDisabled || submitLockRef.current) return;
     const value = message.trim();
     const hasAttachments = readyAttachments.length > 0;
     if (!value && !hasAttachments) return;
 
+    submitLockRef.current = true;
     let finalMessage = value || ATTACHMENT_ONLY_SENTINEL;
     if (selectedTool?.id === "create_image") finalMessage = `Create an image of ${value || "the attached reference"}`;
     if (selectedTool?.id === "url") finalMessage = `Read the URL: ${value}`;
@@ -133,12 +147,17 @@ export default function StreamsComposer({
     clearInput();
     setSelectedTool(null);
     setActiveMenu("");
-    onSubmit?.({
-      message: finalMessage,
-      composerMode: selectedTool?.id === "url" ? "url" : "chat",
-      mode,
-      webSearchEnabled: selectedTool?.id === "web_search",
-    });
+    try {
+      onSubmit?.({
+        message: finalMessage,
+        composerMode: selectedTool?.id === "url" ? "url" : "chat",
+        mode,
+        webSearchEnabled: selectedTool?.id === "web_search",
+      });
+    } catch (error) {
+      submitLockRef.current = false;
+      throw error;
+    }
   }
 
   function handleFileChange(event) {
