@@ -21,6 +21,14 @@ function boundedLimit(value?: number) {
   return Math.max(1, Math.min(MAX_PAGE_SIZE, Math.trunc(numeric)));
 }
 
+function isIntegritySchemaDrift(error: any) {
+  const text = String(error?.message || error || "").toLowerCase();
+  return text.includes("idempotency_key")
+    || text.includes("turn_id")
+    || text.includes("streams_ai_messages_idempotency_unique")
+    || text.includes("could not find the") && (text.includes("column") || text.includes("relationship"));
+}
+
 export class StreamsAIMessagesRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
@@ -70,7 +78,7 @@ export class StreamsAIMessagesRepository {
 
   async findByIdempotencyKey(scope: StreamsAIScope, idempotencyKey: string) {
     if (!idempotencyKey) return null;
-    const { data, error } = await this.db()
+    const direct = await this.db()
       .from(streamsAITables.chatMessages)
       .select("*")
       .eq("tenant_id", scope.tenantId)
@@ -78,8 +86,20 @@ export class StreamsAIMessagesRepository {
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
 
-    if (error) throw new Error(`Failed to read STREAMS AI message idempotency record: ${error.message}`);
-    return data || null;
+    if (!direct.error) return direct.data || null;
+    if (!isIntegritySchemaDrift(direct.error)) throw new Error(`Failed to read STREAMS AI message idempotency record: ${direct.error.message}`);
+
+    const fallback = await this.db()
+      .from(streamsAITables.chatMessages)
+      .select("*")
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .contains("metadata", { idempotencyKey })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (fallback.error) throw new Error(`Failed to read STREAMS AI message compatibility idempotency record: ${fallback.error.message}`);
+    return fallback.data || null;
   }
 
   async create(scope: StreamsAIScope, input: IdempotentMessageInput) {
@@ -102,6 +122,11 @@ export class StreamsAIMessagesRepository {
     if (sessionError) throw new Error(`Failed to verify STREAMS AI session: ${sessionError.message}`);
     if (!session?.id) throw new Error("STREAMS AI session not found or not owned by user.");
 
+    const metadata = {
+      ...(input.metadata || {}),
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(input.turnId ? { turnId: input.turnId } : {}),
+    };
     const row = {
       tenant_id: scope.tenantId,
       user_id: scope.userId,
@@ -110,19 +135,36 @@ export class StreamsAIMessagesRepository {
       role: input.role,
       content: input.content || "",
       status: input.status || "complete",
-      metadata: input.metadata || {},
+      metadata,
       turn_id: input.turnId || null,
       idempotency_key: idempotencyKey,
     };
 
-    const query = idempotencyKey
+    const primaryQuery = idempotencyKey
       ? db.from(streamsAITables.chatMessages).upsert(row, { onConflict: "tenant_id,user_id,idempotency_key", ignoreDuplicates: true })
       : db.from(streamsAITables.chatMessages).insert(row);
+    const primary = await primaryQuery.select("*").maybeSingle();
 
-    const { data, error } = await query.select("*").maybeSingle();
-    if (error) throw new Error(`Failed to create STREAMS AI message: ${error.message}`);
+    let persisted = primary.data || null;
+    if (primary.error && isIntegritySchemaDrift(primary.error)) {
+      const legacyRow = {
+        tenant_id: scope.tenantId,
+        user_id: scope.userId,
+        project_id: session.project_id,
+        session_id: input.sessionId,
+        role: input.role,
+        content: input.content || "",
+        status: input.status || "complete",
+        metadata,
+      };
+      const legacy = await db.from(streamsAITables.chatMessages).insert(legacyRow).select("*").single();
+      if (legacy.error) throw new Error(`Failed to create STREAMS AI compatibility message: ${legacy.error.message}`);
+      persisted = legacy.data;
+    } else if (primary.error) {
+      throw new Error(`Failed to create STREAMS AI message: ${primary.error.message}`);
+    }
 
-    const persisted = data || (idempotencyKey ? await this.findByIdempotencyKey(scope, idempotencyKey) : null);
+    if (!persisted && idempotencyKey) persisted = await this.findByIdempotencyKey(scope, idempotencyKey);
     if (!persisted) throw new Error("STREAMS AI message persistence returned no record.");
 
     await db
