@@ -7,6 +7,7 @@ import {
   requiresDeterministicStructureCheck,
   validateResponseStructure,
 } from "../src/lib/streams-ai/routes/response-structure-validator";
+import { buildDeterministicScreenshotResponse } from "../src/lib/streams-ai/routes/structured-response-service";
 import { MESSAGE_ACTIONS } from "../src/lib/streams-ai/repositories/message-actions-repository";
 
 const canonicalScreenshotResponse = [
@@ -47,6 +48,16 @@ describe("STREAMS AI response integrity", () => {
     );
     expect(result.valid).toBe(false);
     expect(result.missing).toContain("remove generic follow-up filler");
+  });
+
+  it("builds a valid deterministic screenshot response when repair infrastructure fails", () => {
+    const output = buildDeterministicScreenshotResponse("The screenshot displays a dashboard with a visible Ready label. Please let me know if you need anything else.");
+    const validation = validateResponseStructure("Review the attached screenshot.", output);
+    expect(validation).toEqual({ valid: true, missing: [] });
+    expect(output).toContain("| Visible claim | Verified by screenshot? | Evidence still required |");
+    expect(output).toContain("```text");
+    expect(output).toContain("> The screenshot does not independently verify");
+    expect(output).not.toContain("Please let me know");
   });
 
   it("uses a strict message action allowlist", () => {
