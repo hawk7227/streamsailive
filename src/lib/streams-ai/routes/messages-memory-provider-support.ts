@@ -45,13 +45,12 @@ export function hasImageAttachment(attachments: unknown) {
 
 export function resolveValidationInstruction(body: ChatPostBody, userContent: string) {
   const explicit = String(body.metadata?.validationInstruction || "").trim();
-  if (explicit) return explicit;
-  if (!hasImageAttachment(body.attachments)) return userContent;
-  return [
-    userContent || "Review the attached screenshot.",
-    "This request includes an image attachment and must use the canonical screenshot-review structure.",
-    "Include a short summary, a Markdown table with exactly these columns: Visible claim | Verified by screenshot? | Evidence still required, a fenced code block, a blockquote warning, explicit screenshot attribution, and a verification note. Do not add a generic follow-up closing.",
-  ].join("\n\n");
+  return explicit || userContent;
+}
+
+function shouldAssertStructure(body: ChatPostBody, instruction: string) {
+  if (body.metadata?.enforceDeterministicStructure !== true) return false;
+  return Boolean(String(instruction || "").trim());
 }
 
 export async function getHistoryForPrompt(scope: StreamsAIScope, sessionId: string, userContent: string) {
@@ -69,7 +68,8 @@ export async function ensureSession(scope: StreamsAIScope, sessionId: string, co
 
 export async function persistChatTurn({ scope, sessionId, userContent, assistantContent, body, assistantStatus, assistantMetadata }: { scope: StreamsAIScope; sessionId: string; userContent: string; assistantContent: string; body: ChatPostBody; assistantStatus: string; assistantMetadata: Record<string, unknown> }) {
   const validationInstruction = resolveValidationInstruction(body, userContent);
-  assertResponseStructure(validationInstruction, assistantContent);
+  const structureEnforced = shouldAssertStructure(body, validationInstruction);
+  if (structureEnforced) assertResponseStructure(validationInstruction, assistantContent);
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   const turnId = resolveTurnId(body);
   const idempotencyBase = resolveIdempotencyBase(body);
@@ -97,7 +97,7 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
     role: "assistant",
     content: assistantContent,
     status: assistantStatus,
-    metadata: { ...assistantMetadata, structureValidated: true, validationInstruction, turnId, sourceUserMessageId: userMessageId },
+    metadata: { ...assistantMetadata, structureValidated: structureEnforced, validationInstruction: structureEnforced ? validationInstruction : null, turnId, sourceUserMessageId: userMessageId },
     turnId,
     idempotencyKey: idempotencyBase ? `${idempotencyBase}:assistant` : null,
   });
@@ -109,6 +109,7 @@ export function buildUserMetadata(body: ChatPostBody) {
   delete metadata.skipUserPersistence;
   delete metadata.sourceUserMessageId;
   delete metadata.validationInstruction;
+  delete metadata.enforceDeterministicStructure;
   return { ...metadata, copiedUiUserId: body.userId || null, assistantRuntime: "streams-ai-memory-provider-router", mode: "provider-router-memory", attachments: body.attachments || [] };
 }
 
