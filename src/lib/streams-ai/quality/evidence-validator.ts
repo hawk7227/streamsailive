@@ -1,7 +1,7 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
 import { countVisibleMarkdownCitations } from "../research/provider-citation-renderer";
 
-export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v4";
+export const STREAMS_EVIDENCE_VALIDATOR_VERSION = "streams-evidence-validator-v5";
 
 export type StreamsEvidenceValidation = {
   version: string;
@@ -32,13 +32,29 @@ const NUMBER_WORDS: Record<string, number> = {
   ten: 10,
 };
 
-function requestedCurrentItemCount(instruction: string) {
+const COUNT_TOKEN = "(\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+const ITEM_TOKEN = "(?:headlines?|announcements?|changes?|items?|examples?|sources?)";
+
+function parseCountToken(token: string | undefined) {
+  const value = String(token || "").toLowerCase();
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : NUMBER_WORDS[value] || null;
+}
+
+export function requestedCurrentItemCount(instruction: string) {
   const source = String(instruction || "");
-  const match = source.match(/\b(?:top|latest|most important)?\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:headlines?|announcements?|changes?|items?|examples?|sources?)\b/i);
-  if (!match) return null;
-  const token = String(match[1] || "").toLowerCase();
-  const numeric = Number(token);
-  return Number.isFinite(numeric) ? numeric : NUMBER_WORDS[token] || null;
+  const patterns = [
+    new RegExp(`\\b(?:top|latest)\\s+${COUNT_TOKEN}\\s+(?:most\\s+important\\s+)?${ITEM_TOKEN}\\b`, "i"),
+    new RegExp(`\\b${COUNT_TOKEN}\\s+(?:most\\s+important\\s+|top\\s+|latest\\s+)?${ITEM_TOKEN}\\b`, "i"),
+    new RegExp(`\\b(?:give|list|show|return|find|what\\s+are)\\s+(?:me\\s+)?(?:the\\s+)?${COUNT_TOKEN}\\b[\\s\\S]{0,50}?\\b${ITEM_TOKEN}\\b`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    const parsed = parseCountToken(match?.[1]);
+    if (parsed !== null) return parsed;
+  }
+  return null;
 }
 
 export function validateStreamsEvidence(input: {
