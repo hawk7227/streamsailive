@@ -55,17 +55,48 @@ function lower(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function cleanLiteralHeading(value: string) {
+  return String(value || "")
+    .replace(/^\s*[-*•]\s+/, "")
+    .replace(/\s+$/g, "")
+    .trim();
+}
+
 function detectHeadings(text: string) {
-  const quoted = Array.from(text.matchAll(/[“\"]([^”\"]{2,80})[”\"]/g)).map((match) => match[1].trim());
-  const afterHeadings = text.match(/headings?\s*:?\s*([^\n]+)/i)?.[1]
+  const source = String(text || "").replace(/\r\n/g, "\n");
+  const quoted = Array.from(source.matchAll(/[“\"]([^”\"]{2,80})[”\"]/g)).map((match) => cleanLiteralHeading(match[1]));
+  const lines = source.split("\n");
+  const literal: string[] = [];
+  const markerIndex = lines.findIndex((line) => /(?:section\s+)?headings?\s*:?[\s]*$/i.test(line.trim()));
+
+  if (markerIndex >= 0) {
+    for (const raw of lines.slice(markerIndex + 1)) {
+      const line = raw.trim();
+      if (!line) {
+        if (literal.length) break;
+        continue;
+      }
+      const numbered = line.match(/^(\d+[.)]\s+.+)$/);
+      const markdownHeading = line.match(/^#{1,6}\s+(.+)$/);
+      const bullet = line.match(/^[-*•]\s+(.+)$/);
+      if (numbered) literal.push(cleanLiteralHeading(numbered[1]));
+      else if (markdownHeading) literal.push(cleanLiteralHeading(markdownHeading[1]));
+      else if (bullet) literal.push(cleanLiteralHeading(bullet[1]));
+      else if (literal.length) break;
+    }
+  }
+
+  const inline = source.match(/headings?\s*:\s*([^\n]+)/i)?.[1]
     ?.split(/,|\band\b/i)
-    .map((value) => value.trim())
+    .map((value) => cleanLiteralHeading(value))
     .filter(Boolean) || [];
-  return Array.from(new Set([...quoted, ...afterHeadings])).slice(0, 20);
+
+  return Array.from(new Set([...literal, ...quoted, ...inline].filter(Boolean))).slice(0, 20);
 }
 
 export function detectFormatContract(userMessage: string): StreamsFormatContract {
   const text = lower(userMessage);
+  const headings = detectHeadings(userMessage);
   return {
     exact: /\b(exact|exactly|only|same order|do not change|preserve.*format|must include|return only)\b/.test(text),
     table: /\b(markdown table|table|columns?)\b/.test(text),
@@ -74,9 +105,9 @@ export function detectFormatContract(userMessage: string): StreamsFormatContract
     csv: /\bcsv\b/.test(text),
     codeBlock: /\b(code block|fenced code|```)/.test(text),
     blockquote: /\bblockquote\b|^\s*>/m.test(userMessage),
-    numberedSections: /\b(numbered sections?|numbered list|steps?\s+1|1\.)\b/.test(text),
-    headings: detectHeadings(userMessage),
-    requestedOrder: /\b(same order|in this order|order below|following order)\b/.test(text),
+    numberedSections: headings.some((heading) => /^\d+[.)]\s+/.test(heading)) || /\b(numbered sections?|numbered list|steps?\s+1|1\.)\b/.test(text),
+    headings,
+    requestedOrder: /\b(same order|in this order|order below|following order)\b/.test(text) || headings.length > 1,
   };
 }
 
