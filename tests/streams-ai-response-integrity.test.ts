@@ -9,6 +9,7 @@ import {
 } from "../src/lib/streams-ai/routes/response-structure-validator";
 import { buildDeterministicScreenshotResponse } from "../src/lib/streams-ai/routes/structured-response-service";
 import { MESSAGE_ACTIONS } from "../src/lib/streams-ai/repositories/message-actions-repository";
+import { buildStreamsParityPlan, buildStreamsParitySystemPrompt, STREAMS_PARITY_PROFILE_VERSION } from "../src/lib/streams-ai/intelligence/parity-profile";
 
 const canonicalScreenshotResponse = [
   "The screenshot shows a deployment dashboard.",
@@ -92,6 +93,42 @@ describe("STREAMS AI response integrity", () => {
     expect(repository).toContain("idempotency_key");
     expect(repository).toContain("isIntegritySchemaDrift");
     expect(repository).toContain("compatibility message");
+  });
+
+  it("activates one versioned parity profile in the live chat pipeline", () => {
+    const activeRoute = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-active.ts"), "utf8");
+    const profile = buildStreamsParitySystemPrompt("2026-07-14T00:00:00.000Z");
+    const plan = buildStreamsParityPlan({
+      userInstruction: "Generate the full non-condensed answer in this exact table structure.",
+      mode: "reasoning",
+      hasImages: true,
+      hasFiles: true,
+      hasMemory: true,
+      hasRuntimeContext: true,
+    });
+
+    expect(STREAMS_PARITY_PROFILE_VERSION).toBe("streams-unified-parity-v1");
+    expect(profile).toContain("closest technically achievable equivalent");
+    expect(profile).toContain("same request, context, files, tools, and current information");
+    expect(plan).toContain("Response depth: exhaustive");
+    expect(plan).toContain("Exact structure required: yes");
+    expect(activeRoute).toContain("buildUniversalChatContext");
+    expect(activeRoute).toContain("retrieveStreamsMemoryContext");
+    expect(activeRoute).toContain("buildStreamsParityPlan");
+    expect(activeRoute).toContain("buildStreamsParitySystemPrompt");
+    expect(activeRoute).toContain("parityProfile: STREAMS_PARITY_PROFILE_VERSION");
+  });
+
+  it("does not announce writing before the first real response token", () => {
+    const activeRoute = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-active.ts"), "utf8");
+    const writingIndex = activeRoute.indexOf('statusText: "Writing…"');
+    const deltaIndex = activeRoute.indexOf('eventName === "response.output_text.delta"');
+    const firstTokenGuardIndex = activeRoute.indexOf("if (!writingStarted)");
+
+    expect(deltaIndex).toBeGreaterThan(-1);
+    expect(firstTokenGuardIndex).toBeGreaterThan(deltaIndex);
+    expect(writingIndex).toBeGreaterThan(firstTokenGuardIndex);
+    expect(activeRoute).not.toContain('if (!res.body) throw new Error("Streaming response body was unavailable");\n\n  input.send("activity", { phase: "streaming", statusText: "Writing…"');
   });
 
   it("uses event-driven scroll restoration and only notifies after intentional scroll away", () => {
