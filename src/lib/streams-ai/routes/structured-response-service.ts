@@ -81,6 +81,41 @@ function extractResponseText(json: any) {
   return parts.join("\n\n").trim();
 }
 
+function removeGenericClosing(value: string) {
+  return String(value || "")
+    .replace(/\n*if you (?:want|need|would like)[\s\S]{0,180}(?:let me know|i can help|please ask)[.!]?\s*$/i, "")
+    .replace(/\n*please let me know[^\n]*[.!]?\s*$/i, "")
+    .trim();
+}
+
+export function buildDeterministicScreenshotResponse(draft: string) {
+  const cleaned = removeGenericClosing(draft);
+  const analysis = cleaned || "The screenshot could not be described reliably from the first response draft.";
+  const excerpt = analysis.replace(/```/g, "").slice(0, 1200).trim();
+
+  return [
+    "The screenshot shows a visible interface that requires separation between what is displayed and what is independently verified.",
+    "",
+    "### Visible content and interpretation",
+    "",
+    analysis,
+    "",
+    "| Visible claim | Verified by screenshot? | Evidence still required |",
+    "|---|---|---|",
+    "| Interface content and status labels described above | Visible in the screenshot only; not independently verified | Current application state, source history, logs, and live functional testing |",
+    "",
+    "```text",
+    excerpt || "No reliable visible-text excerpt was returned.",
+    "```",
+    "",
+    "> The screenshot does not independently verify deployment effects, functional correctness, integrations, stored configuration, or completed system actions.",
+    "",
+    "### Verification note",
+    "",
+    "Verification requires current logs, source-control history, relevant database or configuration records, and direct live testing beyond the screenshot.",
+  ].join("\n");
+}
+
 export async function repairStructuredResponse(input: {
   instruction: string;
   draft: string;
@@ -131,20 +166,36 @@ export async function validateAndRepairResponse(input: {
   let content = input.draft;
   let validation = validateResponseStructure(input.instruction, content);
   let repaired = false;
+  let repairMode: "none" | "model" | "deterministic" = "none";
 
   if (input.forceRepair || !validation.valid) {
-    content = await repairStructuredResponse({
-      instruction: input.instruction,
-      draft: content,
-      missing: validation.missing.length ? validation.missing : ["valid completed response"],
-    });
+    try {
+      content = await repairStructuredResponse({
+        instruction: input.instruction,
+        draft: content,
+        missing: validation.missing.length ? validation.missing : ["valid completed response"],
+      });
+      validation = validateResponseStructure(input.instruction, content);
+      repaired = true;
+      repairMode = "model";
+    } catch {
+      content = buildDeterministicScreenshotResponse(content);
+      validation = validateResponseStructure(input.instruction, content);
+      repaired = true;
+      repairMode = "deterministic";
+    }
+  }
+
+  if (!validation.valid) {
+    content = buildDeterministicScreenshotResponse(content);
     validation = validateResponseStructure(input.instruction, content);
     repaired = true;
+    repairMode = "deterministic";
   }
 
   if (!validation.valid) {
     throw new Error(`Repaired response did not satisfy requested structure: ${validation.missing.join(", ")}`);
   }
 
-  return { content, validation, repaired };
+  return { content, validation, repaired, repairMode };
 }
