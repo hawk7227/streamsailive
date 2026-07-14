@@ -74,7 +74,7 @@ describe("STREAMS AI response integrity", () => {
     expect(source).toContain("ChatScrollController");
   });
 
-  it("restores direct streaming for image and attachment-only reviews", () => {
+  it("keeps direct streaming while enforcing screenshot generation rules", () => {
     const messagesRoute = readFileSync(resolve(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
     const providerSupport = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-provider-support.ts"), "utf8");
     const repository = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/repositories/messages-repository.ts"), "utf8");
@@ -82,6 +82,10 @@ describe("STREAMS AI response integrity", () => {
     expect(messagesRoute).toContain("explicitlyRequestsDeterministicStructure");
     expect(messagesRoute).toContain("text === ATTACHMENT_ONLY_SENTINEL");
     expect(messagesRoute).not.toContain("if (imageAttached ||");
+    expect(providerSupport).toContain("Direct-stream screenshot and image review contract");
+    expect(providerSupport).toContain("Visible Content, Interpretation, Verification Note");
+    expect(providerSupport).toContain("Every factual statement about visible screenshot content must be attributed");
+    expect(providerSupport).toContain("Never end a screenshot or image review with 'Let me know'");
     expect(providerSupport).toContain("enforceDeterministicStructure");
     expect(providerSupport).toContain("if (structureEnforced) assertResponseStructure");
     expect(repository).toContain("findByIdempotencyKey");
@@ -90,12 +94,15 @@ describe("STREAMS AI response integrity", () => {
     expect(repository).toContain("compatibility message");
   });
 
-  it("uses event-driven scroll restoration without a fixed settle timer", () => {
+  it("uses event-driven scroll restoration and only notifies after intentional scroll away", () => {
     const source = readFileSync(resolve(process.cwd(), "src/components/streams-ai/current-chat/new-face/scroll/ChatScrollController.jsx"), "utf8");
     expect(source).not.toContain("INITIAL_SETTLE_MS");
     expect(source).toContain("document.fonts?.ready");
     expect(source).toContain("waitForCurrentMedia");
     expect(source).toContain("New messages ↓");
+    expect(source).toContain("userMovedRef.current && !isNearBottom(surface)");
+    expect(source).toContain("if (initialRestoreRef.current || near || !userMovedRef.current)");
+    expect(source).not.toContain('surface.addEventListener("pointerdown", markUserMovement');
   });
 
   it("removes the legacy desktop console runtime completely", () => {
