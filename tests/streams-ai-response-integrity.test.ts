@@ -70,6 +70,8 @@ describe("STREAMS AI response integrity", () => {
     expect(messagesRoute).toContain("structuredResponse");
     expect(repository).toContain("findByIdempotencyKey");
     expect(repository).toContain("idempotency_key");
+    expect(repository).toContain("isIntegritySchemaDrift");
+    expect(repository).toContain("compatibility message");
   });
 
   it("uses event-driven scroll restoration without a fixed settle timer", () => {
@@ -107,5 +109,20 @@ describe("STREAMS AI response integrity", () => {
     expect(keyboardBridge).toContain(".streamsOperator");
     expect(keyboardBridge).toContain("visualViewport");
     expect(keyboardBridge).not.toContain(".shell.mobile");
+  });
+
+  it("shows attachment-only user content and live assistant activity", () => {
+    const runtime = readFileSync(resolve(process.cwd(), "src/components/streams-ai/current-chat/new-face/hooks/useStreamsChatRuntime.js"), "utf8");
+    const shell = readFileSync(resolve(process.cwd(), "src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx"), "utf8");
+    const messageCss = readFileSync(resolve(process.cwd(), "src/components/streams-ai/visual-operator/streams-operator-message-states.css"), "utf8");
+
+    expect(runtime).toContain("Review the attached file.");
+    expect(runtime).toContain("Checking the reference image…");
+    expect(runtime).toContain("completed || !receivedText");
+    expect(shell).toContain("MessageAttachments");
+    expect(shell).toContain("PendingAssistant");
+    expect(shell).toContain("!isUser && !failed");
+    expect(messageCss).toContain("operatorPendingDots");
+    expect(messageCss).toContain("operatorAttachmentImage");
   });
 });
