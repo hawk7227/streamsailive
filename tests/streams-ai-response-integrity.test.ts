@@ -95,8 +95,10 @@ describe("STREAMS AI response integrity", () => {
     expect(repository).toContain("compatibility message");
   });
 
-  it("activates one versioned parity profile in the live chat pipeline", () => {
+  it("activates one versioned parity profile through the authoritative live pipeline", () => {
     const activeRoute = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/routes/messages-memory-active.ts"), "utf8");
+    const controller = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/runtime/authoritative-turn-controller.ts"), "utf8");
+    const contextPackage = readFileSync(resolve(process.cwd(), "src/lib/streams-ai/runtime/context-package.ts"), "utf8");
     const profile = buildStreamsParitySystemPrompt("2026-07-14T00:00:00.000Z");
     const plan = buildStreamsParityPlan({
       userInstruction: "Generate the full non-condensed answer in this exact table structure.",
@@ -112,11 +114,14 @@ describe("STREAMS AI response integrity", () => {
     expect(profile).toContain("same request, context, files, tools, and current information");
     expect(plan).toContain("Response depth: exhaustive");
     expect(plan).toContain("Exact structure required: yes");
-    expect(activeRoute).toContain("buildUniversalChatContext");
-    expect(activeRoute).toContain("retrieveStreamsMemoryContext");
-    expect(activeRoute).toContain("buildStreamsParityPlan");
+    expect(activeRoute).toContain("prepareAuthoritativeStreamsTurn");
+    expect(activeRoute).toContain("buildAuthoritativeTurnPrompt");
     expect(activeRoute).toContain("buildStreamsParitySystemPrompt");
     expect(activeRoute).toContain("parityProfile: STREAMS_PARITY_PROFILE_VERSION");
+    expect(controller).toContain("buildStreamsContextPackage");
+    expect(controller).toContain("routeStreamsModels");
+    expect(contextPackage).toContain("buildUniversalChatContext");
+    expect(contextPackage).toContain("retrieveStreamsMemoryContext");
   });
 
   it("does not announce writing before the first real response token", () => {
