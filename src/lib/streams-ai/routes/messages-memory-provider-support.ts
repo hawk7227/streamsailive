@@ -18,7 +18,7 @@ const DEFAULT_PRO_MODEL = "gpt-4o";
 const DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
 
 type PersistedChatMessage = { id?: string; role?: string | null; content?: string | null; metadata?: Record<string, any> | null };
-type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, unknown>; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
+type ChatPostBody = { sessionId?: string; role?: "user" | "assistant" | "system" | "tool"; content?: string; message?: string; status?: string; metadata?: Record<string, any>; userId?: string; idempotencyKey?: string; turnId?: string; mode?: string; provider?: string; attachments?: any[] };
 type AttachmentContext = { text: string; imageParts: OpenAI.Chat.Completions.ChatCompletionContentPartImage[]; statusText: string; statusEvents: string[] };
 type StreamSend = (event: string, payload: Record<string, unknown>) => void;
 
@@ -51,29 +51,42 @@ export async function persistChatTurn({ scope, sessionId, userContent, assistant
   const persistedSessionId = await ensureSession(scope, sessionId, userContent);
   const turnId = resolveTurnId(body);
   const idempotencyBase = resolveIdempotencyBase(body);
-  const userMessage = await messages.create(scope, {
-    sessionId: persistedSessionId,
-    role: body.role || "user",
-    content: userContent,
-    status: body.status || "complete",
-    metadata: { ...buildUserMetadata(body), turnId },
-    turnId,
-    idempotencyKey: idempotencyBase ? `${idempotencyBase}:user` : null,
-  });
+  const skipUserPersistence = body.metadata?.skipUserPersistence === true;
+  const sourceUserMessageId = String(body.metadata?.sourceUserMessageId || "").trim();
+
+  let userMessageId = sourceUserMessageId;
+  if (!skipUserPersistence) {
+    const userMessage = await messages.create(scope, {
+      sessionId: persistedSessionId,
+      role: body.role || "user",
+      content: userContent,
+      status: body.status || "complete",
+      metadata: { ...buildUserMetadata(body), turnId },
+      turnId,
+      idempotencyKey: idempotencyBase ? `${idempotencyBase}:user` : null,
+    });
+    userMessageId = userMessage.id;
+  } else if (!sourceUserMessageId) {
+    throw new Error("Assistant-only persistence requires a verified source user message.");
+  }
+
   const assistantMessage = await messages.create(scope, {
     sessionId: persistedSessionId,
     role: "assistant",
     content: assistantContent,
     status: assistantStatus,
-    metadata: { ...assistantMetadata, structureValidated: true, turnId, sourceUserMessageId: userMessage.id },
+    metadata: { ...assistantMetadata, structureValidated: true, turnId, sourceUserMessageId: userMessageId },
     turnId,
     idempotencyKey: idempotencyBase ? `${idempotencyBase}:assistant` : null,
   });
-  return { sessionId: persistedSessionId, userMessageId: userMessage.id, assistantMessageId: assistantMessage.id, turnId };
+  return { sessionId: persistedSessionId, userMessageId, assistantMessageId: assistantMessage.id, turnId };
 }
 
 export function buildUserMetadata(body: ChatPostBody) {
-  return { ...(body.metadata || {}), copiedUiUserId: body.userId || null, assistantRuntime: "streams-ai-memory-provider-router", mode: "provider-router-memory", attachments: body.attachments || [] };
+  const metadata = { ...(body.metadata || {}) };
+  delete metadata.skipUserPersistence;
+  delete metadata.sourceUserMessageId;
+  return { ...metadata, copiedUiUserId: body.userId || null, assistantRuntime: "streams-ai-memory-provider-router", mode: "provider-router-memory", attachments: body.attachments || [] };
 }
 
 export async function buildAttachmentContext(scope: StreamsAIScope, body: ChatPostBody, sessionId: string, send?: StreamSend): Promise<AttachmentContext> {
