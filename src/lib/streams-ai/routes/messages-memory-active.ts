@@ -5,6 +5,7 @@ import { StreamsAIMessagesRepository } from "../repositories/messages-repository
 import { StreamsAISessionsRepository } from "../repositories/sessions-repository";
 import { buildStreamsParitySystemPrompt, STREAMS_PARITY_PROFILE_VERSION } from "../intelligence/parity-profile";
 import { learnFromStreamsTurn } from "../intelligence/memory-engine";
+import { collectProviderCitations, renderProviderCitations } from "../research/provider-citation-renderer";
 import { executeAuthoritativeStreamsTurn, prepareAuthoritativeStreamsTurn, type StreamsGeneratedCandidate } from "../runtime/authoritative-turn-controller";
 import { buildAttachmentContext, buildUserMetadata, ensureSession, getHistoryForPrompt, persistChatTurn, resolveIdempotencyBase, resolveTurnId } from "./messages-memory-provider-support";
 
@@ -12,6 +13,19 @@ const messages = new StreamsAIMessagesRepository();
 const sessions = new StreamsAISessionsRepository();
 const SOURCE = "streams-ai-authoritative-runtime";
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
+
+const CURRENT_RESEARCH_CONTRACT = [
+  "<current_research_contract>",
+  "Use live web search for every time-sensitive claim.",
+  "Only include an announcement, event, product change, role, price, law, schedule, or other current fact when retrieved evidence supports it.",
+  "For relative windows such as the last 7 days, verify that every included item falls inside that exact window.",
+  "Prefer official or primary sources. Use reputable reporting only when a primary source is unavailable.",
+  "Every distinct current item must have its own provider-backed citation.",
+  "Include the relevant date for each current item.",
+  "Never invent an announcement, product name, operating-system release, model release, source, date, or quotation.",
+  "When enough supported items cannot be found, state that limitation instead of filling the requested count with guesses.",
+  "</current_research_contract>",
+].join("\n");
 
 type Body = {
   sessionId?: string;
@@ -75,24 +89,31 @@ function streamExistingMessage(message: any) {
   }));
 }
 
-function extractResponseText(payload: any) {
+export function extractProviderResponse(payload: any): ProviderResult {
   const output = Array.isArray(payload?.output) ? payload.output : [];
-  const textParts: string[] = [];
-  let citationCount = 0;
+  const renderedParts: string[] = [];
+  const distinctCitationUrls = new Set<string>();
   let webSearchUsed = false;
 
   for (const item of output) {
     if (String(item?.type || "").includes("web_search")) webSearchUsed = true;
     const content = Array.isArray(item?.content) ? item.content : [];
     for (const part of content) {
-      if (part?.type === "output_text" && part?.text) textParts.push(String(part.text));
-      const annotations = Array.isArray(part?.annotations) ? part.annotations : [];
-      citationCount += annotations.filter((annotation: any) => /citation|url/i.test(String(annotation?.type || ""))).length;
+      if (part?.type !== "output_text" || !part?.text) continue;
+      const citations = collectProviderCitations(Array.isArray(part?.annotations) ? part.annotations : []);
+      citations.forEach((citation) => distinctCitationUrls.add(citation.url));
+      const rendered = renderProviderCitations(String(part.text), citations);
+      renderedParts.push(rendered.content);
     }
   }
 
-  const content = String(payload?.output_text || textParts.join("")) || "";
-  return { content: content.trim(), citationCount, webSearchUsed };
+  const fallback = renderedParts.length ? renderedParts.join("") : String(payload?.output_text || "");
+  const citationCount = distinctCitationUrls.size;
+  return {
+    content: fallback.trim(),
+    citationCount,
+    webSearchUsed: webSearchUsed || citationCount > 0,
+  };
 }
 
 async function callResponsesText(input: {
@@ -104,7 +125,8 @@ async function callResponsesText(input: {
   enableWebSearch: boolean;
   signal?: AbortSignal;
 }): Promise<ProviderResult> {
-  const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: input.prompt }];
+  const effectivePrompt = input.enableWebSearch ? `${input.prompt}\n\n${CURRENT_RESEARCH_CONTRACT}` : input.prompt;
+  const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: effectivePrompt }];
   for (const imageUrl of input.imageUrls) userContent.push({ type: "input_image", image_url: imageUrl, detail: "high" });
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -126,7 +148,7 @@ async function callResponsesText(input: {
     throw new Error(error?.error?.message || error?.message || `Responses request failed: ${response.status}`);
   }
   const payload = await response.json();
-  const result = extractResponseText(payload);
+  const result = extractProviderResponse(payload);
   if (!result.content) throw new Error("The response completed without text output");
   return result;
 }
@@ -141,7 +163,8 @@ async function judgeCandidatesWithModel(input: {
 }) {
   const prompt = [
     "Select the single strongest candidate for the user's request.",
-    "Evaluate intent match, factual coverage, instruction adherence, grounding, uncertainty, structure, tone, and usefulness.",
+    "Evaluate intent match, factual coverage, instruction adherence, grounding, uncertainty, structure, tone, citation visibility, and usefulness.",
+    "Reject candidates that make current claims without visible provider-backed citations.",
     "Return JSON only in this exact shape: {\"selectedIndex\":0,\"reason\":\"brief\"}.",
     `<user_instruction>\n${input.userInstruction}\n</user_instruction>`,
     ...input.candidates.map((candidate, index) => `<candidate index="${index}">\n${candidate.content}\n</candidate>`),
@@ -164,16 +187,20 @@ async function repairCandidateWithModel(input: {
   candidate: StreamsGeneratedCandidate;
   defects: unknown;
   evidenceDefects: unknown;
+  deterministicDefects?: unknown;
   imageUrls: string[];
   enableWebSearch: boolean;
   signal?: AbortSignal;
 }) {
   const prompt = [
-    "Repair the candidate response so it fully satisfies the user's request and every listed quality/evidence defect.",
+    "Repair the candidate response so it fully satisfies the user's request and every listed quality, evidence, and deterministic defect.",
+    "For current research, run live web search again and ensure every distinct current item has a visible provider-backed citation and a date.",
+    "Delete every unsupported claim. Never preserve a claim merely because it appeared in the rejected candidate.",
     "Return only the repaired final answer. Do not explain the repair.",
     `<user_instruction>\n${input.userInstruction}\n</user_instruction>`,
     `<quality_defects>\n${JSON.stringify(input.defects)}\n</quality_defects>`,
     `<evidence_defects>\n${JSON.stringify(input.evidenceDefects)}\n</evidence_defects>`,
+    `<deterministic_defects>\n${JSON.stringify(input.deterministicDefects || [])}\n</deterministic_defects>`,
     `<candidate>\n${input.candidate.content}\n</candidate>`,
   ].join("\n\n");
   return callResponsesText({
@@ -297,11 +324,17 @@ export async function memoryMessagesPOST(request: NextRequest) {
             signal: request.signal,
             emitState: (state, statusText) => send("activity", { phase: state, statusText, source: SOURCE, sessionId }),
             generate: async ({ model, prompt, imageUrls: candidateImages, signal, candidateIndex }) => {
-              send("activity", { phase: "generating", statusText: candidateIndex === 0 ? "Preparing the response…" : "Comparing response candidates…", source: SOURCE, sessionId });
-              return callResponsesText({ apiKey, model, systemText, prompt, imageUrls: candidateImages, enableWebSearch: authoritativeTurn.intent.needsCurrentInformation, signal });
+              const researching = authoritativeTurn.intent.needsCurrentInformation;
+              send("activity", {
+                phase: researching ? "searching" : "generating",
+                statusText: researching ? "Searching current sources…" : candidateIndex === 0 ? "Preparing the response…" : "Comparing response candidates…",
+                source: SOURCE,
+                sessionId,
+              });
+              return callResponsesText({ apiKey, model, systemText, prompt, imageUrls: candidateImages, enableWebSearch: researching, signal });
             },
             judgeWithModel: ({ model, candidates, signal }) => judgeCandidatesWithModel({ apiKey, model, systemText, userInstruction: effectiveInstruction, candidates, signal }),
-            repairWithModel: async ({ model, candidate, judgment, evidence, signal }) => repairCandidateWithModel({
+            repairWithModel: async ({ model, candidate, judgment, evidence, deterministic, signal }) => repairCandidateWithModel({
               apiKey,
               model,
               systemText,
@@ -309,11 +342,12 @@ export async function memoryMessagesPOST(request: NextRequest) {
               candidate,
               defects: judgment.defects,
               evidenceDefects: evidence.defects,
+              deterministicDefects: deterministic.defects,
               imageUrls,
               enableWebSearch: authoritativeTurn.intent.needsCurrentInformation,
               signal,
             }),
-            persistAccepted: async ({ turn, candidate, judgment, evidence, repairAttempts }) => {
+            persistAccepted: async ({ turn, candidate, judgment, evidence, deterministic, repairAttempts }) => {
               const persisted = await persistChatTurn({
                 scope,
                 sessionId,
@@ -327,6 +361,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
                   imageGrounded: imageUrls.length > 0,
                   imageCount: imageUrls.length,
                   webGrounded: candidate.webSearchUsed,
+                  citationCount: candidate.citationCount,
                   serverTimestamp,
                   regeneratedFromMessageId: normalizedBody.metadata?.regeneratedFromMessageId || null,
                   parityProfile: STREAMS_PARITY_PROFILE_VERSION,
@@ -341,6 +376,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
                   contextBudget: turn.context.tokenBudget,
                   parityQuality: judgment,
                   evidenceValidation: evidence,
+                  deterministicValidation: deterministic,
                   repairAttempts,
                 },
               });
@@ -369,6 +405,8 @@ export async function memoryMessagesPOST(request: NextRequest) {
             taskId: result.turn.taskId,
             imageGrounded: imageUrls.length > 0,
             imageCount: imageUrls.length,
+            webGrounded: result.candidate.webSearchUsed,
+            citationCount: result.candidate.citationCount,
             serverTimestamp,
             parityProfile: STREAMS_PARITY_PROFILE_VERSION,
             qualityScore: result.judgment.overallScore,
