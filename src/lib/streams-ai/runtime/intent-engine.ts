@@ -152,6 +152,11 @@ function hasRepositoryAction(text: string) {
   return repositoryTarget && action;
 }
 
+function hasRelativeRecencyWindow(text: string) {
+  return /\b(?:last|past|previous|within the last|in the last)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:hours?|days?|weeks?|months?|years?)\b/.test(text)
+    || /\b(?:yesterday|overnight|this morning|this afternoon|this evening|this week|this month|this year)\b/.test(text);
+}
+
 function collectIntentCandidates(text: string, hasFiles: boolean, hasImages: boolean): StreamsPrimaryIntent[] {
   const intents: StreamsPrimaryIntent[] = [];
   if (hasConnectedAction(text)) intents.push("connected_action");
@@ -161,7 +166,7 @@ function collectIntentCandidates(text: string, hasFiles: boolean, hasImages: boo
   if (/\b(build|implement|patch|wire|refactor|component|function|typescript|javascript|react|next\.js|code)\b/.test(text)) intents.push("coding");
   if (hasImages || /\b(image|screenshot|photo|picture|diagram|see attached)\b/.test(text)) intents.push("image_analysis");
   if (hasFiles || /\b(file|document|pdf|spreadsheet|presentation|attachment|uploaded)\b/.test(text)) intents.push("file_analysis");
-  if (/\b(search|research|latest|current|today|recent|news|price|law|schedule|who is|what is the current)\b/.test(text)) intents.push("research");
+  if (/\b(search|research|latest|current|today|recent|news|price|law|schedule|who is|what is the current)\b/.test(text) || hasRelativeRecencyWindow(text)) intents.push("research");
   if (/\b(rewrite|reword|polish|improve this writing)\b/.test(text)) intents.push("rewriting");
   if (/\b(summarize|summary|condense)\b/.test(text)) intents.push("summarization");
   if (/\b(translate|translation)\b/.test(text)) intents.push("translation");
@@ -180,7 +185,8 @@ function choosePrimaryIntent(candidates: StreamsPrimaryIntent[]): StreamsPrimary
 }
 
 function detectCurrentInformation(text: string) {
-  return /\b(latest|current|today|now|recent|this week|this month|202[5-9]|price|stock|weather|news|law|regulation|schedule|score|standings|ceo|president|version|release)\b/.test(text);
+  return /\b(latest|current|today|now|recent|this week|this month|202[5-9]|price|stock|weather|news|law|regulation|schedule|score|standings|ceo|president|version|release)\b/.test(text)
+    || hasRelativeRecencyWindow(text);
 }
 
 function detectRisk(text: string, primaryIntent: StreamsPrimaryIntent) {
