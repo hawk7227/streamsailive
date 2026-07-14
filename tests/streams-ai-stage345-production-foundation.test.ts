@@ -51,6 +51,15 @@ describe("Streams Stage 3-5 production foundations", () => {
     expect(repository).toContain('file.type === "application/pdf"');
   });
 
+  it("does not mark stored analyzable files failed when chunk indexing is unavailable", () => {
+    const processing = read("src/lib/streams-ai/asset-processing.ts");
+    expect(processing).toContain("persistChunksBestEffort");
+    expect(processing).toContain('indexingStatus: indexing.indexed ? "ready" : chunks.length ? "deferred" : "not_required"');
+    expect(processing).toContain('processingStatus: "ready"');
+    expect(processing).toContain('return { ok: true, status: "metadata_only", stored: true');
+    expect(processing).not.toContain('processingStatus: "failed"');
+  });
+
   it("never marks a tool receipt verified until verification succeeds", async () => {
     const receipt = await executeStreamsTool({
       definition: {
