@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { classifyStreamsIntent } from "../src/lib/streams-ai/runtime/intent-engine";
-import { validateStreamsEvidence } from "../src/lib/streams-ai/quality/evidence-validator";
+import { requestedCurrentItemCount, validateStreamsEvidence } from "../src/lib/streams-ai/quality/evidence-validator";
 import { validateDeterministicStreamsOutput } from "../src/lib/streams-ai/quality/deterministic-output-validator";
 import { validateResponseStructure } from "../src/lib/streams-ai/routes/response-structure-validator";
 import { executeAuthoritativeStreamsTurn, prepareAuthoritativeStreamsTurn } from "../src/lib/streams-ai/runtime/authoritative-turn-controller";
@@ -28,10 +28,18 @@ describe("Streams Stage 2 quality enforcement", () => {
   });
 
   it("requires search and visible citation coverage for current multi-item requests", () => {
-    const intent = classifyStreamsIntent({ userMessage: "What are the three most important AI announcements from the last 7 days?" });
+    const instruction = "What are the three most important AI announcements from the last 7 days?";
+    const intent = classifyStreamsIntent({ userMessage: instruction });
+    expect(intent.needsCurrentInformation).toBe(true);
+    expect(requestedCurrentItemCount(instruction)).toBe(3);
+    expect(requestedCurrentItemCount("Give me the top 5 headlines today.")).toBe(5);
+    expect(requestedCurrentItemCount("List two latest API changes.")).toBe(2);
+
     expect(validateStreamsEvidence({ intent, responseText: "Three announcements.", webSearchUsed: false, citationCount: 0, verifiedToolEvidenceCount: 0 }).accepted).toBe(false);
     const insufficient = validateStreamsEvidence({ intent, responseText: "One announcement [Source](https://example.com/a).", webSearchUsed: true, citationCount: 1, verifiedToolEvidenceCount: 0 });
     expect(insufficient.defects.some((defect) => defect.code === "INSUFFICIENT_CITATION_COVERAGE")).toBe(true);
+    expect(insufficient.defects.some((defect) => defect.code === "INSUFFICIENT_VISIBLE_CITATION_COVERAGE")).toBe(true);
+
     const accepted = validateStreamsEvidence({
       intent,
       responseText: [
