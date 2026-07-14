@@ -17,6 +17,21 @@ function isUploadFileLike(value: FormDataEntryValue): value is File {
     && Number.isFinite(Number((value as File)?.size));
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
@@ -50,31 +65,32 @@ export async function POST(request: NextRequest) {
       const messageId = stringOrNull(form.get("messageId"));
       const productId = stringOrNull(form.get("productId"));
 
-      const uploaded: Record<string, any>[] = [];
-      const failures: Array<{ name: string; error: string }> = [];
-      for (const file of files) {
+      const outcomes = await mapWithConcurrency(files, 5, async (file) => {
         try {
-          uploaded.push(
-            await assets.uploadFile(scope, file, {
-              sessionId,
-              projectId,
-              messageId,
-              productId,
-              metadata: {
-                source: "streams-ai-upload",
-                uploadStatus: "stored",
-                processingStatus: "queued",
-                extractionStatus: "queued",
-              },
-            }) as Record<string, any>,
-          );
+          const asset = await assets.uploadFile(scope, file, {
+            sessionId,
+            projectId,
+            messageId,
+            productId,
+            metadata: {
+              source: "streams-ai-upload",
+              uploadStatus: "stored",
+              processingStatus: "queued",
+              extractionStatus: "queued",
+            },
+          }) as Record<string, any>;
+          return { ok: true as const, asset };
         } catch (error) {
-          failures.push({
+          return {
+            ok: false as const,
             name: file.name || "Uploaded file",
             error: error instanceof Error ? error.message : String(error || "Upload failed"),
-          });
+          };
         }
-      }
+      });
+
+      const uploaded = outcomes.filter((item): item is { ok: true; asset: Record<string, any> } => item.ok).map((item) => item.asset);
+      const failures = outcomes.filter((item): item is { ok: false; name: string; error: string } => !item.ok).map((item) => ({ name: item.name, error: item.error }));
 
       if (!uploaded.length) {
         return streamsAIJson({
@@ -87,9 +103,6 @@ export async function POST(request: NextRequest) {
 
       const storedAssets = uploaded.map((asset) => withProcessedMetadata(asset));
 
-      // Never keep the client request open while parsing PDFs, Office files, EPUBs,
-      // spreadsheets, or building retrieval chunks. The files are already durable.
-      // Processing continues after the response and can be refreshed through GET.
       after(async () => {
         try {
           await processUploadedAssets(scope, uploaded);
