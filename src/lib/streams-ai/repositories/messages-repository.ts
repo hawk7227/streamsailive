@@ -7,22 +7,65 @@ type IdempotentMessageInput = CreateMessageInput & {
   turnId?: string | null;
 };
 
+type MessagePageOptions = {
+  limit?: number;
+  before?: string | null;
+};
+
+const DEFAULT_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 200;
+
+function boundedLimit(value?: number) {
+  const numeric = Number(value || DEFAULT_PAGE_SIZE);
+  if (!Number.isFinite(numeric)) return DEFAULT_PAGE_SIZE;
+  return Math.max(1, Math.min(MAX_PAGE_SIZE, Math.trunc(numeric)));
+}
+
 export class StreamsAIMessagesRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
   }
 
-  async list(scope: StreamsAIScope, sessionId: string) {
-    const { data, error } = await this.db()
+  async listPage(scope: StreamsAIScope, sessionId: string, options: MessagePageOptions = {}) {
+    const limit = boundedLimit(options.limit);
+    let query = this.db()
       .from(streamsAITables.chatMessages)
       .select("*")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit + 1);
 
+    if (options.before) query = query.lt("created_at", options.before);
+
+    const { data, error } = await query;
     if (error) throw new Error(`Failed to list STREAMS AI messages: ${error.message}`);
-    return data || [];
+
+    const rows = data || [];
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    const nextCursor = hasMore ? String(page[page.length - 1]?.created_at || "") : null;
+    return { messages: page.reverse(), nextCursor, hasMore };
+  }
+
+  async list(scope: StreamsAIScope, sessionId: string, options: MessagePageOptions = {}) {
+    const page = await this.listPage(scope, sessionId, { limit: options.limit || MAX_PAGE_SIZE, before: options.before });
+    return page.messages;
+  }
+
+  async listAll(scope: StreamsAIScope, sessionId: string, maximum = 10000) {
+    const result: any[] = [];
+    let before: string | null = null;
+    while (result.length < maximum) {
+      const page = await this.listPage(scope, sessionId, { limit: MAX_PAGE_SIZE, before });
+      result.unshift(...page.messages);
+      if (!page.hasMore || !page.nextCursor) break;
+      before = page.nextCursor;
+    }
+    if (result.length >= maximum) throw new Error("Conversation exceeds the supported branch-copy limit.");
+    return result;
   }
 
   async findByIdempotencyKey(scope: StreamsAIScope, idempotencyKey: string) {
