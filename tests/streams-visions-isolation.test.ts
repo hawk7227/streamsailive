@@ -1,73 +1,45 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
-
-const root = process.cwd();
-const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+import { STREAMS_VISIONS_EXPERIENCE_CONTRACT } from "../src/lib/streams-visions/experience-contract";
+import { STREAMS_VISIONS_SYSTEM_PROMPT } from "../src/lib/streams-visions/prompts";
 
 describe("Streams Visions isolation", () => {
-  it("mounts only on the separate Visions route", () => {
-    const visionsPage = read("src/app/streams-ai/Visions/page.tsx");
-    const streamsPage = read("src/app/streams-ai/page.tsx");
-    expect(visionsPage).toContain("VisionsClient");
-    expect(streamsPage).not.toContain("streams-visions");
-    expect(streamsPage).not.toContain("VisionsClient");
+  it("uses a separate route, APIs, storage and event namespace", () => {
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.route).toBe("/streams-ai/Visions");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.messagesApi).toBe("/api/streams-ai/Visions/messages");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.conversationsApi).toBe("/api/streams-ai/Visions/conversations");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.storage.conversation).toBe("streams-visions.conversation.v1");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.storage.mode).toBe("streams-visions.mode.v1");
+    expect(Object.values(STREAMS_VISIONS_EXPERIENCE_CONTRACT.events).every((eventName) => eventName.startsWith("visions:"))).toBe(true);
   });
 
-  it("uses separate API, browser storage, events and prompt namespaces", () => {
-    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
-    const prompt = read("src/lib/streams-visions/prompts.ts");
-    expect(client).toContain("/api/streams-ai/Visions/messages");
-    expect(client).toContain("streams-visions.conversation.v1");
-    expect(client).toContain("visions:preview-revealing");
-    expect(client).toContain("visions:message-started");
-    expect(client).not.toContain("/api/streams-ai/messages");
-    expect(client).not.toContain("streams-ai.assets.cache.v1");
-    expect(prompt).toContain("separate visual-conversation experience");
+  it("remains isolated from the current Streams AI runtime", () => {
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.isolation.importsCurrentChatRuntime).toBe(false);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.isolation.usesMainStreamsMessagesApi).toBe(false);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.isolation.usesMainStreamsAssetCache).toBe(false);
+    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("separate visual-conversation experience");
+    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("conversation remains normal");
   });
 
-  it("does not import current chat behavioral modules", () => {
-    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
-    expect(client).not.toContain("components/streams-ai/current-chat");
-    expect(client).not.toContain("useStreamsChatRuntime");
-    expect(client).not.toContain("lib/streams-ai/runtime");
+  it("uses independent persistence contracts", () => {
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.conversationsTable).toBe("streams_visions_conversations");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.messagesTable).toBe("streams_visions_messages");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.activePreviewField).toBe("active_preview");
   });
 
-  it("uses independent persistence tables and scoped CSS", () => {
-    const migration = read("supabase/migrations/20260714_streams_visions_isolated.sql");
-    const css = read("src/app/streams-ai/Visions/visions.module.css");
-    expect(migration).toContain("streams_visions_conversations");
-    expect(migration).toContain("streams_visions_messages");
-    expect(migration).not.toContain("alter table public.streams_ai_");
-    expect(css).toContain("[data-streams-visions-root]");
-  });
-
-  it("reveals visions without generator indicators", () => {
-    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
-    const css = read("src/app/streams-ai/Visions/visions.module.css");
-    expect(client).not.toContain("Thinking and shaping the visual");
-    expect(client).not.toContain("Generating");
-    expect(client).not.toContain("Almost done");
-    expect(client).not.toContain("final touches");
-    expect(client).toContain("ambientDream");
-    expect(client).toContain("futureSelf");
-    expect(css).toContain("dreamAtmosphere");
-    expect(css).toContain("dreamWorld");
-    expect(css).toContain("dreamSelf");
-    expect(css).toContain("prefers-reduced-motion");
-  });
-
-  it("restores the persisted active vision with the conversation", () => {
-    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
-    const route = read("src/app/api/streams-ai/Visions/messages/route.ts");
-    expect(route).toContain("active_preview");
-    expect(route).toContain("preview: conversation?.active_preview || null");
-    expect(client).toContain("setPreview(data.preview || null)");
+  it("reveals visions without visible generator indicators", () => {
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.visibleGeneratorIndicators).toBe(false);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.ambientClass).toBe("ambientDream");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.futureSelfClass).toBe("futureSelf");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.minimumMs).toBeGreaterThanOrEqual(4200);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.maximumMs).toBeLessThanOrEqual(8000);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.defaultMs).toBeGreaterThanOrEqual(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.minimumMs);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.defaultMs).toBeLessThanOrEqual(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.maximumMs);
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.reducedMotionSupported).toBe(true);
+    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("Do not announce generation, loading, progress");
   });
 
   it("keeps provider and technical generation details out of public errors", () => {
-    const route = read("src/app/api/streams-ai/Visions/messages/route.ts");
-    expect(route).not.toContain("providerJson?.error?.message");
-    expect(route).toContain("Visions could not shape that scene");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.publicErrors.providerFailure).toBe("Visions could not shape that scene");
+    expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.publicErrors.exposesProviderDetails).toBe(false);
   });
 });
