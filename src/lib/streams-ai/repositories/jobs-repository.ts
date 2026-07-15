@@ -8,6 +8,7 @@ import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAITex
 
 const creditLedger = new StreamsAICreditLedgerRepository();
 const entitlements = new StreamsAIEntitlementsRepository();
+const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "cancelled", "blocked"]);
 
 export type UpdateJobInput = {
   status?: string;
@@ -42,16 +43,9 @@ export class StreamsAIJobsRepository {
   }
 
   async list(scope: StreamsAIScope, filters: { sessionId?: string | null; status?: string | null } = {}) {
-    let query = this.db()
-      .from(streamsAITables.jobs)
-      .select("*")
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .order("created_at", { ascending: false });
-
+    let query = this.db().from(streamsAITables.jobs).select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).order("created_at", { ascending: false });
     if (filters.sessionId) query = query.eq("session_id", filters.sessionId);
     if (filters.status) query = query.eq("status", filters.status);
-
     const { data, error } = await query;
     if (error) throw new Error(`Failed to list STREAMS AI jobs: ${error.message}`);
     return (data || []).map((row) => normalizeJobRow(row));
@@ -62,52 +56,53 @@ export class StreamsAIJobsRepository {
     const capability = getCapabilityProduct(input.kind || "chat_tool");
     const effectiveProductId = input.productId && input.productId !== "streams-ai" ? input.productId : capability.productId;
     const effectiveCreditEstimate = input.creditEstimate ?? capability.estimatedCredits ?? 0;
-
     if (capability.entitlementRequired) await entitlements.require(scope, effectiveProductId);
     if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
 
-    const { data, error } = await this.db()
-      .from(streamsAITables.jobs)
-      .insert({
-        tenant_id: scope.tenantId,
-        user_id: scope.userId,
-        project_id: input.projectId ?? scope.defaultProjectId,
-        session_id: input.sessionId ?? null,
-        message_id: input.messageId ?? null,
-        tool_call_id: input.toolCallId ?? null,
-        workspace_id: scope.workspaceId,
-        module_id: scope.moduleId,
-        product_id: effectiveProductId,
-        status: input.status || "queued",
-        kind: capability.kind,
-        input_json: sanitizeStreamsAIPayload({
-          ...(input.inputJson || {}),
-          capability: {
-            kind: capability.kind,
-            productId: effectiveProductId,
-            displayName: capability.displayName,
-            executionStatus: capability.executionStatus,
-          },
-        }),
-        credit_estimate: effectiveCreditEstimate,
-      })
-      .select("*")
-      .single();
+    const { data, error } = await this.db().from(streamsAITables.jobs).insert({
+      tenant_id: scope.tenantId,
+      user_id: scope.userId,
+      project_id: input.projectId ?? scope.defaultProjectId,
+      session_id: input.sessionId ?? null,
+      message_id: input.messageId ?? null,
+      tool_call_id: input.toolCallId ?? null,
+      workspace_id: scope.workspaceId,
+      module_id: scope.moduleId,
+      product_id: effectiveProductId,
+      status: input.status || "queued",
+      kind: capability.kind,
+      input_json: sanitizeStreamsAIPayload({
+        ...(input.inputJson || {}),
+        capability: {
+          kind: capability.kind,
+          productId: effectiveProductId,
+          displayName: capability.displayName,
+          executionStatus: capability.executionStatus,
+        },
+      }),
+      credit_estimate: effectiveCreditEstimate,
+    }).select("*").single();
 
     if (error) throw new Error(`Failed to create STREAMS AI job: ${error.message}`);
-
     await this.createEvent(scope, {
       jobId: data.id,
       eventType: "created",
       message: "Job created",
       data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate, creditsEnforced: shouldEnforceCredits() },
     });
-
     return normalizeJobRow(data);
   }
 
   async update(scope: StreamsAIScope, jobId: string, input: UpdateJobInput) {
     assertNoProtectedFields(input);
+    const current = await this.get(scope, jobId);
+    if (!current) throw new Error("STREAMS AI job not found.");
+    const currentStatus = String(current.status || "");
+    const requestedStatus = input.status === undefined ? currentStatus : String(input.status);
+    if (TERMINAL_JOB_STATUSES.has(currentStatus) && requestedStatus !== currentStatus) {
+      throw new Error(`STREAMS AI job is already ${currentStatus}.`);
+    }
+
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) patch.status = input.status;
     if (input.sessionId !== undefined) patch.session_id = input.sessionId;
@@ -115,10 +110,8 @@ export class StreamsAIJobsRepository {
     if (input.outputJson !== undefined) patch.output_json = input.outputJson == null ? null : sanitizeStreamsAIPayload(input.outputJson);
     if (input.error !== undefined) patch.error = input.error == null ? null : sanitizeStreamsAIText(input.error, 4000);
     if (input.creditEstimate !== undefined) patch.credit_estimate = input.creditEstimate;
-
     if (input.inputJson !== undefined || input.metadata !== undefined) {
-      const current = await this.get(scope, jobId);
-      const currentInputJson = (current?.input_json && typeof current.input_json === "object" ? current.input_json : {}) as Record<string, unknown>;
+      const currentInputJson = (current.input_json && typeof current.input_json === "object" ? current.input_json : {}) as Record<string, unknown>;
       patch.input_json = sanitizeStreamsAIPayload({
         ...currentInputJson,
         ...(input.inputJson || {}),
@@ -126,42 +119,19 @@ export class StreamsAIJobsRepository {
       });
     }
 
-    const { data, error } = await this.db()
-      .from(streamsAITables.jobs)
-      .update(patch)
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .eq("id", jobId)
-      .select("*")
-      .single();
-
+    const { data, error } = await this.db().from(streamsAITables.jobs).update(patch).eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", jobId).select("*").single();
     if (error) throw new Error(`Failed to update STREAMS AI job: ${error.message}`);
     return normalizeJobRow(data);
   }
 
   async get(scope: StreamsAIScope, jobId: string) {
-    const { data, error } = await this.db()
-      .from(streamsAITables.jobs)
-      .select("*")
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .eq("id", jobId)
-      .maybeSingle();
-
+    const { data, error } = await this.db().from(streamsAITables.jobs).select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", jobId).maybeSingle();
     if (error) throw new Error(`Failed to read STREAMS AI job: ${error.message}`);
     return normalizeJobRow(data);
   }
 
   async events(scope: StreamsAIScope, jobId: string) {
-    const { data, error } = await this.db()
-      .from(streamsAITables.jobEvents)
-      .select("*")
-      .eq("tenant_id", scope.tenantId)
-      .eq("user_id", scope.userId)
-      .eq("job_id", jobId)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
-
+    const { data, error } = await this.db().from(streamsAITables.jobEvents).select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("job_id", jobId).order("created_at", { ascending: true }).order("id", { ascending: true });
     if (error) throw new Error(`Failed to read STREAMS AI job events: ${error.message}`);
     return (data || []).map((row) => normalizeEventRow(row));
   }
@@ -171,19 +141,14 @@ export class StreamsAIJobsRepository {
     const existingEvents = await this.events(scope, input.jobId);
     const sequenceNumber = existingEvents.reduce((max, event: any) => Math.max(max, Number(event?.data?.sequenceNumber || 0)), 0) + 1;
     const dataPayload = sanitizeStreamsAIPayload({ ...(input.data || {}), sequenceNumber });
-    const { data, error } = await this.db()
-      .from(streamsAITables.jobEvents)
-      .insert({
-        tenant_id: scope.tenantId,
-        user_id: scope.userId,
-        job_id: input.jobId,
-        event_type: input.eventType,
-        message: input.message ? sanitizeStreamsAIText(input.message, 4000) : null,
-        data: dataPayload,
-      })
-      .select("*")
-      .single();
-
+    const { data, error } = await this.db().from(streamsAITables.jobEvents).insert({
+      tenant_id: scope.tenantId,
+      user_id: scope.userId,
+      job_id: input.jobId,
+      event_type: input.eventType,
+      message: input.message ? sanitizeStreamsAIText(input.message, 4000) : null,
+      data: dataPayload,
+    }).select("*").single();
     if (error) throw new Error(`Failed to create STREAMS AI job event: ${error.message}`);
     return normalizeEventRow(data);
   }
