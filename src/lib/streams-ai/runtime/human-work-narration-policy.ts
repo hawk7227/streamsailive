@@ -93,12 +93,20 @@ const TRIVIAL_PATTERNS = [
   /^(step|task) \d+$/i,
 ];
 const EMPTY_SERVICE_PATTERNS = [
-  /rest assured/i, /happy to help/i, /sit tight/i, /thanks for your patience/i,
-  /i(?:'| a)m excited/i, /i feel/i, /i love/i, /don(?:'|’)t worry/i,
+  /\brest assured\b[,:;.!-]?/gi,
+  /\bhappy to help\b[,:;.!-]?/gi,
+  /\bsit tight\b[,:;.!-]?/gi,
+  /\bthanks for your patience\b[,:;.!-]?/gi,
+  /\bi(?:'|’)?m excited\b(?:\s+and)?/gi,
+  /\bi feel\b/gi,
+  /\bi love\b/gi,
+  /\bdon(?:'|’)?t worry\b[,:;.!-]?/gi,
 ];
 const FALSE_TEMPORAL_PATTERNS = [
-  /i(?:'| a)m working in the background/i, /i(?:'| a)ll keep working after/i,
-  /i(?:'| a)ll notify you later/i, /this will only take a (moment|minute)/i,
+  /\bi(?:'|’)?m working in the background\b/gi,
+  /\bi(?:'|’)?ll keep working after(?:\s+you leave)?\b[.!]?/gi,
+  /\bi(?:'|’)?ll notify you later\b[.!]?/gi,
+  /\bthis will only take a (moment|minute)\b[.!]?/gi,
 ];
 const COMPLETION_WORDS = /\b(complete|completed|done|finished|fully built|deployed|verified)\b/i;
 
@@ -143,9 +151,13 @@ export function statusLabelFor(input: HumanWorkEventInput): string {
 
 export function sanitizeHumanWorkLanguage(value: unknown, limit = 2400): string {
   let text = sanitizeStreamsAIText(value, limit).trim();
-  for (const pattern of EMPTY_SERVICE_PATTERNS) text = text.replace(pattern, "").trim();
-  for (const pattern of FALSE_TEMPORAL_PATTERNS) text = text.replace(pattern, "").trim();
-  text = text.replace(/\s{2,}/g, " ");
+  for (const pattern of EMPTY_SERVICE_PATTERNS) text = text.replace(pattern, " ");
+  for (const pattern of FALSE_TEMPORAL_PATTERNS) text = text.replace(pattern, " ");
+  text = text
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/^[\s,;:.!?-]+/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   return text;
 }
 
@@ -154,8 +166,7 @@ export function shouldExposeWorkEvent(input: HumanWorkEventInput): boolean {
   const type = String(input.eventType || "");
   if (MATERIAL_EVENTS.has(type)) return true;
   const message = sanitizeHumanWorkLanguage(input.message || input.currentAction || "", 600);
-  if (!message) return false;
-  if (TRIVIAL_PATTERNS.some((pattern) => pattern.test(message))) return false;
+  if (!message || TRIVIAL_PATTERNS.some((pattern) => pattern.test(message))) return false;
   const now = Number(input.now || Date.now());
   const last = Number(input.lastVisibleAt || 0);
   if (last && now - last < 2500 && !TERMINAL.has(String(input.status || ""))) return false;
@@ -172,7 +183,7 @@ export function validateCompletionEvidence(input: HumanWorkEventInput): { ok: bo
   const remaining = list(input.remainingItems);
   if (remaining.length) return { ok: false, reason: "remaining_work_exists" };
   if (["none", "requested"].includes(evidenceLevel)) return { ok: false, reason: "completion_lacks_evidence" };
-  if (!['passed', 'complete', 'completed', 'verified'].includes(verificationState)) return { ok: false, reason: "completion_not_verified" };
+  if (!["passed", "complete", "completed", "verified"].includes(verificationState)) return { ok: false, reason: "completion_not_verified" };
   return { ok: true, reason: "completion_verified" };
 }
 
@@ -190,7 +201,7 @@ export function buildHumanWorkEvent(input: HumanWorkEventInput = {}) {
   const risksAvoided = list(input.risksAvoided);
   const rejectedAlternatives = list(input.rejectedAlternatives);
   const evidenceLevel = sanitizeHumanWorkLanguage(input.evidenceLevel || "none", 80) || "none";
-  const evidenceSummary = sanitizeHumanWorkLanguage(input.evidenceSummary || (findings[0] ? findings[0] : "No new evidence has been recorded for this update."), 1600);
+  const evidenceSummary = sanitizeHumanWorkLanguage(input.evidenceSummary || findings[0] || "No new evidence has been recorded for this update.", 1600);
   const verificationState = sanitizeHumanWorkLanguage(input.verificationState || "not_started", 80) || "not_started";
   const planVersion = Math.max(1, Number(input.planVersion || 1));
   const previousPlanVersion = Math.max(0, Number(input.previousPlanVersion || 0));
@@ -198,7 +209,7 @@ export function buildHumanWorkEvent(input: HumanWorkEventInput = {}) {
   const completion = validateCompletionEvidence({ ...input, eventType, status, remainingItems, evidenceLevel, verificationState });
   const visible = shouldExposeWorkEvent({ ...input, eventType, status, message: currentAction });
 
-  const data = sanitizeStreamsAIPayload({
+  return sanitizeStreamsAIPayload({
     humanWorkPolicyVersion: 1,
     coveredItems: Object.keys(HUMAN_WORK_ITEMS).map(Number),
     eventType,
@@ -236,7 +247,6 @@ export function buildHumanWorkEvent(input: HumanWorkEventInput = {}) {
     completionGate: completion,
     elapsedMs: Number.isFinite(Number(input.elapsedMs)) ? Math.max(0, Number(input.elapsedMs)) : null,
   });
-  return data;
 }
 
 export function humanWorkNarration(input: HumanWorkEventInput = {}): string {
@@ -259,7 +269,7 @@ export function buildFinalWorkReceipt(input: HumanWorkEventInput = {}) {
   const completion = validateCompletionEvidence({ ...input, ...(event as any) });
   return sanitizeStreamsAIPayload({
     completed: completion.ok,
-    status: completion.ok ? "completed" : (input.partial ? "partial" : "blocked"),
+    status: completion.ok ? "completed" : input.partial ? "partial" : "blocked",
     goal: (event as any).goal,
     completedItems: (event as any).completedItems,
     remainingItems: (event as any).remainingItems,
