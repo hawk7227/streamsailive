@@ -31,27 +31,34 @@ function errorMessage(value: unknown) {
 }
 
 function VisionPreview({ preview, revealing, onClose }: { preview: VisionsPreviewSpec; revealing: boolean; onClose: () => void }) {
+  const revealStyle = { "--vision-accent": preview.accent, "--vision-reveal-ms": `${preview.revealMs}ms` } as CSSProperties;
   return (
-    <section className={`${styles.previewShell} ${revealing ? styles.revealing : styles.ready}`} aria-label="Streams Visions live preview">
-      <header className={styles.previewHeader}>
-        <div><span className={styles.liveDot} /> {revealing ? "Visual coming into view" : "Vision ready"}</div>
-        <button type="button" onClick={onClose} aria-label="Close visual">×</button>
-      </header>
-      <div className={styles.previewCanvas} style={{ "--vision-accent": preview.accent } as CSSProperties}>
-        <nav className={styles.previewNav}><strong>{preview.title}</strong><span>Overview &nbsp; Features &nbsp; Contact</span></nav>
-        <div className={styles.previewHero}>
-          <div>
-            <p className={styles.previewEyebrow}>{preview.eyebrow}</p>
-            <h2>{preview.headline}</h2>
-            <p>{preview.subheadline}</p>
-            <div className={styles.previewActions}><button type="button">{preview.primaryCta}</button><button type="button">{preview.secondaryCta}</button></div>
+    <section className={`${styles.vision} ${revealing ? styles.revealing : styles.ready}`} style={revealStyle} aria-label="A future vision formed from the conversation">
+      <div className={styles.visionAtmosphere} aria-hidden="true"><span /><span /><span /></div>
+      <div className={styles.visionWorld}>
+        <div className={styles.visionSky} aria-hidden="true" />
+        <div className={styles.visionScene}>
+          <p className={styles.visionEyebrow}>{preview.eyebrow}</p>
+          <h2>{preview.headline}</h2>
+          <p className={styles.visionSubheadline}>{preview.subheadline}</p>
+          <div className={styles.futureSelf}>
+            <span className={styles.futureSelfGlow} aria-hidden="true" />
+            <div><strong>You, inside the future</strong><p>{preview.futureSelf}</p></div>
           </div>
-          <div className={styles.previewOrb} aria-hidden="true"><span /><span /><span /></div>
-        </div>
-        <div className={styles.previewFeatures}>
-          {preview.sections.slice(0, 3).map((section) => <article key={section.title}><strong>{section.title}</strong><p>{section.body}</p></article>)}
+          <div className={styles.visionDetails}>
+            <article><strong>The place</strong><p>{preview.environment}</p></article>
+            <article><strong>The feeling</strong><p>{preview.emotionalOutcome}</p></article>
+          </div>
+          <div className={styles.visionMilestones}>
+            {preview.sections.slice(0, 3).map((section) => <article key={section.title}><strong>{section.title}</strong><p>{section.body}</p></article>)}
+          </div>
         </div>
       </div>
+      {!revealing && <div className={styles.visionControls}>
+        <button type="button">Enter vision</button>
+        <button type="button">Continue this vision</button>
+        <button type="button" onClick={onClose} aria-label="Close vision">Close</button>
+      </div>}
     </section>
   );
 }
@@ -66,14 +73,17 @@ export default function VisionsClient() {
   const [preview, setPreview] = useState<VisionsPreviewSpec | null>(null);
   const [revealing, setRevealing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
 
   const restoreConversation = useCallback(async (id: string) => {
     const response = await fetch(`/api/streams-ai/Visions/messages?conversationId=${encodeURIComponent(id)}`, { credentials: "same-origin" });
     if (!response.ok) return;
-    const data = await response.json() as { messages?: MessagePayload[] };
+    const data = await response.json() as { messages?: MessagePayload[]; preview?: VisionsPreviewSpec | null; mode?: VisionsMode };
     setConversationId(id);
     setMessages((data.messages || []).map(normalizeMessage));
+    setPreview(data.preview || null);
+    if (data.mode === "off" || data.mode === "ask_first" || data.mode === "automatic") setMode(data.mode);
   }, []);
 
   useEffect(() => {
@@ -81,14 +91,16 @@ export default function VisionsClient() {
     if (savedMode === "off" || savedMode === "ask_first" || savedMode === "automatic") setMode(savedMode);
     const savedConversation = window.localStorage.getItem(STORAGE.conversation);
     if (savedConversation) void restoreConversation(savedConversation);
+    return () => { if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current); };
   }, [restoreConversation]);
 
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE.mode, mode);
-  }, [mode]);
+  useEffect(() => { window.localStorage.setItem(STORAGE.mode, mode); }, [mode]);
 
   useEffect(() => {
-    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
+    const feed = feedRef.current;
+    if (!feed) return;
+    const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 180;
+    if (nearBottom) feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
   }, [messages, preview, busy]);
 
   async function ensureConversation() {
@@ -118,6 +130,7 @@ export default function VisionsClient() {
     setMessages((current) => [...current, optimistic]);
     const controller = new AbortController();
     abortRef.current = controller;
+    window.dispatchEvent(new CustomEvent("visions:message-started"));
 
     try {
       const id = await ensureConversation();
@@ -133,18 +146,23 @@ export default function VisionsClient() {
       const userMessage = normalizeMessage((data.userMessage || {}) as MessagePayload);
       const assistantMessage = normalizeMessage((data.message || {}) as MessagePayload);
       setMessages((current) => [...current.filter((message) => message.id !== optimistic.id), userMessage, assistantMessage]);
+      window.dispatchEvent(new CustomEvent("visions:message-complete", { detail: { conversationId: id } }));
       if (data.preview && typeof data.preview === "object") {
         const nextPreview = data.preview as VisionsPreviewSpec;
         setPreview(nextPreview);
         setRevealing(true);
         window.dispatchEvent(new CustomEvent("visions:preview-revealing", { detail: { previewId: nextPreview.id } }));
-        window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = window.setTimeout(() => {
           setRevealing(false);
           window.dispatchEvent(new CustomEvent("visions:preview-ready", { detail: { previewId: nextPreview.id } }));
-        }));
+        }, nextPreview.revealMs || 5200);
       }
     } catch (caught: unknown) {
-      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(errorMessage(caught));
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        setError(errorMessage(caught));
+        window.dispatchEvent(new CustomEvent("visions:preview-failed"));
+      }
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -154,10 +172,12 @@ export default function VisionsClient() {
   function cancel() {
     abortRef.current?.abort();
     setBusy(false);
+    window.dispatchEvent(new CustomEvent("visions:preview-cancelled"));
   }
 
   function newVision() {
     abortRef.current?.abort();
+    if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current);
     setConversationId(null);
     setMessages([]);
     setPreview(null);
@@ -168,7 +188,8 @@ export default function VisionsClient() {
   const welcome = messages.length === 0;
 
   return (
-    <main data-streams-visions-root className={styles.root}>
+    <main data-streams-visions-root className={`${styles.root} ${busy ? styles.gathering : ""}`}>
+      <div className={styles.ambientDream} aria-hidden="true"><span /><span /><span /></div>
       <header className={styles.topbar}>
         <div className={styles.brand}><span className={styles.mark}>✦</span><div><strong>Streams Visions</strong><small>Visual conversation</small></div></div>
         <div className={styles.topActions}>
@@ -178,18 +199,15 @@ export default function VisionsClient() {
       </header>
 
       <div ref={feedRef} className={styles.feed}>
-        {welcome && <section className={styles.welcome}><span className={styles.visionIcon}>✦</span><h1>Turn what you’re imagining into something you can see.</h1><p>Chat normally. When an idea benefits from a visual, it can appear here in the conversation like a vision coming into view.</p><div className={styles.suggestions}>{["Visualize my business idea", "Show a landing page concept", "Help me imagine the customer experience"].map((text) => <button key={text} type="button" onClick={() => setInput(text)}>{text}</button>)}</div></section>}
-
+        {welcome && <section className={styles.welcome}><span className={styles.visionIcon}>✦</span><h1>Turn what you’re imagining into something you can see.</h1><p>Chat normally. When an idea carries a future worth seeing, it can quietly appear here like a vision coming into view.</p><div className={styles.suggestions}>{["Visualize my business idea", "Show me the future I’m building", "Help me imagine what success feels like"].map((text) => <button key={text} type="button" onClick={() => setInput(text)}>{text}</button>)}</div></section>}
         {messages.map((message) => <article key={message.id} className={`${styles.message} ${message.role === "user" ? styles.user : styles.assistant}`}><div className={styles.avatar}>{message.role === "user" ? "You" : "✦"}</div><div><strong>{message.role === "user" ? "You" : "Streams Visions"}</strong><p>{message.content}</p></div></article>)}
-
         {preview && <VisionPreview preview={preview} revealing={revealing} onClose={() => setPreview(null)} />}
-        {busy && <div className={styles.generating}><span /><span /><span /> Thinking and shaping the visual…</div>}
         {error && <div className={styles.error} role="alert">{error}</div>}
       </div>
 
       <form className={styles.composer} onSubmit={submit}>
         <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="Describe what you’re imagining…" rows={1} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
-        {busy ? <button type="button" onClick={cancel} aria-label="Stop generation">■</button> : <button type="submit" disabled={!input.trim()} aria-label="Send message">↑</button>}
+        {busy ? <button type="button" onClick={cancel} aria-label="Stop">■</button> : <button type="submit" disabled={!input.trim()} aria-label="Send message">↑</button>}
       </form>
     </main>
   );
