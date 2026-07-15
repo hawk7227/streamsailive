@@ -88,6 +88,7 @@ const policies = {
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
       'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx',
+      'src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css',
       'src/lib/streams-ai/protected-reasoning.ts',
       'src/lib/streams-ai/intelligence/parity-profile.ts',
       'src/lib/streams-ai/runtime/work-narration-controller.ts',
@@ -95,7 +96,8 @@ const policies = {
       'src/lib/streams-ai/repositories/jobs-repository.ts',
       'src/lib/streams-ai/repositories/messages-repository.ts',
       'tests/streams-ai-protected-reasoning.test.ts',
-      'tests/streams-ai-first-response-planning.test.ts'
+      'tests/streams-ai-first-response-planning.test.ts',
+      'tests/streams-ai-console-transition.test.ts'
     ],
     forbidden: [
       'public/build-report.json',
@@ -113,7 +115,9 @@ function inferPolicyFromFiles(files) {
     f === 'src/lib/streams-ai/runtime/work-narration-controller.ts'
     || f === 'src/lib/streams-ai/runtime/task-complexity-classifier.ts'
     || f === 'src/lib/streams-ai/protected-reasoning.ts'
+    || f === 'src/lib/streams-ai/repositories/jobs-repository.ts'
     || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'
+    || f === 'src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css'
   );
   if (hasWorkNarrationFiles) return 'streams-ai-work-narration-slice';
 
