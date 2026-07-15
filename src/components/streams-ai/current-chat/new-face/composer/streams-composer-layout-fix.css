@@ -1,2 +1,29 @@
-/* Composer layout override intentionally disabled.
-   The compact one-line console uses the base rules in streams-composer.css. */
+/* Keep the same active Streams composer before and after the first message.
+   The previous active-state overrides changed its size and vertical position,
+   which made the current console appear to drop away and be replaced. */
+.startWorkspace .startComposerWrap,
+.startWorkspaceActive .startComposerWrap {
+  bottom: 92px !important;
+  width: min(860px, calc(100% - 96px)) !important;
+  z-index: 260 !important;
+}
+
+/* Keep persisted work history above the composer instead of overlapping it. */
+.streamsAIWorkHistory {
+  bottom: 228px !important;
+  width: min(860px, calc(100vw - 96px)) !important;
+}
+
+@media (max-width: 760px) {
+  .startWorkspace .startComposerWrap,
+  .startWorkspaceActive .startComposerWrap {
+    width: calc(100vw - 72px) !important;
+    left: calc(56px + (100vw - 56px) / 2) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+  }
+
+  .streamsAIWorkHistory {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 132px) !important;
+    width: calc(100vw - 24px) !important;
+  }
+}
