@@ -83,7 +83,7 @@ export class StreamsAIJobsRepository {
         displayName: capability.displayName,
         executionStatus: capability.executionStatus,
       },
-    });
+    }) as Record<string, unknown>;
     const { data, error } = await this.db().from(streamsAITables.jobs).insert({
       tenant_id: scope.tenantId,
       user_id: scope.userId,
