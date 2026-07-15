@@ -96,8 +96,7 @@ const policies = {
       'src/lib/streams-ai/repositories/jobs-repository.ts',
       'src/lib/streams-ai/repositories/messages-repository.ts',
       'tests/streams-ai-protected-reasoning.test.ts',
-      'tests/streams-ai-first-response-planning.test.ts',
-      'tests/streams-ai-console-transition.test.ts'
+      'tests/streams-ai-first-response-planning.test.ts'
     ],
     forbidden: [
       'public/build-report.json',
