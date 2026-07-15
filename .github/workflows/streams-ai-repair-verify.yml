@@ -1,0 +1,43 @@
+name: Streams AI Repair Verify
+
+on:
+  push:
+    branches:
+      - fix-streams-ai-console-session-transition
+
+jobs:
+  verify-repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Production contract tests
+        run: pnpm test:streams-ai-production
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Next production build
+        env:
+          OPENAI_API_KEY: ""
+          NEXT_PUBLIC_SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          FAL_API_KEY: ""
+          ADMIN_SECRET_KEY: ""
+        run: pnpm build
