@@ -1,6 +1,7 @@
 import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "../server";
 import type { StreamsAIScope } from "../auth";
 import type { CreateMessageInput } from "./types";
+import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "../protected-reasoning";
 
 type IdempotentMessageInput = CreateMessageInput & {
   idempotencyKey?: string | null;
@@ -29,6 +30,11 @@ function isIntegritySchemaDrift(error: any) {
     || text.includes("could not find the") && (text.includes("column") || text.includes("relationship"));
 }
 
+function sanitizeMessageRow<T extends Record<string, any> | null>(row: T): T {
+  if (!row) return row;
+  return sanitizeStreamsAIPayload({ ...row, content: sanitizeStreamsAIText(row.content || "") }) as T;
+}
+
 export class StreamsAIMessagesRepository {
   private db() {
     return streamsAISchema(createStreamsAIServiceClient());
@@ -51,7 +57,7 @@ export class StreamsAIMessagesRepository {
     const { data, error } = await query;
     if (error) throw new Error(`Failed to list STREAMS AI messages: ${error.message}`);
 
-    const rows = data || [];
+    const rows = (data || []).map((row) => sanitizeMessageRow(row));
     const hasMore = rows.length > limit;
     const page = rows.slice(0, limit);
     const nextCursor = hasMore ? String(page[page.length - 1]?.created_at || "") : null;
@@ -86,7 +92,7 @@ export class StreamsAIMessagesRepository {
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
 
-    if (!direct.error) return direct.data || null;
+    if (!direct.error) return sanitizeMessageRow(direct.data || null);
     if (!isIntegritySchemaDrift(direct.error)) throw new Error(`Failed to read STREAMS AI message idempotency record: ${direct.error.message}`);
 
     const fallback = await this.db()
@@ -99,10 +105,11 @@ export class StreamsAIMessagesRepository {
       .limit(1)
       .maybeSingle();
     if (fallback.error) throw new Error(`Failed to read STREAMS AI message compatibility idempotency record: ${fallback.error.message}`);
-    return fallback.data || null;
+    return sanitizeMessageRow(fallback.data || null);
   }
 
   async create(scope: StreamsAIScope, input: IdempotentMessageInput) {
+    assertNoProtectedFields(input);
     const db = this.db();
     const idempotencyKey = String(input.idempotencyKey || "").trim() || null;
 
@@ -122,18 +129,18 @@ export class StreamsAIMessagesRepository {
     if (sessionError) throw new Error(`Failed to verify STREAMS AI session: ${sessionError.message}`);
     if (!session?.id) throw new Error("STREAMS AI session not found or not owned by user.");
 
-    const metadata = {
+    const metadata = sanitizeStreamsAIPayload({
       ...(input.metadata || {}),
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(input.turnId ? { turnId: input.turnId } : {}),
-    };
+    });
     const row = {
       tenant_id: scope.tenantId,
       user_id: scope.userId,
       project_id: session.project_id,
       session_id: input.sessionId,
       role: input.role,
-      content: input.content || "",
+      content: sanitizeStreamsAIText(input.content || ""),
       status: input.status || "complete",
       metadata,
       turn_id: input.turnId || null,
@@ -153,7 +160,7 @@ export class StreamsAIMessagesRepository {
         project_id: session.project_id,
         session_id: input.sessionId,
         role: input.role,
-        content: input.content || "",
+        content: sanitizeStreamsAIText(input.content || ""),
         status: input.status || "complete",
         metadata,
       };
@@ -174,13 +181,14 @@ export class StreamsAIMessagesRepository {
       .eq("user_id", scope.userId)
       .eq("id", input.sessionId);
 
-    return persisted;
+    return sanitizeMessageRow(persisted);
   }
 
   async updateMetadata(scope: StreamsAIScope, id: string, metadata: Record<string, any>) {
+    assertNoProtectedFields(metadata);
     const { data, error } = await this.db()
       .from(streamsAITables.chatMessages)
-      .update({ metadata })
+      .update({ metadata: sanitizeStreamsAIPayload(metadata) })
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
       .eq("id", id)
@@ -188,6 +196,29 @@ export class StreamsAIMessagesRepository {
       .single();
 
     if (error) throw new Error(`Failed to update STREAMS AI message metadata: ${error.message}`);
-    return data;
+    return sanitizeMessageRow(data);
+  }
+
+  async updateContent(scope: StreamsAIScope, id: string, content: string, metadataPatch: Record<string, any> = {}) {
+    assertNoProtectedFields(metadataPatch);
+    const current = await this.db()
+      .from(streamsAITables.chatMessages)
+      .select("metadata")
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .eq("id", id)
+      .maybeSingle();
+    if (current.error) throw new Error(`Failed to read STREAMS AI message before update: ${current.error.message}`);
+    const metadata = sanitizeStreamsAIPayload({ ...(current.data?.metadata || {}), ...metadataPatch });
+    const { data, error } = await this.db()
+      .from(streamsAITables.chatMessages)
+      .update({ content: sanitizeStreamsAIText(content), metadata })
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw new Error(`Failed to update STREAMS AI message content: ${error.message}`);
+    return sanitizeMessageRow(data);
   }
 }

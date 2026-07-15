@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
 import { requiresDeterministicStructureCheck } from "@/lib/streams-ai/routes/response-structure-validator";
+import { runNarratedStreamsMessage } from "@/lib/streams-ai/runtime/work-narration-controller";
+import { sanitizeStreamsAIPayload } from "@/lib/streams-ai/protected-reasoning";
 
 type StreamsMessageRequestBody = Record<string, any> & {
   content?: string;
@@ -20,14 +22,15 @@ function buildInternalRequest(request: NextRequest, body: StreamsMessageRequestB
   return new NextRequest(request.url, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(sanitizeStreamsAIPayload(body)),
+    signal: request.signal,
   });
 }
 
 function normalizedRequestBody(body: StreamsMessageRequestBody): StreamsMessageRequestBody {
   const idempotencyKey = String(body.idempotencyKey || body.userId || "").trim() || crypto.randomUUID();
   const turnId = String(body.turnId || "").trim() || crypto.randomUUID();
-  return { ...body, idempotencyKey, turnId };
+  return sanitizeStreamsAIPayload({ ...body, idempotencyKey, turnId });
 }
 
 function explicitlyRequestsDeterministicStructure(userContent: string, body: StreamsMessageRequestBody) {
@@ -48,14 +51,15 @@ export async function POST(request: NextRequest) {
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
     const enforceDeterministicStructure = explicitlyRequestsDeterministicStructure(userContent, body);
-    const authoritativeBody = {
+    const authoritativeBody = sanitizeStreamsAIPayload({
       ...body,
       metadata: {
         ...(body.metadata || {}),
         enforceDeterministicStructure,
       },
-    };
-    return memoryMessagesPOST(buildInternalRequest(request, authoritativeBody));
+    });
+    const internalRequest = buildInternalRequest(request, authoritativeBody);
+    return runNarratedStreamsMessage(internalRequest, authoritativeBody, memoryMessagesPOST);
   } catch {
     return new Response("Streams could not complete this response.", { status: 500 });
   }

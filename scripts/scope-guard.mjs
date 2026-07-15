@@ -77,11 +77,42 @@ const policies = {
       'scripts/validate-rule-confirmation.js',
       'supabase/migrations/'
     ]
+  },
+  'streams-ai-work-narration-slice': {
+    allowed: [
+      'docs/streams-current-status.md',
+      'docs/merge-policies/streams-ai-work-narration-slice.md',
+      'scripts/scope-guard.mjs',
+      'src/app/streams-ai/page.tsx',
+      'src/app/api/streams-ai/messages/route.ts',
+      'src/app/api/streams-ai/jobs/route.ts',
+      'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx',
+      'src/lib/streams-ai/protected-reasoning.ts',
+      'src/lib/streams-ai/intelligence/parity-profile.ts',
+      'src/lib/streams-ai/runtime/work-narration-controller.ts',
+      'src/lib/streams-ai/repositories/jobs-repository.ts',
+      'src/lib/streams-ai/repositories/messages-repository.ts',
+      'tests/streams-ai-protected-reasoning.test.ts'
+    ],
+    forbidden: [
+      'public/build-report.json',
+      'scripts/validate-rule-confirmation.js',
+      'supabase/migrations/',
+      'src/app/api/streams/video/',
+      'src/app/api/streams/image/'
+    ]
   }
 };
 
 function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
+  const hasWorkNarrationFiles = files.some((f) =>
+    f === 'src/lib/streams-ai/runtime/work-narration-controller.ts'
+    || f === 'src/lib/streams-ai/protected-reasoning.ts'
+    || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'
+  );
+  if (hasWorkNarrationFiles) return 'streams-ai-work-narration-slice';
+
   const chatUIFiles = [
     'src/components/streams/StreamsPanel.tsx',
     'src/components/streams/UnifiedChatPanel.tsx',
@@ -101,9 +132,8 @@ function inferPolicyFromFiles(files) {
 function inferPolicyFromStatus() {
   try {
     const status = readFileSync('docs/streams-current-status.md', 'utf8');
-    if (/STREAMS Self-Build Runtime Foundation/i.test(status)) {
-      return 'streams-self-build-runtime-foundation-slice';
-    }
+    if (/Streams AI Work Narration & Protected Reasoning Slice/i.test(status)) return 'streams-ai-work-narration-slice';
+    if (/STREAMS Self-Build Runtime Foundation/i.test(status)) return 'streams-self-build-runtime-foundation-slice';
   } catch {}
   return 'build-quality-prevention-slice';
 }
@@ -114,43 +144,27 @@ const useWorkingTree = args.includes('--working-tree');
 const pArg = args.find(a => a.startsWith('--policy='));
 
 let files = [];
-
-// Get files based on context
 if (useWorkingTree) {
-  files = execSync('git diff --name-only', { encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .filter(Boolean);
+  files = execSync('git diff --name-only', { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 } else {
   try {
-    const base = process.env.GITHUB_BASE_REF
-      ? `origin/${process.env.GITHUB_BASE_REF}`
-      : 'origin/main';
+    const base = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main';
     execSync(`git rev-parse --verify ${base}`, { stdio: 'pipe' });
-    files = execSync(`git diff --name-only ${base}...HEAD`, { encoding: 'utf8' })
-      .trim()
-      .split('\n')
-      .filter(Boolean);
+    files = execSync(`git diff --name-only ${base}...HEAD`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
   } catch {
-    files = execSync('git diff --name-only HEAD^...HEAD', { encoding: 'utf8' })
-      .trim()
-      .split('\n')
-      .filter(Boolean);
+    files = execSync('git diff --name-only HEAD^...HEAD', { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
     console.log('WARNING: using HEAD^...HEAD fallback');
   }
 }
 
-// Determine policy with priority: explicit > file-based > status-based
 const policy = pArg?.split('=')[1] || process.env.STREAMS_ACTIVE_SLICE || inferPolicyFromFiles(files) || inferPolicyFromStatus();
 const cfg = policies[policy];
-
 if (!cfg) {
   console.error(`No policy declared: ${policy}`);
   process.exit(1);
 }
 
 const matches = (f, p) => p.endsWith('/') ? f.startsWith(p) : f === p;
-
 function validate(files) {
   const badForbidden = files.filter(f => cfg.forbidden.some(p => matches(f, p)));
   const badScope = files.filter(f => !cfg.allowed.some(p => matches(f, p)));
@@ -166,7 +180,6 @@ if (selfTest) {
 
 console.log(`active policy: ${policy}`);
 console.log('changed files:', files);
-
 const result = validate(files);
 if (!result.ok) {
   console.error('scope-guard FAIL', result);
