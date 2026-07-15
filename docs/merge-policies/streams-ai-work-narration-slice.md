@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Connect the live `/streams-ai` message route to the existing Streams AI jobs/job-events ledger, render persisted activity history, enforce protected-reasoning boundaries, provide an authoritative first response for multi-step tasks, preserve one compact active composer across the first-message transition, and persist a canonical Item 5 progress update containing goal, completed work, current action, evidence, and next action without creating parallel persistence or changing provider routes.
+Connect the live `/streams-ai` message route to the existing Streams AI jobs/job-events ledger, render persisted activity history, enforce protected-reasoning boundaries, provide an authoritative first response for multi-step tasks, preserve one compact active composer, persist the canonical Item 5 progress update, and enforce Items 6–40 through one shared human-work narration policy rather than disconnected subsystems.
 
 ## Allowed files
 
@@ -20,11 +20,13 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 - `src/lib/streams-ai/runtime/work-narration-controller.ts`
 - `src/lib/streams-ai/runtime/task-complexity-classifier.ts`
 - `src/lib/streams-ai/runtime/progress-update-structure.ts`
+- `src/lib/streams-ai/runtime/human-work-narration-policy.ts`
 - `src/lib/streams-ai/repositories/jobs-repository.ts`
 - `src/lib/streams-ai/repositories/messages-repository.ts`
 - `tests/streams-ai-protected-reasoning.test.ts`
 - `tests/streams-ai-first-response-planning.test.ts`
 - `tests/streams-ai-progress-update-structure.test.ts`
+- `tests/streams-ai-human-work-items-06-40.test.ts`
 
 ## Forbidden files
 
@@ -37,20 +39,24 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 
 - Scope guard passes for the exact allowed list.
 - TypeScript passes.
-- The production contract suite passes, including Item 5.
-- The full Next production build passes.
+- The production contract suite passes, including Items 5–40.
+- The full Next production build passes in the real Vercel environment.
 - Simple requests bypass unnecessary operation narration.
-- Multi-step requests receive persisted `operation_started`, `plan_created`, and initial `phase_started` events before material execution.
-- Every durable operation event stores a normalized progress object with goal, completed work, current action, evidence, next action, remaining work, and plan version.
-- Restored activity history renders the five required user-facing fields without exposing private reasoning.
-- Evidence labels distinguish evidence level and verification state.
+- Multi-step requests receive persisted `operation_started`, reuse assessment, `plan_created`, and initial `phase_started` events before material execution.
+- Every durable operation event stores normalized progress and human-work policy data.
+- Material plan changes persist the cause, previous and new plan versions, retained work, rejected alternatives, risk avoided, and replacement action.
+- New user directions supersede prior active work in the same session while preserving completed work.
+- Reuse is assessed before new construction.
+- Findings and architectural decisions are persisted and rendered before their consequences are applied.
+- Autosave, persistence, background, test, merge, deployment, and completion words are evidence-gated.
+- Tool, file, attachment, research, repository, design, generation, and testing work carry domain-specific fields.
+- Trivial micro-actions and repetitive activity are suppressed.
+- Status labels are stable and accompanied by natural-language current action, evidence, and next action.
+- Error, blocker, cancellation, supersession, and partial-completion states preserve completed work and identify retryability and required user action.
+- Completion is rejected when required work remains, evidence is absent, or verification has not passed.
+- Restored activity history renders goal, completed work, current action, evidence, next action, remaining work, findings, decisions, plan changes, preservation, risks, blockers, tool/file context, and terminal receipts without exposing private reasoning.
+- Activity history remains collapsed by default, keyboard accessible, mobile-safe, cross-tab synchronized, and restorable after refresh.
 - Duplicate idempotency keys recover the same chat operation.
-- The accepted goal, phases, plan version, preserved items, risks avoided, and next action can be read back from `/api/streams-ai/jobs`.
 - The same compact composer remains mounted before and after the first message.
-- The duplicate two-row live-status console is suppressed.
-- The composer remains clamped above the desktop and mobile safe edge.
-- The conversation viewport remains visible and scrollable above the composer.
-- Persisted work history and Stop render above the composer instead of overlapping or replacing it.
-- Refresh restores the activity panel, accepted plan, and latest structured progress update.
 - Stop transitions the authoritative job to `cancelled` and late completion cannot overwrite it.
-- Protected fields do not appear in persisted message metadata, job input/output, job events, or restored UI payloads.
+- Protected fields do not appear in persisted message metadata, job input/output, job events, restored UI payloads, or final responses.
