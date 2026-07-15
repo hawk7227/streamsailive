@@ -84,6 +84,7 @@ const policies = {
       'docs/merge-policies/streams-ai-work-narration-slice.md',
       'scripts/scope-guard.mjs',
       'package.json',
+      '.github/workflows/streams-ai-vercel-env-verify.yml',
       'src/app/streams-ai/page.tsx',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
@@ -94,11 +95,13 @@ const policies = {
       'src/lib/streams-ai/runtime/work-narration-controller.ts',
       'src/lib/streams-ai/runtime/task-complexity-classifier.ts',
       'src/lib/streams-ai/runtime/progress-update-structure.ts',
+      'src/lib/streams-ai/runtime/human-work-narration-policy.ts',
       'src/lib/streams-ai/repositories/jobs-repository.ts',
       'src/lib/streams-ai/repositories/messages-repository.ts',
       'tests/streams-ai-protected-reasoning.test.ts',
       'tests/streams-ai-first-response-planning.test.ts',
-      'tests/streams-ai-progress-update-structure.test.ts'
+      'tests/streams-ai-progress-update-structure.test.ts',
+      'tests/streams-ai-human-work-items-06-40.test.ts'
     ],
     forbidden: [
       'public/build-report.json',
@@ -116,6 +119,7 @@ function inferPolicyFromFiles(files) {
     f === 'src/lib/streams-ai/runtime/work-narration-controller.ts'
     || f === 'src/lib/streams-ai/runtime/task-complexity-classifier.ts'
     || f === 'src/lib/streams-ai/runtime/progress-update-structure.ts'
+    || f === 'src/lib/streams-ai/runtime/human-work-narration-policy.ts'
     || f === 'src/lib/streams-ai/protected-reasoning.ts'
     || f === 'src/lib/streams-ai/repositories/jobs-repository.ts'
     || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'

@@ -5,7 +5,7 @@ import { sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "@/lib/streams-a
 
 const STORAGE_KEY = "streams-ai.active-work-job.v1";
 const CHANNEL_NAME = "streams-ai-work-history-v1";
-const TERMINAL = new Set(["completed", "failed", "cancelled", "blocked"]);
+const TERMINAL = new Set(["completed", "failed", "cancelled", "blocked", "partial", "superseded"]);
 
 function currentSessionId() {
   if (typeof window === "undefined") return "";
@@ -39,11 +39,11 @@ function statusLabel(status) {
 }
 
 function listText(items) {
-  return Array.isArray(items) ? items.map((item) => sanitizeStreamsAIText(typeof item === "string" ? item : item?.label || item?.id || "")).filter(Boolean) : [];
+  return Array.isArray(items) ? items.map((item) => sanitizeStreamsAIText(typeof item === "string" ? item : item?.label || item?.name || item?.id || "")).filter(Boolean) : [];
 }
 
 function progressFromEvent(event, job) {
-  const source = event?.data?.progressUpdate || event?.data || {};
+  const source = event?.data?.humanWorkEvent || event?.data?.progressUpdate || event?.data || {};
   const evidence = source.evidence || {};
   return {
     goal: sanitizeStreamsAIText(source.goal || job?.input_json?.goal || "Complete the accepted Streams task.", 500),
@@ -54,6 +54,24 @@ function progressFromEvent(event, job) {
     verificationState: sanitizeStreamsAIText(evidence.verificationState || source.verificationState || "in progress", 120),
     nextAction: sanitizeStreamsAIText(source.nextAction || "Continue the accepted work plan.", 1000),
     remainingWork: listText(source.remainingWork || source.remainingItems),
+    preservedItems: listText(source.preservedItems),
+    risksAvoided: listText(source.risksAvoided),
+    findings: listText(source.findings),
+    rejectedAlternatives: listText(source.rejectedAlternatives),
+    decision: sanitizeStreamsAIText(source.decision || "", 1000),
+    planChanged: Boolean(source.planChanged),
+    changeReason: sanitizeStreamsAIText(source.changeReason || "", 1000),
+    planVersion: Number(source.planVersion || 1),
+    previousPlanVersion: Number(source.previousPlanVersion || 0),
+    blockedReason: sanitizeStreamsAIText(source.blockedReason || "", 1000),
+    userActionRequired: Boolean(source.userActionRequired),
+    retryable: Boolean(source.retryable),
+    partial: Boolean(source.partial),
+    toolName: sanitizeStreamsAIText(source.toolName || "", 300),
+    fileName: sanitizeStreamsAIText(source.fileName || "", 500),
+    domain: sanitizeStreamsAIText(source.domain || "general", 100),
+    visible: source.visible !== false,
+    completionGate: source.completionGate || null,
   };
 }
 
@@ -149,11 +167,12 @@ export default function StreamsAIWorkHistoryBridge() {
   }, [active?.jobId]);
 
   const events = useMemo(() => Array.isArray(record?.events) ? record.events : [], [record]);
+  const visibleEvents = useMemo(() => events.filter((event) => progressFromEvent(event, record?.job).visible), [events, record?.job]);
   const planEvent = useMemo(() => events.find((event) => event?.event_type === "plan_created") || null, [events]);
   if (!active?.jobId) return null;
   const job = record?.job;
   const status = String(job?.status || "running");
-  const latest = events[events.length - 1];
+  const latest = visibleEvents[visibleEvents.length - 1] || events[events.length - 1];
   const canStop = !TERMINAL.has(status);
   const plan = planEvent?.data || job?.input_json || {};
   const goal = sanitizeStreamsAIText(plan.goal || job?.input_json?.goal || "Streams operation", 500);
@@ -184,18 +203,18 @@ export default function StreamsAIWorkHistoryBridge() {
   return (
     <aside className={`streamsAIWorkHistory streamsAIWorkHistory--${status}`} aria-label="Streams work activity" role="status">
       <div className="streamsAIWorkHistory__bar">
-        <button type="button" className="streamsAIWorkHistory__summary" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+        <button type="button" className="streamsAIWorkHistory__summary" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls="streams-ai-work-history-events">
           <span className="streamsAIWorkHistory__dot" aria-hidden="true" />
           <span className="streamsAIWorkHistory__copy">
             <strong>{goal || job?.input_json?.capability?.displayName || "Streams activity"}</strong>
             <small>{latestProgress.currentAction || error || "Restoring activity…"}</small>
           </span>
-          <span className="streamsAIWorkHistory__status">{statusLabel(status)}</span>
+          <span className="streamsAIWorkHistory__status">{statusLabel(latest?.data?.statusLabel || status)}</span>
         </button>
         {canStop && <button type="button" className="streamsAIWorkHistory__stop" onClick={stop} disabled={stopping} aria-label="Stop current Streams operation">{stopping ? "Stopping…" : "Stop"}</button>}
       </div>
       {expanded && (
-        <div className="streamsAIWorkHistory__events" role="log" aria-live={TERMINAL.has(status) ? "polite" : "off"}>
+        <div id="streams-ai-work-history-events" className="streamsAIWorkHistory__events" role="log" aria-live={TERMINAL.has(status) ? "polite" : "off"}>
           {error && <div className="streamsAIWorkHistory__event streamsAIWorkHistory__event--error">{error}</div>}
           <section className="streamsAIWorkHistory__progress" aria-label="Current structured progress update">
             <p><strong>Goal:</strong> {latestProgress.goal}</p>
@@ -203,6 +222,12 @@ export default function StreamsAIWorkHistoryBridge() {
             <p><strong>Now:</strong> {latestProgress.currentAction}</p>
             <p><strong>Evidence:</strong> {latestProgress.evidenceSummary} <span>({statusLabel(latestProgress.evidenceLevel)} · {statusLabel(latestProgress.verificationState)})</span></p>
             <p><strong>Next:</strong> {latestProgress.nextAction}</p>
+            {latestProgress.remainingWork.length > 0 && <p><strong>Remaining:</strong> {latestProgress.remainingWork.join(" · ")}</p>}
+            {latestProgress.planChanged && <p><strong>Plan updated:</strong> {latestProgress.changeReason || `Version ${latestProgress.previousPlanVersion} → ${latestProgress.planVersion}`}</p>}
+            {latestProgress.findings.length > 0 && <p><strong>Findings:</strong> {latestProgress.findings.join(" · ")}</p>}
+            {latestProgress.decision && <p><strong>Decision:</strong> {latestProgress.decision}</p>}
+            {latestProgress.rejectedAlternatives.length > 0 && <p><strong>Not using:</strong> {latestProgress.rejectedAlternatives.join(" · ")}</p>}
+            {latestProgress.blockedReason && <p><strong>Blocker:</strong> {latestProgress.blockedReason}{latestProgress.userActionRequired ? " · User action required" : ""}</p>}
           </section>
           {(phases.length > 0 || preserved.length > 0 || risks.length > 0) && (
             <section className="streamsAIWorkHistory__plan" aria-label="Accepted work plan">
@@ -211,16 +236,23 @@ export default function StreamsAIWorkHistoryBridge() {
               {risks.length > 0 && <p><strong>Avoiding:</strong> {risks.join(" · ")}</p>}
             </section>
           )}
-          {events.map((event) => {
+          {visibleEvents.map((event) => {
             const progress = progressFromEvent(event, job);
             return (
               <article key={event.id} className={`streamsAIWorkHistory__event streamsAIWorkHistory__event--${event?.data?.status || status}`}>
-                <div className="streamsAIWorkHistory__eventHead"><strong>{statusLabel(event.event_type)}</strong><time dateTime={event.created_at}>{event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</time></div>
+                <div className="streamsAIWorkHistory__eventHead"><strong>{event?.data?.statusLabel || statusLabel(event.event_type)}</strong><time dateTime={event.created_at}>{event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</time></div>
                 <p>{eventText(event)}</p>
+                {progress.planChanged && <small>Plan updated: {progress.changeReason || `Version ${progress.previousPlanVersion} → ${progress.planVersion}`}</small>}
+                {progress.findings.length > 0 && <small>Found: {progress.findings.join(" · ")}</small>}
+                {progress.decision && <small>Decision: {progress.decision}</small>}
                 <small>Now: {progress.currentAction}</small>
                 <small>Evidence: {progress.evidenceSummary}</small>
                 <small>Next: {progress.nextAction}</small>
                 {progress.completedWork.length > 0 && <small>Completed: {progress.completedWork.join(" · ")}</small>}
+                {progress.preservedItems.length > 0 && <small>Preserving: {progress.preservedItems.join(" · ")}</small>}
+                {progress.risksAvoided.length > 0 && <small>Avoiding: {progress.risksAvoided.join(" · ")}</small>}
+                {progress.toolName && <small>Tool: {progress.toolName}</small>}
+                {progress.fileName && <small>File: {progress.fileName}</small>}
               </article>
             );
           })}
@@ -228,8 +260,8 @@ export default function StreamsAIWorkHistoryBridge() {
       )}
       <style jsx>{`
         .streamsAIWorkHistory{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);width:min(780px,calc(100vw - 72px));z-index:246;border:1px solid rgba(15,23,42,.12);border-radius:16px;background:rgba(255,255,255,.97);box-shadow:0 14px 40px rgba(15,23,42,.12);overflow:hidden;color:#0f172a}
-        .streamsAIWorkHistory__bar{display:flex;align-items:center}.streamsAIWorkHistory__summary{flex:1;min-width:0;border:0;background:transparent;padding:12px 14px;display:flex;align-items:center;gap:10px;text-align:left}.streamsAIWorkHistory__dot{width:9px;height:9px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.12);flex:none}.streamsAIWorkHistory--completed .streamsAIWorkHistory__dot{background:#16a34a}.streamsAIWorkHistory--failed .streamsAIWorkHistory__dot,.streamsAIWorkHistory--blocked .streamsAIWorkHistory__dot{background:#dc2626}.streamsAIWorkHistory__copy{display:flex;flex-direction:column;min-width:0;flex:1}.streamsAIWorkHistory__copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__copy small{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__status{font-size:11px;text-transform:capitalize;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px}.streamsAIWorkHistory__stop{margin-right:10px;min-height:34px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:10px;padding:0 11px}.streamsAIWorkHistory__events{border-top:1px solid #e2e8f0;max-height:320px;overflow:auto;padding:9px 12px;display:flex;flex-direction:column;gap:8px}.streamsAIWorkHistory__progress,.streamsAIWorkHistory__plan{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:8px 10px}.streamsAIWorkHistory__progress p,.streamsAIWorkHistory__plan p{margin:4px 0;font-size:12px;line-height:1.45;color:#475569}.streamsAIWorkHistory__progress span{color:#64748b}.streamsAIWorkHistory__event{border-left:2px solid #cbd5e1;padding:6px 9px;display:flex;flex-direction:column;gap:2px}.streamsAIWorkHistory__event--failed,.streamsAIWorkHistory__event--error{border-left-color:#dc2626}.streamsAIWorkHistory__eventHead{display:flex;justify-content:space-between;gap:12px}.streamsAIWorkHistory__eventHead strong{font-size:12px}.streamsAIWorkHistory__eventHead time,.streamsAIWorkHistory__event small{font-size:11px;color:#64748b}.streamsAIWorkHistory__event p{margin:3px 0;font-size:13px;line-height:1.4}
-        @media(max-width:700px){.streamsAIWorkHistory{bottom:104px;width:calc(100vw - 24px);border-radius:14px}.streamsAIWorkHistory__status{max-width:86px;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__events{max-height:250px}.streamsAIWorkHistory__copy strong{font-size:13px}.streamsAIWorkHistory__progress p{font-size:11.5px}}
+        .streamsAIWorkHistory__bar{display:flex;align-items:center}.streamsAIWorkHistory__summary{flex:1;min-width:0;border:0;background:transparent;padding:12px 14px;display:flex;align-items:center;gap:10px;text-align:left}.streamsAIWorkHistory__dot{width:9px;height:9px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.12);flex:none}.streamsAIWorkHistory--completed .streamsAIWorkHistory__dot{background:#16a34a}.streamsAIWorkHistory--failed .streamsAIWorkHistory__dot,.streamsAIWorkHistory--blocked .streamsAIWorkHistory__dot{background:#dc2626}.streamsAIWorkHistory--partial .streamsAIWorkHistory__dot{background:#d97706}.streamsAIWorkHistory--cancelled .streamsAIWorkHistory__dot,.streamsAIWorkHistory--superseded .streamsAIWorkHistory__dot{background:#64748b}.streamsAIWorkHistory__copy{display:flex;flex-direction:column;min-width:0;flex:1}.streamsAIWorkHistory__copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__copy small{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__status{font-size:11px;text-transform:capitalize;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px}.streamsAIWorkHistory__stop{margin-right:10px;min-height:34px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:10px;padding:0 11px}.streamsAIWorkHistory__events{border-top:1px solid #e2e8f0;max-height:360px;overflow:auto;padding:9px 12px;display:flex;flex-direction:column;gap:8px}.streamsAIWorkHistory__progress,.streamsAIWorkHistory__plan{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:8px 10px}.streamsAIWorkHistory__progress p,.streamsAIWorkHistory__plan p{margin:4px 0;font-size:12px;line-height:1.45;color:#475569}.streamsAIWorkHistory__progress span{color:#64748b}.streamsAIWorkHistory__event{border-left:2px solid #cbd5e1;padding:6px 9px;display:flex;flex-direction:column;gap:2px}.streamsAIWorkHistory__event--failed,.streamsAIWorkHistory__event--error,.streamsAIWorkHistory__event--blocked{border-left-color:#dc2626}.streamsAIWorkHistory__event--partial{border-left-color:#d97706}.streamsAIWorkHistory__eventHead{display:flex;justify-content:space-between;gap:12px}.streamsAIWorkHistory__eventHead strong{font-size:12px}.streamsAIWorkHistory__eventHead time,.streamsAIWorkHistory__event small{font-size:11px;color:#64748b}.streamsAIWorkHistory__event p{margin:3px 0;font-size:13px;line-height:1.4}
+        @media(max-width:700px){.streamsAIWorkHistory{bottom:104px;width:calc(100vw - 24px);border-radius:14px}.streamsAIWorkHistory__status{max-width:86px;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__events{max-height:270px}.streamsAIWorkHistory__copy strong{font-size:13px}.streamsAIWorkHistory__progress p{font-size:11.5px}}
         @media(prefers-reduced-motion:reduce){.streamsAIWorkHistory *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
       `}</style>
     </aside>
