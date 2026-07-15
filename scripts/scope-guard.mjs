@@ -90,9 +90,11 @@ const policies = {
       'src/lib/streams-ai/protected-reasoning.ts',
       'src/lib/streams-ai/intelligence/parity-profile.ts',
       'src/lib/streams-ai/runtime/work-narration-controller.ts',
+      'src/lib/streams-ai/runtime/task-complexity-classifier.ts',
       'src/lib/streams-ai/repositories/jobs-repository.ts',
       'src/lib/streams-ai/repositories/messages-repository.ts',
-      'tests/streams-ai-protected-reasoning.test.ts'
+      'tests/streams-ai-protected-reasoning.test.ts',
+      'tests/streams-ai-first-response-planning.test.ts'
     ],
     forbidden: [
       'public/build-report.json',
@@ -108,6 +110,7 @@ function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
   const hasWorkNarrationFiles = files.some((f) =>
     f === 'src/lib/streams-ai/runtime/work-narration-controller.ts'
+    || f === 'src/lib/streams-ai/runtime/task-complexity-classifier.ts'
     || f === 'src/lib/streams-ai/protected-reasoning.ts'
     || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'
   );
