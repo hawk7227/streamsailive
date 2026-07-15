@@ -56,13 +56,20 @@ describe("Streams AI first-response planning", () => {
     expect(jobsSource).toContain("input.productId !== \"text-2-video\"");
   });
 
-  it("keeps the same composer and conversation viewport after the first message", () => {
+  it("keeps only the compact one-line composer in both chat states", () => {
     expect(layoutCss).toContain(".startWorkspace .startComposerWrap");
     expect(layoutCss).toContain(".startWorkspaceActive .startComposerWrap");
-    expect(layoutCss).toContain("bottom: 92px !important");
+    expect(layoutCss).toContain("bottom: max(24px, env(safe-area-inset-bottom, 0px)) !important");
     expect(layoutCss).toContain("width: min(860px, calc(100% - 96px)) !important");
+    expect(layoutCss).toContain(".startComposerWrap .streamsComposerLiveStatus");
+    expect(layoutCss).toContain("display: none !important");
+    expect(layoutCss).toContain("flex-wrap: nowrap !important");
+    expect(layoutCss).toContain("min-height: 58px !important");
+  });
+
+  it("keeps the conversation viewport visible above the compact console", () => {
     expect(layoutCss).toContain(".startWorkspaceActive .startChatSurface");
-    expect(layoutCss).toContain("bottom: 208px !important");
+    expect(layoutCss).toContain("bottom: 112px !important");
     expect(layoutCss).toContain("overflow-y: auto !important");
     expect(layoutCss).toContain("justify-content: flex-start !important");
   });
