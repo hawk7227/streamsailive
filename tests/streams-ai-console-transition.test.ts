@@ -1,37 +1,38 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { isAuthorizedInternalChatOperation } from "@/lib/streams-ai/repositories/jobs-repository";
+
+const jobsSource = readFileSync("src/lib/streams-ai/repositories/jobs-repository.ts", "utf8");
+const layoutCss = readFileSync("src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css", "utf8");
 
 describe("Streams AI first-message console transition", () => {
-  it("recognizes the zero-credit internal narration record as already chat-authorized", () => {
-    expect(isAuthorizedInternalChatOperation({
-      kind: "chat_tool",
-      productId: "streams-ai",
-      creditEstimate: 0,
-      inputJson: { purpose: "streams_ai_chat_operation" },
-    })).toBe(true);
+  it("reuses the already-authorized scope only for zero-credit internal chat narration", () => {
+    expect(jobsSource).toContain("input.inputJson?.purpose === \"streams_ai_chat_operation\"");
+    expect(jobsSource).toContain("input.creditEstimate === 0");
+    expect(jobsSource).toContain("capability.entitlementRequired && !internalChatOperation");
   });
 
-  it("does not bypass entitlement for paid or unrelated jobs", () => {
-    expect(isAuthorizedInternalChatOperation({
-      kind: "image_generation",
-      productId: "text-2-image",
-      creditEstimate: 1,
-      inputJson: { purpose: "streams_ai_chat_operation" },
-    })).toBe(false);
+  it("keeps paid and unrelated jobs behind their normal entitlement checks", () => {
+    expect(jobsSource).toContain("input.productId !== \"text-2-image\"");
+    expect(jobsSource).toContain("input.productId !== \"photo-2-motion\"");
+    expect(jobsSource).toContain("input.productId !== \"text-2-video\"");
   });
 
   it("keeps the same composer geometry before and after the first message", () => {
-    const css = readFileSync("src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css", "utf8");
-    expect(css).toContain(".startWorkspace .startComposerWrap");
-    expect(css).toContain(".startWorkspaceActive .startComposerWrap");
-    expect(css).toContain("bottom: 92px !important");
-    expect(css).toContain("width: min(860px, calc(100% - 96px)) !important");
+    expect(layoutCss).toContain(".startWorkspace .startComposerWrap");
+    expect(layoutCss).toContain(".startWorkspaceActive .startComposerWrap");
+    expect(layoutCss).toContain("bottom: 92px !important");
+    expect(layoutCss).toContain("width: min(860px, calc(100% - 96px)) !important");
+  });
+
+  it("keeps the conversation viewport visible above the composer", () => {
+    expect(layoutCss).toContain(".startWorkspaceActive .startChatSurface");
+    expect(layoutCss).toContain("bottom: 208px !important");
+    expect(layoutCss).toContain("overflow-y: auto !important");
+    expect(layoutCss).toContain("justify-content: flex-start !important");
   });
 
   it("keeps work history above the composer instead of overlapping it", () => {
-    const css = readFileSync("src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css", "utf8");
-    expect(css).toContain(".streamsAIWorkHistory");
-    expect(css).toContain("bottom: 228px !important");
+    expect(layoutCss).toContain(".streamsAIWorkHistory");
+    expect(layoutCss).toContain("bottom: 228px !important");
   });
 });
