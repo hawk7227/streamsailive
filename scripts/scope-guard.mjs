@@ -84,10 +84,12 @@ const policies = {
       'docs/merge-policies/streams-ai-work-narration-slice.md',
       'scripts/scope-guard.mjs',
       'package.json',
+      '.github/workflows/streams-ai-repair-verify.yml',
       'src/app/streams-ai/page.tsx',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
       'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx',
+      'src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css',
       'src/lib/streams-ai/protected-reasoning.ts',
       'src/lib/streams-ai/intelligence/parity-profile.ts',
       'src/lib/streams-ai/runtime/work-narration-controller.ts',
@@ -113,7 +115,9 @@ function inferPolicyFromFiles(files) {
     f === 'src/lib/streams-ai/runtime/work-narration-controller.ts'
     || f === 'src/lib/streams-ai/runtime/task-complexity-classifier.ts'
     || f === 'src/lib/streams-ai/protected-reasoning.ts'
+    || f === 'src/lib/streams-ai/repositories/jobs-repository.ts'
     || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'
+    || f === 'src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css'
   );
   if (hasWorkNarrationFiles) return 'streams-ai-work-narration-slice';
 

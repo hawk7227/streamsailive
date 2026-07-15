@@ -25,6 +25,15 @@ function shouldEnforceCredits() {
   return process.env.STREAMS_AI_ENFORCE_CREDITS === "true";
 }
 
+export function isAuthorizedInternalChatOperation(input: CreateJobInput = {}) {
+  return input.kind === "chat_tool"
+    && input.productId !== "text-2-image"
+    && input.productId !== "photo-2-motion"
+    && input.productId !== "text-2-video"
+    && input.inputJson?.purpose === "streams_ai_chat_operation"
+    && input.creditEstimate === 0;
+}
+
 function normalizeJobRow<T extends Record<string, any> | null>(row: T): T {
   if (!row) return row;
   const clean = sanitizeStreamsAIPayload(row);
@@ -72,7 +81,12 @@ export class StreamsAIJobsRepository {
     const capability = getCapabilityProduct(input.kind || "chat_tool");
     const effectiveProductId = input.productId && input.productId !== "streams-ai" ? input.productId : capability.productId;
     const effectiveCreditEstimate = input.creditEstimate ?? capability.estimatedCredits ?? 0;
-    if (capability.entitlementRequired) await entitlements.require(scope, effectiveProductId);
+    const internalChatOperation = isAuthorizedInternalChatOperation(input);
+
+    // The live message route already authorizes the user and scope before it creates
+    // this zero-credit narration ledger record. Requiring a second product entitlement
+    // here can abort an otherwise authorized chat turn before the assistant executes.
+    if (capability.entitlementRequired && !internalChatOperation) await entitlements.require(scope, effectiveProductId);
     if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
 
     const inputJson = sanitizeStreamsAIPayload({
