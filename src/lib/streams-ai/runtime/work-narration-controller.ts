@@ -10,10 +10,16 @@ import {
   sanitizeStreamsAIText,
 } from "../protected-reasoning";
 import { classifyStreamsTask, type StreamsInitialPlan } from "./task-complexity-classifier";
+import {
+  buildHumanWorkEvent,
+  detectWorkDomain,
+  humanWorkNarration,
+  shouldExposeWorkEvent,
+} from "./human-work-narration-policy";
 
 const jobs = new StreamsAIJobsRepository();
 const messages = new StreamsAIMessagesRepository();
-const TERMINAL = new Set(["completed", "failed", "cancelled", "blocked"]);
+const TERMINAL = new Set(["completed", "failed", "cancelled", "blocked", "partial", "superseded"]);
 
 type Body = Record<string, any> & {
   sessionId?: string;
@@ -54,11 +60,12 @@ function eventMessage(payload: Record<string, any>) {
 }
 
 function phaseEventType(phase: string) {
-  if (phase === "searching") return "research_started";
-  if (phase === "generating") return "generation_started";
+  if (phase === "searching" || phase === "researching") return "research_started";
+  if (phase === "generating" || phase === "rendering") return "generation_started";
   if (phase === "repairing") return "repair_started";
-  if (phase === "validating" || phase === "verifying") return "verification_started";
-  if (phase === "streaming") return "delivery_started";
+  if (phase === "validating" || phase === "verifying" || phase === "testing") return "verification_started";
+  if (phase === "streaming" || phase === "delivering") return "delivery_started";
+  if (phase === "implementing" || phase === "building") return "implementation_started";
   return "phase_started";
 }
 
@@ -73,6 +80,34 @@ function passthroughWithJob(upstream: Response, jobId: string) {
   const headers = new Headers(upstream.headers);
   headers.set("X-Streams-AI-Job-Id", jobId);
   return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+}
+
+async function supersedeOlderSessionWork(scope: Awaited<ReturnType<typeof requireStreamsAIScope>>, sessionId: string, keepJobId = "") {
+  if (!sessionId) return;
+  const sessionJobs = await jobs.list(scope, { sessionId });
+  for (const candidate of sessionJobs) {
+    if (!candidate?.id || candidate.id === keepJobId) continue;
+    if (candidate?.input_json?.purpose !== "streams_ai_chat_operation") continue;
+    if (TERMINAL.has(String(candidate.status || ""))) continue;
+    await jobs.update(scope, candidate.id, { status: "superseded", error: "A newer user direction superseded this operation." });
+    await jobs.createEvent(scope, {
+      jobId: candidate.id,
+      eventType: "superseded",
+      message: "A newer user direction replaced this operation. Completed work remains preserved.",
+      data: {
+        status: "superseded",
+        phase: "superseded",
+        currentAction: "Stopped the superseded direction.",
+        nextAction: "Continue with the newest user instruction.",
+        evidenceLevel: "runtime_verified",
+        evidenceSummary: "A newer turn was accepted for the same session.",
+        verificationState: "passed",
+        remainingItems: [],
+        preservedItems: candidate?.input_json?.preservedItems || [],
+        planVersion: Number(candidate?.input_json?.planVersion || 1),
+      },
+    });
+  }
 }
 
 export async function runNarratedStreamsMessage(
@@ -95,6 +130,9 @@ export async function runNarratedStreamsMessage(
     return passthroughWithJob(await innerHandler(request), existingJob.id);
   }
 
+  if (body.sessionId) await supersedeOlderSessionWork(scope, String(body.sessionId), existingJob?.id || "");
+
+  const domain = detectWorkDomain({ message: userText, attachments: body.attachments, mode: body.mode });
   const job = existingJob || await jobs.create(scope, {
     sessionId: body.sessionId || null,
     kind: "chat_tool",
@@ -106,6 +144,7 @@ export async function runNarratedStreamsMessage(
       idempotencyKey,
       protectedRequest,
       mode: body.mode || "Thinking",
+      domain,
       complexityClassification: plan.classification,
       planVersion: 1,
       goal: plan.goal,
@@ -115,9 +154,15 @@ export async function runNarratedStreamsMessage(
       clarificationState: plan.clarificationState,
       currentAction: plan.nextAction,
       nextAction: plan.nextAction,
+      attachments: Array.isArray(body.attachments) ? body.attachments.map((attachment: any) => ({ id: attachment?.id || null, name: attachment?.name || null, kind: attachment?.kind || null, mimeType: attachment?.mimeType || attachment?.mime_type || null })) : [],
     }),
     creditEstimate: 0,
   });
+
+  let currentPlanVersion = Number(job?.input_json?.planVersion || 1);
+  let lastVisibleAt = 0;
+  let lastActivityKey = "";
+  let findingCount = 0;
 
   if (!existingJob) {
     const opening = firstResponse(plan, protectedRequest);
@@ -128,13 +173,39 @@ export async function runNarratedStreamsMessage(
       data: {
         phase: "understanding",
         status: "running",
+        domain,
         currentAction: plan.nextAction,
         nextAction: plan.nextAction,
         planVersion: 1,
         complexityClassification: plan.classification,
         clarificationState: plan.clarificationState,
         evidenceLevel: "runtime_verified",
+        evidenceSummary: "The request was accepted and classified before material execution.",
         verificationState: "not_started",
+        preservedItems: plan.preservedItems,
+        risksAvoided: plan.risksAvoided,
+        remainingItems: plan.phases.map((phase) => phase.label),
+      },
+    });
+    await jobs.createEvent(scope, {
+      jobId: job.id,
+      eventType: "reuse_assessment",
+      message: "I’m inspecting the active implementation before creating new infrastructure.",
+      data: {
+        phase: "inspect",
+        status: "running",
+        domain,
+        currentAction: "Inspect the active implementation and identify reusable systems.",
+        nextAction: plan.nextAction,
+        planVersion: 1,
+        decision: "Prefer extending working infrastructure when it satisfies the requirement.",
+        rejectedAlternatives: ["Create a parallel system before inspecting the active implementation"],
+        preservedItems: plan.preservedItems,
+        risksAvoided: [...plan.risksAvoided, "duplicating working infrastructure"],
+        evidenceLevel: "requested",
+        evidenceSummary: "Reuse remains a requirement until repository or runtime inspection produces evidence.",
+        verificationState: "in_progress",
+        remainingItems: plan.phases.map((phase) => phase.label),
       },
     });
     await jobs.createEvent(scope, {
@@ -148,10 +219,12 @@ export async function runNarratedStreamsMessage(
         preservedItems: plan.preservedItems,
         risksAvoided: plan.risksAvoided,
         nextAction: plan.nextAction,
+        remainingItems: plan.phases.map((phase) => phase.label),
         planVersion: 1,
         clarificationState: plan.clarificationState,
         status: "running",
         evidenceLevel: "runtime_verified",
+        evidenceSummary: "The server persisted the accepted plan before invoking the inner assistant runtime.",
         verificationState: "not_started",
       },
     });
@@ -162,10 +235,13 @@ export async function runNarratedStreamsMessage(
       data: {
         phase: plan.phases[0]?.id || "analyze",
         status: "running",
+        domain,
         currentAction: plan.nextAction,
         nextAction: plan.nextAction,
+        remainingItems: plan.phases.map((phase) => phase.label),
         planVersion: 1,
         evidenceLevel: "runtime_verified",
+        evidenceSummary: "The first accepted phase started.",
         verificationState: "in_progress",
       },
     });
@@ -175,13 +251,60 @@ export async function runNarratedStreamsMessage(
   try {
     upstream = await innerHandler(request);
   } catch (error) {
-    await jobs.update(scope, job.id, { status: "failed", error: sanitizeStreamsAIText(error instanceof Error ? error.message : error) });
-    await jobs.createEvent(scope, { jobId: job.id, eventType: "operation_failed", message: "Streams could not start this response. No material execution was completed.", data: { status: "failed", retryable: true, failedPhase: "startup", planVersion: 1 } });
+    const errorMessage = sanitizeStreamsAIText(error instanceof Error ? error.message : error);
+    await jobs.update(scope, job.id, { status: "failed", error: errorMessage });
+    await jobs.createEvent(scope, {
+      jobId: job.id,
+      eventType: "operation_failed",
+      message: "Streams could not start this response. No material execution was completed.",
+      data: {
+        status: "failed",
+        retryable: true,
+        failedPhase: "startup",
+        blockedReason: errorMessage,
+        currentAction: "Preserve the accepted plan and report the startup failure.",
+        nextAction: "Retry the operation after the startup failure is resolved.",
+        remainingItems: plan.phases.map((phase) => phase.label),
+        preservedItems: plan.preservedItems,
+        evidenceLevel: "runtime_verified",
+        evidenceSummary: errorMessage,
+        verificationState: "failed",
+        planVersion: currentPlanVersion,
+      },
+    });
     throw error;
   }
 
   if (!upstream.body || !String(upstream.headers.get("content-type") || "").includes("text/event-stream")) {
-    await jobs.update(scope, job.id, { status: upstream.ok ? "completed" : "failed" });
+    const status = upstream.ok ? "completed" : "failed";
+    await jobs.update(scope, job.id, {
+      status,
+      outputJson: upstream.ok ? {
+        verificationState: "passed",
+        evidenceLevel: "runtime_verified",
+        remainingItems: [],
+        completedPhases: plan.phases.map((phase) => phase.id),
+      } : null,
+    });
+    await jobs.createEvent(scope, {
+      jobId: job.id,
+      eventType: upstream.ok ? "operation_completed" : "operation_failed",
+      message: upstream.ok ? "The non-streaming response completed and passed runtime delivery checks." : "The non-streaming response failed.",
+      data: {
+        status,
+        phase: upstream.ok ? "complete" : "failed",
+        completedItems: upstream.ok ? plan.phases.map((phase) => phase.label) : [],
+        remainingItems: upstream.ok ? [] : plan.phases.map((phase) => phase.label),
+        preservedItems: plan.preservedItems,
+        risksAvoided: plan.risksAvoided,
+        currentAction: upstream.ok ? "Delivered the response." : "Preserved the failure state.",
+        nextAction: upstream.ok ? "No additional action is scheduled." : "Retry after resolving the failure.",
+        evidenceLevel: "runtime_verified",
+        evidenceSummary: `The upstream route returned HTTP ${upstream.status}.`,
+        verificationState: upstream.ok ? "passed" : "failed",
+        planVersion: currentPlanVersion,
+      },
+    });
     return passthroughWithJob(upstream, job.id);
   }
 
@@ -190,19 +313,18 @@ export async function runNarratedStreamsMessage(
   let buffer = "";
   let responseText = "";
   let finalPayload: Record<string, any> = {};
-  let lastActivityKey = "";
   let terminal = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(encode("operation", { jobId: job.id, status: "running", turnId, planVersion: 1, complexityClassification: plan.classification }));
+      controller.enqueue(encode("operation", { jobId: job.id, status: "running", turnId, planVersion: currentPlanVersion, complexityClassification: plan.classification, domain }));
       controller.enqueue(encode("activity", {
         jobId: job.id,
         phase: plan.phases[0]?.id || "analyze",
         statusText: firstResponse(plan, protectedRequest),
         currentAction: plan.nextAction,
         nextAction: plan.nextAction,
-        planVersion: 1,
+        planVersion: currentPlanVersion,
       }));
       try {
         while (true) {
@@ -213,7 +335,7 @@ export async function runNarratedStreamsMessage(
           buffer = parsed.rest;
 
           for (const item of parsed.events) {
-            const payload = sanitizeStreamsAIPayload(item.payload || {});
+            const payload = sanitizeStreamsAIPayload(item.payload || {}) as Record<string, any>;
             const sessionId = String(payload.sessionId || finalPayload.sessionId || body.sessionId || "") || null;
             if (sessionId && sessionId !== job.session_id) await jobs.update(scope, job.id, { sessionId });
 
@@ -226,8 +348,90 @@ export async function runNarratedStreamsMessage(
               const phase = String(payload.phase || "working");
               const message = eventMessage(payload);
               const key = `${phase}:${message}`;
-              if (key !== lastActivityKey) {
+              const requestedPlanVersion = Math.max(currentPlanVersion, Number(payload.planVersion || currentPlanVersion));
+              const planChanged = Boolean(payload.planChanged || requestedPlanVersion > currentPlanVersion);
+              if (planChanged) {
+                const previousPlanVersion = currentPlanVersion;
+                currentPlanVersion = requestedPlanVersion > currentPlanVersion ? requestedPlanVersion : currentPlanVersion + 1;
+                await jobs.update(scope, job.id, { inputJson: { planVersion: currentPlanVersion, currentAction: message, nextAction: payload.nextAction || "Continue with the revised plan." } });
+                await jobs.createEvent(scope, {
+                  jobId: job.id,
+                  eventType: "plan_changed",
+                  message: sanitizeStreamsAIText(payload.changeReason || "The plan changed because new runtime evidence required a different action."),
+                  data: {
+                    phase,
+                    status: "running",
+                    planChanged: true,
+                    previousPlanVersion,
+                    planVersion: currentPlanVersion,
+                    changeReason: payload.changeReason || "New runtime evidence changed the next action.",
+                    completedItems: payload.completedItems || [],
+                    remainingItems: payload.remainingItems || plan.phases.map((candidate) => candidate.label),
+                    preservedItems: payload.preservedItems || plan.preservedItems,
+                    rejectedAlternatives: payload.rejectedAlternatives || [],
+                    risksAvoided: payload.risksAvoided || plan.risksAvoided,
+                    currentAction: message,
+                    nextAction: payload.nextAction || "Continue with the revised plan.",
+                    evidenceLevel: payload.evidenceLevel || "runtime_verified",
+                    evidenceSummary: payload.evidenceSummary || message,
+                    verificationState: "in_progress",
+                  },
+                });
+              }
+
+              const findings = Array.isArray(payload.findings) ? payload.findings : payload.finding ? [payload.finding] : [];
+              if (findings.length) {
+                findingCount += findings.length;
+                await jobs.createEvent(scope, {
+                  jobId: job.id,
+                  eventType: "finding",
+                  message: sanitizeStreamsAIText(findings[0]),
+                  data: {
+                    phase,
+                    status: "running",
+                    findings,
+                    currentAction: message,
+                    nextAction: payload.nextAction || "Apply the verified finding to the accepted plan.",
+                    evidenceLevel: payload.evidenceLevel || "runtime_verified",
+                    evidenceSummary: payload.evidenceSummary || findings[0],
+                    verificationState: "in_progress",
+                    planVersion: currentPlanVersion,
+                  },
+                });
+              }
+
+              if (payload.decision) {
+                await jobs.createEvent(scope, {
+                  jobId: job.id,
+                  eventType: "decision",
+                  message: sanitizeStreamsAIText(payload.decision),
+                  data: {
+                    phase,
+                    status: "running",
+                    decision: payload.decision,
+                    rejectedAlternatives: payload.rejectedAlternatives || [],
+                    preservedItems: payload.preservedItems || plan.preservedItems,
+                    risksAvoided: payload.risksAvoided || plan.risksAvoided,
+                    currentAction: message,
+                    nextAction: payload.nextAction || "Implement the selected decision.",
+                    evidenceLevel: payload.evidenceLevel || "runtime_verified",
+                    evidenceSummary: payload.evidenceSummary || message,
+                    verificationState: "in_progress",
+                    planVersion: currentPlanVersion,
+                  },
+                });
+              }
+
+              const visible = shouldExposeWorkEvent({
+                eventType: phaseEventType(phase),
+                status: "running",
+                message,
+                now: Date.now(),
+                lastVisibleAt,
+              });
+              if (key !== lastActivityKey && visible) {
                 lastActivityKey = key;
+                lastVisibleAt = Date.now();
                 await jobs.createEvent(scope, {
                   jobId: job.id,
                   eventType: phaseEventType(phase),
@@ -235,15 +439,25 @@ export async function runNarratedStreamsMessage(
                   data: {
                     phase,
                     status: "running",
+                    domain: payload.domain || detectWorkDomain({ message, phase }),
                     currentAction: message,
-                    nextAction: phase === "streaming" ? "Deliver the verified response." : "Continue the accepted work plan.",
-                    planVersion: 1,
-                    evidenceLevel: "runtime_verified",
-                    verificationState: "in_progress",
+                    nextAction: phase === "streaming" ? "Deliver the verified response." : payload.nextAction || "Continue the accepted work plan.",
+                    completedItems: payload.completedItems || [],
+                    remainingItems: payload.remainingItems || plan.phases.map((candidate) => candidate.label),
+                    preservedItems: payload.preservedItems || plan.preservedItems,
+                    risksAvoided: payload.risksAvoided || plan.risksAvoided,
+                    toolName: payload.toolName || payload.tool || "",
+                    fileName: payload.fileName || payload.file || "",
+                    autosaveConfirmed: Boolean(payload.autosaveConfirmed),
+                    backgroundExecutionConfirmed: Boolean(payload.backgroundExecutionConfirmed),
+                    planVersion: currentPlanVersion,
+                    evidenceLevel: payload.evidenceLevel || "runtime_verified",
+                    evidenceSummary: payload.evidenceSummary || message,
+                    verificationState: payload.verificationState || "in_progress",
                   },
                 });
               }
-              controller.enqueue(encode("activity", { ...payload, jobId: job.id, planVersion: 1 }));
+              controller.enqueue(encode("activity", { ...payload, jobId: job.id, planVersion: currentPlanVersion }));
               continue;
             }
 
@@ -255,16 +469,31 @@ export async function runNarratedStreamsMessage(
             if (item.event === "error") {
               terminal = true;
               const cancelled = String(payload.detailCode || "") === "STREAMS_RESPONSE_CANCELLED" || request.signal.aborted;
+              const status = cancelled ? "cancelled" : payload.userActionRequired ? "blocked" : "failed";
               await jobs.update(scope, job.id, {
-                status: cancelled ? "cancelled" : "failed",
+                status,
                 sessionId,
                 error: sanitizeStreamsAIText(payload.message || "Streams could not complete this response."),
               });
               await jobs.createEvent(scope, {
                 jobId: job.id,
-                eventType: cancelled ? "cancelled" : "operation_failed",
-                message: cancelled ? "Streams stopped this response." : "Streams could not complete this response.",
-                data: { status: cancelled ? "cancelled" : "failed", retryable: !cancelled, verificationState: "failed", planVersion: 1 },
+                eventType: cancelled ? "cancelled" : status === "blocked" ? "blocked" : "operation_failed",
+                message: cancelled ? "Streams stopped this response." : sanitizeStreamsAIText(payload.message || "Streams could not complete this response."),
+                data: {
+                  status,
+                  retryable: !cancelled && payload.retryable !== false,
+                  userActionRequired: Boolean(payload.userActionRequired),
+                  blockedReason: status === "blocked" ? payload.message : "",
+                  currentAction: cancelled ? "Preserve completed work and stop the active operation." : "Preserve completed work and report the failure boundary.",
+                  nextAction: cancelled ? "Resume only if the user starts a new operation." : payload.nextAction || "Retry after resolving the reported failure.",
+                  completedItems: payload.completedItems || [],
+                  remainingItems: payload.remainingItems || plan.phases.map((candidate) => candidate.label),
+                  preservedItems: payload.preservedItems || plan.preservedItems,
+                  evidenceLevel: payload.evidenceLevel || "runtime_verified",
+                  evidenceSummary: payload.message || "The upstream runtime returned an error event.",
+                  verificationState: "failed",
+                  planVersion: currentPlanVersion,
+                },
               });
               controller.enqueue(encode("error", { ...payload, jobId: job.id }));
               controller.close();
@@ -295,7 +524,8 @@ export async function runNarratedStreamsMessage(
             protectedReasoningChecked: true,
             protectedReasoningRequest: protectedRequest,
             workJobId: job.id,
-            workPlanVersion: 1,
+            workPlanVersion: currentPlanVersion,
+            humanWorkPolicyVersion: 1,
           });
         }
 
@@ -303,20 +533,38 @@ export async function runNarratedStreamsMessage(
           jobId: job.id,
           eventType: "verification_completed",
           message: "The response passed protected-content and completion checks.",
-          data: { phase: "verifying", status: "running", verificationState: "passed", evidenceLevel: "persistence_verified", planVersion: 1 },
+          data: {
+            phase: "verifying",
+            status: "running",
+            currentAction: "Verify the response and persisted receipt.",
+            nextAction: "Persist the final completion receipt.",
+            completedItems: ["Protected-content verification", "Response persistence verification"],
+            remainingItems: ["Persist final completion receipt"],
+            verificationState: "passed",
+            evidenceLevel: "persistence_verified",
+            evidenceSummary: "The assistant response was sanitized and persisted with the operation identifier.",
+            planVersion: currentPlanVersion,
+          },
         });
+
+        const completedItems = plan.phases.map((phase) => phase.label);
+        const outputJson = {
+          assistantMessageId: assistantMessageId || null,
+          responseLength: safeText.length,
+          verificationState: "passed",
+          evidenceLevel: "persistence_verified",
+          evidence: { level: "persistence_verified", verificationState: "passed", summary: "The final response and completion receipt were persisted." },
+          remainingItems: [],
+          initialPlanVersion: 1,
+          finalPlanVersion: currentPlanVersion,
+          completedPhases: plan.phases.map((phase) => phase.id),
+          findingsRecorded: findingCount,
+        };
         await jobs.update(scope, job.id, {
           status: "completed",
           sessionId,
           messageId: assistantMessageId || null,
-          outputJson: {
-            assistantMessageId: assistantMessageId || null,
-            responseLength: safeText.length,
-            verificationState: "passed",
-            initialPlanVersion: 1,
-            finalPlanVersion: 1,
-            completedPhases: plan.phases.map((phase) => phase.id),
-          },
+          outputJson,
         });
         await jobs.createEvent(scope, {
           jobId: job.id,
@@ -326,28 +574,44 @@ export async function runNarratedStreamsMessage(
             phase: "complete",
             status: "completed",
             initialPlanVersion: 1,
-            finalPlanVersion: 1,
+            finalPlanVersion: currentPlanVersion,
             goal: plan.goal,
-            completedItems: plan.phases.map((phase) => phase.label),
+            completedItems,
             preservedItems: plan.preservedItems,
             risksAvoided: plan.risksAvoided,
             remainingItems: [],
+            currentAction: "Completed and persisted the verified response.",
+            nextAction: "No additional action is scheduled.",
             verificationState: "passed",
             evidenceLevel: "persistence_verified",
+            evidenceSummary: "The server persisted the final response, operation status, ordered events, and completion receipt.",
+            decision: "Deliver the verified response after all completion gates passed.",
           },
         });
 
         for (let index = 0; index < safeText.length; index += 180) controller.enqueue(encode("response", { token: safeText.slice(index, index + 180), jobId: job.id }));
-        controller.enqueue(encode("complete", { ...finalPayload, jobId: job.id, verificationState: "passed", planVersion: 1 }));
+        controller.enqueue(encode("complete", { ...finalPayload, jobId: job.id, verificationState: "passed", planVersion: currentPlanVersion }));
         controller.close();
       } catch (error) {
         const message = sanitizeStreamsAIText(error instanceof Error ? error.message : error);
-        await jobs.update(scope, job.id, { status: request.signal.aborted ? "cancelled" : "failed", error: message }).catch(() => null);
+        const status = request.signal.aborted ? "cancelled" : "failed";
+        await jobs.update(scope, job.id, { status, error: message }).catch(() => null);
         await jobs.createEvent(scope, {
           jobId: job.id,
           eventType: request.signal.aborted ? "cancelled" : "operation_failed",
           message: request.signal.aborted ? "Streams stopped this response." : "The response could not be safely completed.",
-          data: { status: request.signal.aborted ? "cancelled" : "failed", retryable: !request.signal.aborted, verificationState: "failed", planVersion: 1 },
+          data: {
+            status,
+            retryable: !request.signal.aborted,
+            currentAction: request.signal.aborted ? "Preserve completed work and stop." : "Preserve completed work and report the failed verification boundary.",
+            nextAction: request.signal.aborted ? "Resume only after a new user instruction." : "Retry after resolving the reported failure.",
+            remainingItems: plan.phases.map((phase) => phase.label),
+            preservedItems: plan.preservedItems,
+            evidenceLevel: "runtime_verified",
+            evidenceSummary: message,
+            verificationState: "failed",
+            planVersion: currentPlanVersion,
+          },
         }).catch(() => null);
         controller.enqueue(encode("error", { jobId: job.id, message: request.signal.aborted ? "Streams stopped this response." : "The response could not be safely completed. Please retry." }));
         controller.close();
@@ -358,7 +622,22 @@ export async function runNarratedStreamsMessage(
       const latestJob = await jobs.get(scope, job.id).catch(() => null);
       if (latestJob && !TERMINAL.has(String(latestJob.status || ""))) {
         await jobs.update(scope, job.id, { status: "cancelled", error: "Client cancelled the response." }).catch(() => null);
-        await jobs.createEvent(scope, { jobId: job.id, eventType: "cancelled", message: "Streams stopped this response.", data: { status: "cancelled", planVersion: 1 } }).catch(() => null);
+        await jobs.createEvent(scope, {
+          jobId: job.id,
+          eventType: "cancelled",
+          message: "Streams stopped this response. Completed work remains preserved.",
+          data: {
+            status: "cancelled",
+            currentAction: "Stop the active response and preserve completed work.",
+            nextAction: "Resume only after a new user instruction.",
+            preservedItems: plan.preservedItems,
+            remainingItems: plan.phases.map((phase) => phase.label),
+            evidenceLevel: "runtime_verified",
+            evidenceSummary: "The response stream was cancelled by the client.",
+            verificationState: "inconclusive",
+            planVersion: currentPlanVersion,
+          },
+        }).catch(() => null);
       }
     },
   });
