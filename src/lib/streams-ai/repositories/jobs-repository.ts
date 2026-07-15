@@ -51,6 +51,22 @@ export class StreamsAIJobsRepository {
     return (data || []).map((row) => normalizeJobRow(row));
   }
 
+  async findChatOperationByIdempotency(scope: StreamsAIScope, idempotencyKey: string) {
+    const key = sanitizeStreamsAIText(idempotencyKey, 300).trim();
+    if (!key) return null;
+    const { data, error } = await this.db()
+      .from(streamsAITables.jobs)
+      .select("*")
+      .eq("tenant_id", scope.tenantId)
+      .eq("user_id", scope.userId)
+      .contains("input_json", { purpose: "streams_ai_chat_operation", idempotencyKey: key })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to recover STREAMS AI chat operation: ${error.message}`);
+    return normalizeJobRow(data);
+  }
+
   async create(scope: StreamsAIScope, input: CreateJobInput = {}) {
     assertNoProtectedFields(input);
     const capability = getCapabilityProduct(input.kind || "chat_tool");
@@ -59,6 +75,15 @@ export class StreamsAIJobsRepository {
     if (capability.entitlementRequired) await entitlements.require(scope, effectiveProductId);
     if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
 
+    const inputJson = sanitizeStreamsAIPayload({
+      ...(input.inputJson || {}),
+      capability: {
+        kind: capability.kind,
+        productId: effectiveProductId,
+        displayName: capability.displayName,
+        executionStatus: capability.executionStatus,
+      },
+    }) as Record<string, unknown>;
     const { data, error } = await this.db().from(streamsAITables.jobs).insert({
       tenant_id: scope.tenantId,
       user_id: scope.userId,
@@ -71,25 +96,19 @@ export class StreamsAIJobsRepository {
       product_id: effectiveProductId,
       status: input.status || "queued",
       kind: capability.kind,
-      input_json: sanitizeStreamsAIPayload({
-        ...(input.inputJson || {}),
-        capability: {
-          kind: capability.kind,
-          productId: effectiveProductId,
-          displayName: capability.displayName,
-          executionStatus: capability.executionStatus,
-        },
-      }),
+      input_json: inputJson,
       credit_estimate: effectiveCreditEstimate,
     }).select("*").single();
 
     if (error) throw new Error(`Failed to create STREAMS AI job: ${error.message}`);
-    await this.createEvent(scope, {
-      jobId: data.id,
-      eventType: "created",
-      message: "Job created",
-      data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate, creditsEnforced: shouldEnforceCredits() },
-    });
+    if (inputJson.suppressCreatedEvent !== true) {
+      await this.createEvent(scope, {
+        jobId: data.id,
+        eventType: "created",
+        message: "Job created",
+        data: { status: data.status, kind: data.kind, productId: effectiveProductId, creditEstimate: effectiveCreditEstimate, creditsEnforced: shouldEnforceCredits() },
+      });
+    }
     return normalizeJobRow(data);
   }
 
@@ -99,9 +118,7 @@ export class StreamsAIJobsRepository {
     if (!current) throw new Error("STREAMS AI job not found.");
     const currentStatus = String(current.status || "");
     const requestedStatus = input.status === undefined ? currentStatus : String(input.status);
-    if (TERMINAL_JOB_STATUSES.has(currentStatus) && requestedStatus !== currentStatus) {
-      throw new Error(`STREAMS AI job is already ${currentStatus}.`);
-    }
+    if (TERMINAL_JOB_STATUSES.has(currentStatus) && requestedStatus !== currentStatus) throw new Error(`STREAMS AI job is already ${currentStatus}.`);
 
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) patch.status = input.status;

@@ -5,6 +5,7 @@
 - STREAMS Self-Build Runtime Foundation
 - Chat UI Slice (chat rail, composer UX, mobile shell fixes)
 - Streams AI Work Narration & Protected Reasoning Slice
+- Streams AI Item 3 — First Response to a Multi-Step Task
 
 ## Proven items
 
@@ -14,7 +15,8 @@
 
 - STREAMS Self-Build Runtime Foundation (in progress in this slice).
 - Chat UI Slice mobile shell & double-sidebar fixes (hidden duplicate inner sidebar, hidden top actions and action status pill on mobile, hidden floating "Snap Pic Click" button on mobile, drawer hamburger menu, full width layout, mobile bottom message scroll spacer).
-- Streams AI Work Narration & Protected Reasoning: live `/api/streams-ai/messages` requests are wrapped by the existing jobs/job-events ledger; user-visible text and persisted metadata pass through protected-field and credential sanitization; the `/streams-ai` page mounts persisted work history, refresh restoration, cross-tab synchronization, and server-side cancellation controls. Source implementation is complete in the current branch; runtime, persistence, browser, and deployment proof are still required before classification as Proven.
+- Streams AI Work Narration & Protected Reasoning: live `/api/streams-ai/messages` requests are wrapped by the existing jobs/job-events ledger; user-visible text and persisted metadata pass through protected-field and credential sanitization; the `/streams-ai` page mounts persisted work history, refresh restoration, cross-tab synchronization, and server-side cancellation controls.
+- Item 3 First Response to a Multi-Step Task: qualifying tasks are deterministically classified before operation creation; simple tasks bypass unnecessary operation narration; multi-step tasks persist `operation_started`, `plan_created`, and initial `phase_started` events with goal, plan version, phases, preservation constraints, risks avoided, clarification state, and next action before material execution; repeated idempotency keys recover the existing chat operation; the mounted history card restores and renders the accepted plan.
 
 ## Blocked items
 
@@ -23,6 +25,8 @@
 ## Target files for this slice
 
 - `docs/streams-current-status.md`
+- `docs/merge-policies/streams-ai-work-narration-slice.md`
+- `scripts/scope-guard.mjs`
 - `src/lib/streams/build-runtime/**`
 - `src/app/api/streams/build/tasks/**`
 - `docs/streams-knowledge/**`
@@ -31,11 +35,13 @@
 - `src/lib/streams-ai/protected-reasoning.ts`
 - `src/lib/streams-ai/intelligence/parity-profile.ts`
 - `src/lib/streams-ai/runtime/work-narration-controller.ts`
+- `src/lib/streams-ai/runtime/task-complexity-classifier.ts`
 - `src/lib/streams-ai/repositories/jobs-repository.ts`
 - `src/lib/streams-ai/repositories/messages-repository.ts`
 - `src/app/api/streams-ai/messages/route.ts`
 - `src/app/api/streams-ai/jobs/route.ts`
 - `tests/streams-ai-protected-reasoning.test.ts`
+- `tests/streams-ai-first-response-planning.test.ts`
 
 ## Files that must not be touched
 
