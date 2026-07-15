@@ -45,6 +45,33 @@
 .streamsAIWorkHistory {
   bottom: 228px !important;
   width: min(860px, calc(100vw - 96px)) !important;
+  z-index: 420 !important;
+  pointer-events: auto !important;
+}
+
+/* The authoritative Stop action must remain visible and clickable even when
+   the activity summary is long. */
+.streamsAIWorkHistory__bar {
+  position: relative !important;
+  min-height: 54px !important;
+  padding-right: 86px !important;
+}
+
+.streamsAIWorkHistory__summary {
+  width: 100% !important;
+  padding-right: 12px !important;
+}
+
+.streamsAIWorkHistory__stop {
+  position: absolute !important;
+  right: 10px !important;
+  top: 9px !important;
+  z-index: 8 !important;
+  min-width: 66px !important;
+  min-height: 36px !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
 }
 
 @media (max-width: 760px) {
@@ -64,5 +91,14 @@
   .streamsAIWorkHistory {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 132px) !important;
     width: calc(100vw - 24px) !important;
+  }
+
+  .streamsAIWorkHistory__bar {
+    padding-right: 78px !important;
+  }
+
+  .streamsAIWorkHistory__stop {
+    right: 8px !important;
+    min-width: 62px !important;
   }
 }
