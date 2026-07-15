@@ -1,6 +1,6 @@
-/* Keep the same active Streams composer before and after the first message.
-   The previous active-state overrides changed its size and vertical position,
-   which made the current console appear to drop away and be replaced. */
+/* Keep one compact Streams console in every chat state.
+   The previous active layout allowed status text and controls to wrap into a
+   second row, creating the tall legacy-looking console shown in the report. */
 .startWorkspace,
 .startWorkspaceActive {
   min-height: 0 !important;
@@ -9,19 +9,102 @@
 
 .startWorkspace .startComposerWrap,
 .startWorkspaceActive .startComposerWrap {
-  bottom: 92px !important;
+  left: 50% !important;
+  bottom: max(24px, env(safe-area-inset-bottom, 0px)) !important;
+  transform: translateX(-50%) !important;
   width: min(860px, calc(100% - 96px)) !important;
-  z-index: 260 !important;
+  z-index: 360 !important;
 }
 
-/* The conversation must fill the viewport above the composer. Do not let
-   active-state bottom offsets collapse it into a short strip or scroll the
-   submitted message out of view. */
+/* Remove the expanded/two-row legacy appearance without replacing the working
+   composer component or disconnecting uploads, tools, voice, or send actions. */
+.startComposerWrap .streamsComposer {
+  min-height: 58px !important;
+  height: auto !important;
+  border-radius: 20px !important;
+  padding: 5px 8px !important;
+  overflow: visible !important;
+}
+
+.startComposerWrap .streamsComposerLiveStatus {
+  display: none !important;
+}
+
+.startComposerWrap .streamsComposerRow {
+  min-height: 48px !important;
+  height: auto !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 !important;
+}
+
+.startComposerWrap .streamsComposerRow::before {
+  inset: 0 !important;
+  border-radius: 16px !important;
+}
+
+.startComposerWrap .streamsComposerIconButton {
+  order: 1 !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 14px !important;
+  font-size: 22px !important;
+}
+
+.startComposerWrap .streamsComposerToolPill {
+  order: 2 !important;
+  flex: none !important;
+}
+
+.startComposerWrap .streamsComposerInput {
+  order: 3 !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-height: 104px !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+  font-weight: 700 !important;
+}
+
+.startComposerWrap .streamsComposerPill {
+  order: 4 !important;
+  flex: none !important;
+  margin: 0 !important;
+  height: 32px !important;
+  padding: 0 4px !important;
+  font-size: 12px !important;
+}
+
+.startComposerWrap .streamsComposerMicButton {
+  order: 5 !important;
+  flex: none !important;
+  margin: 0 !important;
+  width: 28px !important;
+  height: 32px !important;
+  font-size: 12px !important;
+}
+
+.startComposerWrap .streamsComposerSendButton {
+  order: 6 !important;
+  flex: none !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 14px !important;
+  font-size: 20px !important;
+}
+
+.startComposerWrap > small {
+  display: none !important;
+}
+
+/* The conversation fills the viewport above the compact console. */
 .startWorkspaceActive .startChatSurface {
   position: absolute !important;
   top: 0 !important;
   right: 0 !important;
-  bottom: 208px !important;
+  bottom: 112px !important;
   left: 0 !important;
   min-height: 0 !important;
   overflow-y: auto !important;
@@ -41,16 +124,14 @@
   height: 12px !important;
 }
 
-/* Keep persisted work history above the composer instead of overlapping it. */
+/* Persisted work history remains above the console and never replaces it. */
 .streamsAIWorkHistory {
-  bottom: 228px !important;
+  bottom: 104px !important;
   width: min(860px, calc(100vw - 96px)) !important;
   z-index: 420 !important;
   pointer-events: auto !important;
 }
 
-/* The authoritative Stop action must remain visible and clickable even when
-   the activity summary is long. */
 .streamsAIWorkHistory__bar {
   position: relative !important;
   min-height: 54px !important;
@@ -77,19 +158,44 @@
 @media (max-width: 760px) {
   .startWorkspace .startComposerWrap,
   .startWorkspaceActive .startComposerWrap {
-    width: calc(100vw - 72px) !important;
-    left: calc(56px + (100vw - 56px) / 2) !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    width: calc(100vw - 24px) !important;
+    left: 50% !important;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .startComposerWrap .streamsComposer {
+    min-height: 54px !important;
+    border-radius: 18px !important;
+  }
+
+  .startComposerWrap .streamsComposerRow {
+    min-height: 44px !important;
+    gap: 6px !important;
+  }
+
+  .startComposerWrap .streamsComposerIconButton {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .startComposerWrap .streamsComposerPill,
+  .startComposerWrap .streamsComposerMicButton {
+    display: none !important;
+  }
+
+  .startComposerWrap .streamsComposerSendButton {
+    width: 36px !important;
+    height: 36px !important;
   }
 
   .startWorkspaceActive .startChatSurface {
     top: 0 !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 126px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 82px) !important;
     padding: 58px 12px 20px !important;
   }
 
   .streamsAIWorkHistory {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 132px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 76px) !important;
     width: calc(100vw - 24px) !important;
   }
 
