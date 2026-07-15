@@ -46,7 +46,7 @@ export type HumanWorkEventInput = {
   status?: string;
   phase?: string;
   goal?: string;
-  message?: string;
+  message?: string | null;
   currentAction?: string;
   nextAction?: string;
   completedItems?: unknown[];
