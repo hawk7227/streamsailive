@@ -1,0 +1,57 @@
+name: Streams AI Items 6-40 Verify
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-items-06-40:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: TypeScript
+        id: typecheck
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          pnpm exec tsc --noEmit --pretty false 2>&1 | tee streams-ai-items-06-40-typecheck.log
+      - name: Production contract tests
+        id: tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          pnpm test:streams-ai-production 2>&1 | tee streams-ai-items-06-40-tests.log
+      - name: Next production build
+        id: build
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: test-placeholder
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: test-placeholder
+          FAL_API_KEY: test-placeholder
+          ADMIN_SECRET_KEY: test-placeholder
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee streams-ai-items-06-40-build.log
+      - name: Upload verifier logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streams-ai-items-06-40-logs
+          path: |
+            streams-ai-items-06-40-typecheck.log
+            streams-ai-items-06-40-tests.log
+            streams-ai-items-06-40-build.log
+          if-no-files-found: error
+      - name: Fail when verification failed
+        if: steps.typecheck.outcome == 'failure' || steps.tests.outcome == 'failure' || steps.build.outcome == 'failure'
+        run: exit 1
