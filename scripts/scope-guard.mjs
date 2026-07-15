@@ -82,6 +82,7 @@ const policies = {
     allowed: [
       'docs/streams-current-status.md',
       'docs/merge-policies/streams-ai-work-narration-slice.md',
+      'docs/merge-policies/streams-ai-authorized-supplement-2-slice.md',
       'scripts/scope-guard.mjs',
       'package.json',
       '.github/workflows/streams-ai-vercel-env-verify.yml',
@@ -92,16 +93,19 @@ const policies = {
       'src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css',
       'src/lib/streams-ai/protected-reasoning.ts',
       'src/lib/streams-ai/intelligence/parity-profile.ts',
+      'src/lib/streams-ai/quality/deterministic-output-validator.ts',
       'src/lib/streams-ai/runtime/work-narration-controller.ts',
       'src/lib/streams-ai/runtime/task-complexity-classifier.ts',
       'src/lib/streams-ai/runtime/progress-update-structure.ts',
       'src/lib/streams-ai/runtime/human-work-narration-policy.ts',
+      'src/lib/streams-ai/runtime/authorized-supplement-2-policy.ts',
       'src/lib/streams-ai/repositories/jobs-repository.ts',
       'src/lib/streams-ai/repositories/messages-repository.ts',
       'tests/streams-ai-protected-reasoning.test.ts',
       'tests/streams-ai-first-response-planning.test.ts',
       'tests/streams-ai-progress-update-structure.test.ts',
-      'tests/streams-ai-human-work-items-06-40.test.ts'
+      'tests/streams-ai-human-work-items-06-40.test.ts',
+      'tests/streams-ai-authorized-supplement-2.test.ts'
     ],
     forbidden: [
       'public/build-report.json',
@@ -120,6 +124,9 @@ function inferPolicyFromFiles(files) {
     || f === 'src/lib/streams-ai/runtime/task-complexity-classifier.ts'
     || f === 'src/lib/streams-ai/runtime/progress-update-structure.ts'
     || f === 'src/lib/streams-ai/runtime/human-work-narration-policy.ts'
+    || f === 'src/lib/streams-ai/runtime/authorized-supplement-2-policy.ts'
+    || f === 'src/lib/streams-ai/quality/deterministic-output-validator.ts'
+    || f === 'src/lib/streams-ai/intelligence/parity-profile.ts'
     || f === 'src/lib/streams-ai/protected-reasoning.ts'
     || f === 'src/lib/streams-ai/repositories/jobs-repository.ts'
     || f === 'src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx'
