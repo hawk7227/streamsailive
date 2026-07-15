@@ -34,10 +34,26 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Next production build
+        id: build
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ""
           NEXT_PUBLIC_SUPABASE_URL: ""
           SUPABASE_SERVICE_ROLE_KEY: ""
           FAL_API_KEY: ""
           ADMIN_SECRET_KEY: ""
-        run: pnpm build
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee streams-ai-repair-build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streams-ai-repair-build-log
+          path: streams-ai-repair-build.log
+          if-no-files-found: error
+
+      - name: Fail when build failed
+        if: steps.build.outcome == 'failure'
+        run: exit 1
