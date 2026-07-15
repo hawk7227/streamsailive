@@ -6,7 +6,7 @@
 - Chat UI Slice (chat rail, composer UX, mobile shell fixes)
 - Streams AI Work Narration & Protected Reasoning Slice
 - Streams AI Item 3 — First Response to a Multi-Step Task
-- Streams AI Console Transition Repair
+- Streams AI Compact Console Repair
 
 ## Proven items
 
@@ -18,7 +18,7 @@
 - Chat UI Slice mobile shell & double-sidebar fixes (hidden duplicate inner sidebar, hidden top actions and action status pill on mobile, hidden floating "Snap Pic Click" button on mobile, drawer hamburger menu, full width layout, mobile bottom message scroll spacer).
 - Streams AI Work Narration & Protected Reasoning: live `/api/streams-ai/messages` requests are wrapped by the existing jobs/job-events ledger; user-visible text and persisted metadata pass through protected-field and credential sanitization; the `/streams-ai` page mounts persisted work history, refresh restoration, cross-tab synchronization, and server-side cancellation controls.
 - Item 3 First Response to a Multi-Step Task: qualifying tasks are deterministically classified before operation creation; simple tasks bypass unnecessary operation narration; multi-step tasks persist `operation_started`, `plan_created`, and initial `phase_started` events with goal, plan version, phases, preservation constraints, risks avoided, clarification state, and next action before material execution; repeated idempotency keys recover the existing chat operation; the mounted history card restores and renders the accepted plan.
-- Console Transition Repair: the zero-credit internal narration record reuses the already authorized live chat scope instead of requiring a second product-entitlement check; the same composer geometry is preserved before and after the first message; persisted work history is positioned above the composer instead of overlapping or visually replacing it; production regression coverage is included.
+- Compact Console Repair: the zero-credit internal narration record reuses the already authorized live chat scope instead of requiring a second product-entitlement check; the active composer is forced into one compact non-wrapping row in empty and active chats; its duplicate live-status row is hidden; the console is clamped above the viewport safe edge; the conversation remains scrollable above it; persisted work history and Stop remain above the console. The production contract suite, TypeScript, and the full Next production build passed in the temporary repair verifier.
 
 ## Blocked items
 
@@ -46,7 +46,6 @@
 - `src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css`
 - `tests/streams-ai-protected-reasoning.test.ts`
 - `tests/streams-ai-first-response-planning.test.ts`
-- `tests/streams-ai-console-transition.test.ts`
 
 ## Files that must not be touched
 
