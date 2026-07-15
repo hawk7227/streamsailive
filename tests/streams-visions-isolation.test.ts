@@ -17,7 +17,7 @@ describe("Streams Visions isolation", () => {
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.isolation.usesMainStreamsMessagesApi).toBe(false);
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.isolation.usesMainStreamsAssetCache).toBe(false);
     expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("separate visual-conversation experience");
-    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("Do not merge this experience into the normal Streams AI runtime");
+    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("conversation remains normal");
   });
 
   it("uses independent persistence contracts", () => {
@@ -35,6 +35,7 @@ describe("Streams Visions isolation", () => {
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.defaultMs).toBeGreaterThanOrEqual(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.minimumMs);
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.defaultMs).toBeLessThanOrEqual(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.maximumMs);
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.reveal.reducedMotionSupported).toBe(true);
+    expect(STREAMS_VISIONS_SYSTEM_PROMPT).toContain("Do not announce generation, loading, progress");
   });
 
   it("keeps provider and technical generation details out of public errors", () => {
