@@ -36,7 +36,7 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 - Scope guard passes for the exact allowed list.
 - TypeScript passes.
 - The production contract suite passes.
-- The full Next production build passes with required environment placeholders.
+- The full Next production build passes with non-secret test environment placeholders.
 - Simple requests bypass unnecessary operation narration.
 - Multi-step requests receive persisted `operation_started`, `plan_created`, and initial `phase_started` events before material execution.
 - The internal zero-credit narration job does not repeat product-entitlement authorization after the live chat route has already authorized the user and scope.
