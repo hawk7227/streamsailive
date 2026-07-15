@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { VisionsMessage, VisionsMode, VisionsPreviewSpec } from "@/lib/streams-visions/types";
 import styles from "./visions.module.css";
 
@@ -9,17 +10,24 @@ const STORAGE = {
   mode: "streams-visions.mode.v1",
 };
 
+type MessagePayload = Partial<VisionsMessage> & { created_at?: string };
+type ApiPayload = Record<string, unknown>;
+
 function nowIso() {
   return new Date().toISOString();
 }
 
-function normalizeMessage(input: any): VisionsMessage {
+function normalizeMessage(input: MessagePayload): VisionsMessage {
   return {
     id: String(input.id || crypto.randomUUID()),
     role: input.role === "assistant" ? "assistant" : "user",
     content: String(input.content || ""),
     createdAt: String(input.created_at || input.createdAt || nowIso()),
   };
+}
+
+function errorMessage(value: unknown) {
+  return value instanceof Error ? value.message : "Visions encountered an error";
 }
 
 function VisionPreview({ preview, revealing, onClose }: { preview: VisionsPreviewSpec; revealing: boolean; onClose: () => void }) {
@@ -29,16 +37,16 @@ function VisionPreview({ preview, revealing, onClose }: { preview: VisionsPrevie
         <div><span className={styles.liveDot} /> {revealing ? "Visual coming into view" : "Vision ready"}</div>
         <button type="button" onClick={onClose} aria-label="Close visual">×</button>
       </header>
-      <div className={styles.previewCanvas} style={{ "--vision-accent": preview.accent } as React.CSSProperties}>
+      <div className={styles.previewCanvas} style={{ "--vision-accent": preview.accent } as CSSProperties}>
         <nav className={styles.previewNav}><strong>{preview.title}</strong><span>Overview &nbsp; Features &nbsp; Contact</span></nav>
         <div className={styles.previewHero}>
           <div>
             <p className={styles.previewEyebrow}>{preview.eyebrow}</p>
             <h2>{preview.headline}</h2>
             <p>{preview.subheadline}</p>
-            <div className={styles.previewActions}><button>{preview.primaryCta}</button><button>{preview.secondaryCta}</button></div>
+            <div className={styles.previewActions}><button type="button">{preview.primaryCta}</button><button type="button">{preview.secondaryCta}</button></div>
           </div>
-          <div className={styles.previewOrb}><span /><span /><span /></div>
+          <div className={styles.previewOrb} aria-hidden="true"><span /><span /><span /></div>
         </div>
         <div className={styles.previewFeatures}>
           {preview.sections.slice(0, 3).map((section) => <article key={section.title}><strong>{section.title}</strong><p>{section.body}</p></article>)}
@@ -60,12 +68,20 @@ export default function VisionsClient() {
   const abortRef = useRef<AbortController | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
 
+  const restoreConversation = useCallback(async (id: string) => {
+    const response = await fetch(`/api/streams-ai/Visions/messages?conversationId=${encodeURIComponent(id)}`, { credentials: "same-origin" });
+    if (!response.ok) return;
+    const data = await response.json() as { messages?: MessagePayload[] };
+    setConversationId(id);
+    setMessages((data.messages || []).map(normalizeMessage));
+  }, []);
+
   useEffect(() => {
     const savedMode = window.localStorage.getItem(STORAGE.mode) as VisionsMode | null;
     if (savedMode === "off" || savedMode === "ask_first" || savedMode === "automatic") setMode(savedMode);
     const savedConversation = window.localStorage.getItem(STORAGE.conversation);
     if (savedConversation) void restoreConversation(savedConversation);
-  }, []);
+  }, [restoreConversation]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE.mode, mode);
@@ -75,14 +91,6 @@ export default function VisionsClient() {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, preview, busy]);
 
-  async function restoreConversation(id: string) {
-    const response = await fetch(`/api/streams-ai/Visions/messages?conversationId=${encodeURIComponent(id)}`, { credentials: "same-origin" });
-    if (!response.ok) return;
-    const data = await response.json();
-    setConversationId(id);
-    setMessages((data.messages || []).map(normalizeMessage));
-  }
-
   async function ensureConversation() {
     if (conversationId) return conversationId;
     const response = await fetch("/api/streams-ai/Visions/conversations", {
@@ -91,8 +99,8 @@ export default function VisionsClient() {
       credentials: "same-origin",
       body: JSON.stringify({ title: "New vision", mode }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Unable to start Visions");
+    const data = await response.json() as { conversation?: { id?: string }; error?: string };
+    if (!response.ok || !data.conversation?.id) throw new Error(data.error || "Unable to start Visions");
     const id = String(data.conversation.id);
     setConversationId(id);
     window.localStorage.setItem(STORAGE.conversation, id);
@@ -120,20 +128,23 @@ export default function VisionsClient() {
         signal: controller.signal,
         body: JSON.stringify({ conversationId: id, content, mode }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Visions could not complete that request");
-      setMessages((current) => [...current.filter((message) => message.id !== optimistic.id), normalizeMessage(data.userMessage), normalizeMessage(data.message)]);
-      if (data.preview) {
-        setPreview(data.preview);
+      const data = await response.json() as ApiPayload;
+      if (!response.ok) throw new Error(String(data.error || "Visions could not complete that request"));
+      const userMessage = normalizeMessage((data.userMessage || {}) as MessagePayload);
+      const assistantMessage = normalizeMessage((data.message || {}) as MessagePayload);
+      setMessages((current) => [...current.filter((message) => message.id !== optimistic.id), userMessage, assistantMessage]);
+      if (data.preview && typeof data.preview === "object") {
+        const nextPreview = data.preview as VisionsPreviewSpec;
+        setPreview(nextPreview);
         setRevealing(true);
-        window.dispatchEvent(new CustomEvent("visions:preview-revealing", { detail: { previewId: data.preview.id } }));
-        window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("visions:preview-revealing", { detail: { previewId: nextPreview.id } }));
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
           setRevealing(false);
-          window.dispatchEvent(new CustomEvent("visions:preview-ready", { detail: { previewId: data.preview.id } }));
-        }, 2600);
+          window.dispatchEvent(new CustomEvent("visions:preview-ready", { detail: { previewId: nextPreview.id } }));
+        }));
       }
-    } catch (caught: any) {
-      if (caught?.name !== "AbortError") setError(caught?.message || "Visions encountered an error");
+    } catch (caught: unknown) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(errorMessage(caught));
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -154,7 +165,7 @@ export default function VisionsClient() {
     window.localStorage.removeItem(STORAGE.conversation);
   }
 
-  const welcome = useMemo(() => messages.length === 0, [messages.length]);
+  const welcome = messages.length === 0;
 
   return (
     <main data-streams-visions-root className={styles.root}>
