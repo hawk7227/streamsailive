@@ -16,6 +16,12 @@ export type VisionsPreviewSpec = {
   primaryCta: string;
   secondaryCta: string;
   accent: string;
+  atmosphere: string;
+  futureSelf: string;
+  environment: string;
+  motion: string;
+  emotionalOutcome: string;
+  revealMs: number;
   sections: Array<{ title: string; body: string }>;
 };
 

@@ -20,6 +20,7 @@ describe("Streams Visions isolation", () => {
     expect(client).toContain("/api/streams-ai/Visions/messages");
     expect(client).toContain("streams-visions.conversation.v1");
     expect(client).toContain("visions:preview-revealing");
+    expect(client).toContain("visions:message-started");
     expect(client).not.toContain("/api/streams-ai/messages");
     expect(client).not.toContain("streams-ai.assets.cache.v1");
     expect(prompt).toContain("separate visual-conversation experience");
@@ -39,5 +40,34 @@ describe("Streams Visions isolation", () => {
     expect(migration).toContain("streams_visions_messages");
     expect(migration).not.toContain("alter table public.streams_ai_");
     expect(css).toContain("[data-streams-visions-root]");
+  });
+
+  it("reveals visions without generator indicators", () => {
+    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
+    const css = read("src/app/streams-ai/Visions/visions.module.css");
+    expect(client).not.toContain("Thinking and shaping the visual");
+    expect(client).not.toContain("Generating");
+    expect(client).not.toContain("Almost done");
+    expect(client).not.toContain("final touches");
+    expect(client).toContain("ambientDream");
+    expect(client).toContain("futureSelf");
+    expect(css).toContain("dreamAtmosphere");
+    expect(css).toContain("dreamWorld");
+    expect(css).toContain("dreamSelf");
+    expect(css).toContain("prefers-reduced-motion");
+  });
+
+  it("restores the persisted active vision with the conversation", () => {
+    const client = read("src/app/streams-ai/Visions/VisionsClient.tsx");
+    const route = read("src/app/api/streams-ai/Visions/messages/route.ts");
+    expect(route).toContain("active_preview");
+    expect(route).toContain("preview: conversation?.active_preview || null");
+    expect(client).toContain("setPreview(data.preview || null)");
+  });
+
+  it("keeps provider and technical generation details out of public errors", () => {
+    const route = read("src/app/api/streams-ai/Visions/messages/route.ts");
+    expect(route).not.toContain("providerJson?.error?.message");
+    expect(route).toContain("Visions could not shape that scene");
   });
 });
