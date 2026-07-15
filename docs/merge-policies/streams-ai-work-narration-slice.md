@@ -23,7 +23,6 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 - `src/lib/streams-ai/repositories/messages-repository.ts`
 - `tests/streams-ai-protected-reasoning.test.ts`
 - `tests/streams-ai-first-response-planning.test.ts`
-- `tests/streams-ai-console-transition.test.ts`
 
 ## Forbidden files
 
@@ -36,7 +35,7 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 
 - Scope guard passes for the exact allowed list.
 - TypeScript/build checks pass or any unrelated pre-existing failure is documented.
-- The production build executes the Item 3 and console-transition regression tests.
+- The production build executes the Item 3 suite containing console-transition and Stop-control regressions.
 - Simple requests bypass unnecessary operation narration.
 - Multi-step requests receive a persisted `operation_started`, `plan_created`, and initial `phase_started` sequence before material execution.
 - The internal zero-credit narration job does not repeat product-entitlement authorization after the live chat route has already authorized the user and scope.
@@ -44,7 +43,8 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 - The accepted goal, phases, plan version, preserved items, risks avoided, and next action can be read back from `/api/streams-ai/jobs`.
 - Live `/api/streams-ai/messages` invocation returns a job ID for qualifying tasks.
 - The same composer geometry remains active before and after the first message.
-- Persisted work history renders above the composer instead of overlapping or replacing it.
+- The conversation viewport remains visible above the composer after submission.
+- Persisted work history and its Stop control render above the composer instead of overlapping or being covered.
 - Refresh restores the activity panel and accepted plan.
 - Stop transitions the authoritative job to `cancelled` and late completion cannot overwrite it.
 - Protected fields do not appear in persisted message metadata, job input/output, job events, or restored UI payloads.
