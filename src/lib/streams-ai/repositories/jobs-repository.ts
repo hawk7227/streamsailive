@@ -5,6 +5,7 @@ import { StreamsAICreditLedgerRepository } from "./credit-ledger-repository";
 import { StreamsAIEntitlementsRepository } from "./entitlements-repository";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
 import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "../protected-reasoning";
+import { buildStructuredProgressUpdate } from "../runtime/progress-update-structure";
 
 const creditLedger = new StreamsAICreditLedgerRepository();
 const entitlements = new StreamsAIEntitlementsRepository();
@@ -83,9 +84,6 @@ export class StreamsAIJobsRepository {
     const effectiveCreditEstimate = input.creditEstimate ?? capability.estimatedCredits ?? 0;
     const internalChatOperation = isAuthorizedInternalChatOperation(input);
 
-    // The live message route already authorizes the user and scope before it creates
-    // this zero-credit narration ledger record. Requiring a second product entitlement
-    // here can abort an otherwise authorized chat turn before the assistant executes.
     if (capability.entitlementRequired && !internalChatOperation) await entitlements.require(scope, effectiveProductId);
     if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
 
@@ -169,9 +167,26 @@ export class StreamsAIJobsRepository {
 
   async createEvent(scope: StreamsAIScope, input: CreateJobEventInput) {
     assertNoProtectedFields(input);
-    const existingEvents = await this.events(scope, input.jobId);
+    const [existingEvents, job] = await Promise.all([this.events(scope, input.jobId), this.get(scope, input.jobId)]);
+    if (!job) throw new Error("STREAMS AI job not found for event.");
     const sequenceNumber = existingEvents.reduce((max, event: any) => Math.max(max, Number(event?.data?.sequenceNumber || 0)), 0) + 1;
-    const dataPayload = sanitizeStreamsAIPayload({ ...(input.data || {}), sequenceNumber });
+    const baseData = sanitizeStreamsAIPayload({ ...(input.data || {}), sequenceNumber }) as Record<string, any>;
+    const progressUpdate = buildStructuredProgressUpdate({
+      ...baseData,
+      message: input.message,
+      jobInput: job.input_json && typeof job.input_json === "object" ? job.input_json : {},
+    });
+    const dataPayload = sanitizeStreamsAIPayload({
+      ...baseData,
+      goal: progressUpdate.goal,
+      completedWork: progressUpdate.completedWork,
+      currentAction: progressUpdate.currentAction,
+      evidence: progressUpdate.evidence,
+      nextAction: progressUpdate.nextAction,
+      remainingWork: progressUpdate.remainingWork,
+      planVersion: progressUpdate.planVersion,
+      progressUpdate,
+    });
     const { data, error } = await this.db().from(streamsAITables.jobEvents).insert({
       tenant_id: scope.tenantId,
       user_id: scope.userId,
