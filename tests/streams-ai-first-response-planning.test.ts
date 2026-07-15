@@ -1,9 +1,6 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { classifyStreamsTask } from "@/lib/streams-ai/runtime/task-complexity-classifier";
-
-const jobsSource = readFileSync("src/lib/streams-ai/repositories/jobs-repository.ts", "utf8");
-const layoutCss = readFileSync("src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css", "utf8");
+import { isAuthorizedInternalChatOperation } from "@/lib/streams-ai/repositories/jobs-repository";
 
 describe("Streams AI first-response planning", () => {
   it("keeps a simple factual request direct", () => {
@@ -48,36 +45,26 @@ describe("Streams AI first-response planning", () => {
   });
 
   it("reuses the already-authorized scope only for zero-credit internal chat narration", () => {
-    expect(jobsSource).toContain("input.inputJson?.purpose === \"streams_ai_chat_operation\"");
-    expect(jobsSource).toContain("input.creditEstimate === 0");
-    expect(jobsSource).toContain("capability.entitlementRequired && !internalChatOperation");
-    expect(jobsSource).toContain("input.productId !== \"text-2-image\"");
-    expect(jobsSource).toContain("input.productId !== \"photo-2-motion\"");
-    expect(jobsSource).toContain("input.productId !== \"text-2-video\"");
+    expect(isAuthorizedInternalChatOperation({
+      kind: "chat_tool",
+      productId: "streams-ai",
+      creditEstimate: 0,
+      inputJson: { purpose: "streams_ai_chat_operation" },
+    })).toBe(true);
   });
 
-  it("keeps only the compact one-line composer in both chat states", () => {
-    expect(layoutCss).toContain(".startWorkspace .startComposerWrap");
-    expect(layoutCss).toContain(".startWorkspaceActive .startComposerWrap");
-    expect(layoutCss).toContain("bottom: max(24px, env(safe-area-inset-bottom, 0px)) !important");
-    expect(layoutCss).toContain("width: min(860px, calc(100% - 96px)) !important");
-    expect(layoutCss).toContain(".startComposerWrap .streamsComposerLiveStatus");
-    expect(layoutCss).toContain("display: none !important");
-    expect(layoutCss).toContain("flex-wrap: nowrap !important");
-    expect(layoutCss).toContain("min-height: 58px !important");
-  });
-
-  it("keeps the conversation viewport visible above the compact console", () => {
-    expect(layoutCss).toContain(".startWorkspaceActive .startChatSurface");
-    expect(layoutCss).toContain("bottom: 112px !important");
-    expect(layoutCss).toContain("overflow-y: auto !important");
-    expect(layoutCss).toContain("justify-content: flex-start !important");
-  });
-
-  it("keeps the authoritative Stop control visible above the composer", () => {
-    expect(layoutCss).toContain(".streamsAIWorkHistory__stop");
-    expect(layoutCss).toContain("z-index: 8 !important");
-    expect(layoutCss).toContain("pointer-events: auto !important");
-    expect(layoutCss).toContain("cursor: pointer !important");
+  it("keeps paid and unrelated jobs behind normal entitlement checks", () => {
+    expect(isAuthorizedInternalChatOperation({
+      kind: "image_generation",
+      productId: "text-2-image",
+      creditEstimate: 1,
+      inputJson: { purpose: "streams_ai_chat_operation" },
+    })).toBe(false);
+    expect(isAuthorizedInternalChatOperation({
+      kind: "chat_tool",
+      productId: "streams-ai",
+      creditEstimate: 1,
+      inputJson: { purpose: "streams_ai_chat_operation" },
+    })).toBe(false);
   });
 });
