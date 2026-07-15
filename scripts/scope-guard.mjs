@@ -85,7 +85,6 @@ const policies = {
       'scripts/scope-guard.mjs',
       'package.json',
       '.github/workflows/streams-ai-vercel-env-verify.yml',
-      '.github/workflows/streams-ai-final-diagnostic.yml',
       'src/app/streams-ai/page.tsx',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
