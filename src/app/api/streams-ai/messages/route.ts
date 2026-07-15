@@ -41,11 +41,22 @@ function explicitlyRequestsDeterministicStructure(userContent: string, body: Str
     && requiresDeterministicStructureCheck(text);
 }
 
+function withNarrationFallbackHeader(response: Response) {
+  const headers = new Headers(response.headers);
+  headers.set("X-Streams-AI-Narration-Fallback", "direct-chat");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export async function GET(request: NextRequest) {
   return memoryMessagesGET(request);
 }
 
 export async function POST(request: NextRequest) {
+  let directFallbackRequest: NextRequest | null = null;
   try {
     const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
@@ -58,9 +69,26 @@ export async function POST(request: NextRequest) {
         enforceDeterministicStructure,
       },
     });
-    const internalRequest = buildInternalRequest(request, authoritativeBody);
-    return runNarratedStreamsMessage(internalRequest, authoritativeBody, memoryMessagesPOST);
+    const narratedRequest = buildInternalRequest(request, authoritativeBody);
+    directFallbackRequest = buildInternalRequest(request, {
+      ...authoritativeBody,
+      metadata: {
+        ...(authoritativeBody.metadata || {}),
+        narrationFallback: true,
+      },
+    });
+
+    try {
+      return await runNarratedStreamsMessage(narratedRequest, authoritativeBody, memoryMessagesPOST);
+    } catch {
+      return withNarrationFallbackHeader(await memoryMessagesPOST(directFallbackRequest));
+    }
   } catch {
+    if (directFallbackRequest) {
+      try {
+        return withNarrationFallbackHeader(await memoryMessagesPOST(directFallbackRequest));
+      } catch {}
+    }
     return new Response("Streams could not complete this response.", { status: 500 });
   }
 }
