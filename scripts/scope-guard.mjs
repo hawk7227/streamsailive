@@ -4,17 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const policies = {
   'chat-ui-slice': {
-    allowed: [
-      'src/components/streams/StreamsPanel.tsx',
-      'src/components/streams/UnifiedChatPanel.tsx',
-      'src/components/streams/tabs/ChatTab.tsx',
-      'docs/streams-current-status.md',
-      'package.json',
-      '.github/workflows/ci.yml',
-      'scripts/generated-file-guard.mjs',
-      'scripts/check-pr-ready.mjs',
-      'scripts/scope-guard.mjs'
-    ],
+    allowed: ['src/components/streams/StreamsPanel.tsx','src/components/streams/UnifiedChatPanel.tsx','src/components/streams/tabs/ChatTab.tsx','docs/streams-current-status.md','package.json','.github/workflows/ci.yml','scripts/generated-file-guard.mjs','scripts/check-pr-ready.mjs','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','src/app/api/streams/video/','src/app/api/streams/image/','supabase/migrations/']
   },
   'video-quality-slice': {
@@ -34,32 +24,12 @@ const policies = {
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/']
   },
   'streams-ai-work-narration-slice': {
-    allowed: [
-      'docs/streams-current-status.md','docs/merge-policies/streams-ai-work-narration-slice.md','scripts/scope-guard.mjs','package.json','.github/workflows/streams-ai-vercel-env-verify.yml','src/app/streams-ai/page.tsx','src/app/api/streams-ai/messages/route.ts','src/app/api/streams-ai/jobs/route.ts','src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx','src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css','src/lib/streams-ai/protected-reasoning.ts','src/lib/streams-ai/intelligence/parity-profile.ts','src/lib/streams-ai/runtime/work-narration-controller.ts','src/lib/streams-ai/runtime/task-complexity-classifier.ts','src/lib/streams-ai/runtime/progress-update-structure.ts','src/lib/streams-ai/runtime/human-work-narration-policy.ts','src/lib/streams-ai/repositories/jobs-repository.ts','src/lib/streams-ai/repositories/messages-repository.ts','tests/streams-ai-protected-reasoning.test.ts','tests/streams-ai-first-response-planning.test.ts','tests/streams-ai-progress-update-structure.test.ts','tests/streams-ai-human-work-items-06-40.test.ts'
-    ],
+    allowed: ['docs/streams-current-status.md','docs/merge-policies/streams-ai-work-narration-slice.md','scripts/scope-guard.mjs','package.json','.github/workflows/streams-ai-vercel-env-verify.yml','src/app/streams-ai/page.tsx','src/app/api/streams-ai/messages/route.ts','src/app/api/streams-ai/jobs/route.ts','src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx','src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css','src/lib/streams-ai/protected-reasoning.ts','src/lib/streams-ai/intelligence/parity-profile.ts','src/lib/streams-ai/runtime/work-narration-controller.ts','src/lib/streams-ai/runtime/task-complexity-classifier.ts','src/lib/streams-ai/runtime/progress-update-structure.ts','src/lib/streams-ai/runtime/human-work-narration-policy.ts','src/lib/streams-ai/repositories/jobs-repository.ts','src/lib/streams-ai/repositories/messages-repository.ts','tests/streams-ai-protected-reasoning.test.ts','tests/streams-ai-first-response-planning.test.ts','tests/streams-ai-progress-update-structure.test.ts','tests/streams-ai-human-work-items-06-40.test.ts'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/','src/app/api/streams/video/','src/app/api/streams/image/']
   },
   'streams-visions-isolated-slice': {
-    allowed: [
-      'src/app/streams-ai/Visions/',
-      'src/app/api/streams-ai/Visions/',
-      'src/lib/streams-visions/',
-      'supabase/migrations/20260714_streams_visions_isolated.sql',
-      'tests/streams-visions-isolation.test.ts',
-      '.github/workflows/streams-visions-verify.yml',
-      'package.json',
-      'scripts/scope-guard.mjs'
-    ],
-    forbidden: [
-      'public/build-report.json',
-      'scripts/validate-rule-confirmation.js',
-      'src/app/streams-ai/page.tsx',
-      'src/app/api/streams-ai/messages/route.ts',
-      'src/components/streams-ai/current-chat/',
-      'src/lib/streams-ai/runtime/',
-      'src/app/streams-builder/',
-      'src/app/streams-ai/streams-builder/'
-    ]
+    allowed: ['src/app/streams-ai/Visions/','src/app/api/streams-ai/Visions/','src/lib/streams-visions/','supabase/migrations/20260714_streams_visions_isolated.sql','tests/streams-visions-isolation.test.ts','.github/workflows/streams-visions-verify.yml','.github/workflows/pr-checks.yml','package.json','scripts/scope-guard.mjs'],
+    forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','src/app/streams-ai/page.tsx','src/app/api/streams-ai/messages/route.ts','src/components/streams-ai/current-chat/','src/lib/streams-ai/runtime/','src/app/streams-builder/','src/app/streams-ai/streams-builder/']
   }
 };
 
