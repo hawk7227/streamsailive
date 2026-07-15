@@ -1,0 +1,29 @@
+name: Streams Visions Verify
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/app/streams-ai/Visions/**'
+      - 'src/app/api/streams-ai/Visions/**'
+      - 'src/lib/streams-visions/**'
+      - 'supabase/migrations/20260714_streams_visions_isolated.sql'
+      - 'tests/streams-visions-isolation.test.ts'
+      - 'package.json'
+      - '.github/workflows/streams-visions-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run tests/streams-visions-isolation.test.ts
+      - run: pnpm run build
