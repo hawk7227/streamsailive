@@ -83,6 +83,7 @@ const policies = {
       'docs/streams-current-status.md',
       'docs/merge-policies/streams-ai-work-narration-slice.md',
       'scripts/scope-guard.mjs',
+      'package.json',
       'src/app/streams-ai/page.tsx',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
