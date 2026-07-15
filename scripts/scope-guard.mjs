@@ -84,6 +84,7 @@ const policies = {
       'docs/merge-policies/streams-ai-work-narration-slice.md',
       'scripts/scope-guard.mjs',
       'package.json',
+      '.github/workflows/streams-ai-items-06-40-verify.yml',
       'src/app/streams-ai/page.tsx',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-ai/jobs/route.ts',
