@@ -51,7 +51,7 @@
     "satori": "^0.25.0",
     "sharp": "^0.34.5",
     "stripe": "^20.2.0",
-    "twilio": "^7.0.13",
+    "twilio": "^5.13.0",
     "uuid": "^13.0.0",
     "wavesurfer.js": "^7.12.5",
     "web-vitals": "^5.2.0",
