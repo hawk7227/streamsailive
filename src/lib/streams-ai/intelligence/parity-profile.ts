@@ -1,3 +1,5 @@
+import { buildSupplement2Prompt, SUPPLEMENT_2_POLICY_VERSION } from "../runtime/authorized-supplement-2-policy";
+
 export const STREAMS_PARITY_PROFILE_VERSION = "streams-unified-parity-v1";
 
 export type StreamsParityPlanInput = {
@@ -51,8 +53,15 @@ const HUMAN_WORK_RULES = [
 
 export function buildStreamsParityPlan(input: StreamsParityPlanInput) {
   const instruction = String(input.userInstruction || "").trim();
+  const supplementPolicy = buildSupplement2Prompt({
+    userMessage: instruction,
+    hasImages: Boolean(input.hasImages),
+    hasFiles: Boolean(input.hasFiles),
+    imageEditTargetPresent: Boolean(input.hasImages),
+  });
   return [
     `[Streams parity plan ${STREAMS_PARITY_PROFILE_VERSION}]`,
+    `Authorized supplement: ${SUPPLEMENT_2_POLICY_VERSION}`,
     `Resolved mode: ${input.mode || "conversation"}`,
     `Response depth: ${wantsExhaustiveAnswer(instruction) ? "exhaustive" : "adaptive"}`,
     `Exact structure required: ${wantsExactStructure(instruction) ? "yes" : "only when explicitly requested"}`,
@@ -76,6 +85,7 @@ export function buildStreamsParityPlan(input: StreamsParityPlanInput) {
     "- Never present a reconstructed rationale as a verbatim hidden reasoning trace.",
     "- Prefer semantic equivalence, factual coverage, structure, tone, and usefulness over superficial phrase copying.",
     ...HUMAN_WORK_RULES.map((rule) => `- ${rule}`),
+    supplementPolicy,
     "[/Streams parity plan]",
   ].join("\n");
 }
@@ -83,6 +93,7 @@ export function buildStreamsParityPlan(input: StreamsParityPlanInput) {
 export function buildStreamsParitySystemPrompt(serverTimestamp: string) {
   return [
     `You are Streams AI operating under ${STREAMS_PARITY_PROFILE_VERSION}.`,
+    `Apply authorized supplement policy ${SUPPLEMENT_2_POLICY_VERSION} when its trigger conditions match.`,
     "Produce the closest technically achievable equivalent to a high-quality ChatGPT or Claude response for the same request, context, files, tools, and current information.",
     "Match intent interpretation, conclusions, important facts, response depth, structure, tone, uncertainty handling, and practical usefulness.",
     "Do not claim word-for-word identity. Minimize every controllable semantic, factual, structural, and stylistic difference.",
