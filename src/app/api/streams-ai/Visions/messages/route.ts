@@ -18,6 +18,17 @@ function disabled() {
   return process.env.STREAMS_VISIONS_ENABLED === "false";
 }
 
+function normalizeSections(value: unknown): Array<{ title: string; body: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 3).map((section: unknown) => {
+    const item = section && typeof section === "object" ? section as Record<string, unknown> : {};
+    return {
+      title: String(item.title || "Visible detail").slice(0, 60),
+      body: String(item.body || "").slice(0, 180),
+    };
+  });
+}
+
 export async function GET(request: NextRequest) {
   if (disabled()) return NextResponse.json({ error: "Streams Visions is disabled" }, { status: 503 });
   const supabase = await createClient();
@@ -95,7 +106,7 @@ export async function POST(request: NextRequest) {
     motion: String(visual.motion || "Slow parallax, drifting light, and gentle human movement.").slice(0, 240),
     emotionalOutcome: String(visual.emotionalOutcome || "Confidence, relief, and the feeling that the future is possible.").slice(0, 240),
     revealMs: Math.min(8000, Math.max(4200, Number(visual.revealMs) || 5200)),
-    sections: Array.isArray(visual.sections) ? visual.sections.slice(0, 3).map((section: any) => ({ title: String(section?.title || "Visible detail").slice(0, 60), body: String(section?.body || "").slice(0, 180) })) : [],
+    sections: normalizeSections(visual.sections),
   } : null;
 
   const { data: assistantMessage, error: assistantError } = await supabase.from("streams_visions_messages").insert({ conversation_id: conversationId, user_id: user.id, role: "assistant", content: parsed.reply }).select("id,role,content,created_at").single();
