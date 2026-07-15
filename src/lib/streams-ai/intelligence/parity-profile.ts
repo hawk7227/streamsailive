@@ -1,4 +1,4 @@
-export const STREAMS_PARITY_PROFILE_VERSION = "streams-unified-parity-v2-human-work";
+export const STREAMS_PARITY_PROFILE_VERSION = "streams-unified-parity-v1";
 
 export type StreamsParityPlanInput = {
   userInstruction: string;
