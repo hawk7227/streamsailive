@@ -42,6 +42,21 @@ function listText(items) {
   return Array.isArray(items) ? items.map((item) => sanitizeStreamsAIText(typeof item === "string" ? item : item?.label || item?.id || "")).filter(Boolean) : [];
 }
 
+function progressFromEvent(event, job) {
+  const source = event?.data?.progressUpdate || event?.data || {};
+  const evidence = source.evidence || {};
+  return {
+    goal: sanitizeStreamsAIText(source.goal || job?.input_json?.goal || "Complete the accepted Streams task.", 500),
+    completedWork: listText(source.completedWork || source.completedItems),
+    currentAction: sanitizeStreamsAIText(source.currentAction || eventText(event), 1000),
+    evidenceSummary: sanitizeStreamsAIText(evidence.summary || source.evidenceSummary || eventText(event), 1000),
+    evidenceLevel: sanitizeStreamsAIText(evidence.level || source.evidenceLevel || "runtime observed", 120),
+    verificationState: sanitizeStreamsAIText(evidence.verificationState || source.verificationState || "in progress", 120),
+    nextAction: sanitizeStreamsAIText(source.nextAction || "Continue the accepted work plan.", 1000),
+    remainingWork: listText(source.remainingWork || source.remainingItems),
+  };
+}
+
 export default function StreamsAIWorkHistoryBridge() {
   const [active, setActive] = useState(null);
   const [record, setRecord] = useState(null);
@@ -145,6 +160,7 @@ export default function StreamsAIWorkHistoryBridge() {
   const phases = listText(plan.phases || job?.input_json?.phases);
   const preserved = listText(plan.preservedItems || job?.input_json?.preservedItems);
   const risks = listText(plan.risksAvoided || job?.input_json?.risksAvoided);
+  const latestProgress = progressFromEvent(latest, job);
 
   const stop = async () => {
     if (!canStop || stopping) return;
@@ -172,7 +188,7 @@ export default function StreamsAIWorkHistoryBridge() {
           <span className="streamsAIWorkHistory__dot" aria-hidden="true" />
           <span className="streamsAIWorkHistory__copy">
             <strong>{goal || job?.input_json?.capability?.displayName || "Streams activity"}</strong>
-            <small>{latest ? eventText(latest) : error || "Restoring activity…"}</small>
+            <small>{latestProgress.currentAction || error || "Restoring activity…"}</small>
           </span>
           <span className="streamsAIWorkHistory__status">{statusLabel(status)}</span>
         </button>
@@ -181,6 +197,13 @@ export default function StreamsAIWorkHistoryBridge() {
       {expanded && (
         <div className="streamsAIWorkHistory__events" role="log" aria-live={TERMINAL.has(status) ? "polite" : "off"}>
           {error && <div className="streamsAIWorkHistory__event streamsAIWorkHistory__event--error">{error}</div>}
+          <section className="streamsAIWorkHistory__progress" aria-label="Current structured progress update">
+            <p><strong>Goal:</strong> {latestProgress.goal}</p>
+            <p><strong>Completed:</strong> {latestProgress.completedWork.length ? latestProgress.completedWork.join(" · ") : "No completed phase recorded yet."}</p>
+            <p><strong>Now:</strong> {latestProgress.currentAction}</p>
+            <p><strong>Evidence:</strong> {latestProgress.evidenceSummary} <span>({statusLabel(latestProgress.evidenceLevel)} · {statusLabel(latestProgress.verificationState)})</span></p>
+            <p><strong>Next:</strong> {latestProgress.nextAction}</p>
+          </section>
           {(phases.length > 0 || preserved.length > 0 || risks.length > 0) && (
             <section className="streamsAIWorkHistory__plan" aria-label="Accepted work plan">
               {phases.length > 0 && <p><strong>Plan:</strong> {phases.join(" → ")}</p>}
@@ -188,20 +211,25 @@ export default function StreamsAIWorkHistoryBridge() {
               {risks.length > 0 && <p><strong>Avoiding:</strong> {risks.join(" · ")}</p>}
             </section>
           )}
-          {events.map((event) => (
-            <article key={event.id} className={`streamsAIWorkHistory__event streamsAIWorkHistory__event--${event?.data?.status || status}`}>
-              <div className="streamsAIWorkHistory__eventHead"><strong>{statusLabel(event.event_type)}</strong><time dateTime={event.created_at}>{event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</time></div>
-              <p>{eventText(event)}</p>
-              {event?.data?.nextAction && <small>Next: {sanitizeStreamsAIText(event.data.nextAction)}</small>}
-              {Array.isArray(event?.data?.completedItems) && event.data.completedItems.length > 0 && <small>Completed: {event.data.completedItems.map((item) => sanitizeStreamsAIText(item)).join(" · ")}</small>}
-            </article>
-          ))}
+          {events.map((event) => {
+            const progress = progressFromEvent(event, job);
+            return (
+              <article key={event.id} className={`streamsAIWorkHistory__event streamsAIWorkHistory__event--${event?.data?.status || status}`}>
+                <div className="streamsAIWorkHistory__eventHead"><strong>{statusLabel(event.event_type)}</strong><time dateTime={event.created_at}>{event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</time></div>
+                <p>{eventText(event)}</p>
+                <small>Now: {progress.currentAction}</small>
+                <small>Evidence: {progress.evidenceSummary}</small>
+                <small>Next: {progress.nextAction}</small>
+                {progress.completedWork.length > 0 && <small>Completed: {progress.completedWork.join(" · ")}</small>}
+              </article>
+            );
+          })}
         </div>
       )}
       <style jsx>{`
         .streamsAIWorkHistory{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);width:min(780px,calc(100vw - 72px));z-index:246;border:1px solid rgba(15,23,42,.12);border-radius:16px;background:rgba(255,255,255,.97);box-shadow:0 14px 40px rgba(15,23,42,.12);overflow:hidden;color:#0f172a}
-        .streamsAIWorkHistory__bar{display:flex;align-items:center}.streamsAIWorkHistory__summary{flex:1;min-width:0;border:0;background:transparent;padding:12px 14px;display:flex;align-items:center;gap:10px;text-align:left}.streamsAIWorkHistory__dot{width:9px;height:9px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.12);flex:none}.streamsAIWorkHistory--completed .streamsAIWorkHistory__dot{background:#16a34a}.streamsAIWorkHistory--failed .streamsAIWorkHistory__dot,.streamsAIWorkHistory--blocked .streamsAIWorkHistory__dot{background:#dc2626}.streamsAIWorkHistory__copy{display:flex;flex-direction:column;min-width:0;flex:1}.streamsAIWorkHistory__copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__copy small{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__status{font-size:11px;text-transform:capitalize;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px}.streamsAIWorkHistory__stop{margin-right:10px;min-height:34px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:10px;padding:0 11px}.streamsAIWorkHistory__events{border-top:1px solid #e2e8f0;max-height:280px;overflow:auto;padding:9px 12px;display:flex;flex-direction:column;gap:8px}.streamsAIWorkHistory__plan{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:8px 10px}.streamsAIWorkHistory__plan p{margin:3px 0;font-size:12px;line-height:1.45;color:#475569}.streamsAIWorkHistory__event{border-left:2px solid #cbd5e1;padding:6px 9px}.streamsAIWorkHistory__event--failed,.streamsAIWorkHistory__event--error{border-left-color:#dc2626}.streamsAIWorkHistory__eventHead{display:flex;justify-content:space-between;gap:12px}.streamsAIWorkHistory__eventHead strong{font-size:12px}.streamsAIWorkHistory__eventHead time,.streamsAIWorkHistory__event small{font-size:11px;color:#64748b}.streamsAIWorkHistory__event p{margin:3px 0;font-size:13px;line-height:1.4}
-        @media(max-width:700px){.streamsAIWorkHistory{bottom:104px;width:calc(100vw - 24px);border-radius:14px}.streamsAIWorkHistory__status{max-width:86px;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__events{max-height:230px}.streamsAIWorkHistory__copy strong{font-size:13px}}
+        .streamsAIWorkHistory__bar{display:flex;align-items:center}.streamsAIWorkHistory__summary{flex:1;min-width:0;border:0;background:transparent;padding:12px 14px;display:flex;align-items:center;gap:10px;text-align:left}.streamsAIWorkHistory__dot{width:9px;height:9px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.12);flex:none}.streamsAIWorkHistory--completed .streamsAIWorkHistory__dot{background:#16a34a}.streamsAIWorkHistory--failed .streamsAIWorkHistory__dot,.streamsAIWorkHistory--blocked .streamsAIWorkHistory__dot{background:#dc2626}.streamsAIWorkHistory__copy{display:flex;flex-direction:column;min-width:0;flex:1}.streamsAIWorkHistory__copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__copy small{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__status{font-size:11px;text-transform:capitalize;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px}.streamsAIWorkHistory__stop{margin-right:10px;min-height:34px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:10px;padding:0 11px}.streamsAIWorkHistory__events{border-top:1px solid #e2e8f0;max-height:320px;overflow:auto;padding:9px 12px;display:flex;flex-direction:column;gap:8px}.streamsAIWorkHistory__progress,.streamsAIWorkHistory__plan{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:8px 10px}.streamsAIWorkHistory__progress p,.streamsAIWorkHistory__plan p{margin:4px 0;font-size:12px;line-height:1.45;color:#475569}.streamsAIWorkHistory__progress span{color:#64748b}.streamsAIWorkHistory__event{border-left:2px solid #cbd5e1;padding:6px 9px;display:flex;flex-direction:column;gap:2px}.streamsAIWorkHistory__event--failed,.streamsAIWorkHistory__event--error{border-left-color:#dc2626}.streamsAIWorkHistory__eventHead{display:flex;justify-content:space-between;gap:12px}.streamsAIWorkHistory__eventHead strong{font-size:12px}.streamsAIWorkHistory__eventHead time,.streamsAIWorkHistory__event small{font-size:11px;color:#64748b}.streamsAIWorkHistory__event p{margin:3px 0;font-size:13px;line-height:1.4}
+        @media(max-width:700px){.streamsAIWorkHistory{bottom:104px;width:calc(100vw - 24px);border-radius:14px}.streamsAIWorkHistory__status{max-width:86px;overflow:hidden;text-overflow:ellipsis}.streamsAIWorkHistory__events{max-height:250px}.streamsAIWorkHistory__copy strong{font-size:13px}.streamsAIWorkHistory__progress p{font-size:11.5px}}
         @media(prefers-reduced-motion:reduce){.streamsAIWorkHistory *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
       `}</style>
     </aside>
