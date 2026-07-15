@@ -1,0 +1,35 @@
+name: Streams AI TypeScript Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Exact normal TypeScript command
+        id: tsc
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee streams-ai-ts-diagnostic.log
+      - name: Upload TypeScript log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streams-ai-ts-diagnostic
+          path: streams-ai-ts-diagnostic.log
+          if-no-files-found: error
+      - name: Preserve TypeScript exit status
+        run: test "${{ steps.tsc.outcome }}" = "success"
