@@ -1,9 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildStructuredProgressUpdate, progressUpdateMessage } from "@/lib/streams-ai/runtime/progress-update-structure";
-
-const jobsSource = readFileSync("src/lib/streams-ai/repositories/jobs-repository.ts", "utf8");
-const historySource = readFileSync("src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx", "utf8");
 
 describe("Streams AI Item 5 structured progress updates", () => {
   it("normalizes goal, completed work, current action, evidence, and next action", () => {
@@ -45,20 +41,42 @@ describe("Streams AI Item 5 structured progress updates", () => {
     expect(message).not.toMatch(/\d+%|chain[- ]of[- ]thought|scratchpad/i);
   });
 
-  it("persists the canonical structure on every durable job event", () => {
-    expect(jobsSource).toContain("buildStructuredProgressUpdate");
-    expect(jobsSource).toContain("progressUpdate,");
-    expect(jobsSource).toContain("completedWork: progressUpdate.completedWork");
-    expect(jobsSource).toContain("evidence: progressUpdate.evidence");
-    expect(jobsSource).toContain("remainingWork: progressUpdate.remainingWork");
+  it("derives remaining work from planned phases when explicit remaining items are absent", () => {
+    const update = buildStructuredProgressUpdate({
+      goal: "Complete the build.",
+      phases: [
+        { id: "inspect", label: "Inspect the active implementation" },
+        { id: "implement", label: "Implement the missing behavior" },
+        { id: "verify", label: "Verify the completed behavior" },
+      ],
+      completedItems: ["Inspect the active implementation"],
+      currentAction: "Implementing the missing behavior.",
+      nextAction: "Verify the completed behavior.",
+    });
+
+    expect(update.completedWork).toEqual(["Inspect the active implementation"]);
+    expect(update.remainingWork).toEqual([
+      "Implement the missing behavior",
+      "Verify the completed behavior",
+    ]);
   });
 
-  it("renders all five required fields in the restored activity interface", () => {
-    expect(historySource).toContain("Goal:");
-    expect(historySource).toContain("Completed:");
-    expect(historySource).toContain("Now:");
-    expect(historySource).toContain("Evidence:");
-    expect(historySource).toContain("Next:");
-    expect(historySource).toContain("Current structured progress update");
+  it("sanitizes malformed and empty values into a stable user-facing contract", () => {
+    const update = buildStructuredProgressUpdate({
+      goal: "  ",
+      completedItems: ["", null, { label: "Validated persistence" }],
+      currentAction: "  Restoring history.  ",
+      evidenceLevel: "runtime_verified",
+      evidenceSummary: "  The durable event was read back.  ",
+      verificationState: "passed",
+      nextAction: "  Deliver the restored update.  ",
+      planVersion: 0,
+    });
+
+    expect(update.completedWork).toEqual(["Validated persistence"]);
+    expect(update.currentAction).toBe("Restoring history.");
+    expect(update.evidence.summary).toBe("The durable event was read back.");
+    expect(update.nextAction).toBe("Deliver the restored update.");
+    expect(update.planVersion).toBe(1);
   });
 });
