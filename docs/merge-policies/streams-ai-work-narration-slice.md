@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Connect the live `/streams-ai` message route to the existing Streams AI jobs/job-events ledger, render persisted activity history, enforce protected-reasoning boundaries, provide an authoritative first response for multi-step tasks, and preserve one stable active composer across the first-message transition without creating parallel persistence or changing provider routes.
+Connect the live `/streams-ai` message route to the existing Streams AI jobs/job-events ledger, render persisted activity history, enforce protected-reasoning boundaries, provide an authoritative first response for multi-step tasks, and preserve one compact active composer across the first-message transition without creating parallel persistence or changing provider routes.
 
 ## Allowed files
 
@@ -34,17 +34,19 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 ## Required proof
 
 - Scope guard passes for the exact allowed list.
-- TypeScript/build checks pass or any unrelated pre-existing failure is documented.
-- The production build executes the Item 3 suite containing console-transition and Stop-control regressions.
+- TypeScript passes.
+- The production contract suite passes.
+- The full Next production build passes with required environment placeholders.
 - Simple requests bypass unnecessary operation narration.
-- Multi-step requests receive a persisted `operation_started`, `plan_created`, and initial `phase_started` sequence before material execution.
+- Multi-step requests receive persisted `operation_started`, `plan_created`, and initial `phase_started` events before material execution.
 - The internal zero-credit narration job does not repeat product-entitlement authorization after the live chat route has already authorized the user and scope.
 - Duplicate idempotency keys recover the same chat operation.
 - The accepted goal, phases, plan version, preserved items, risks avoided, and next action can be read back from `/api/streams-ai/jobs`.
-- Live `/api/streams-ai/messages` invocation returns a job ID for qualifying tasks.
-- The same composer geometry remains active before and after the first message.
-- The conversation viewport remains visible above the composer after submission.
-- Persisted work history and its Stop control render above the composer instead of overlapping or being covered.
+- The same compact composer remains mounted before and after the first message.
+- The duplicate two-row live-status console is suppressed.
+- The composer remains clamped above the desktop and mobile safe edge.
+- The conversation viewport remains visible and scrollable above the composer.
+- Persisted work history and Stop render above the composer instead of overlapping or replacing it.
 - Refresh restores the activity panel and accepted plan.
 - Stop transitions the authoritative job to `cancelled` and late completion cannot overwrite it.
 - Protected fields do not appear in persisted message metadata, job input/output, job events, or restored UI payloads.
