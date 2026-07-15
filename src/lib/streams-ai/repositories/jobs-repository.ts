@@ -6,10 +6,11 @@ import { StreamsAIEntitlementsRepository } from "./entitlements-repository";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
 import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "../protected-reasoning";
 import { buildStructuredProgressUpdate } from "../runtime/progress-update-structure";
+import { buildHumanWorkEvent, validateCompletionEvidence } from "../runtime/human-work-narration-policy";
 
 const creditLedger = new StreamsAICreditLedgerRepository();
 const entitlements = new StreamsAIEntitlementsRepository();
-const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "cancelled", "blocked"]);
+const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "cancelled", "blocked", "partial"]);
 
 export type UpdateJobInput = {
   status?: string;
@@ -89,6 +90,7 @@ export class StreamsAIJobsRepository {
 
     const inputJson = sanitizeStreamsAIPayload({
       ...(input.inputJson || {}),
+      humanWorkPolicyVersion: 1,
       capability: {
         kind: capability.kind,
         productId: effectiveProductId,
@@ -131,6 +133,18 @@ export class StreamsAIJobsRepository {
     const currentStatus = String(current.status || "");
     const requestedStatus = input.status === undefined ? currentStatus : String(input.status);
     if (TERMINAL_JOB_STATUSES.has(currentStatus) && requestedStatus !== currentStatus) throw new Error(`STREAMS AI job is already ${currentStatus}.`);
+
+    if (requestedStatus === "completed") {
+      const output = input.outputJson && typeof input.outputJson === "object" ? input.outputJson as Record<string, any> : {};
+      const gate = validateCompletionEvidence({
+        eventType: "operation_completed",
+        status: "completed",
+        remainingItems: output.remainingItems || output.remainingWork || [],
+        evidenceLevel: output.evidenceLevel || output.evidence?.level || "none",
+        verificationState: output.verificationState || output.evidence?.verificationState || "not_started",
+      });
+      if (!gate.ok) throw new Error(`STREAMS AI completion gate failed: ${gate.reason}.`);
+    }
 
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) patch.status = input.status;
@@ -176,8 +190,28 @@ export class StreamsAIJobsRepository {
       message: input.message,
       jobInput: job.input_json && typeof job.input_json === "object" ? job.input_json : {},
     });
+    const humanWorkEvent = buildHumanWorkEvent({
+      ...baseData,
+      eventType: input.eventType,
+      message: input.message,
+      goal: progressUpdate.goal,
+      completedItems: baseData.completedItems || progressUpdate.completedWork,
+      currentAction: progressUpdate.currentAction,
+      evidenceLevel: progressUpdate.evidence.level,
+      evidenceSummary: progressUpdate.evidence.summary,
+      verificationState: progressUpdate.evidence.verificationState,
+      nextAction: progressUpdate.nextAction,
+      remainingItems: baseData.remainingItems || progressUpdate.remainingWork,
+      preservedItems: baseData.preservedItems || job.input_json?.preservedItems,
+      risksAvoided: baseData.risksAvoided || job.input_json?.risksAvoided,
+      planVersion: progressUpdate.planVersion,
+    }) as Record<string, any>;
+    if (input.eventType === "operation_completed" && !humanWorkEvent.completionGate?.ok) {
+      throw new Error(`STREAMS AI completion event rejected: ${humanWorkEvent.completionGate?.reason || "unverified"}.`);
+    }
     const dataPayload = sanitizeStreamsAIPayload({
       ...baseData,
+      ...humanWorkEvent,
       goal: progressUpdate.goal,
       completedWork: progressUpdate.completedWork,
       currentAction: progressUpdate.currentAction,
@@ -186,6 +220,7 @@ export class StreamsAIJobsRepository {
       remainingWork: progressUpdate.remainingWork,
       planVersion: progressUpdate.planVersion,
       progressUpdate,
+      humanWorkEvent,
     });
     const { data, error } = await this.db().from(streamsAITables.jobEvents).insert({
       tenant_id: scope.tenantId,
