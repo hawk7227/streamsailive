@@ -1,9 +1,9 @@
 name: Streams AI Repair Verify
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix-streams-ai-console-session-transition
+      - main
 
 jobs:
   verify-repair:
