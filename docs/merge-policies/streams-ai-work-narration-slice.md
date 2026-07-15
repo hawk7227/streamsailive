@@ -9,6 +9,7 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 - `docs/streams-current-status.md`
 - `docs/merge-policies/streams-ai-work-narration-slice.md`
 - `scripts/scope-guard.mjs`
+- `package.json`
 - `src/app/streams-ai/page.tsx`
 - `src/app/api/streams-ai/messages/route.ts`
 - `src/app/api/streams-ai/jobs/route.ts`
@@ -33,6 +34,7 @@ Connect the live `/streams-ai` message route to the existing Streams AI jobs/job
 
 - Scope guard passes for the exact allowed list.
 - TypeScript/build checks pass or any unrelated pre-existing failure is documented.
+- The production build executes the Item 3 classifier tests.
 - Simple requests bypass unnecessary operation narration.
 - Multi-step requests receive a persisted `operation_started`, `plan_created`, and initial `phase_started` sequence before material execution.
 - Duplicate idempotency keys recover the same chat operation.
