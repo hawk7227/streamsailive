@@ -4,13 +4,18 @@ import type { StreamsAIScope } from "../auth";
 import { StreamsAICreditLedgerRepository } from "./credit-ledger-repository";
 import { StreamsAIEntitlementsRepository } from "./entitlements-repository";
 import type { CreateJobEventInput, CreateJobInput } from "./types";
+import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "../protected-reasoning";
 
 const creditLedger = new StreamsAICreditLedgerRepository();
 const entitlements = new StreamsAIEntitlementsRepository();
 
 export type UpdateJobInput = {
   status?: string;
+  sessionId?: string | null;
+  messageId?: string | null;
   inputJson?: Record<string, unknown>;
+  outputJson?: Record<string, unknown> | null;
+  error?: string | null;
   creditEstimate?: number;
   metadata?: Record<string, unknown>;
 };
@@ -19,11 +24,16 @@ function shouldEnforceCredits() {
   return process.env.STREAMS_AI_ENFORCE_CREDITS === "true";
 }
 
-function normalizeJobRow<T extends Record<string, unknown> | null>(row: T): T {
+function normalizeJobRow<T extends Record<string, any> | null>(row: T): T {
   if (!row) return row;
-  const inputJson = (row.input_json && typeof row.input_json === "object" ? row.input_json : {}) as Record<string, unknown>;
-  const nextMetadata = row.metadata && typeof row.metadata === "object" ? row.metadata : inputJson.metadata;
-  return { ...row, metadata: nextMetadata } as T;
+  const clean = sanitizeStreamsAIPayload(row);
+  const inputJson = (clean.input_json && typeof clean.input_json === "object" ? clean.input_json : {}) as Record<string, unknown>;
+  const nextMetadata = clean.metadata && typeof clean.metadata === "object" ? clean.metadata : inputJson.metadata;
+  return { ...clean, metadata: nextMetadata } as T;
+}
+
+function normalizeEventRow<T extends Record<string, any> | null>(row: T): T {
+  return row ? sanitizeStreamsAIPayload(row) as T : row;
 }
 
 export class StreamsAIJobsRepository {
@@ -48,17 +58,13 @@ export class StreamsAIJobsRepository {
   }
 
   async create(scope: StreamsAIScope, input: CreateJobInput = {}) {
+    assertNoProtectedFields(input);
     const capability = getCapabilityProduct(input.kind || "chat_tool");
     const effectiveProductId = input.productId && input.productId !== "streams-ai" ? input.productId : capability.productId;
     const effectiveCreditEstimate = input.creditEstimate ?? capability.estimatedCredits ?? 0;
 
-    if (capability.entitlementRequired) {
-      await entitlements.require(scope, effectiveProductId);
-    }
-
-    if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) {
-      await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
-    }
+    if (capability.entitlementRequired) await entitlements.require(scope, effectiveProductId);
+    if (effectiveCreditEstimate > 0 && shouldEnforceCredits()) await creditLedger.assertSufficientCredits(scope, effectiveCreditEstimate);
 
     const { data, error } = await this.db()
       .from(streamsAITables.jobs)
@@ -74,7 +80,7 @@ export class StreamsAIJobsRepository {
         product_id: effectiveProductId,
         status: input.status || "queued",
         kind: capability.kind,
-        input_json: {
+        input_json: sanitizeStreamsAIPayload({
           ...(input.inputJson || {}),
           capability: {
             kind: capability.kind,
@@ -82,7 +88,7 @@ export class StreamsAIJobsRepository {
             displayName: capability.displayName,
             executionStatus: capability.executionStatus,
           },
-        },
+        }),
         credit_estimate: effectiveCreditEstimate,
       })
       .select("*")
@@ -101,18 +107,23 @@ export class StreamsAIJobsRepository {
   }
 
   async update(scope: StreamsAIScope, jobId: string, input: UpdateJobInput) {
+    assertNoProtectedFields(input);
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) patch.status = input.status;
+    if (input.sessionId !== undefined) patch.session_id = input.sessionId;
+    if (input.messageId !== undefined) patch.message_id = input.messageId;
+    if (input.outputJson !== undefined) patch.output_json = input.outputJson == null ? null : sanitizeStreamsAIPayload(input.outputJson);
+    if (input.error !== undefined) patch.error = input.error == null ? null : sanitizeStreamsAIText(input.error, 4000);
     if (input.creditEstimate !== undefined) patch.credit_estimate = input.creditEstimate;
 
     if (input.inputJson !== undefined || input.metadata !== undefined) {
       const current = await this.get(scope, jobId);
       const currentInputJson = (current?.input_json && typeof current.input_json === "object" ? current.input_json : {}) as Record<string, unknown>;
-      patch.input_json = {
+      patch.input_json = sanitizeStreamsAIPayload({
         ...currentInputJson,
         ...(input.inputJson || {}),
         ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
-      };
+      });
     }
 
     const { data, error } = await this.db()
@@ -148,13 +159,18 @@ export class StreamsAIJobsRepository {
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
       .eq("job_id", jobId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
 
     if (error) throw new Error(`Failed to read STREAMS AI job events: ${error.message}`);
-    return data || [];
+    return (data || []).map((row) => normalizeEventRow(row));
   }
 
   async createEvent(scope: StreamsAIScope, input: CreateJobEventInput) {
+    assertNoProtectedFields(input);
+    const existingEvents = await this.events(scope, input.jobId);
+    const sequenceNumber = existingEvents.reduce((max, event: any) => Math.max(max, Number(event?.data?.sequenceNumber || 0)), 0) + 1;
+    const dataPayload = sanitizeStreamsAIPayload({ ...(input.data || {}), sequenceNumber });
     const { data, error } = await this.db()
       .from(streamsAITables.jobEvents)
       .insert({
@@ -162,13 +178,13 @@ export class StreamsAIJobsRepository {
         user_id: scope.userId,
         job_id: input.jobId,
         event_type: input.eventType,
-        message: input.message || null,
-        data: input.data || {},
+        message: input.message ? sanitizeStreamsAIText(input.message, 4000) : null,
+        data: dataPayload,
       })
       .select("*")
       .single();
 
     if (error) throw new Error(`Failed to create STREAMS AI job event: ${error.message}`);
-    return data;
+    return normalizeEventRow(data);
   }
 }
