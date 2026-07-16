@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { STREAMS_VISIONS_SYSTEM_PROMPT } from "@/lib/streams-visions/prompts";
+import { getVisionsIdentityAccess } from "@/lib/streams-visions/identity-server";
 import type { VisionsPreviewSpec } from "@/lib/streams-visions/types";
 
 function parseModelJson(raw: string): { reply: string; visual: Omit<VisionsPreviewSpec, "id"> | null } {
@@ -29,11 +30,20 @@ function normalizeSections(value: unknown): Array<{ title: string; body: string 
   });
 }
 
+async function requireAccess(user: { id: string; email_confirmed_at?: string | null; phone_confirmed_at?: string | null }) {
+  const access = await getVisionsIdentityAccess(user);
+  if (!access.enrolled) return NextResponse.json({ error: "Complete the required Streams Visions identity setup first." }, { status: 403 });
+  if (!access.biometricFresh) return NextResponse.json({ error: "Unlock Streams Visions with your protected device before continuing." }, { status: 423 });
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   if (disabled()) return NextResponse.json({ error: "Streams Visions is disabled" }, { status: 503 });
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await requireAccess(user);
+  if (denied) return denied;
   const conversationId = request.nextUrl.searchParams.get("conversationId");
   if (!conversationId) return NextResponse.json({ error: "conversationId required" }, { status: 400 });
 
@@ -51,6 +61,8 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await requireAccess(user);
+  if (denied) return denied;
 
   const body = await request.json().catch(() => ({}));
   const conversationId = String(body.conversationId || "");
