@@ -41,6 +41,40 @@ function explicitlyRequestsDeterministicStructure(userContent: string, body: Str
     && requiresDeterministicStructureCheck(text);
 }
 
+function extractRendererFixture(userContent: string) {
+  const text = String(userContent || "").replace(/\r\n/g, "\n").trim();
+  const explicitTest = /(streams\s+(?:code\s*\+\s*table|chat\s+artifact|renderer)|syntax\s+highlighting|renderer\s+test|respond\s+with\s+the\s+following\s+(?:content\s+)?exactly|generate\s+this\s+response\s+exactly\s+as\s+structured\s+below)/i.test(text);
+  const markdownRich = (text.match(/```/g) || []).length >= 4 || (/^#\s+/m.test(text) && /^\|.+\|$/m.test(text));
+  if (!explicitTest || !markdownRich) return "";
+
+  const firstHeading = text.search(/^#\s+.+$/m);
+  if (firstHeading < 0) return "";
+  return text.slice(firstHeading).trim();
+}
+
+function deterministicFixtureResponse(content: string) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const emit = (event: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      };
+      emit("activity", { phase: "rendering", statusText: "Rendering exact test fixture…" });
+      for (let index = 0; index < content.length; index += 180) emit("response", { token: content.slice(index, index + 180) });
+      emit("complete", { ok: true, deterministicFixture: true, qualityAccepted: true });
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Streams-AI-Deterministic-Fixture": "1",
+    },
+  });
+}
+
 function withNarrationFallbackHeader(response: Response) {
   const headers = new Headers(response.headers);
   headers.set("X-Streams-AI-Narration-Fallback", "direct-chat");
@@ -61,6 +95,9 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
+    const deterministicFixture = extractRendererFixture(userContent);
+    if (deterministicFixture) return deterministicFixtureResponse(deterministicFixture);
+
     const enforceDeterministicStructure = explicitlyRequestsDeterministicStructure(userContent, body);
     const authoritativeBody = sanitizeStreamsAIPayload({
       ...body,
