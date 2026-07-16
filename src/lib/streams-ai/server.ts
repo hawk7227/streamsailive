@@ -14,10 +14,26 @@ function firstEnv(...names: string[]) {
   return "";
 }
 
-export function getStreamsAIConfig(): StreamsAIConfig {
-  const supabaseUrl = firstEnv("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL", "DATABASE_SUPABASE_URL");
-  const supabaseAnonKey = firstEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY");
-  const supabaseServiceRoleKey = firstEnv(
+function supabaseUrl() {
+  return firstEnv(
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_URL",
+    "DATABASE_SUPABASE_URL",
+  );
+}
+
+function supabaseAnonKey() {
+  return firstEnv(
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLIC_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+  );
+}
+
+function supabaseServiceRoleKey() {
+  return firstEnv(
     "SUPABASE_SERVICE_ROLE_KEY",
     "SUPABASE_SERVICE_KEY",
     "SUPABASE_SERVICE_ROLE",
@@ -25,23 +41,43 @@ export function getStreamsAIConfig(): StreamsAIConfig {
     "SUPABASE_SECRET",
     "SERVICE_ROLE_KEY",
   );
+}
+
+export function getStreamsAIConfig(): StreamsAIConfig {
+  const url = supabaseUrl();
+  const serviceRoleKey = supabaseServiceRoleKey();
+  const anonKey = supabaseAnonKey() || serviceRoleKey;
 
   const missing = [
-    !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL",
-    !supabaseAnonKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY",
-    !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY",
+    !url && "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL",
+    !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY",
   ].filter(Boolean);
 
   if (missing.length) {
     throw new Error(`STREAMS AI Supabase configuration missing: ${missing.join(", ")}`);
   }
 
-  return { supabaseUrl, supabaseAnonKey, supabaseServiceRoleKey };
+  return {
+    supabaseUrl: url,
+    supabaseAnonKey: anonKey,
+    supabaseServiceRoleKey: serviceRoleKey,
+  };
 }
 
 export function createStreamsAIServiceClient(): SupabaseClient {
-  const config = getStreamsAIConfig();
-  return createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
+  const url = supabaseUrl();
+  const serviceRoleKey = supabaseServiceRoleKey();
+
+  const missing = [
+    !url && "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL",
+    !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY",
+  ].filter(Boolean);
+
+  if (missing.length) {
+    throw new Error(`STREAMS AI Supabase service configuration missing: ${missing.join(", ")}`);
+  }
+
+  return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { "x-streams-ai-client": "service" } },
   });

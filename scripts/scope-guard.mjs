@@ -15,6 +15,10 @@ const policies = {
     allowed: ['scripts/','.github/workflows/','docs/merge-policies/','.github/pull_request_template.md','package.json','docs/streams-current-status.md'],
     forbidden: ['src/','supabase/migrations/']
   },
+  'streams-shared-api-config-hotfix': {
+    allowed: ['src/lib/streams-ai/server.ts','scripts/scope-guard.mjs'],
+    forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/','src/app/api/streams/video/','src/app/api/streams/image/']
+  },
   'streams-self-build-runtime-foundation-slice': {
     allowed: ['docs/streams-current-status.md','docs/streams-knowledge/','docs/merge-policies/streams-self-build-runtime-foundation-slice.md','src/lib/streams/build-runtime/','src/app/api/streams/build/tasks/','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/','src/app/api/streams/video/','src/app/api/streams/image/']
@@ -35,6 +39,8 @@ const policies = {
 
 function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
+  if (files.some((f) => f === 'src/lib/streams-ai/server.ts')) return 'streams-shared-api-config-hotfix';
+
   const hasVisionsFiles = files.some((f) =>
     f.startsWith('src/app/streams-ai/Visions/') ||
     f.startsWith('src/app/api/streams-ai/Visions/') ||
