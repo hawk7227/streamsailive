@@ -7,6 +7,8 @@ import {
   VISIONS_LIKENESS_BUCKET,
   type VisionsCaptureMetadata,
   type VisionsCaptureType,
+  type VisionsLikenessStatus,
+  type VisionsLivenessStatus,
 } from "@/lib/streams-visions/identity";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -30,6 +32,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.email_confirmed_at || !user.phone_confirmed_at) return NextResponse.json({ error: "Verify your email and phone before facial enrollment." }, { status: 403 });
 
   const body = await request.json().catch(() => ({})) as {
     action?: string;
@@ -44,7 +47,8 @@ export async function POST(request: Request) {
   if (!challengeValid(profile, String(body.challenge || ""))) {
     return NextResponse.json({ error: "The secure capture session expired. Start again." }, { status: 409 });
   }
-  if (!profile?.notice_accepted_at) return NextResponse.json({ error: "Accept the Identity and Privacy Notice first." }, { status: 403 });
+  if (!profile?.full_name || !profile?.date_of_birth || !profile?.country || !profile?.state_region) return NextResponse.json({ error: "Complete your required account details first." }, { status: 403 });
+  if (!profile.notice_accepted_at) return NextResponse.json({ error: "Accept the Identity and Privacy Notice first." }, { status: 403 });
 
   if (body.action === "prepare") {
     if (!isCaptureType(body.captureType) || !ALLOWED_TYPES.has(String(body.contentType)) || !Number.isFinite(body.sizeBytes) || Number(body.sizeBytes) <= 0 || Number(body.sizeBytes) > MAX_BYTES) {
@@ -66,9 +70,9 @@ export async function POST(request: Request) {
       if (!isCaptureType(capture.captureType) || seenTypes.has(capture.captureType)) return NextResponse.json({ error: "Each required camera angle must be captured once." }, { status: 422 });
       if (!capture.storagePath.startsWith(`${user.id}/source/`)) return NextResponse.json({ error: "A capture path is not owned by this account." }, { status: 403 });
       if (!ALLOWED_TYPES.has(capture.contentType) || capture.sizeBytes <= 0 || capture.sizeBytes > MAX_BYTES || capture.width < 320 || capture.height < 320) return NextResponse.json({ error: "One or more captures do not meet the quality rules." }, { status: 422 });
-      if (!/^[a-f0-9]{64}$/i.test(capture.sha256) || seenHashes.has(capture.sha256)) return NextResponse.json({ error: "The live captures must be distinct images." }, { status: 422 });
+      if (!/^[a-f0-9]{64}$/i.test(capture.sha256) || seenHashes.has(capture.sha256.toLowerCase())) return NextResponse.json({ error: "The live captures must be distinct images." }, { status: 422 });
       seenTypes.add(capture.captureType);
-      seenHashes.add(capture.sha256);
+      seenHashes.add(capture.sha256.toLowerCase());
     }
 
     const { data: objects } = await admin.storage.from(VISIONS_LIKENESS_BUCKET).list(`${user.id}/source`, { limit: 100 });
@@ -90,9 +94,9 @@ export async function POST(request: Request) {
     const { data: saved, error: insertError } = await admin.from("streams_visions_likeness_assets").insert(rows).select("id,capture_type,storage_path");
     if (insertError || !saved) return NextResponse.json({ error: "The private likeness profile could not be saved." }, { status: 500 });
 
-    let livenessStatus = "manual_review";
-    let likenessStatus = "pending_review";
-    let reviewReason = "A trained reviewer must confirm the live capture before Visions unlocks.";
+    let livenessStatus: VisionsLivenessStatus = "manual_review";
+    let likenessStatus: VisionsLikenessStatus = "pending_review";
+    let reviewReason: string | null = "A trained reviewer must confirm the live capture before Visions unlocks.";
     let providerReference: string | null = null;
     const providerUrl = process.env.STREAMS_VISIONS_IDENTITY_PROVIDER_URL;
     const providerSecret = process.env.STREAMS_VISIONS_IDENTITY_PROVIDER_SECRET;
@@ -113,7 +117,8 @@ export async function POST(request: Request) {
         if (result.verified === true) {
           livenessStatus = "verified";
           likenessStatus = "approved";
-          reviewReason = null as unknown as string;
+          reviewReason = null;
+          await admin.from("streams_visions_likeness_assets").update({ verification_status: "approved" }).eq("user_id", user.id).is("deleted_at", null);
         } else if (result.reason) {
           reviewReason = result.reason.slice(0, 500);
         }
@@ -122,7 +127,7 @@ export async function POST(request: Request) {
 
     const frontAsset = saved.find((asset) => asset.capture_type === "front");
     const retentionExpiresAt = new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000).toISOString();
-    await admin.from("streams_visions_identity_profiles").upsert({
+    const { error: profileError } = await admin.from("streams_visions_identity_profiles").upsert({
       user_id: user.id,
       liveness_status: livenessStatus,
       likeness_profile_status: likenessStatus,
@@ -135,6 +140,7 @@ export async function POST(request: Request) {
       challenge_purpose: null,
       challenge_expires_at: null,
     }, { onConflict: "user_id" });
+    if (profileError) return NextResponse.json({ error: "The verification result could not be saved." }, { status: 500 });
     await admin.from("streams_visions_identity_events").insert({ user_id: user.id, event_type: "likeness_submitted", result: likenessStatus, metadata: { capture_count: captures.length, provider_configured: Boolean(providerUrl && providerSecret) } });
     return NextResponse.json({ ok: true, livenessStatus, likenessProfileStatus: likenessStatus, reviewReason });
   }
