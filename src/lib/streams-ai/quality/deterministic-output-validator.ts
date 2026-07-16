@@ -1,6 +1,7 @@
 import type { StreamsIntentDecision } from "../runtime/intent-engine";
+import { enforceSupplement2Response, validateSupplement2Request } from "../runtime/authorized-supplement-2-policy";
 
-export const STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION = "streams-deterministic-output-validator-v2";
+export const STREAMS_DETERMINISTIC_OUTPUT_VALIDATOR_VERSION = "streams-deterministic-output-validator-v3-supplement-2";
 
 export type StreamsDeterministicDefect = {
   code: string;
@@ -72,6 +73,33 @@ export function validateDeterministicStreamsOutput(input: { instruction: string;
   const defects: StreamsDeterministicDefect[] = [];
 
   if (!trimmed) defects.push({ code: "EMPTY_RESPONSE", message: "The response is empty.", repairHint: "Return a complete response." });
+
+  const supplementRequest = validateSupplement2Request({
+    userMessage: instruction,
+    hasFiles: Boolean(input.intent.needsFiles),
+    hasImages: Boolean(input.intent.needsImages),
+    imageEditTargetPresent: Boolean(input.intent.needsImages),
+    currentInformation: Boolean(input.intent.needsCurrentInformation),
+  });
+  if (!supplementRequest.accepted) {
+    defects.push({ code: supplementRequest.code, message: supplementRequest.message, repairHint: "Ask the user to upload or identify the exact image target. Do not claim an edit was performed." });
+  }
+
+  const supplementResponse = enforceSupplement2Response({ userMessage: instruction, responseText: trimmed });
+  for (const code of supplementResponse.defects) {
+    defects.push({
+      code,
+      message: code === "LANGUAGE_INCONSISTENCY" ? "The response does not remain in the user’s language." : "The response violates an authorized supplement output boundary.",
+      repairHint: code === "LANGUAGE_INCONSISTENCY" ? "Rewrite the complete response in the user’s language." : "Remove hidden operational disclosure and unsupported future or background promises.",
+    });
+  }
+  if (supplementResponse.content !== trimmed) {
+    defects.push({
+      code: "SUPPLEMENT_OUTPUT_NORMALIZATION_REQUIRED",
+      message: "The response contains a generic offer ending or a raw internal source identifier.",
+      repairHint: "Remove generic offer-to-help endings and replace raw internal reference IDs with rendered citations or natural source references.",
+    });
+  }
 
   const conflictingFormats = format.exact && countFormatKinds(input.intent) > 1;
   if (conflictingFormats && !explainsFormatConflict(trimmed)) {
