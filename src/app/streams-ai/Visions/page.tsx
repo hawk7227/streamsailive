@@ -1,4 +1,5 @@
 import VisionsClient from "./VisionsClient";
+import VisionsIdentityGate from "./VisionsIdentityGate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +15,5 @@ export default function StreamsVisionsPage() {
     );
   }
 
-  return <VisionsClient />;
+  return <VisionsIdentityGate><VisionsClient /></VisionsIdentityGate>;
 }
