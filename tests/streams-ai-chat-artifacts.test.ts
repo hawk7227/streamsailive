@@ -26,7 +26,7 @@ describe("Streams AI chat artifact integration", () => {
     expect(file).toContain("<ChatMarkdownMessage content={text} message={message} runtime={chatRuntime}/>");
   });
 
-  it("ships the link ingest route", () => {
+  it("ships the link ingest route in the production app router", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src/app/api/streams/link/ingest/route.js"))).toBe(true);
   });
 });
