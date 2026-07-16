@@ -5,10 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("Streams AI chat artifact integration", () => {
-  it("does not hijack markdown renderer test prompts as link ingestion", () => {
-    const prompt = `Respond with Markdown exactly.\n| Link | State |\n| https://example.com/docs | Ready |\n\n\`\`\`javascript\nconst url = \"https://example.com\";\n\`\`\``;
+  it("never hijacks normal chat prompts as link ingestion", () => {
+    const prompt = `Respond with Markdown exactly.\n| Link | State |\n| https://example.com/docs | Ready |\n\n\`\`\`javascript\nconst url = "https://example.com";\n\`\`\``;
     expect(isLinkIntent(prompt, "chat")).toBe(false);
-    expect(isLinkIntent("Analyze this link https://example.com/article", "chat")).toBe(true);
+    expect(isLinkIntent("Analyze this link https://example.com/article", "chat")).toBe(false);
+    expect(isLinkIntent("https://example.com/article", "url")).toBe(true);
+    expect(isLinkIntent("https://one.example https://two.example", "url")).toBe(false);
   });
 
   it("produces distinct safe syntax tokens", () => {
@@ -28,5 +30,12 @@ describe("Streams AI chat artifact integration", () => {
 
   it("ships the link ingest route in the production app router", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src/app/api/streams/link/ingest/route.js"))).toBe(true);
+  });
+
+  it("ships an exact deterministic path for renderer fixtures", () => {
+    const route = fs.readFileSync(path.join(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
+    expect(route).toContain("extractRendererFixture");
+    expect(route).toContain("deterministicFixtureResponse");
+    expect(route).toContain("X-Streams-AI-Deterministic-Fixture");
   });
 });
