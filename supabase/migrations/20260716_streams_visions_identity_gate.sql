@@ -18,6 +18,10 @@ on conflict (id) do update set
 
 create table if not exists public.streams_visions_identity_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  date_of_birth date,
+  country text,
+  state_region text,
   consent_version text,
   notice_accepted_at timestamptz,
   liveness_status text not null default 'not_started' check (liveness_status in ('not_started','capturing','submitted','manual_review','verified','retake_required','rejected')),
