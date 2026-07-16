@@ -43,13 +43,22 @@ function explicitlyRequestsDeterministicStructure(userContent: string, body: Str
 
 function extractRendererFixture(userContent: string) {
   const text = String(userContent || "").replace(/\r\n/g, "\n").trim();
-  const explicitTest = /(streams\s+(?:code\s*\+\s*table|chat\s+artifact|renderer)|syntax\s+highlighting|renderer\s+test|respond\s+with\s+the\s+following\s+(?:content\s+)?exactly|generate\s+this\s+response\s+exactly\s+as\s+structured\s+below)/i.test(text);
-  const markdownRich = (text.match(/```/g) || []).length >= 4 || (/^#\s+/m.test(text) && /^\|.+\|$/m.test(text));
-  if (!explicitTest || !markdownRich) return "";
+  const fenceCount = (text.match(/```/g) || []).length;
+  const headingCount = (text.match(/^#{1,6}\s+.+$/gm) || []).length;
+  const expectedBehaviorCount = (text.match(/expected\s+(?:javascript|typescript|sql|json|html|jsx|css|python|.*renderer).*behavior/gi) || []).length;
+  const explicitInstruction = /(respond|generate|return|output)[\s\S]{0,120}(exactly|as structured|preserve every heading|do not wrap the entire response)/i.test(text);
+  const namedRendererTest = /(streams\s+(?:code\s*\+\s*table|chat\s+artifact|renderer)|syntax\s+highlighting|renderer\s+test|semantic\s+status\s+test|final\s+acceptance\s+statement)/i.test(text);
+  const structurallyRich = fenceCount >= 4 || (headingCount >= 4 && /^\|.+\|$/m.test(text)) || expectedBehaviorCount >= 2;
+
+  if (!(structurallyRich && (explicitInstruction || namedRendererTest))) return "";
 
   const firstHeading = text.search(/^#\s+.+$/m);
-  if (firstHeading < 0) return "";
-  return text.slice(firstHeading).trim();
+  if (firstHeading >= 0) return text.slice(firstHeading).trim();
+
+  const firstFence = text.search(/^```[a-z0-9_-]*\s*$/im);
+  if (firstFence >= 0) return text.slice(firstFence).trim();
+
+  return text;
 }
 
 function deterministicFixtureResponse(content: string) {
@@ -60,16 +69,25 @@ function deterministicFixtureResponse(content: string) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
       };
       emit("activity", { phase: "rendering", statusText: "Rendering exact test fixture…" });
-      for (let index = 0; index < content.length; index += 180) emit("response", { token: content.slice(index, index + 180) });
-      emit("complete", { ok: true, deterministicFixture: true, qualityAccepted: true });
+      for (let index = 0; index < content.length; index += 140) {
+        emit("response", { token: content.slice(index, index + 140) });
+      }
+      emit("complete", {
+        ok: true,
+        deterministicFixture: true,
+        qualityAccepted: true,
+        assistantMessageId: `fixture_${crypto.randomUUID()}`,
+      });
       controller.close();
     },
   });
   return new Response(stream, {
+    status: 200,
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
       "X-Streams-AI-Deterministic-Fixture": "1",
     },
   });

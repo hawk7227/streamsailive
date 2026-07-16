@@ -32,10 +32,14 @@ describe("Streams AI chat artifact integration", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src/app/api/streams/link/ingest/route.js"))).toBe(true);
   });
 
-  it("ships an exact deterministic path for renderer fixtures", () => {
+  it("ships a guaranteed exact deterministic path for rich renderer fixtures", () => {
     const route = fs.readFileSync(path.join(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
     expect(route).toContain("extractRendererFixture");
+    expect(route).toContain("expectedBehaviorCount");
+    expect(route).toContain("structurallyRich");
     expect(route).toContain("deterministicFixtureResponse");
     expect(route).toContain("X-Streams-AI-Deterministic-Fixture");
+    expect(route).toContain("qualityAccepted: true");
+    expect(route).toContain("assistantMessageId");
   });
 });
