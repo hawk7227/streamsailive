@@ -62,25 +62,31 @@ export class StreamsTaskLifecycle {
     if (!this.jobId) throw new Error("Streams task lifecycle has not been created");
     if (next !== this.current && !ALLOWED[this.current]?.includes(next)) throw new Error(`Invalid Streams task transition: ${this.current} -> ${next}`);
     if (!testMode()) {
-      await jobs.update(this.scope, this.jobId, {
-        status: next,
-        metadata: { lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION, taskId: this.input.taskId, turnId: this.input.turnId, state: next, statusText, updatedAt: new Date().toISOString(), ...metadata },
-        ...(next === "completed" ? {
-          outputJson: {
-            evidenceLevel: "verified",
-            verificationState: "verified",
-            remainingItems: [],
-            taskId: this.input.taskId,
-            turnId: this.input.turnId,
-          },
-        } : {}),
-      });
-      await jobs.createEvent(this.scope, {
-        jobId: this.jobId,
-        eventType: `turn.${next}`,
-        message: statusText,
-        data: { taskId: this.input.taskId, turnId: this.input.turnId, previousState: this.current, state: next, ...metadata },
-      });
+      const finalizeOnly = next === "completed";
+      try {
+        await jobs.update(this.scope, this.jobId, {
+          status: next,
+          metadata: { lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION, taskId: this.input.taskId, turnId: this.input.turnId, state: next, statusText, updatedAt: new Date().toISOString(), ...metadata },
+          ...(finalizeOnly ? {
+            outputJson: {
+              evidenceLevel: "verified",
+              verificationState: "verified",
+              remainingItems: [],
+              taskId: this.input.taskId,
+              turnId: this.input.turnId,
+            },
+          } : {}),
+        });
+        await jobs.createEvent(this.scope, {
+          jobId: this.jobId,
+          eventType: `turn.${next}`,
+          message: statusText,
+          data: { taskId: this.input.taskId, turnId: this.input.turnId, previousState: this.current, state: next, ...metadata },
+        });
+      } catch (error) {
+        if (!finalizeOnly) throw error;
+        console.error("[streams-ai/task-lifecycle] completion tracking failed", error instanceof Error ? error.message : String(error));
+      }
     }
     this.current = next;
   }
