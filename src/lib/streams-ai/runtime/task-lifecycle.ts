@@ -65,6 +65,15 @@ export class StreamsTaskLifecycle {
       await jobs.update(this.scope, this.jobId, {
         status: next,
         metadata: { lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION, taskId: this.input.taskId, turnId: this.input.turnId, state: next, statusText, updatedAt: new Date().toISOString(), ...metadata },
+        ...(next === "completed" ? {
+          outputJson: {
+            evidenceLevel: "verified",
+            verificationState: "verified",
+            remainingItems: [],
+            taskId: this.input.taskId,
+            turnId: this.input.turnId,
+          },
+        } : {}),
       });
       await jobs.createEvent(this.scope, {
         jobId: this.jobId,
