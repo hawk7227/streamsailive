@@ -28,7 +28,7 @@ const policies = {
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/','src/app/api/streams/video/','src/app/api/streams/image/']
   },
   'streams-visions-isolated-slice': {
-    allowed: ['src/app/streams-ai/Visions/','src/app/api/streams-ai/Visions/','src/lib/streams-visions/','supabase/migrations/20260714_streams_visions_isolated.sql','tests/streams-visions-isolation.test.ts','.github/workflows/streams-visions-verify.yml','.github/workflows/pr-checks.yml','package.json','scripts/scope-guard.mjs'],
+    allowed: ['src/app/streams-ai/Visions/','src/app/api/streams-ai/Visions/','src/lib/streams-visions/','supabase/migrations/20260714_streams_visions_isolated.sql','supabase/migrations/20260716_streams_visions_identity_gate.sql','tests/streams-visions-isolation.test.ts','.github/workflows/streams-visions-verify.yml','.github/workflows/pr-checks.yml','package.json','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','src/app/streams-ai/page.tsx','src/app/api/streams-ai/messages/route.ts','src/components/streams-ai/current-chat/','src/lib/streams-ai/runtime/','src/app/streams-builder/','src/app/streams-ai/streams-builder/']
   }
 };
@@ -40,6 +40,7 @@ function inferPolicyFromFiles(files) {
     f.startsWith('src/app/api/streams-ai/Visions/') ||
     f.startsWith('src/lib/streams-visions/') ||
     f === 'supabase/migrations/20260714_streams_visions_isolated.sql' ||
+    f === 'supabase/migrations/20260716_streams_visions_identity_gate.sql' ||
     f === 'tests/streams-visions-isolation.test.ts' ||
     f === '.github/workflows/streams-visions-verify.yml'
   );
