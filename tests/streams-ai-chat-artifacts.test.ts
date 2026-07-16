@@ -31,4 +31,11 @@ describe("Streams AI chat artifact integration", () => {
   it("ships the link ingest route in the production app router", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src/app/api/streams/link/ingest/route.js"))).toBe(true);
   });
+
+  it("ships an exact deterministic path for renderer fixtures", () => {
+    const route = fs.readFileSync(path.join(process.cwd(), "src/app/api/streams-ai/messages/route.ts"), "utf8");
+    expect(route).toContain("extractRendererFixture");
+    expect(route).toContain("deterministicFixtureResponse");
+    expect(route).toContain("X-Streams-AI-Deterministic-Fixture");
+  });
 });
