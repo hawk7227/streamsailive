@@ -31,6 +31,11 @@ export type VisionsIdentityStatus = {
   emailVerified: boolean;
   phoneVerified: boolean;
   phone: string;
+  accountDetailsComplete: boolean;
+  fullName: string;
+  dateOfBirth: string;
+  country: string;
+  stateRegion: string;
   noticeAccepted: boolean;
   consentVersion: string | null;
   livenessStatus: VisionsLivenessStatus;
@@ -74,9 +79,10 @@ export const VISIONS_IDENTITY_NOTICE = {
   ],
 } as const;
 
-export function canEnterVisions(status: Pick<VisionsIdentityStatus, "emailVerified" | "phoneVerified" | "noticeAccepted" | "livenessStatus" | "likenessProfileStatus" | "biometricLockEnabled">) {
+export function canEnterVisions(status: Pick<VisionsIdentityStatus, "emailVerified" | "phoneVerified" | "accountDetailsComplete" | "noticeAccepted" | "livenessStatus" | "likenessProfileStatus" | "biometricLockEnabled">) {
   return status.emailVerified
     && status.phoneVerified
+    && status.accountDetailsComplete
     && status.noticeAccepted
     && status.livenessStatus === "verified"
     && status.likenessProfileStatus === "approved"
