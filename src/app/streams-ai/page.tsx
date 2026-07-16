@@ -1,5 +1,5 @@
 import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
-import StreamsAIWorkHistoryBridge from "@/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge";
+import StreamsAIWorkHistoryGate from "@/components/streams-ai/current-chat/StreamsAIWorkHistoryGate";
 import StreamsAIMobileKeyboardBridge from "./StreamsAIMobileKeyboardBridge";
 import "@/components/streams-ai/visual-operator/streams-operator-message-states.css";
 import mobileChatStyles from "./StreamsAIMobileChat.module.css";
@@ -12,7 +12,7 @@ export default function StreamsAIPage() {
     <>
       <StreamsAIMobileKeyboardBridge />
       <StreamsClientShell />
-      <StreamsAIWorkHistoryBridge />
+      <StreamsAIWorkHistoryGate />
     </>
   );
 }
