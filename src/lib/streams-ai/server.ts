@@ -16,13 +16,7 @@ function firstEnv(...names: string[]) {
 
 export function getStreamsAIConfig(): StreamsAIConfig {
   const supabaseUrl = firstEnv("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL", "DATABASE_SUPABASE_URL");
-  const supabaseAnonKey = firstEnv(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    "SUPABASE_ANON_KEY",
-    "SUPABASE_PUBLIC_ANON_KEY",
-    "SUPABASE_PUBLISHABLE_KEY",
-  );
+  const supabaseAnonKey = firstEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY");
   const supabaseServiceRoleKey = firstEnv(
     "SUPABASE_SERVICE_ROLE_KEY",
     "SUPABASE_SERVICE_KEY",
@@ -34,7 +28,7 @@ export function getStreamsAIConfig(): StreamsAIConfig {
 
   const missing = [
     !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL",
-    !supabaseAnonKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, or SUPABASE_ANON_KEY",
+    !supabaseAnonKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY",
     !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY",
   ].filter(Boolean);
 

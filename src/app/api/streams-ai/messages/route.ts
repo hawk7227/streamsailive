@@ -41,58 +41,6 @@ function explicitlyRequestsDeterministicStructure(userContent: string, body: Str
     && requiresDeterministicStructureCheck(text);
 }
 
-function extractRendererFixture(userContent: string) {
-  const text = String(userContent || "").replace(/\r\n/g, "\n").trim();
-  const fenceCount = (text.match(/```/g) || []).length;
-  const headingCount = (text.match(/^#{1,6}\s+.+$/gm) || []).length;
-  const expectedBehaviorCount = (text.match(/expected\s+(?:javascript|typescript|sql|json|html|jsx|css|python|.*renderer).*behavior/gi) || []).length;
-  const explicitInstruction = /(respond|generate|return|output)[\s\S]{0,120}(exactly|as structured|preserve every heading|do not wrap the entire response)/i.test(text);
-  const namedRendererTest = /(streams\s+(?:code\s*\+\s*table|chat\s+artifact|renderer)|syntax\s+highlighting|renderer\s+test|semantic\s+status\s+test|final\s+acceptance\s+statement)/i.test(text);
-  const structurallyRich = fenceCount >= 4 || (headingCount >= 4 && /^\|.+\|$/m.test(text)) || expectedBehaviorCount >= 2;
-
-  if (!(structurallyRich && (explicitInstruction || namedRendererTest))) return "";
-
-  const firstHeading = text.search(/^#\s+.+$/m);
-  if (firstHeading >= 0) return text.slice(firstHeading).trim();
-
-  const firstFence = text.search(/^```[a-z0-9_-]*\s*$/im);
-  if (firstFence >= 0) return text.slice(firstFence).trim();
-
-  return text;
-}
-
-function deterministicFixtureResponse(content: string) {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const emit = (event: string, payload: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
-      };
-      emit("activity", { phase: "rendering", statusText: "Rendering exact test fixture…" });
-      for (let index = 0; index < content.length; index += 140) {
-        emit("response", { token: content.slice(index, index + 140) });
-      }
-      emit("complete", {
-        ok: true,
-        deterministicFixture: true,
-        qualityAccepted: true,
-        assistantMessageId: `fixture_${crypto.randomUUID()}`,
-      });
-      controller.close();
-    },
-  });
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-      "X-Streams-AI-Deterministic-Fixture": "1",
-    },
-  });
-}
-
 function withNarrationFallbackHeader(response: Response) {
   const headers = new Headers(response.headers);
   headers.set("X-Streams-AI-Narration-Fallback", "direct-chat");
@@ -113,9 +61,6 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
-    const deterministicFixture = extractRendererFixture(userContent);
-    if (deterministicFixture) return deterministicFixtureResponse(deterministicFixture);
-
     const enforceDeterministicStructure = explicitlyRequestsDeterministicStructure(userContent, body);
     const authoritativeBody = sanitizeStreamsAIPayload({
       ...body,
