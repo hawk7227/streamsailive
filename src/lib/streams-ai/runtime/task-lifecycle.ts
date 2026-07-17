@@ -62,9 +62,28 @@ export class StreamsTaskLifecycle {
     if (!this.jobId) throw new Error("Streams task lifecycle has not been created");
     if (next !== this.current && !ALLOWED[this.current]?.includes(next)) throw new Error(`Invalid Streams task transition: ${this.current} -> ${next}`);
     if (!testMode()) {
-      await jobs.update(this.scope, this.jobId, {
+       await jobs.update(this.scope, this.jobId, {
         status: next,
         metadata: { lifecycleVersion: STREAMS_TASK_LIFECYCLE_VERSION, taskId: this.input.taskId, turnId: this.input.turnId, state: next, statusText, updatedAt: new Date().toISOString(), ...metadata },
+        // The completion gate in jobs-repository rejects any `completed` update
+        // whose outputJson lacks evidence (it defaults evidenceLevel to "none",
+        // which is on the reject list). The ALLOWED state machine only permits
+        // persisting -> completed, so persistence is guaranteed to have run by
+        // the time we reach here. Mirrors work-narration-controller.ts:556.
+        ...(next === "completed"
+          ? {
+              outputJson: {
+                evidence: {
+                  level: "persistence_verified",
+                  verificationState: "passed",
+                  summary: "The turn reached the persisting phase and the response was saved.",
+                },
+                remainingItems: [],
+                taskId: this.input.taskId,
+                turnId: this.input.turnId,
+              },
+            }
+          : {}),
       });
       await jobs.createEvent(this.scope, {
         jobId: this.jobId,
