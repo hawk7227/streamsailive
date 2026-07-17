@@ -109,9 +109,13 @@ export class StreamsAIMessagesRepository {
   }
 
   async create(scope: StreamsAIScope, input: IdempotentMessageInput) {
-    assertNoProtectedFields(input);
+    // Internal runtime metadata can contain protected-key names inside nested context
+    // snapshots. Strip those keys before validation and persistence instead of failing
+    // the completed assistant response during the persistence phase.
+    const safeInput = sanitizeStreamsAIPayload(input) as IdempotentMessageInput;
+    assertNoProtectedFields(safeInput);
     const db = this.db();
-    const idempotencyKey = String(input.idempotencyKey || "").trim() || null;
+    const idempotencyKey = String(safeInput.idempotencyKey || "").trim() || null;
 
     if (idempotencyKey) {
       const existing = await this.findByIdempotencyKey(scope, idempotencyKey);
@@ -123,27 +127,27 @@ export class StreamsAIMessagesRepository {
       .select("id, project_id")
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
-      .eq("id", input.sessionId)
+      .eq("id", safeInput.sessionId)
       .maybeSingle();
 
     if (sessionError) throw new Error(`Failed to verify STREAMS AI session: ${sessionError.message}`);
     if (!session?.id) throw new Error("STREAMS AI session not found or not owned by user.");
 
     const metadata = sanitizeStreamsAIPayload({
-      ...(input.metadata || {}),
+      ...(safeInput.metadata || {}),
       ...(idempotencyKey ? { idempotencyKey } : {}),
-      ...(input.turnId ? { turnId: input.turnId } : {}),
+      ...(safeInput.turnId ? { turnId: safeInput.turnId } : {}),
     });
     const row = {
       tenant_id: scope.tenantId,
       user_id: scope.userId,
       project_id: session.project_id,
-      session_id: input.sessionId,
-      role: input.role,
-      content: sanitizeStreamsAIText(input.content || ""),
-      status: input.status || "complete",
+      session_id: safeInput.sessionId,
+      role: safeInput.role,
+      content: sanitizeStreamsAIText(safeInput.content || ""),
+      status: safeInput.status || "complete",
       metadata,
-      turn_id: input.turnId || null,
+      turn_id: safeInput.turnId || null,
       idempotency_key: idempotencyKey,
     };
 
@@ -158,10 +162,10 @@ export class StreamsAIMessagesRepository {
         tenant_id: scope.tenantId,
         user_id: scope.userId,
         project_id: session.project_id,
-        session_id: input.sessionId,
-        role: input.role,
-        content: sanitizeStreamsAIText(input.content || ""),
-        status: input.status || "complete",
+        session_id: safeInput.sessionId,
+        role: safeInput.role,
+        content: sanitizeStreamsAIText(safeInput.content || ""),
+        status: safeInput.status || "complete",
         metadata,
       };
       const legacy = await db.from(streamsAITables.chatMessages).insert(legacyRow).select("*").single();
@@ -179,7 +183,7 @@ export class StreamsAIMessagesRepository {
       .update({ updated_at: new Date().toISOString() })
       .eq("tenant_id", scope.tenantId)
       .eq("user_id", scope.userId)
-      .eq("id", input.sessionId);
+      .eq("id", safeInput.sessionId);
 
     return sanitizeMessageRow(persisted);
   }
