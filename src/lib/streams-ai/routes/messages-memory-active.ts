@@ -420,6 +420,7 @@ export async function memoryMessagesPOST(request: NextRequest) {
           send("error", {
             message: cancelled ? "Streams stopped this response." : detail.startsWith("STREAMS_RESPONSE_REJECTED") ? "Streams could not produce a response that met the required quality and evidence checks." : "Streams could not complete this response. Please retry.",
             detailCode: cancelled ? "STREAMS_RESPONSE_CANCELLED" : detail.startsWith("STREAMS_RESPONSE_REJECTED") ? "STREAMS_RESPONSE_REJECTED" : "STREAMS_RESPONSE_FAILED",
+            debugDetail: detail,
             sessionId,
             elapsedMs: Date.now() - startedAt,
           });
