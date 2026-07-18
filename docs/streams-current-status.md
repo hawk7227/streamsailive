@@ -1,15 +1,32 @@
 # Streams Current Status
 
-## Active slice
+## Current authorized replacement slice
 
-- STREAMS Self-Build Runtime Foundation
-- Chat UI Slice (chat rail, composer UX, mobile shell fixes)
-- Streams AI Work Narration & Protected Reasoning Slice
-- Streams AI Item 3 — First Response to a Multi-Step Task
-- Streams AI Compact Console Repair
-- Streams AI Item 5 — Progress Update Structure
-- Streams AI Items 6–40 — Human Work Behavior Program
-- Streams AI Authorized Self-Reconstruction Supplement 2 — Records 152–255
+- Universal Project Workspace Replacement Conversion
+- Streams Builder Preservation and Combination
+- Documents 1 and 2 are the governing requirements for this slice.
+- This is a controlled replacement conversion, not a companion extension.
+- Existing Streams AI and Streams Builder capabilities must be preserved, combined, made durable where required, parity-tested, and moved behind reversible controls before any legacy surface is retired.
+
+## Current slice classification
+
+- Existing Streams intelligence and shared data foundation: Proven in source; runtime proof remains feature-specific.
+- Existing `/streams-ai/streams-builder` route and mounted builder capability chain: Implemented; preserve and parity-test before relocation.
+- Universal project-centered workspace shell: Active implementation target.
+- Native iOS, Android, and Kotlin Multiplatform work: Later phases; not part of the first web replacement commit.
+
+## Current implementation order
+
+1. Freeze the current capability inventory.
+2. Add preservation parity tests for every protected builder capability.
+3. Add one authoritative project workspace controller while retaining current events and component internals.
+4. Mount the existing builder/editor/preview capabilities inside the universal project workspace shell.
+5. Move browser-local and process-memory state to authoritative durable storage without changing user behavior.
+6. Unify repository actions while preserving Quick Source Push and Reviewed Builder Push.
+7. Add stronger element/source mapping and precise patch generation while retaining current fallbacks.
+8. Complete browser verification evidence and approval gates.
+9. Add versioned mobile-safe API wrappers around existing services.
+10. Build KMP, SwiftUI, and Compose replacements only after the web replacement contract is stable and proven.
 
 ## Proven items
 
@@ -19,59 +36,88 @@
 
 ## Implemented but unproven items
 
-- STREAMS Self-Build Runtime Foundation (in progress in this slice).
-- Chat UI Slice mobile shell & double-sidebar fixes (hidden duplicate inner sidebar, hidden top actions and action status pill on mobile, hidden floating "Snap Pic Click" button on mobile, drawer hamburger menu, full width layout, mobile bottom message scroll spacer).
-- Streams AI Work Narration & Protected Reasoning: live `/api/streams-ai/messages` requests are wrapped by the existing jobs/job-events ledger; user-visible text and persisted metadata pass through protected-field and credential sanitization; the `/streams-ai` page mounts persisted work history, refresh restoration, cross-tab synchronization, and server-side cancellation controls.
-- Item 3 First Response to a Multi-Step Task: qualifying tasks are deterministically classified before operation creation; simple tasks bypass unnecessary operation narration; multi-step tasks persist `operation_started`, `plan_created`, and initial `phase_started` events with goal, plan version, phases, preservation constraints, risks avoided, clarification state, and next action before material execution; repeated idempotency keys recover the existing chat operation; the mounted history card restores and renders the accepted plan.
-- Compact Console Repair: the zero-credit internal narration record reuses the already authorized live chat scope instead of requiring a second product-entitlement check; the active composer is forced into one compact non-wrapping row in empty and active chats; its duplicate live-status row is hidden; the console is clamped above the viewport safe edge; the conversation remains scrollable above it; persisted work history and Stop remain above the console.
-- Item 5 Progress Update Structure: every durable operation event is normalized into a canonical progress record containing goal, completed work, current action, evidence level and summary, verification state, next action, remaining work, and plan version.
-- Items 6–40 Human Work Behavior Program: one shared policy engine registers all 35 items; the live controller, jobs API, repository, model prompt, persistence layer, and restored activity UI support plan changes, reuse-first behavior, finding-first communication, decisions, truthful temporal language, tool/file updates, stable labels, micro-action suppression, continuity, preservation, blockers, partial completion, testing narration, final receipts, interruption/supersession, evidence-gated completion, and the default narration template.
-- Authorized Supplement 2 Records 152–255: one typed registry contains all 104 records exactly once. Contextual activation injects language, uncertainty, assumptions, tool/connector, Gmail, Calendar, automation, source-of-truth, citation, file, spreadsheet/chart, image, ads, settings, memory, reasoning-summary, artifact/container, and web-limit rules into the live parity plan only when relevant. The deterministic response validator now rejects missing image-edit targets, unsupported temporal promises, protected operational disclosure, language inconsistency, generic offer endings, and raw internal source identifiers through the existing repair loop.
+- STREAMS Self-Build Runtime Foundation.
+- Chat UI Slice mobile shell and duplicate-sidebar repairs.
+- Streams AI Work Narration and Protected Reasoning.
+- Item 3 First Response to a Multi-Step Task.
+- Compact Console Repair.
+- Item 5 Progress Update Structure.
+- Items 6–40 Human Work Behavior Program.
+- Authorized Supplement 2 Records 152–255.
+- Existing Streams Builder workspace, GitHub repository controls, editable frontend proxy, visual editor, GitHub-style runtime code editor, visual-to-code synchronization, split code/preview review, controlled patch workflow, temporary Git branches, Vercel preview polling, source-truth registry, browser-verification contract, approval foundation, and builder context events.
 
-## Blocked items
+## Current replacement-slice target files
 
-- None declared for Supplement 2 before repository and deployment verification runs.
-
-## Target files for this slice
+### Status, rules, and tests
 
 - `docs/streams-current-status.md`
-- `docs/merge-policies/streams-ai-work-narration-slice.md`
-- `docs/merge-policies/streams-ai-authorized-supplement-2-slice.md`
-- `scripts/scope-guard.mjs`
+- `docs/merge-policies/universal-project-workspace-replacement-slice.md`
 - `package.json`
-- `src/app/streams-ai/page.tsx`
-- `src/app/api/streams-ai/messages/route.ts`
-- `src/app/api/streams-ai/jobs/route.ts`
-- `src/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge.jsx`
-- `src/components/streams-ai/current-chat/new-face/composer/streams-composer-layout-fix.css`
-- `src/lib/streams-ai/protected-reasoning.ts`
-- `src/lib/streams-ai/intelligence/parity-profile.ts`
-- `src/lib/streams-ai/quality/deterministic-output-validator.ts`
-- `src/lib/streams-ai/runtime/work-narration-controller.ts`
-- `src/lib/streams-ai/runtime/task-complexity-classifier.ts`
-- `src/lib/streams-ai/runtime/progress-update-structure.ts`
-- `src/lib/streams-ai/runtime/human-work-narration-policy.ts`
-- `src/lib/streams-ai/runtime/authorized-supplement-2-policy.ts`
-- `src/lib/streams-ai/repositories/jobs-repository.ts`
-- `src/lib/streams-ai/repositories/messages-repository.ts`
-- `tests/streams-ai-protected-reasoning.test.ts`
-- `tests/streams-ai-first-response-planning.test.ts`
-- `tests/streams-ai-progress-update-structure.test.ts`
-- `tests/streams-ai-human-work-items-06-40.test.ts`
-- `tests/streams-ai-authorized-supplement-2.test.ts`
+- `tests/streams-workspace-preservation-contract.test.ts`
+- `tests/streams-workspace-shell-contract.test.tsx`
 
-## Files that must not be touched
+### Universal workspace shell
 
-- Provider image/video routes
-- DB migrations (unless explicitly approved)
-- `scripts/validate-rule-confirmation.js`
-- `public/build-report.json`
+- `src/components/streams-workspace/ProjectWorkspaceController.tsx`
+- `src/components/streams-workspace/ProjectWorkspaceShell.tsx`
+- `src/components/streams-workspace/ProjectTopBar.tsx`
+- `src/components/streams-workspace/GlobalNavigationRail.tsx`
+- `src/components/streams-workspace/ProjectContextPanel.tsx`
+- `src/components/streams-workspace/WorkspaceCanvas.tsx`
+- `src/components/streams-workspace/CanvasHeader.tsx`
+- `src/components/streams-workspace/ContextInspectorPanel.tsx`
+- `src/components/streams-workspace/WorkspaceBottomTray.tsx`
+- `src/components/streams-workspace/ProjectOverviewBlock.tsx`
+- `src/components/streams-workspace/workspace-state.ts`
+- `src/components/streams-workspace/workspace-events.ts`
 
-## Required proof before any item can be marked Proven
+### Existing builder files permitted only for preservation wiring and compatibility
 
-- Source proof in changed files
-- Runtime proof through real API invocation
-- Command/check proof from real command runner output
-- Persistence proof when durable storage is claimed
-- Browser/runtime proof where UI behavior is claimed
-- Vercel production build and deployment success
+- `src/app/streams-ai/streams-builder/page.tsx`
+- `src/components/streams-builder/WorkspaceGrid.tsx`
+- `src/components/streams-builder/GitHubRepositoryPicker.tsx`
+- `src/components/streams-builder/VisualEditingWorkstation.tsx`
+- `src/components/streams-builder/RuntimeCodeEditor.tsx`
+- `src/components/streams-builder/BuilderCenterChat.tsx`
+- `src/components/streams-builder/BuilderControlLayers.tsx`
+- `src/components/streams-builder/LiveFrontendWorkstation.tsx`
+- `src/components/streams-builder/TopRowWorkstationControls.tsx`
+- `src/components/streams-builder/VisualEditorScrollBehavior.tsx`
+- `src/components/streams-builder/VisualOperationDock.tsx`
+- `src/components/streams-builder/VisualPropertyInspector.tsx`
+- `src/components/streams-builder/WorkstationChromeEnhancer.tsx`
+- `src/components/streams-builder/VisualEditorCodeDock.tsx`
+- `src/components/streams-builder/VisualSelectionPatchPanel.tsx`
+- `src/components/streams-builder/WorkspaceBridgeSourceOfTruth.tsx`
+- `src/components/streams-builder/BuilderContextEventSink.tsx`
+- `src/components/streams-builder/CanonicalPreviewEventBridge.tsx`
+- `src/components/streams-builder/CanonicalPreviewWorkspaceSurface.tsx`
+- `src/components/streams-builder/PreviewCanvasFixStyles.tsx`
+- `src/components/streams-builder/VisualEditorCanvasFixStyles.tsx`
+- `src/components/streams-builder/workspace-modules/WorkspaceModulePanel.tsx`
+- `src/components/streams-builder/builderSystemContract.ts`
+
+## Files that must not be touched in the first replacement slice
+
+- Provider image/video routes.
+- Database migrations.
+- Billing or entitlement logic.
+- Authentication implementation.
+- `scripts/validate-rule-confirmation.js`.
+- `public/build-report.json`.
+- Existing editor internals unless a parity test proves a required compatibility change.
+- Existing repository write APIs unless the current shell cannot be wired without a narrowly scoped compatibility change.
+
+## Required proof before the first replacement slice can be marked Proven
+
+- Source proof for every changed file.
+- Preservation-contract tests proving protected builder capabilities remain present.
+- TypeScript passes.
+- Production build passes.
+- The active `/streams-ai/streams-builder` route mounts the universal shell and the existing builder implementation.
+- Browser proof confirms repository controls, frontend visual editing, GitHub-style code editor, matching line numbers, top tool section, visual-to-code synchronization, side-by-side preview, device review controls, source truth, and push gates remain reachable.
+- No duplicate editor, preview, builder, project, chat, memory, jobs, asset, billing, or repository system is introduced.
+
+## Cutover rule
+
+The old frontend may be retired only after the replacement is verified for complete feature parity in production and a tested rollback remains available.
