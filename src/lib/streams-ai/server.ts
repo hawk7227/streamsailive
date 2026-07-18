@@ -89,4 +89,11 @@ export const streamsAITables = {
   memories: "streams_ai_memories",
   memoryChunks: "streams_ai_memory_chunks",
   projectKnowledge: "streams_ai_project_knowledge",
+  devices: "streams_ai_devices",
+  deviceSecurityEvents: "streams_ai_device_security_events",
+  notificationPreferences: "streams_ai_notification_preferences",
+  pushDeliveries: "streams_ai_push_deliveries",
+  uploadSessions: "streams_ai_upload_sessions",
+  uploadChunks: "streams_ai_upload_chunks",
+  featureFlags: "streams_ai_feature_flags",
 } as const;
