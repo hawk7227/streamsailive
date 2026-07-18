@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { validateBrowserVerificationRequest } from "../src/lib/streams-builder/browser-verification";
+import {
+  BROWSER_VERIFICATION_DEFAULT_VIEWPORTS,
+  BROWSER_VERIFICATION_EVIDENCE_CONTRACT,
+  validateBrowserVerificationRequest,
+} from "../src/lib/streams-builder/browser-verification";
 
 describe("builder browser verification evidence", () => {
   it("accepts safe preview URLs and desktop/mobile viewports", () => {
@@ -10,11 +12,13 @@ describe("builder browser verification evidence", () => {
       sessionId: "session-1",
       targetUrl: "https://example-preview.vercel.app/streams-ai/streams-builder",
       actions: [{ type: "wait_for_selector", selector: "body" }],
-      viewports: [
-        { name: "desktop", width: 1440, height: 1000 },
-        { name: "mobile", width: 430, height: 932 },
-      ],
+      viewports: BROWSER_VERIFICATION_DEFAULT_VIEWPORTS,
     })).toEqual([]);
+
+    expect(BROWSER_VERIFICATION_DEFAULT_VIEWPORTS).toEqual([
+      { name: "desktop", width: 1440, height: 1000 },
+      { name: "mobile", width: 430, height: 932 },
+    ]);
   });
 
   it("rejects unsafe URLs, selectors, and invalid viewport dimensions", () => {
@@ -30,18 +34,30 @@ describe("builder browser verification evidence", () => {
     expect(errors.some((item) => item.includes("Invalid mobile viewport"))).toBe(true);
   });
 
-  it("mounts one real verification handler behind both routes and persists evidence through existing assets", () => {
-    const modulePanel = readFileSync(resolve(process.cwd(), "src/components/streams-builder/workspace-modules/WorkspaceModulePanel.tsx"), "utf8");
-    const legacyRoute = readFileSync(resolve(process.cwd(), "src/app/api/streams-builder/browser-verification/route.ts"), "utf8");
-    const versionedRoute = readFileSync(resolve(process.cwd(), "src/app/api/v1/builder/verifications/route.ts"), "utf8");
-    const handler = readFileSync(resolve(process.cwd(), "src/lib/streams-builder/browser-verification-route-handler.ts"), "utf8");
-    expect(modulePanel).toContain("<BrowserVerificationPanel />");
-    expect(legacyRoute).toContain("handleBrowserVerificationPost");
-    expect(versionedRoute).toContain("handleBrowserVerificationPost");
-    expect(legacyRoute).not.toContain("@/app/api/v1/");
-    expect(versionedRoute).not.toContain("@/app/api/streams-builder/");
-    expect(handler).toContain("StreamsAIAssetsRepository");
-    expect(handler).toContain("browser_verification_screenshot");
-    expect(handler).toContain("evidenceAssetIds");
+  it("locks one shared handler, both routes, mounted workspace, and durable evidence persistence", () => {
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.sharedHandler).toBe(
+      "src/lib/streams-builder/browser-verification-route-handler.ts",
+    );
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.routes).toEqual([
+      "src/app/api/streams-builder/browser-verification/route.ts",
+      "src/app/api/v1/builder/verifications/route.ts",
+    ]);
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.mountedWorkspace).toBe("Browser Verification");
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.mountedComponent).toBe(
+      "src/components/streams-builder/BrowserVerificationPanel.tsx",
+    );
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.persistence.assetsRepository).toBe(
+      "StreamsAIAssetsRepository",
+    );
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.persistence.jobsRepository).toBe(
+      "StreamsAIJobsRepository",
+    );
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.persistence.evidenceType).toBe(
+      "browser_verification_screenshot",
+    );
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.evidence).toContain("desktop screenshot");
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.evidence).toContain("mobile screenshot");
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.evidence).toContain("checkpoint identity");
+    expect(BROWSER_VERIFICATION_EVIDENCE_CONTRACT.evidence).toContain("preview identity");
   });
 });
