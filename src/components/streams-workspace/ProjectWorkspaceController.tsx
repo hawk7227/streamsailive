@@ -10,7 +10,11 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { emitWorkspaceEvent, WORKSPACE_EVENT_NAMES } from "./workspace-events";
+import {
+  emitWorkspaceEvent,
+  WORKSPACE_EVENT_NAMES,
+  type WorkspaceEventName,
+} from "./workspace-events";
 import {
   DEFAULT_WORKSPACE_STATE,
   type UniversalWorkspaceState,
@@ -35,7 +39,10 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 export function ProjectWorkspaceController({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UniversalWorkspaceState>(DEFAULT_WORKSPACE_STATE);
 
-  const update = useCallback((next: Partial<UniversalWorkspaceState>, eventName = WORKSPACE_EVENT_NAMES.stateChanged) => {
+  const update = useCallback((
+    next: Partial<UniversalWorkspaceState>,
+    eventName: WorkspaceEventName = WORKSPACE_EVENT_NAMES.stateChanged,
+  ) => {
     setState((current) => {
       const updated = { ...current, ...next };
       emitWorkspaceEvent(eventName, updated);
