@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
+import { requiresDeterministicStructureCheck } from "@/lib/streams-ai/routes/response-structure-validator";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { ensureSession, persistChatTurn } from "@/lib/streams-ai/routes/messages-memory-provider-support";
 import { sanitizeStreamsAIPayload } from "@/lib/streams-ai/protected-reasoning";
@@ -21,6 +22,7 @@ type StreamsMessageRequestBody = Record<string, any> & {
   metadata?: Record<string, any>;
 };
 
+const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 const FAST_SOURCE = "streams-ai-provider-direct";
 const FAST_SYSTEM_PROMPT = [
   "You are Streams AI, a capable and direct AI assistant.",
@@ -33,6 +35,14 @@ function normalizedRequestBody(body: StreamsMessageRequestBody): StreamsMessageR
   const idempotencyKey = String(body.idempotencyKey || body.userId || "").trim() || crypto.randomUUID();
   const turnId = String(body.turnId || "").trim() || crypto.randomUUID();
   return sanitizeStreamsAIPayload({ ...body, idempotencyKey, turnId });
+}
+
+function explicitlyRequestsDeterministicStructure(userContent: string, body: StreamsMessageRequestBody) {
+  if (body.metadata?.enforceDeterministicStructure === true) return true;
+  const text = String(userContent || "");
+  if (!text || text === ATTACHMENT_ONLY_SENTINEL) return false;
+  return /\b(markdown\s+table|exact\s+columns?|fenced\s+code\s+block|blockquote|numbered\s+sections?|output\s+exactly|use\s+this\s+exact\s+format|return\s+only\s+(?:json|xml|csv))\b/i.test(text)
+    && requiresDeterministicStructureCheck(text);
 }
 
 function shouldUseDirectProvider(body: StreamsMessageRequestBody, userContent: string) {
@@ -202,9 +212,17 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.clone().json().catch(() => ({} as StreamsMessageRequestBody));
     const body = normalizedRequestBody(rawBody as StreamsMessageRequestBody);
     const userContent = String(body.content || body.message || "").trim();
+    const enforceDeterministicStructure = explicitlyRequestsDeterministicStructure(userContent, body);
+    const authoritativeBody = sanitizeStreamsAIPayload({
+      ...body,
+      metadata: {
+        ...(body.metadata || {}),
+        enforceDeterministicStructure,
+      },
+    });
 
-    if (shouldUseDirectProvider(body, userContent)) {
-      return directProviderResponse(request, body, userContent);
+    if (shouldUseDirectProvider(authoritativeBody, userContent)) {
+      return directProviderResponse(request, authoritativeBody, userContent);
     }
 
     const headers = new Headers(request.headers);
@@ -212,7 +230,7 @@ export async function POST(request: NextRequest) {
     return memoryMessagesPOST(new NextRequest(request.url, {
       method: "POST",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(authoritativeBody),
       signal: request.signal,
     }));
   } catch {
