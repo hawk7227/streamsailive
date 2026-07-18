@@ -3,7 +3,7 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type CodeSelection = { startLine: number; startColumn: number; endLine: number; endColumn: number; text: string };
-type Props = { value: string; filePath: string; sha?: string; onChange: (nextValue: string) => void; onSelectionChange?: (selection: CodeSelection | null) => void; highlightRange?: { startLine: number; endLine: number } | null };
+type Props = { value: string; filePath: string; repo?: string; branch?: string; sha?: string; onChange: (nextValue: string) => void; onSelectionChange?: (selection: CodeSelection | null) => void; highlightRange?: { startLine: number; endLine: number } | null };
 type CursorStatus = { line: number; column: number; offset: number };
 type MatchRange = { start: number; end: number; line: number; column: number };
 type CodeEditorCommand = { action?: string; query?: string; replace?: string; kind?: string };
@@ -20,7 +20,7 @@ function urlParts(value: string) { const out = new Set<string>(); const raw = St
 function queryCandidates(query: string) { const cleaned = String(query || "").replace(/\s+/g, " ").trim(); const set = new Set<string>(); if (cleaned) set.add(cleaned); urlParts(cleaned).forEach((item) => { if (item && item.length > 2) set.add(item); }); const list = words(cleaned); for (let size = Math.min(6, list.length); size >= 1; size -= 1) for (let i = 0; i <= list.length - size; i += 1) { const chunk = list.slice(i, i + size).join(" "); if (chunk.length > 2 && !/^(the|and|with|for|more|see|care|visit|visits|private|medical)$/i.test(chunk)) set.add(chunk); } return Array.from(set).map((item) => item.trim()).filter((item) => item.length > 2).sort((a, b) => b.length - a.length); }
 function bestQuery(value: string, query: string, matchCase = false) { for (const candidate of queryCandidates(query)) if (allMatches(value, candidate, matchCase).length) return candidate; return query.trim(); }
 
-export default function RuntimeCodeEditor({ value, filePath, sha, onChange, onSelectionChange, highlightRange }: Props) {
+export default function RuntimeCodeEditor({ value, filePath, repo, branch, sha, onChange, onSelectionChange, highlightRange }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLPreElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
@@ -44,8 +44,8 @@ export default function RuntimeCodeEditor({ value, filePath, sha, onChange, onSe
   const matchedLines = useMemo(() => new Set(matches.map((match) => match.line)), [matches]);
   const activeMatch = findIndex >= 0 && matches[findIndex] ? matches[findIndex] : null;
 
-  function publish(message = status) { window.dispatchEvent(new CustomEvent("streams-builder:code-editor-state", { detail: { filePath, sha, status: message, cursor, selection, findQuery, replaceQuery, matchCount: matches.length, findIndex, marks: marks.length, lineCount: totalLines, charCount: (value || "").length } })); }
-  function report(message: string) { setStatus(message); window.dispatchEvent(new CustomEvent("streams-builder:code-editor-result", { detail: { filePath, sha, message } })); window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "code-editor", message } })); }
+  function publish(message = status) { window.dispatchEvent(new CustomEvent("streams-builder:code-editor-state", { detail: { repo, branch, filePath, sha, status: message, cursor, selection, findQuery, replaceQuery, matchCount: matches.length, findIndex, marks: marks.length, lineCount: totalLines, charCount: (value || "").length } })); }
+  function report(message: string) { setStatus(message); window.dispatchEvent(new CustomEvent("streams-builder:code-editor-result", { detail: { repo, branch, filePath, sha, message } })); window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "code-editor", repo, branch, filePath, message } })); }
   function syncScroll() { const textarea = textareaRef.current; if (!textarea) return; setScrollTop(textarea.scrollTop); if (gutterRef.current) gutterRef.current.scrollTop = textarea.scrollTop; }
   function updateSelection() { const textarea = textareaRef.current; if (!textarea) return; const next = selectionFromTextarea(textarea); setSelection(next); setCursor(positionFromOffset(textarea.value, textarea.selectionStart || 0)); setLocateRange(null); onSelectionChange?.(next.text ? next : null); window.setTimeout(() => publish(), 0); }
   function scrollToOffset(offset: number, alignColumn = false) { const textarea = textareaRef.current; if (!textarea) return; const pos = positionFromOffset(textarea.value, offset); textarea.scrollTop = Math.max(0, (pos.line - 4) * 19); if (alignColumn) textarea.scrollLeft = Math.max(0, (pos.column - 16) * 7.25); syncScroll(); }
