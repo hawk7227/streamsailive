@@ -1,4 +1,4 @@
-import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
+import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspaceShell";
 import PreviewCanvasFixStyles from "@/components/streams-builder/PreviewCanvasFixStyles";
 import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEditorCanvasFixStyles";
 import VisualEditorCodeDock from "@/components/streams-builder/VisualEditorCodeDock";
@@ -11,5 +11,17 @@ import WorkspaceBridgeSourceOfTruth from "@/components/streams-builder/Workspace
 export const dynamic = "force-dynamic";
 
 export default function StreamsAIStreamsBuilderPage() {
-  return <main className="h-dvh min-h-dvh overflow-hidden bg-[#020713] text-white"><WorkspaceGrid /><WorkspaceBridgeSourceOfTruth /><BuilderContextEventSink /><CanonicalPreviewEventBridge /><CanonicalPreviewWorkspaceSurface /><VisualSelectionPatchPanel /><PreviewCanvasFixStyles /><VisualEditorCanvasFixStyles /><VisualEditorCodeDock /></main>;
+  return (
+    <>
+      <ProjectWorkspaceShell />
+      <WorkspaceBridgeSourceOfTruth />
+      <BuilderContextEventSink />
+      <CanonicalPreviewEventBridge />
+      <CanonicalPreviewWorkspaceSurface />
+      <VisualSelectionPatchPanel />
+      <PreviewCanvasFixStyles />
+      <VisualEditorCanvasFixStyles />
+      <VisualEditorCodeDock />
+    </>
+  );
 }
