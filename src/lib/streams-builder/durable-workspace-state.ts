@@ -31,7 +31,12 @@ export type DurableBuilderDraft = {
   previewBuildState?: string;
   previewId?: string;
   previewUrl?: string;
+  previewBranch?: string;
+  deploymentId?: string;
+  deploymentUrl?: string;
   commitSha?: string;
+  pullRequestNumber?: number;
+  pullRequestUrl?: string;
   lastError?: string;
 };
 
