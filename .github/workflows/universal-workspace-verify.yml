@@ -6,9 +6,13 @@ on:
     paths:
       - 'src/components/streams-workspace/**'
       - 'src/app/streams-ai/streams-builder/page.tsx'
+      - 'src/app/api/streams-ai/messages/route.ts'
       - 'src/components/streams-builder/**'
+      - 'tests/streams-ai-response-integrity.test.ts'
       - 'tests/streams-workspace-*.test.ts'
       - 'tests/streams-workspace-*.test.tsx'
+      - 'docs/streams-current-status.md'
+      - 'scripts/scope-guard.mjs'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/universal-workspace-verify.yml'
@@ -50,8 +54,8 @@ jobs:
           pnpm exec tsc --noEmit 2>&1 | tee -a universal-workspace-verification.log
           TSC_STATUS=${PIPESTATUS[0]}
 
-          echo '## Preservation and shell tests' | tee -a universal-workspace-verification.log
-          pnpm exec vitest run tests/streams-workspace-preservation-contract.test.ts tests/streams-workspace-shell-contract.test.tsx 2>&1 | tee -a universal-workspace-verification.log
+          echo '## Preservation, shell, and protected-chat tests' | tee -a universal-workspace-verification.log
+          pnpm exec vitest run tests/streams-ai-response-integrity.test.ts tests/streams-workspace-preservation-contract.test.ts tests/streams-workspace-shell-contract.test.tsx 2>&1 | tee -a universal-workspace-verification.log
           TEST_STATUS=${PIPESTATUS[0]}
 
           echo '## Production build' | tee -a universal-workspace-verification.log
