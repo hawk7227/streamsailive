@@ -1,22 +1,9 @@
 import { createHash } from "node:crypto";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import { createStreamsAIServiceClient, streamsAISchema, streamsAITables } from "@/lib/streams-ai/server";
+import { compareVersions } from "@/lib/streams-mobile/mobile-backend-contract";
 
 export type StreamsFeaturePlatform = "web" | "ios" | "android";
-
-function versionParts(value?: string | null) {
-  return String(value || "0").split(/[.+-]/).slice(0, 4).map((part) => Number(part.replace(/\D/g, "")) || 0);
-}
-
-export function compareVersions(left?: string | null, right?: string | null) {
-  const a = versionParts(left);
-  const b = versionParts(right);
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const delta = (a[index] || 0) - (b[index] || 0);
-    if (delta !== 0) return delta > 0 ? 1 : -1;
-  }
-  return 0;
-}
 
 export function rolloutBucket(input: string) {
   const digest = createHash("sha256").update(input).digest();
