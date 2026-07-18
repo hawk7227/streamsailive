@@ -1,5 +1,6 @@
 "use client";
 
+import BuilderWorkspacePersistenceBridge from "./BuilderWorkspacePersistenceBridge";
 import ContextInspectorPanel from "./ContextInspectorPanel";
 import GlobalNavigationRail from "./GlobalNavigationRail";
 import ProjectContextPanel from "./ProjectContextPanel";
@@ -20,6 +21,7 @@ function ShellLayout() {
 
   return (
     <main className="universalWorkspaceShell" data-replacement-conversion="true">
+      <BuilderWorkspacePersistenceBridge />
       <ProjectTopBar />
       <div className="workspaceBody" style={{ gridTemplateColumns: columns }}>
         <GlobalNavigationRail />
