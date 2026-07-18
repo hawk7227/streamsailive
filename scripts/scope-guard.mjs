@@ -30,11 +30,65 @@ const policies = {
   'streams-visions-isolated-slice': {
     allowed: ['src/app/streams-ai/Visions/','src/app/api/streams-ai/Visions/','src/lib/streams-visions/','supabase/migrations/20260714_streams_visions_isolated.sql','tests/streams-visions-isolation.test.ts','.github/workflows/streams-visions-verify.yml','.github/workflows/pr-checks.yml','package.json','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','src/app/streams-ai/page.tsx','src/app/api/streams-ai/messages/route.ts','src/components/streams-ai/current-chat/','src/lib/streams-ai/runtime/','src/app/streams-builder/','src/app/streams-ai/streams-builder/']
+  },
+  'universal-project-workspace-replacement-slice': {
+    allowed: [
+      'docs/streams-current-status.md',
+      'docs/merge-policies/universal-project-workspace-replacement-slice.md',
+      'scripts/scope-guard.mjs',
+      'package.json',
+      'tests/streams-workspace-preservation-contract.test.ts',
+      'tests/streams-workspace-shell-contract.test.tsx',
+      'src/components/streams-workspace/',
+      'src/app/streams-ai/streams-builder/page.tsx',
+      'src/components/streams-builder/WorkspaceGrid.tsx',
+      'src/components/streams-builder/GitHubRepositoryPicker.tsx',
+      'src/components/streams-builder/VisualEditingWorkstation.tsx',
+      'src/components/streams-builder/RuntimeCodeEditor.tsx',
+      'src/components/streams-builder/BuilderCenterChat.tsx',
+      'src/components/streams-builder/BuilderControlLayers.tsx',
+      'src/components/streams-builder/LiveFrontendWorkstation.tsx',
+      'src/components/streams-builder/TopRowWorkstationControls.tsx',
+      'src/components/streams-builder/VisualEditorScrollBehavior.tsx',
+      'src/components/streams-builder/VisualOperationDock.tsx',
+      'src/components/streams-builder/VisualPropertyInspector.tsx',
+      'src/components/streams-builder/WorkstationChromeEnhancer.tsx',
+      'src/components/streams-builder/VisualEditorCodeDock.tsx',
+      'src/components/streams-builder/VisualSelectionPatchPanel.tsx',
+      'src/components/streams-builder/WorkspaceBridgeSourceOfTruth.tsx',
+      'src/components/streams-builder/BuilderContextEventSink.tsx',
+      'src/components/streams-builder/CanonicalPreviewEventBridge.tsx',
+      'src/components/streams-builder/CanonicalPreviewWorkspaceSurface.tsx',
+      'src/components/streams-builder/PreviewCanvasFixStyles.tsx',
+      'src/components/streams-builder/VisualEditorCanvasFixStyles.tsx',
+      'src/components/streams-builder/workspace-modules/WorkspaceModulePanel.tsx',
+      'src/components/streams-builder/builderSystemContract.ts'
+    ],
+    forbidden: [
+      'public/build-report.json',
+      'scripts/validate-rule-confirmation.js',
+      'supabase/migrations/',
+      'src/app/api/streams/video/',
+      'src/app/api/streams/image/',
+      'src/lib/streams-ai/auth.ts',
+      'src/lib/streams-ai/server.ts',
+      'src/lib/streams-ai/repositories/subscriptions-repository.ts',
+      'src/lib/streams-ai/repositories/usage-repository.ts'
+    ]
   }
 };
 
 function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
+  const hasUniversalWorkspaceFiles = files.some((f) =>
+    f.startsWith('src/components/streams-workspace/') ||
+    f === 'src/app/streams-ai/streams-builder/page.tsx' ||
+    f === 'tests/streams-workspace-preservation-contract.test.ts' ||
+    f === 'tests/streams-workspace-shell-contract.test.tsx' ||
+    f === 'docs/merge-policies/universal-project-workspace-replacement-slice.md'
+  );
+  if (hasUniversalWorkspaceFiles) return 'universal-project-workspace-replacement-slice';
+
   const hasVisionsFiles = files.some((f) =>
     f.startsWith('src/app/streams-ai/Visions/') ||
     f.startsWith('src/app/api/streams-ai/Visions/') ||
@@ -69,6 +123,7 @@ function inferPolicyFromFiles(files) {
 function inferPolicyFromStatus() {
   try {
     const status = readFileSync('docs/streams-current-status.md', 'utf8');
+    if (/Universal Project Workspace Replacement Conversion/i.test(status)) return 'universal-project-workspace-replacement-slice';
     if (/Streams AI Work Narration & Protected Reasoning Slice/i.test(status)) return 'streams-ai-work-narration-slice';
     if (/STREAMS Self-Build Runtime Foundation/i.test(status)) return 'streams-self-build-runtime-foundation-slice';
   } catch {}
