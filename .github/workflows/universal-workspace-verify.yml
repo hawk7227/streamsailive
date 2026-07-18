@@ -59,7 +59,7 @@ jobs:
           TSC_STATUS=${PIPESTATUS[0]}
 
           echo '## Preservation, shell, protected-chat, and builder tests' | tee -a universal-workspace-verification.log
-          pnpm exec vitest run tests/streams-ai-response-integrity.test.ts tests/streams-workspace-preservation-contract.test.ts tests/streams-workspace-shell-contract.test.tsx tests/streams-builder-pull-request-workflow.test.ts tests/streams-builder-line-patch-planner.test.ts 2>&1 | tee -a universal-workspace-verification.log
+          pnpm exec vitest run tests/streams-ai-response-integrity.test.ts tests/streams-workspace-preservation-contract.test.ts tests/streams-workspace-shell-contract.test.tsx tests/streams-builder-pull-request-workflow.test.ts tests/streams-builder-line-patch-planner.test.ts tests/streams-builder-element-source-mapping.test.ts 2>&1 | tee -a universal-workspace-verification.log
           TEST_STATUS=${PIPESTATUS[0]}
 
           echo '## Production build' | tee -a universal-workspace-verification.log
