@@ -57,10 +57,35 @@ export interface BrowserVerificationResult {
   viewports: BrowserViewportResult[];
 }
 
-const DEFAULT_VIEWPORTS: BrowserVerificationViewport[] = [
+export const BROWSER_VERIFICATION_DEFAULT_VIEWPORTS: BrowserVerificationViewport[] = [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "mobile", width: 430, height: 932 },
 ];
+
+export const BROWSER_VERIFICATION_EVIDENCE_CONTRACT = {
+  sharedHandler: "src/lib/streams-builder/browser-verification-route-handler.ts",
+  routes: [
+    "src/app/api/streams-builder/browser-verification/route.ts",
+    "src/app/api/v1/builder/verifications/route.ts",
+  ],
+  mountedWorkspace: "Browser Verification",
+  mountedComponent: "src/components/streams-builder/BrowserVerificationPanel.tsx",
+  persistence: {
+    assetsRepository: "StreamsAIAssetsRepository",
+    jobsRepository: "StreamsAIJobsRepository",
+    evidenceType: "browser_verification_screenshot",
+    eventTypes: ["browser.verification.started", "browser.verification.completed"],
+  },
+  evidence: [
+    "desktop screenshot",
+    "mobile screenshot",
+    "console messages",
+    "network failures",
+    "proof steps",
+    "checkpoint identity",
+    "preview identity",
+  ],
+} as const;
 
 function isSafeUrl(value: string) {
   try {
@@ -104,7 +129,7 @@ export function validateBrowserVerificationRequest(request: BrowserVerificationR
     if (action.type === "fill" && action.value.length > 1000) errors.push("fill value is too long.");
   }
 
-  for (const viewport of request.viewports || DEFAULT_VIEWPORTS) {
+  for (const viewport of request.viewports || BROWSER_VERIFICATION_DEFAULT_VIEWPORTS) {
     if (!["desktop", "mobile"].includes(viewport.name)) errors.push("viewport name must be desktop or mobile.");
     if (!Number.isInteger(viewport.width) || !Number.isInteger(viewport.height) || viewport.width < 320 || viewport.width > 2560 || viewport.height < 480 || viewport.height > 2000) {
       errors.push(`Invalid ${viewport.name} viewport dimensions.`);
@@ -155,7 +180,7 @@ export async function runBrowserVerification(request: BrowserVerificationRequest
   const browser = await chromium.launch({ headless: true });
   const viewportResults: BrowserViewportResult[] = [];
   try {
-    for (const viewport of request.viewports || DEFAULT_VIEWPORTS) {
+    for (const viewport of request.viewports || BROWSER_VERIFICATION_DEFAULT_VIEWPORTS) {
       const proof = [`${viewport.name} browser verification request validated`];
       const consoleMessages: string[] = [];
       const networkFailures: string[] = [];
