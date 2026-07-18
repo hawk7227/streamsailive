@@ -1,0 +1,135 @@
+name: Universal Workspace Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/streams-workspace/**'
+      - 'src/app/streams-ai/streams-builder/page.tsx'
+      - 'src/components/streams-builder/**'
+      - 'tests/streams-workspace-*.test.ts'
+      - 'tests/streams-workspace-*.test.tsx'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/universal-workspace-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Run replacement verification
+        id: verify
+        shell: bash
+        run: |
+          set +e
+          : > universal-workspace-verification.log
+
+          echo '## TypeScript' | tee -a universal-workspace-verification.log
+          pnpm exec tsc --noEmit 2>&1 | tee -a universal-workspace-verification.log
+          TSC_STATUS=${PIPESTATUS[0]}
+
+          echo '## Preservation and shell tests' | tee -a universal-workspace-verification.log
+          pnpm exec vitest run tests/streams-workspace-preservation-contract.test.ts tests/streams-workspace-shell-contract.test.tsx 2>&1 | tee -a universal-workspace-verification.log
+          TEST_STATUS=${PIPESTATUS[0]}
+
+          echo '## Production build' | tee -a universal-workspace-verification.log
+          pnpm build 2>&1 | tee -a universal-workspace-verification.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+
+          echo "tsc=$TSC_STATUS tests=$TEST_STATUS build=$BUILD_STATUS" | tee -a universal-workspace-verification.log
+          if [ "$TSC_STATUS" -ne 0 ] || [ "$TEST_STATUS" -ne 0 ] || [ "$BUILD_STATUS" -ne 0 ]; then
+            echo 'result=failure' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo 'result=success' >> "$GITHUB_OUTPUT"
+
+      - name: Publish exact failure diagnostics
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const title = '[Build Diagnostics] Universal Workspace Replacement';
+            const raw = fs.existsSync('universal-workspace-verification.log')
+              ? fs.readFileSync('universal-workspace-verification.log', 'utf8')
+              : 'Verification log was not created.';
+            const log = raw.slice(-60000);
+            const body = [
+              `Commit: ${context.sha}`,
+              '',
+              '```text',
+              log,
+              '```',
+            ].join('\n');
+            const { data } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = data.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
+
+      - name: Close resolved diagnostics issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '[Build Diagnostics] Universal Workspace Replacement';
+            const { data } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = data.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Resolved by commit ${context.sha}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                state: 'closed',
+              });
+            }
