@@ -6,6 +6,8 @@ import type { StreamsSettingsCategory } from "@/lib/streams-ai/settings-policy";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type JsonValue = string | number | boolean | null | Record<string, unknown> | unknown[];
+
 const settings = new StreamsAISettingsRepository();
 
 function failure(error: unknown) {
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const scope = await requireStreamsAIScope(request);
-    const body = await request.json().catch(() => ({})) as { category?: string; key?: string; value?: unknown };
+    const body = await request.json().catch(() => ({})) as { category?: string; key?: string; value?: JsonValue };
     if (!body.category || !body.key) {
       return NextResponse.json({ ok: false, apiVersion: "v1", error: "category and key are required" }, { status: 400 });
     }
