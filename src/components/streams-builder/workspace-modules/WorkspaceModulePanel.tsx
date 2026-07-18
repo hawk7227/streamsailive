@@ -1,5 +1,6 @@
 "use client";
 
+import BrowserVerificationPanel from "../BrowserVerificationPanel";
 import EnvReadinessMonitor from "../EnvReadinessMonitor";
 import CodexDiffApprovalPanel from "./CodexDiffApprovalPanel";
 import VisualEditorBuildGroupsPanel from "./VisualEditorBuildGroupsPanel";
@@ -33,62 +34,16 @@ function shouldShowApprovalGate(moduleName: WorkspaceModuleName) {
   return moduleName === "Visual Editing" || moduleName === "Approval Center" || moduleName === "Repository Truth" || moduleName === "Truth Panel";
 }
 
-export default function WorkspaceModulePanel({
-  moduleName,
-}: {
-  moduleName: WorkspaceModuleName;
-}) {
+export default function WorkspaceModulePanel({ moduleName }: { moduleName: WorkspaceModuleName }) {
   return (
     <section className="streamsModulePanel">
-      <header>
-        <b>{moduleName}</b>
-        <span>{MODULE_COPY[moduleName]}</span>
-      </header>
-
+      <header><b>{moduleName}</b><span>{MODULE_COPY[moduleName]}</span></header>
       <p>This compact module stays under the workstation and does not replace the main builder screen.</p>
-
       {shouldShowVisualEditorBuildGroups(moduleName) ? <VisualEditorBuildGroupsPanel /> : null}
       {shouldShowApprovalGate(moduleName) ? <CodexDiffApprovalPanel /> : null}
-
-      <div className="monitorSlot">
-        <EnvReadinessMonitor />
-      </div>
-
-      <style jsx>{`
-        .streamsModulePanel {
-          margin-top: 8px;
-          border: 1px solid rgba(16, 185, 129, 0.18);
-          border-radius: 10px;
-          background: rgba(6, 78, 59, 0.08);
-          color: #fff;
-          padding: 8px;
-          font-size: 10px;
-        }
-
-        header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-        }
-
-        b {
-          color: #6ee7b7;
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-
-        span,
-        p {
-          color: #cbd5e1;
-          margin: 4px 0 0;
-        }
-
-        .monitorSlot {
-          margin-top: 10px;
-        }
-      `}</style>
+      {moduleName === "Browser Verification" ? <BrowserVerificationPanel /> : null}
+      <div className="monitorSlot"><EnvReadinessMonitor /></div>
+      <style jsx>{`.streamsModulePanel{margin-top:8px;border:1px solid rgba(16,185,129,.18);border-radius:10px;background:rgba(6,78,59,.08);color:#fff;padding:8px;font-size:10px}header{display:flex;align-items:center;justify-content:space-between;gap:8px}b{color:#6ee7b7;font-size:10px;text-transform:uppercase;letter-spacing:.05em}span,p{color:#cbd5e1;margin:4px 0 0}.monitorSlot{margin-top:10px}`}</style>
     </section>
   );
 }
