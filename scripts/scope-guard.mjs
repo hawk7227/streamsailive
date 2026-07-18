@@ -35,10 +35,13 @@ const policies = {
     allowed: [
       'docs/streams-current-status.md',
       'docs/merge-policies/universal-project-workspace-replacement-slice.md',
+      '.github/workflows/universal-workspace-verify.yml',
       'scripts/scope-guard.mjs',
       'package.json',
+      'tests/streams-ai-response-integrity.test.ts',
       'tests/streams-workspace-preservation-contract.test.ts',
       'tests/streams-workspace-shell-contract.test.tsx',
+      'src/app/api/streams-ai/messages/route.ts',
       'src/components/streams-workspace/',
       'src/app/streams-ai/streams-builder/page.tsx',
       'src/components/streams-builder/WorkspaceGrid.tsx',
@@ -83,9 +86,12 @@ function inferPolicyFromFiles(files) {
   const hasUniversalWorkspaceFiles = files.some((f) =>
     f.startsWith('src/components/streams-workspace/') ||
     f === 'src/app/streams-ai/streams-builder/page.tsx' ||
+    f === 'src/app/api/streams-ai/messages/route.ts' ||
+    f === 'tests/streams-ai-response-integrity.test.ts' ||
     f === 'tests/streams-workspace-preservation-contract.test.ts' ||
     f === 'tests/streams-workspace-shell-contract.test.tsx' ||
-    f === 'docs/merge-policies/universal-project-workspace-replacement-slice.md'
+    f === 'docs/merge-policies/universal-project-workspace-replacement-slice.md' ||
+    f === '.github/workflows/universal-workspace-verify.yml'
   );
   if (hasUniversalWorkspaceFiles) return 'universal-project-workspace-replacement-slice';
 
