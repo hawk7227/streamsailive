@@ -47,9 +47,25 @@ type CreatePullRequestInput = {
   verificationStatus?: string;
 };
 
-function normalizePullRequest(pr: any, checks: any[] = []) {
+type ApprovalState = "approved" | "changes-requested" | "review-requested" | "review-required";
+
+function reviewState(pr: any, reviews: any[]): ApprovalState {
+  const latestByReviewer = new Map<string, string>();
+  for (const review of reviews) {
+    const login = String(review?.user?.login || "");
+    if (!login) continue;
+    latestByReviewer.set(login, String(review?.state || "").toUpperCase());
+  }
+  const states = Array.from(latestByReviewer.values());
+  if (states.includes("CHANGES_REQUESTED")) return "changes-requested";
+  if (states.includes("APPROVED")) return "approved";
+  if (Array.isArray(pr?.requested_reviewers) && pr.requested_reviewers.length > 0) return "review-requested";
+  return "review-required";
+}
+
+function normalizePullRequest(pr: any, checks: any[] = [], reviews: any[] = []) {
   const successfulChecks = checks.length > 0 && checks.every((check) => ["success", "neutral", "skipped"].includes(String(check.conclusion || "")));
-  const approvalState = String(pr?.requested_reviewers?.length || 0) === "0" ? "review-required" : "review-requested";
+  const approvalState = reviewState(pr, reviews);
   return {
     number: Number(pr?.number || 0),
     url: String(pr?.html_url || ""),
@@ -101,10 +117,13 @@ export class GitHubPullRequestService {
     const repo = cleanRepositoryName(repoInput);
     if (!Number.isInteger(number) || number <= 0) throw new GitHubPullRequestError("A valid pull request number is required.", 400, "PULL_REQUEST_NUMBER_INVALID");
     const pr = await github<any>(`/repos/${repo}/pulls/${number}`);
-    const checksResponse = pr?.head?.sha
-      ? await github<{ check_runs?: any[] }>(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`)
-      : { check_runs: [] };
-    return normalizePullRequest(pr, checksResponse.check_runs || []);
+    const [checksResponse, reviews] = await Promise.all([
+      pr?.head?.sha
+        ? github<{ check_runs?: any[] }>(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`)
+        : Promise.resolve({ check_runs: [] }),
+      github<any[]>(`/repos/${repo}/pulls/${number}/reviews?per_page=100`),
+    ]);
+    return normalizePullRequest(pr, checksResponse.check_runs || [], reviews || []);
   }
 }
 
