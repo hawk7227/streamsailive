@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { DurableWorkspaceStateError } from "@/lib/streams-builder/durable-workspace-state";
+import { BUILDER_APPROVAL_STATUSES } from "@/lib/streams-builder/versioned-builder-api-contract";
 import { VersionedBuilderWorkspaceResources, type BuilderApprovalState } from "@/lib/streams-builder/versioned-workspace-resources";
 
 export const runtime = "nodejs";
@@ -46,8 +47,8 @@ export async function PATCH(request: NextRequest) {
       approval?: Partial<BuilderApprovalState> & { status?: BuilderApprovalState["status"] };
     };
     const status = body.approval?.status;
-    if (!status || !["not_requested", "requested", "approved", "rejected"].includes(status)) {
-      return NextResponse.json({ ok: false, apiVersion: "v1", error: "approval.status must be not_requested, requested, approved, or rejected" }, { status: 400 });
+    if (!status || !BUILDER_APPROVAL_STATUSES.includes(status)) {
+      return NextResponse.json({ ok: false, apiVersion: "v1", error: `approval.status must be ${BUILDER_APPROVAL_STATUSES.join(", ")}` }, { status: 400 });
     }
     return NextResponse.json({ ok: true, apiVersion: "v1", ...(await resources.saveApproval(scope, { projectId: body.projectId, expectedRevision: body.expectedRevision, idempotencyKey: body.idempotencyKey, approval: { ...body.approval, status } })) });
   } catch (error) {
