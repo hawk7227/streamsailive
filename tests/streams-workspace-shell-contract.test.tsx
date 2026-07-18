@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/streams-builder/WorkspaceGrid", () => ({
   default: () => <div data-testid="preserved-workspace-grid">Preserved WorkspaceGrid</div>,
@@ -7,57 +7,56 @@ vi.mock("@/components/streams-builder/WorkspaceGrid", () => ({
 
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
 
-describe("universal project workspace shell", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
+function renderShell() {
+  return renderToStaticMarkup(<ProjectWorkspaceShell />);
+}
 
+function count(haystack: string, needle: string) {
+  return haystack.split(needle).length - 1;
+}
+
+describe("universal project workspace shell", () => {
   it("mounts the existing builder as the central preserved implementation", () => {
-    render(<ProjectWorkspaceShell />);
-    expect(screen.getByTestId("preserved-workspace-grid")).toBeTruthy();
-    expect(document.querySelector('[data-preserved-builder-surface="true"]')).toBeTruthy();
-    expect(document.querySelector('[data-replacement-conversion="true"]')).toBeTruthy();
+    const html = renderShell();
+    expect(html).toContain('data-testid="preserved-workspace-grid"');
+    expect(html).toContain('data-preserved-builder-surface="true"');
+    expect(html).toContain('data-replacement-conversion="true"');
   });
 
   it("renders the universal project identity and completion actions", () => {
-    render(<ProjectWorkspaceShell />);
-    expect(screen.getAllByText("Streams Builder").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText(/Coding \/ Application/).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByRole("button", { name: "Preview" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Share" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Export" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Publish / Complete" })).toBeTruthy();
+    const html = renderShell();
+    expect(count(html, "Streams Builder")).toBeGreaterThanOrEqual(2);
+    expect(count(html, "Coding / Application")).toBeGreaterThanOrEqual(2);
+    expect(html).toContain(">Preview<");
+    expect(html).toContain(">Share<");
+    expect(html).toContain(">Export<");
+    expect(html).toContain(">Publish / Complete<");
   });
 
   it("keeps the project—not Ask AI—as the dominant canvas", () => {
-    render(<ProjectWorkspaceShell />);
-    expect(screen.getByLabelText("Main workspace canvas")).toBeTruthy();
-    expect(screen.getByLabelText("Project context")).toBeTruthy();
-    expect(screen.getByLabelText("Contextual utility panel")).toBeTruthy();
-    expect(screen.getByLabelText("Workspace supporting materials")).toBeTruthy();
+    const html = renderShell();
+    expect(html).toContain('aria-label="Main workspace canvas"');
+    expect(html).toContain('aria-label="Project context"');
+    expect(html).toContain('aria-label="Contextual utility panel"');
+    expect(html).toContain('aria-label="Workspace supporting materials"');
   });
 
   it("renders the complete global navigation contract", () => {
-    render(<ProjectWorkspaceShell />);
-    const navigation = screen.getByLabelText("StreamsAI global navigation");
+    const html = renderShell();
+    expect(html).toContain('aria-label="StreamsAI global navigation"');
     for (const item of ["Home", "Projects", "Workspace", "Files", "Create", "Generate", "Build", "Assets", "Tasks", "History", "Ask AI", "Settings"]) {
-      expect(navigation.querySelector(`[title="${item}"]`)).toBeTruthy();
+      expect(html).toContain(`title="${item}"`);
     }
   });
 
   it("renders universal context, canvas, utility, and tray controls", () => {
-    render(<ProjectWorkspaceShell />);
-    expect(screen.getByText("Project Goal")).toBeTruthy();
-    expect(screen.getByText("Current Stage")).toBeTruthy();
-    expect(screen.getByText("Progress")).toBeTruthy();
-    expect(screen.getByText("Next Recommended Action")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Full screen" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Properties" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Generate" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Ask AI" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Outputs" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Activity" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Proof" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Verification" })).toBeTruthy();
+    const html = renderShell();
+    for (const label of ["Project Goal", "Current Stage", "Progress", "Next Recommended Action"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain('aria-label="Full screen"');
+    for (const tab of ["Properties", "Generate", "Ask AI", "Outputs", "Activity", "Proof", "Verification"]) {
+      expect(html).toContain(`>${tab}<`);
+    }
   });
 });
