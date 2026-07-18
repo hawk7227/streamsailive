@@ -2,11 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAIMessagesRepository } from "@/lib/streams-ai/repositories/messages-repository";
 import { assertNoProtectedFields, sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "@/lib/streams-ai/protected-reasoning";
+import type { CreateMessageInput } from "@/lib/streams-ai/repositories/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const messages = new StreamsAIMessagesRepository();
+const MESSAGE_ROLES: CreateMessageInput["role"][] = ["user", "assistant", "system", "tool"];
 
 function failure(error: unknown, status = 500) {
   return NextResponse.json({ ok: false, apiVersion: "v1", error: error instanceof Error ? error.message : "Unknown messages error" }, { status });
@@ -40,9 +42,12 @@ export async function POST(request: NextRequest) {
     };
     assertNoProtectedFields(body);
     if (!body.sessionId || !body.role) return failure(new Error("sessionId and role are required"), 400);
+    if (!MESSAGE_ROLES.includes(body.role as CreateMessageInput["role"])) {
+      return failure(new Error("role must be user, assistant, system, or tool"), 400);
+    }
     const message = await messages.create(scope, {
       sessionId: body.sessionId,
-      role: body.role,
+      role: body.role as CreateMessageInput["role"],
       content: sanitizeStreamsAIText(body.content || ""),
       status: body.status,
       metadata: body.metadata || {},
