@@ -54,7 +54,7 @@ describe("universal project workspace shell", () => {
     for (const label of ["Project Goal", "Current Stage", "Progress", "Next Recommended Action"]) {
       expect(html).toContain(label);
     }
-    expect(html).toContain('aria-label="Full screen"');
+    expect(html).toContain(">Full screen<");
     for (const tab of ["Properties", "Generate", "Ask AI", "Outputs", "Activity", "Proof", "Verification"]) {
       expect(html).toContain(`>${tab}<`);
     }
