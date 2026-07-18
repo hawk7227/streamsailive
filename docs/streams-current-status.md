@@ -52,6 +52,7 @@
 
 - `docs/streams-current-status.md`
 - `docs/merge-policies/universal-project-workspace-replacement-slice.md`
+- `.github/workflows/universal-workspace-verify.yml`
 - `scripts/scope-guard.mjs`
 - `package.json`
 - `tests/streams-workspace-preservation-contract.test.ts`
