@@ -60,12 +60,12 @@ export class StreamsV1Client {
     const headers: Record<string, string> = { Accept: "application/json", ...(options.headers || {}) };
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
     if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
-    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    if (options.body !== undefined && !(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
 
     const response = await this.fetcher(url.toString(), {
       method: options.method || (options.body === undefined ? "GET" : "POST"),
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.body === undefined ? undefined : options.body instanceof FormData ? options.body : JSON.stringify(options.body),
       signal: options.signal,
       cache: "no-store",
     });
@@ -78,17 +78,35 @@ export class StreamsV1Client {
   }
 
   auth() { return this.request("/api/v1/auth"); }
+  devices(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/devices", { query }); }
   projects(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/projects", { query }); }
   conversations(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/conversations", { query }); }
   messages(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/messages", { query }); }
   jobs(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/jobs", { query }); }
   jobEvents(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/job-events", { query }); }
   assets(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/assets", { query }); }
+  uploads(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/uploads", { query }); }
   memory(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/memory", { query }); }
   settings(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/settings", { query }); }
   subscriptions(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/subscriptions", { query }); }
   entitlements(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/entitlements", { query }); }
   usage(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/usage", { query }); }
+  notifications(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/notifications", { query }); }
+  featureFlags(query?: StreamsV1RequestOptions["query"]) { return this.request("/api/v1/feature-flags", { query }); }
+
+  createUpload(body: unknown, idempotencyKey?: string) {
+    return this.request("/api/v1/uploads", { method: "POST", body, idempotencyKey });
+  }
+
+  uploadChunk(input: { uploadId: string; chunkIndex: number; byteOffset: number; chunk: Blob; checksum?: string }) {
+    const form = new FormData();
+    form.set("uploadId", input.uploadId);
+    form.set("chunkIndex", String(input.chunkIndex));
+    form.set("byteOffset", String(input.byteOffset));
+    if (input.checksum) form.set("checksum", input.checksum);
+    form.set("chunk", input.chunk, `chunk-${input.chunkIndex}`);
+    return this.request("/api/v1/uploads", { method: "POST", body: form });
+  }
 }
 
 export type StreamsSseEvent = { event: string; data: string; id?: string; retry?: number };
