@@ -11,6 +11,8 @@ export const VERSIONED_BUILDER_STATE_ROUTES = [
   "/api/v1/builder/workspaces",
   "/api/v1/builder/drafts",
   "/api/v1/builder/checkpoints",
+  "/api/v1/builder/patches",
+  "/api/v1/builder/previews",
   "/api/v1/builder/approvals",
   "/api/v1/builder/events",
 ] as const;
