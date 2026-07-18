@@ -1,16 +1,20 @@
 export const STREAMS_V1_CORE_ROUTES = [
   "/api/v1/auth",
+  "/api/v1/devices",
   "/api/v1/projects",
   "/api/v1/conversations",
   "/api/v1/messages",
   "/api/v1/jobs",
   "/api/v1/job-events",
   "/api/v1/assets",
+  "/api/v1/uploads",
   "/api/v1/memory",
   "/api/v1/settings",
   "/api/v1/subscriptions",
   "/api/v1/entitlements",
   "/api/v1/usage",
+  "/api/v1/notifications",
+  "/api/v1/feature-flags",
 ] as const;
 
 export const STREAMS_V1_BUILDER_ROUTES = [
