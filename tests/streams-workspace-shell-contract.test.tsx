@@ -22,7 +22,7 @@ describe("universal project workspace shell", () => {
   it("renders the universal project identity and completion actions", () => {
     render(<ProjectWorkspaceShell />);
     expect(screen.getAllByText("Streams Builder").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/Coding \/ Application/)).toBeTruthy();
+    expect(screen.getAllByText(/Coding \/ Application/).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: "Preview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Share" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Export" })).toBeTruthy();
