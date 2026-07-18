@@ -42,15 +42,22 @@ const policies = {
       'tests/streams-workspace-preservation-contract.test.ts',
       'tests/streams-workspace-shell-contract.test.tsx',
       'tests/streams-builder-durable-workspace-state.test.ts',
+      'tests/streams-builder-pull-request-workflow.test.ts',
       'src/app/api/streams-ai/messages/route.ts',
       'src/app/api/streams-builder/workspace-state/route.ts',
+      'src/app/api/streams-builder/github/',
+      'src/app/api/v1/builder/',
       'src/lib/streams-builder/durable-workspace-state.ts',
+      'src/lib/streams-builder/repository-action-policy.ts',
+      'src/lib/streams-builder/repository-action-service.ts',
+      'src/lib/streams-builder/github-pull-request-service.ts',
       'src/components/streams-workspace/',
       'src/app/streams-ai/streams-builder/page.tsx',
       'src/components/streams-builder/WorkspaceGrid.tsx',
       'src/components/streams-builder/GitHubRepositoryPicker.tsx',
       'src/components/streams-builder/VisualEditingWorkstation.tsx',
       'src/components/streams-builder/RuntimeCodeEditor.tsx',
+      'src/components/streams-builder/PullRequestReviewPanel.tsx',
       'src/components/streams-builder/BuilderCenterChat.tsx',
       'src/components/streams-builder/BuilderControlLayers.tsx',
       'src/components/streams-builder/LiveFrontendWorkstation.tsx',
@@ -88,14 +95,21 @@ function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
   const hasUniversalWorkspaceFiles = files.some((f) =>
     f.startsWith('src/components/streams-workspace/') ||
+    f.startsWith('src/app/api/v1/builder/') ||
+    f.startsWith('src/app/api/streams-builder/github/') ||
     f === 'src/app/streams-ai/streams-builder/page.tsx' ||
     f === 'src/app/api/streams-ai/messages/route.ts' ||
     f === 'src/app/api/streams-builder/workspace-state/route.ts' ||
     f === 'src/lib/streams-builder/durable-workspace-state.ts' ||
+    f === 'src/lib/streams-builder/repository-action-policy.ts' ||
+    f === 'src/lib/streams-builder/repository-action-service.ts' ||
+    f === 'src/lib/streams-builder/github-pull-request-service.ts' ||
+    f === 'src/components/streams-builder/PullRequestReviewPanel.tsx' ||
     f === 'tests/streams-ai-response-integrity.test.ts' ||
     f === 'tests/streams-workspace-preservation-contract.test.ts' ||
     f === 'tests/streams-workspace-shell-contract.test.tsx' ||
     f === 'tests/streams-builder-durable-workspace-state.test.ts' ||
+    f === 'tests/streams-builder-pull-request-workflow.test.ts' ||
     f === 'docs/merge-policies/universal-project-workspace-replacement-slice.md' ||
     f === '.github/workflows/universal-workspace-verify.yml'
   );
