@@ -41,7 +41,10 @@ const policies = {
       'tests/streams-ai-response-integrity.test.ts',
       'tests/streams-workspace-preservation-contract.test.ts',
       'tests/streams-workspace-shell-contract.test.tsx',
+      'tests/streams-builder-durable-workspace-state.test.ts',
       'src/app/api/streams-ai/messages/route.ts',
+      'src/app/api/streams-builder/workspace-state/route.ts',
+      'src/lib/streams-builder/durable-workspace-state.ts',
       'src/components/streams-workspace/',
       'src/app/streams-ai/streams-builder/page.tsx',
       'src/components/streams-builder/WorkspaceGrid.tsx',
@@ -87,9 +90,12 @@ function inferPolicyFromFiles(files) {
     f.startsWith('src/components/streams-workspace/') ||
     f === 'src/app/streams-ai/streams-builder/page.tsx' ||
     f === 'src/app/api/streams-ai/messages/route.ts' ||
+    f === 'src/app/api/streams-builder/workspace-state/route.ts' ||
+    f === 'src/lib/streams-builder/durable-workspace-state.ts' ||
     f === 'tests/streams-ai-response-integrity.test.ts' ||
     f === 'tests/streams-workspace-preservation-contract.test.ts' ||
     f === 'tests/streams-workspace-shell-contract.test.tsx' ||
+    f === 'tests/streams-builder-durable-workspace-state.test.ts' ||
     f === 'docs/merge-policies/universal-project-workspace-replacement-slice.md' ||
     f === '.github/workflows/universal-workspace-verify.yml'
   );
