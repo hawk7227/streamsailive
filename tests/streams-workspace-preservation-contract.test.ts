@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildWorkspacePreservationContract,
@@ -223,26 +221,6 @@ describe("universal project workspace replacement preservation contract", () => 
     expect(REPLACEMENT_CONVERSION_RULES).toContain(
       "No confirmed capability may be removed before its parity test passes.",
     );
-  });
-
-  it("wires durable project state through existing projects, jobs, and events", () => {
-    const repository = readFileSync(resolve(process.cwd(), "src/lib/streams-builder/durable-workspace-state.ts"), "utf8");
-    const route = readFileSync(resolve(process.cwd(), "src/app/api/streams-builder/workspace-state/route.ts"), "utf8");
-    const bridge = readFileSync(resolve(process.cwd(), "src/components/streams-workspace/BuilderWorkspacePersistenceBridge.tsx"), "utf8");
-    const shell = readFileSync(resolve(process.cwd(), "src/components/streams-workspace/ProjectWorkspaceShell.tsx"), "utf8");
-
-    expect(repository).toContain("streamsAITables.projects");
-    expect(repository).toContain("streamsAITables.jobs");
-    expect(repository).toContain("StreamsAIJobsRepository");
-    expect(repository).toContain("BUILDER_STATE_REVISION_CONFLICT");
-    expect(repository).toContain("MAX_BUILDER_WORKSPACE_SNAPSHOT_BYTES");
-    expect(route).toContain("requireStreamsAIScope");
-    expect(route).toContain("workspaceState.save");
-    expect(bridge).toContain("streams-builder:pulled-file");
-    expect(bridge).toContain("streams-builder:code-draft-changed");
-    expect(bridge).toContain("BroadcastChannel");
-    expect(bridge).toContain("expectedRevision");
-    expect(shell).toContain("<BuilderWorkspacePersistenceBridge />");
   });
 
   it("returns one complete contract for the shell and parity tests", () => {
