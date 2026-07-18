@@ -7,10 +7,12 @@
 - Documents 1 and 2 are the governing requirements for this slice.
 - This is a controlled replacement conversion, not a companion extension.
 - Existing Streams AI and Streams Builder capabilities must be preserved, combined, made durable where required, parity-tested, and moved behind reversible controls before any legacy surface is retired.
+- Production-build compatibility repairs required to keep the proven `/streams-ai` chat contract green are authorized within this same slice.
 
 ## Current slice classification
 
 - Existing Streams intelligence and shared data foundation: Proven in source; runtime proof remains feature-specific.
+- Existing `/streams-ai` chat: protected stable foundation; ordinary text may use the fast provider path only when attachments, current-information work, repository/build work, and deterministic output requirements are absent.
 - Existing `/streams-ai/streams-builder` route and mounted builder capability chain: Implemented; preserve and parity-test before relocation.
 - Universal project-centered workspace shell: Active implementation target.
 - Native iOS, Android, and Kotlin Multiplatform work: Later phases; not part of the first web replacement commit.
@@ -45,6 +47,7 @@
 - Items 6–40 Human Work Behavior Program.
 - Authorized Supplement 2 Records 152–255.
 - Existing Streams Builder workspace, GitHub repository controls, editable frontend proxy, visual editor, GitHub-style runtime code editor, visual-to-code synchronization, split code/preview review, controlled patch workflow, temporary Git branches, Vercel preview polling, source-truth registry, browser-verification contract, approval foundation, and builder context events.
+- Universal project workspace shell mounted around the existing builder implementation.
 
 ## Current replacement-slice target files
 
@@ -55,8 +58,13 @@
 - `.github/workflows/universal-workspace-verify.yml`
 - `scripts/scope-guard.mjs`
 - `package.json`
+- `tests/streams-ai-response-integrity.test.ts`
 - `tests/streams-workspace-preservation-contract.test.ts`
 - `tests/streams-workspace-shell-contract.test.tsx`
+
+### Protected chat compatibility
+
+- `src/app/api/streams-ai/messages/route.ts`
 
 ### Universal workspace shell
 
@@ -115,6 +123,7 @@
 
 - Source proof for every changed file.
 - Preservation-contract tests proving protected builder capabilities remain present.
+- Existing `/streams-ai` response-integrity contract passes.
 - TypeScript passes.
 - Production build passes.
 - The active `/streams-ai/streams-builder` route mounts the universal shell and the existing builder implementation.
