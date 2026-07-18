@@ -52,12 +52,14 @@
 
 - `docs/streams-current-status.md`
 - `docs/merge-policies/universal-project-workspace-replacement-slice.md`
+- `scripts/scope-guard.mjs`
 - `package.json`
 - `tests/streams-workspace-preservation-contract.test.ts`
 - `tests/streams-workspace-shell-contract.test.tsx`
 
 ### Universal workspace shell
 
+- `src/components/streams-workspace/preservation-contract.ts`
 - `src/components/streams-workspace/ProjectWorkspaceController.tsx`
 - `src/components/streams-workspace/ProjectWorkspaceShell.tsx`
 - `src/components/streams-workspace/ProjectTopBar.tsx`
