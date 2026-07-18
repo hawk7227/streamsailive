@@ -6,7 +6,9 @@ export const WORKSPACE_EVENT_NAMES = {
   trayChanged: "streams-workspace:tray-changed",
 } as const;
 
-export function emitWorkspaceEvent<T>(name: string, detail: T) {
+export type WorkspaceEventName = (typeof WORKSPACE_EVENT_NAMES)[keyof typeof WORKSPACE_EVENT_NAMES];
+
+export function emitWorkspaceEvent<T>(name: WorkspaceEventName, detail: T) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
