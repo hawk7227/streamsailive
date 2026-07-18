@@ -186,6 +186,9 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   const [previewBuildState, setPreviewBuildState] = useState<PreviewBuildState>("not_started");
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewId, setPreviewId] = useState("");
+  const [previewBranch, setPreviewBranch] = useState("");
+  const [deploymentId, setDeploymentId] = useState("");
+  const [deploymentUrlValue, setDeploymentUrlValue] = useState("");
   const [previewLogs, setPreviewLogs] = useState<string[]>([]);
   const [reviewDevice, setReviewDevice] = useState<ReviewDevice>("desktop");
   const [reviewBrowser, setReviewBrowser] = useState<ReviewBrowser>("chrome");
@@ -202,9 +205,9 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   const editorUrl = editableProxyUrl(liveUrl);
   const pushReady = ready && !saving && patchState === "generated" && generatedContent === draftContent && previewBuildState === "succeeded" && Boolean(previewUrl) && !lastError;
 
-  function chatEvent(phase: string, message: string) {
+  function chatEvent(phase: string, message: string, extra: Record<string, unknown> = {}) {
     onChat(message);
-    const detail = { phase, message, repo, branch, filePath, route: sourceRoute, patchState, previewBuildState, previewUrl, previewId };
+    const detail = { phase, message, repo, branch, filePath, route: sourceRoute, patchState, previewBuildState, previewUrl, previewId, previewBranch, deploymentId, deploymentUrl: deploymentUrlValue, checkpointId, commitSha, ...extra };
     window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail }));
     window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail }));
   }
@@ -219,8 +222,28 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     if (build.previewId) setPreviewId(build.previewId);
     if (build.status) setPreviewBuildState(build.status);
     if (build.previewUrl) setPreviewUrl(build.previewUrl);
+    if (build.previewBranch) setPreviewBranch(build.previewBranch);
+    if (build.deploymentId) setDeploymentId(build.deploymentId);
+    if (build.deploymentUrl) setDeploymentUrlValue(build.deploymentUrl);
     if (build.error) setLastError(build.error);
     if (build.logs) setPreviewLogs(build.logs);
+    window.dispatchEvent(new CustomEvent("streams-builder:preview-state", {
+      detail: {
+        repo,
+        branch,
+        path: filePath,
+        route: sourceRoute,
+        checkpointId,
+        patchState,
+        previewBuildState: build.status || previewBuildState,
+        previewId: build.previewId || previewId,
+        previewUrl: build.previewUrl || previewUrl,
+        previewBranch: build.previewBranch || previewBranch,
+        deploymentId: build.deploymentId || deploymentId,
+        deploymentUrl: build.deploymentUrl || deploymentUrlValue,
+        error: build.error || "",
+      },
+    }));
   }
 
   useEffect(() => {
@@ -232,6 +255,9 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     setPreviewBuildState("not_started");
     setPreviewUrl("");
     setPreviewId("");
+    setPreviewBranch("");
+    setDeploymentId("");
+    setDeploymentUrlValue("");
     setPreviewLogs([]);
     setCommitSha("");
     setLastError("");
@@ -250,6 +276,9 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     setPreviewBuildState("not_started");
     setPreviewUrl("");
     setPreviewId("");
+    setPreviewBranch("");
+    setDeploymentId("");
+    setDeploymentUrlValue("");
     setPreviewLogs([]);
     setLastError("");
     setGeneratedContent("");
@@ -342,20 +371,20 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     applyPreviewBuild(initialBuild || null);
     const activePreviewId = initialBuild?.previewId;
     if (!activePreviewId) throw new Error(initialBuild?.error || "Temporary preview build did not return a previewId.");
-    chatEvent("preview-build-started", `Real temporary preview build started on branch ${initialBuild?.previewBranch || "unknown"}.`);
+    chatEvent("preview-build-started", `Real temporary preview build started on branch ${initialBuild?.previewBranch || "unknown"}.`, initialBuild || {});
 
     let current: PreviewBuildResult | null = initialBuild;
     for (let attempt = 0; attempt < 18; attempt += 1) {
       if (current?.status === "succeeded" && current.previewUrl) {
         applyPreviewBuild(current);
-        chatEvent("preview-build-succeeded", `Real temporary preview succeeded: ${current.previewUrl}`);
+        chatEvent("preview-build-succeeded", `Real temporary preview succeeded: ${current.previewUrl}`, current);
         return current;
       }
       if (current?.status === "failed") throw new Error(current.error || "Temporary preview build failed.");
       await wait(attempt < 6 ? 3500 : 6000);
       current = await pollPreviewBuild(activePreviewId);
       applyPreviewBuild(current);
-      chatEvent("preview-build-poll", `Temporary preview status: ${current?.status || "unknown"}.`);
+      chatEvent("preview-build-poll", `Temporary preview status: ${current?.status || "unknown"}.`, current || {});
     }
     throw new Error("Temporary preview build is still building. Browser Review is not ready yet; poll again before push.");
   }
@@ -378,15 +407,16 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
       window.localStorage.setItem(draftKey(repo, branch, filePath), JSON.stringify(payload));
       setDraftId(nextDraftId);
       setCheckpointId(nextCheckpointId);
-      chatEvent("draft-saved", `Draft saved for ${filePath}. Generating patch and real temporary preview now.`);
+      chatEvent("draft-saved", `Draft saved for ${filePath}. Generating patch and real temporary preview now.`, { checkpointId: nextCheckpointId });
       const result = await callLinePatches({ repo, branch, filePath, content: nextContent, push: false, sourceTruthId, checkpointId: nextCheckpointId, buildPreview: true, route: sourceRoute });
       setGeneratedContent(nextContent);
       setPatchState("generated");
       const build = await waitForPreview(result.previewBuild);
+      window.dispatchEvent(new CustomEvent("streams-builder:code-draft-changed", { detail: { repo, branch, path: filePath, route: sourceRoute, content: nextContent, draftId: nextDraftId, checkpointId: nextCheckpointId, saved: true, patchState: "generated", previewBuildState: build.status || "succeeded", previewId: build.previewId || "", previewUrl: build.previewUrl || "", previewBranch: build.previewBranch || "", deploymentId: build.deploymentId || "", deploymentUrl: build.deploymentUrl || "" } }));
       setViewMode("browser");
       setFrameKey((value) => value + 1);
       onProof(`Draft saved, patch generated, and real temporary Browser Review opened. Changed lines: ${result.preview?.changedLineCount ?? "unknown"}. Preview: ${build.previewUrl}`);
-      chatEvent("browser-review-opened", `Browser Review opened using real temporary preview URL ${build.previewUrl}.`);
+      chatEvent("browser-review-opened", `Browser Review opened using real temporary preview URL ${build.previewUrl}.`, { ...build, checkpointId: nextCheckpointId, patchState: "generated" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";
       setLastError(message);
@@ -394,7 +424,7 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
       setPreviewBuildState("failed");
       setViewMode("editor");
       onProof(`Save Draft / patch / real preview generation failed: ${message}`);
-      chatEvent("patch-generation-failed", `Save Draft failed while generating patch or real temporary preview: ${message}.`);
+      chatEvent("patch-generation-failed", `Save Draft failed while generating patch or real temporary preview: ${message}.`, { error: message });
     } finally {
       setSaving(false);
     }
@@ -419,90 +449,63 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
       setCommitSha(sha);
       setPatchState("pushed");
       onProof(`Pushed reviewed visual editor draft to GitHub${sha ? `: ${sha}` : "."}`);
-      chatEvent("github-pushed", `Changes pushed to GitHub successfully${sha ? ` with commit ${sha.slice(0, 7)}` : ""}.`);
+      chatEvent("github-pushed", `Changes pushed to GitHub successfully${sha ? ` with commit ${sha.slice(0, 7)}` : ""}.`, { commitSha: sha, checkpointId: activeCheckpoint });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";
       setPatchState("failed");
       setLastError(message);
       onProof(`GitHub push failed: ${message}`);
-      chatEvent("github-push-failed", `GitHub push failed: ${message}.`);
+      chatEvent("github-push-failed", `GitHub push failed: ${message}.`, { error: message });
     } finally {
       setSaving(false);
     }
   }
 
-  function resetEditor() {
-    setBrowserUrl(defaultUrl);
+  function resetToOriginal() {
+    setDraftContent(content || "");
     setSelected(null);
     setEdits([]);
-    setDraftContent(content || "");
+    setDraftId("");
+    setCheckpointId("");
     setPatchState("not_generated");
     setPreviewBuildState("not_started");
     setPreviewUrl("");
     setPreviewId("");
+    setPreviewBranch("");
+    setDeploymentId("");
+    setDeploymentUrlValue("");
     setPreviewLogs([]);
     setCommitSha("");
     setLastError("");
     setGeneratedContent("");
-    setFrameKey((value) => value + 1);
-    setDrawerOpen(false);
-    onProof("Reset visual editor to original page source truth.");
+    onContentChange(content || "");
+    window.localStorage.removeItem(draftKey(repo, branch, filePath));
+    chatEvent("editor-reset", `Visual editor reset to original source truth for ${filePath || sourceRoute}.`);
   }
 
-  function reviewPanel() {
-    return (
-      <aside className="reviewPanel">
-        <b>Browser Review</b>
-        <span>{pushReady ? "Ready to Push" : "Push Blocked"}</span>
-        <p>{patchState === "generated" && previewBuildState === "succeeded" ? `Real temporary preview ready: ${previewId}. Click through before pushing.` : patchState === "failed" || previewBuildState === "failed" ? `Issue: ${lastError || "Patch/preview failed."}` : previewBuildState === "building" || previewBuildState === "queued" ? "Building real temporary preview..." : "Save Draft first to generate the review patch and real temporary preview."}</p>
-        {lastError ? <p className="errorText">{lastError}</p> : null}
-        <button type="button" className={pushReady ? "pushReady" : "pushBlocked"} onClick={pushToGitHub} disabled={!pushReady}>{pushReady ? "Push GitHub" : "Push GitHub Locked"}</button>
-      </aside>
-    );
-  }
+  const modeButtons: Array<{ id: ViewMode; label: string }> = [
+    { id: "editor", label: "Front View" },
+    { id: "browser", label: "Browser Review" },
+    { id: "mobile", label: "Mobile" },
+    { id: "advanced", label: "Advanced" },
+    { id: "code", label: "Code" },
+    { id: "split", label: "Split" },
+  ];
 
-  function reviewControls() {
-    if (viewMode !== "browser" && viewMode !== "split") return null;
-    return (
-      <section className="reviewControls">
-        <button type="button" className={reviewDevice === "desktop" ? "active" : ""} onClick={() => updateReviewMode({ device: "desktop" })}>Desktop</button>
-        <button type="button" className={reviewDevice === "iphone-14-pro-max" ? "active" : ""} onClick={() => updateReviewMode({ device: "iphone-14-pro-max" })}>iPhone 14 Pro Max</button>
-        <button type="button" className={reviewBrowser === "safari" ? "active" : ""} onClick={() => updateReviewMode({ browser: "safari" })}>Safari</button>
-        <button type="button" className={reviewBrowser === "chrome" ? "active" : ""} onClick={() => updateReviewMode({ browser: "chrome" })}>Chrome</button>
-        <button type="button" className={reviewFullscreen ? "active" : ""} onClick={() => updateReviewMode({ fullscreen: !reviewFullscreen })}>Full Screen</button>
-        <button type="button" className={reviewSafeZone ? "active" : ""} onClick={() => updateReviewMode({ safeZone: !reviewSafeZone })}>Safe Zone</button>
-      </section>
-    );
-  }
-
-  function previewFrame(className = viewMode === "mobile" || reviewDevice === "iphone-14-pro-max" ? "phoneFrame" : "desktopFrame") {
-    const src = viewMode === "browser" && previewUrl ? reviewProxyUrl(previewUrl) : viewMode === "editor" || viewMode === "advanced" ? editorUrl : liveUrl;
-    const frameClass = viewMode === "browser" ? `${className} reviewFrame ${reviewBrowser} ${reviewFullscreen ? "fullScreen" : ""} ${reviewSafeZone ? "safeZone" : ""}` : className;
-    return <section className={frameClass}>{ready ? <iframe key={`${frameKey}-${viewMode}-${src}-${reviewDevice}-${reviewBrowser}-${reviewFullscreen}-${reviewSafeZone}`} title="Visual editor preview" src={src} /> : <div className="emptyFrame"><h2>Pull a source file first</h2><p>The actual frontend will appear here.</p></div>}</section>;
-  }
-
-  function codePanel() {
-    return (
-      <section className="codePanel">
-        <div className="codeActions"><button type="button" onClick={saveDraft} disabled={!ready || saving}>Save Draft</button><button type="button" onClick={generatePatch} disabled={!ready || saving}>Generate Patch</button></div>
-        <RuntimeCodeEditor value={draftContent || ""} filePath={filePath || "no-file-selected"} sha={commitSha || undefined} onChange={handleCodeChange} onSelectionChange={setCodeSelection} />
-      </section>
-    );
-  }
-
-  function mainCanvas() {
-    if (viewMode === "code") return <main className="canvas codeMode">{codePanel()}</main>;
-    if (viewMode === "split") return <main className="canvas splitMode">{codePanel()}<section className="splitPreview"><div className="paneTitle"><b>Real Temporary Browser Review</b><span>{previewUrl || "Save Draft to create real temporary preview"}</span></div>{reviewControls()}{previewFrame(reviewDevice === "iphone-14-pro-max" ? "phoneFrame embedded" : "desktopFrame embedded")}{reviewPanel()}</section></main>;
-    return <main className={`canvas ${viewMode}`}>{reviewControls()}{previewFrame()}{viewMode === "browser" ? reviewPanel() : null}</main>;
-  }
-
+  const reviewSrc = previewUrl ? reviewProxyUrl(previewUrl) : "";
   return (
-    <section className="visualEditor">
-      <header className="top"><div><b>VISUAL EDITOR</b><span>{stationLabel} · editor stays original; Browser Review uses real temporary preview</span></div><div className="routeBar"><button type="button" onClick={refreshPreview}>↻</button><input value={viewMode === "browser" && previewUrl ? previewUrl : liveUrl} onChange={(event) => setBrowserUrl(event.target.value)} /><button type="button" onClick={refreshPreview}>Open</button></div></header>
-      {mainCanvas()}
-      <footer className="sourceActionStrip"><div><span>Route</span><b>{sourceRoute}</b></div><div><span>Selected</span><b>{selected?.text || selected?.src || (codeSelection ? `Lines ${codeSelection.startLine}-${codeSelection.endLine}` : "Click text/image/panel")}</b></div><div><span>File</span><b>{filePath || "no file"}</b></div><div><span>Patch</span><b>{patchState}{commitSha ? ` · ${commitSha.slice(0, 7)}` : ""}</b></div><div><span>Preview</span><b>{previewBuildState}{previewId ? ` · ${previewId}` : ""}</b></div><button type="button" className={viewMode === "editor" ? "active" : ""} onClick={() => switchMode("editor")}>Editor</button><button type="button" className={viewMode === "browser" ? "active" : ""} onClick={() => switchMode("browser")}>Browser</button><button type="button" className={viewMode === "mobile" ? "active" : ""} onClick={() => switchMode("mobile")}>Mobile</button><button type="button" className={viewMode === "split" ? "active" : ""} onClick={() => switchMode("split")}>Code Editor</button><button type="button" onClick={saveDraft} disabled={!ready || saving}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" onClick={generatePatch} disabled={!ready || saving}>Generate Patch</button><button type="button" onClick={resetEditor}>Reset</button></footer>
-      <details className="editorDrawer" open={drawerOpen || viewMode === "advanced"} onToggle={(event) => setDrawerOpen(event.currentTarget.open)}><summary>Advanced edit log / source controls</summary><section className="drawerGrid"><section className="patchBox"><b>Selected</b><p>kind: {selected?.kind || "none"}</p><p>selector: {selected?.selector || "none"}</p><p>file: {filePath || "none"}</p><p>preview: {previewUrl || "none"}</p><p>error: {lastError || "none"}</p></section><section className="patchBox"><b>Preview logs</b>{previewLogs.length ? previewLogs.slice(-8).map((line, index) => <p key={`${line}-${index}`}>{line}</p>) : <p>No preview logs yet.</p>}</section></section></details>
-      <style jsx>{`.visualEditor{width:100%;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:#020617;color:#fff;overflow:hidden}.top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(148,163,184,.18);background:#0f172a}.top b{display:block;font-size:13px}.top span{display:block;color:#93c5fd;font-size:11px}.routeBar{display:grid;grid-template-columns:40px minmax(260px,1fr) 80px;gap:8px;width:min(680px,56vw)}.routeBar input{height:38px;border-radius:999px;border:1px solid rgba(148,163,184,.22);background:#020617;color:#fff;padding:0 14px}button{border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#7c3aed;color:#fff;height:36px;padding:0 12px;font-size:11px;font-weight:900;cursor:pointer}button.active{background:#065f46;color:#6ee7b7;border-color:#34d399}button:disabled{opacity:.48;cursor:not-allowed}.canvas{position:relative;min-height:0;overflow:hidden;background:#020617}.desktopFrame{position:relative;height:calc(100% - 18px);margin:10px;border:1px solid rgba(124,58,237,.5);border-radius:16px;overflow:auto;background:#fff}.phoneFrame{position:relative;width:430px;height:min(932px,calc(100% - 30px));margin:12px auto;border:12px solid #111827;border-radius:38px;overflow:auto;background:#fff}.reviewFrame.safari:before,.reviewFrame.chrome:before{position:sticky;top:0;z-index:4;display:block;height:34px;background:#f8fafc;color:#0f172a;border-bottom:1px solid #cbd5e1;padding:8px 12px;font-size:12px;font-weight:900}.reviewFrame.safari:before{content:'Safari · Real Temporary Preview'}.reviewFrame.chrome:before{content:'Chrome · Real Temporary Preview'}.reviewFrame.safeZone:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(34,197,94,.18) 0 48px,transparent 48px calc(100% - 34px),rgba(34,197,94,.18) calc(100% - 34px));outline:2px dashed rgba(34,197,94,.6);outline-offset:-14px}.reviewFrame.fullScreen{position:absolute!important;inset:8px!important;width:auto!important;height:auto!important;margin:0!important;z-index:35}.desktopFrame iframe,.phoneFrame iframe{display:block;width:100%;height:1800px;min-height:100%;border:0;background:#fff}.emptyFrame{height:100%;display:grid;place-content:center;text-align:center;color:#0f172a}.codeMode{padding:10px}.codePanel{position:relative;min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:8px;overflow:hidden}.codeActions,.reviewControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.reviewControls{position:relative;z-index:28;padding:8px 10px;background:rgba(2,6,23,.92);border-bottom:1px solid rgba(148,163,184,.16)}.splitMode{display:grid;grid-template-columns:minmax(520px,.95fr) minmax(520px,1fr);gap:10px;padding:10px}.splitPreview{position:relative;min-width:0;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;border:1px solid rgba(124,58,237,.45);border-radius:14px;background:#020617}.paneTitle{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.18);background:#020617;color:#fff;font-size:11px}.paneTitle span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd}.desktopFrame.embedded{height:100%;margin:0;border:0;border-radius:0}.phoneFrame.embedded{height:100%;max-height:932px}.reviewPanel{position:absolute;right:18px;top:62px;z-index:25;width:min(330px,calc(100% - 36px));border:1px solid rgba(34,197,94,.36);border-radius:16px;background:rgba(2,6,23,.94);box-shadow:0 18px 44px rgba(0,0,0,.35);padding:12px;color:#d1fae5}.reviewPanel b{display:block;color:#fff;font-size:13px}.reviewPanel span{display:inline-flex;margin-top:4px;color:#6ee7b7;font-size:11px;font-weight:900;text-transform:uppercase}.reviewPanel p{margin:8px 0 0;color:#cbd5e1;font-size:12px;line-height:1.35}.reviewPanel .errorText{color:#fecaca}.reviewPanel button{width:100%;margin-top:10px}.reviewPanel button.pushReady{background:#16a34a;border-color:#86efac;color:#fff}.reviewPanel button.pushBlocked{background:#334155;border-color:#64748b;color:#cbd5e1}.sourceActionStrip{display:grid;grid-template-columns:repeat(5,minmax(96px,1fr)) repeat(7,auto);gap:8px;align-items:center;padding:8px;background:#020617;border-top:1px solid rgba(148,163,184,.18)}.sourceActionStrip div{min-width:0;border:1px solid rgba(20,184,166,.3);border-radius:12px;background:rgba(8,47,73,.34);padding:8px}.sourceActionStrip span{display:block;color:#6ee7b7;font-size:10px;text-transform:uppercase;font-weight:900}.sourceActionStrip b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:12px}.editorDrawer{max-height:260px;overflow:auto;border-top:1px solid rgba(148,163,184,.18);background:#020617}.editorDrawer summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:900}.drawerGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}.patchBox{border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.9);padding:10px;color:#cbd5e1;font-size:11px}.patchBox p{margin:4px 0;color:#94a3b8;font-size:11px;overflow-wrap:anywhere}@media(max-width:1180px){.splitMode{grid-template-columns:minmax(0,1fr)}.codePanel,.splitPreview{min-height:520px}.sourceActionStrip{grid-template-columns:repeat(2,minmax(0,1fr));}.routeBar{width:min(620px,52vw)}}`}</style>
+    <section className={reviewFullscreen ? "visualEditor reviewFullscreen" : "visualEditor"}>
+      <header className="editorHeader"><div><strong>{stationLabel} Visual Editing</strong><span>{repo || "No repo"} · {branch || "No branch"} · {sourceRoute} · {filePath || "No file"}</span></div><div className="modeButtons">{modeButtons.map((item) => <button key={item.id} type="button" className={viewMode === item.id ? "active" : ""} onClick={() => switchMode(item.id)}>{item.label}</button>)}</div></header>
+      <div className="editorStatus"><span>Draft: {draftId || "not saved"}</span><span>Checkpoint: {checkpointId || "none"}</span><span>Patch: {patchState}</span><span>Preview: {previewBuildState}</span><span>Commit: {commitSha ? commitSha.slice(0, 8) : "none"}</span><span>Code selection: {codeSelection ? `${codeSelection.startLine}:${codeSelection.startColumn}` : "none"}</span></div>
+      {lastError ? <div className="errorBox"><b>Failed</b><span>{lastError}</span><button type="button" onClick={saveDraft} disabled={saving}>Retry Save + Preview</button></div> : null}
+      <div className="editorActions"><button type="button" onClick={saveDraft} disabled={saving || !ready}>{saving ? "Working…" : "Save Draft"}</button><button type="button" onClick={generatePatch} disabled={saving || !ready}>Generate Patch</button><button type="button" onClick={pushToGitHub} disabled={!pushReady}>Push GitHub</button><button type="button" onClick={resetToOriginal}>Reset</button><button type="button" onClick={refreshPreview}>Refresh</button><button type="button" onClick={() => setDrawerOpen((value) => !value)}>Operations</button></div>
+      {viewMode === "editor" || viewMode === "advanced" ? <div className="previewPane"><iframe key={`editor-${frameKey}`} title="Editable frontend preview" src={editorUrl} /></div> : null}
+      {viewMode === "mobile" ? <div className="mobilePane"><div className="phoneFrame"><iframe key={`mobile-${frameKey}`} title="Mobile editable preview" src={editorUrl} /></div></div> : null}
+      {viewMode === "code" ? <div className="codePanel"><RuntimeCodeEditor repo={repo} branch={branch} filePath={filePath} sha="current" value={draftContent} onChange={handleCodeChange} onSelectionChange={setCodeSelection} /></div> : null}
+      {viewMode === "split" ? <div className="splitMode"><div className="codePanel"><RuntimeCodeEditor repo={repo} branch={branch} filePath={filePath} sha="current" value={draftContent} onChange={handleCodeChange} onSelectionChange={setCodeSelection} /></div><div className="splitPreview">{previewUrl ? <iframe key={`split-${frameKey}`} title="Real temporary split preview" src={reviewSrc} /> : <div className="reviewPending"><b>Real temporary preview required</b><span>Save Draft to create a temporary Git branch, wait for Vercel, then review the exact result beside the code.</span></div>}</div></div> : null}
+      {viewMode === "browser" ? <div className={reviewFullscreen ? "browserReview full" : "browserReview"}><div className="reviewToolbar"><button type="button" className={reviewDevice === "desktop" ? "active" : ""} onClick={() => updateReviewMode({ device: "desktop" })}>Desktop</button><button type="button" className={reviewDevice === "iphone-14-pro-max" ? "active" : ""} onClick={() => updateReviewMode({ device: "iphone-14-pro-max" })}>iPhone 14 Pro Max</button><button type="button" className={reviewBrowser === "safari" ? "active" : ""} onClick={() => updateReviewMode({ browser: "safari" })}>Safari</button><button type="button" className={reviewBrowser === "chrome" ? "active" : ""} onClick={() => updateReviewMode({ browser: "chrome" })}>Chrome</button><button type="button" onClick={() => updateReviewMode({ fullscreen: !reviewFullscreen })}>{reviewFullscreen ? "Exit Full Screen" : "Full Screen"}</button><button type="button" className={reviewSafeZone ? "active" : ""} onClick={() => updateReviewMode({ safeZone: !reviewSafeZone })}>Safe Zone</button></div><div className={`reviewFrame ${reviewDevice} ${reviewBrowser}`}>{reviewSafeZone ? <div className="safeZoneOverlay"><span>Safe zone</span></div> : null}{previewUrl ? <iframe key={`review-${frameKey}`} title="Real temporary Browser Review" src={reviewSrc} /> : <div className="reviewPending"><b>No real temporary preview yet</b><span>Save Draft to generate the patch, create a temporary Git branch, and wait for Vercel.</span></div>}</div><aside className="reviewPanel"><b>Real Temporary Preview</b><span>Status: {previewBuildState}</span><span>URL: {previewUrl || "not ready"}</span><span>Branch: {previewBranch || "not ready"}</span><span>Deployment: {deploymentId || "not ready"}</span><span>Push GitHub: {pushReady ? "ready" : "locked until preview succeeds and draft is unchanged"}</span><button type="button" onClick={pushToGitHub} disabled={!pushReady}>Push GitHub</button></aside></div> : null}
+      {drawerOpen ? <aside className="advancedDrawer"><b>Advanced source state</b><span>Source truth: {sourceTruthId}</span><span>Preview ID: {previewId || "none"}</span><span>Preview branch: {previewBranch || "none"}</span><span>Deployment ID: {deploymentId || "none"}</span><span>Preview logs: {previewLogs.length}</span><span>Selected: {selected?.selector || selected?.kind || "none"}</span><span>Edits: {edits.length}</span><span>Generated draft current: {generatedContent === draftContent ? "yes" : "no"}</span></aside> : null}
+      <style jsx>{`.visualEditor{height:100%;min-height:580px;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);background:#07101f;color:#fff;overflow:hidden}.editorHeader{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.16)}.editorHeader div:first-child{display:grid;gap:2px}.editorHeader strong{font-size:12px}.editorHeader span,.editorStatus span,.reviewPanel span,.advancedDrawer span{font-size:9px;color:#94a3b8}.modeButtons,.editorActions,.reviewToolbar{display:flex;gap:5px;align-items:center;overflow:auto}.modeButtons button,.editorActions button,.reviewToolbar button,.reviewPanel button,.errorBox button{height:28px;border:1px solid rgba(148,163,184,.25);border-radius:7px;background:#111c31;color:#dbeafe;font-size:9px;font-weight:900;padding:0 9px}.modeButtons button.active,.reviewToolbar button.active{background:#2563eb;border-color:#60a5fa;color:#fff}.editorStatus{display:flex;gap:12px;padding:5px 10px;border-bottom:1px solid rgba(148,163,184,.12);overflow:auto}.editorActions{padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12)}button:disabled{opacity:.4;cursor:not-allowed}.errorBox{display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(127,29,29,.36);border-bottom:1px solid rgba(248,113,113,.34);font-size:10px}.errorBox b{color:#fca5a5}.errorBox span{color:#fecaca;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.previewPane,.codePanel,.splitPreview,.browserReview,.mobilePane{min-height:0;overflow:hidden}.previewPane iframe,.splitPreview iframe,.reviewFrame iframe{width:100%;height:100%;border:0;background:#fff}.mobilePane{display:grid;place-items:center;padding:10px;overflow:auto}.phoneFrame{width:430px;height:740px;max-width:96%;border:10px solid #111827;border-radius:34px;overflow:hidden;background:#fff}.phoneFrame iframe{width:100%;height:100%;border:0}.splitMode{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:8px}.browserReview{display:grid;grid-template-columns:minmax(0,1fr) 240px;grid-template-rows:auto minmax(0,1fr);gap:0}.reviewToolbar{grid-column:1/-1;padding:6px 8px;border-bottom:1px solid rgba(148,163,184,.14)}.reviewFrame{position:relative;min-width:0;min-height:0;background:#0f172a;overflow:auto;display:grid;place-items:center}.reviewFrame.desktop iframe{width:100%;height:100%}.reviewFrame.iphone-14-pro-max iframe{width:430px;height:932px;max-width:96%;border:10px solid #111827;border-radius:34px}.reviewFrame.safari{box-shadow:inset 0 34px 0 #e5e7eb}.reviewFrame.chrome{box-shadow:inset 0 34px 0 #1f2937}.safeZoneOverlay{position:absolute;z-index:5;inset:72px 7% 42px;border:2px dashed #f59e0b;pointer-events:none}.safeZoneOverlay span{background:#f59e0b;color:#111827;font-size:9px;font-weight:900;padding:2px 5px}.reviewPanel{display:grid;align-content:start;gap:7px;padding:10px;border-left:1px solid rgba(148,163,184,.16);background:#08111f}.reviewPending{height:100%;display:grid;place-content:center;gap:8px;padding:30px;text-align:center;color:#cbd5e1}.reviewPending span{font-size:10px;color:#94a3b8}.advancedDrawer{position:absolute;right:10px;top:110px;z-index:20;width:280px;display:grid;gap:7px;padding:10px;border:1px solid rgba(148,163,184,.28);border-radius:12px;background:#08111f;box-shadow:0 18px 50px rgba(0,0,0,.45)}.reviewFullscreen{position:fixed;inset:0;z-index:50000;min-height:100dvh}.reviewFullscreen .browserReview{height:calc(100dvh - 120px)}@media(max-width:900px){.splitMode{grid-template-columns:1fr;overflow:auto}.browserReview{grid-template-columns:1fr}.reviewPanel{border-left:0;border-top:1px solid rgba(148,163,184,.16)}.editorHeader{align-items:flex-start;flex-direction:column}}`}</style>
     </section>
   );
 }
