@@ -1,12 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
+import type { UpdateSessionInput } from "@/lib/streams-ai/repositories/types";
 import { sanitizeStreamsAIPayload, sanitizeStreamsAIText } from "@/lib/streams-ai/protected-reasoning";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const sessions = new StreamsAISessionsRepository();
+const SESSION_STATUSES: NonNullable<UpdateSessionInput["status"]>[] = ["active", "archived"];
 
 function failure(error: unknown, status = 500) {
   return NextResponse.json({ ok: false, apiVersion: "v1", error: error instanceof Error ? error.message : "Unknown conversations error" }, { status });
@@ -57,9 +59,12 @@ export async function PATCH(request: NextRequest) {
       metadata?: Record<string, unknown>;
     };
     if (!body.conversationId) return failure(new Error("conversationId is required"), 400);
+    if (body.status && !SESSION_STATUSES.includes(body.status as NonNullable<UpdateSessionInput["status"]>)) {
+      return failure(new Error("status must be active or archived"), 400);
+    }
     const conversation = await sessions.update(scope, body.conversationId, {
       title: typeof body.title === "string" ? sanitizeStreamsAIText(body.title, 300) : undefined,
-      status: body.status,
+      status: body.status as UpdateSessionInput["status"],
       metadata: body.metadata,
     });
     return NextResponse.json({ ok: true, apiVersion: "v1", conversation });
