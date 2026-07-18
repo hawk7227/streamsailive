@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, rolloutBucket } from "../src/lib/streams-mobile/feature-flags-repository";
-import { STREAMS_RESUMABLE_UPLOAD_LIMITS } from "../src/lib/streams-mobile/resumable-uploads-repository";
+import { compareVersions, stableFallbackRolloutBucket, STREAMS_RESUMABLE_UPLOAD_LIMITS } from "../src/lib/streams-mobile/mobile-backend-contract";
 import { STREAMS_V1_CORE_ROUTES } from "../src/lib/streams-api/v1-contract";
 
 describe("Streams mobile backend extensions", () => {
@@ -20,10 +19,10 @@ describe("Streams mobile backend extensions", () => {
   });
 
   it("assigns stable rollout buckets", () => {
-    const first = rolloutBucket("feature-a:user-1");
+    const first = stableFallbackRolloutBucket("feature-a:user-1");
     expect(first).toBeGreaterThanOrEqual(0);
     expect(first).toBeLessThan(100);
-    expect(rolloutBucket("feature-a:user-1")).toBe(first);
+    expect(stableFallbackRolloutBucket("feature-a:user-1")).toBe(first);
   });
 
   it("defines bounded resumable upload sizes", () => {
