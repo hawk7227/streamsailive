@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
@@ -9,8 +9,11 @@ type BuilderChatConnection = { connected: boolean; activeWorkstationId: string; 
 type Props = { activeModule: string; connection: BuilderChatConnection; onConnectionChange: (next: BuilderChatConnection) => void };
 type FileResult = { ok: boolean; error?: string; path?: string; sha?: string; frontendRoute?: string; content?: string; sourceTruth?: { route?: string; file?: string } };
 type ChatMessage = { id: string; role: "assistant" | "user"; content: string; streaming?: boolean; error?: boolean };
+type ComposerAttachment = { id: string; name: string; mimeType?: string; sizeBytes?: number; kind?: string; storageUrl?: string; previewUrl?: string; publicUrl?: string };
 
 const UUID_PATH = /\/streams-ai\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i;
+const COMPOSER_MIN_HEIGHT = 38;
+const COMPOSER_MAX_HEIGHT = 168;
 
 async function readJson(response: Response) {
   const text = await response.text();
@@ -40,14 +43,40 @@ function parseSseBlock(block: string) {
   try { return { event, payload: JSON.parse(data.join("\n")) as Record<string, any> }; } catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
+function normalizeAttachment(asset: Record<string, any>): ComposerAttachment {
+  return {
+    id: String(asset.id || asset.assetId || asset.storageUrl || asset.previewUrl || asset.name || createId("attachment")),
+    name: String(asset.name || "Attached file"),
+    mimeType: asset.mimeType || asset.mime_type || undefined,
+    sizeBytes: Number(asset.sizeBytes || asset.size_bytes || 0),
+    kind: asset.kind || undefined,
+    storageUrl: asset.storageUrl || asset.storage_url || undefined,
+    previewUrl: asset.previewUrl || asset.preview_url || undefined,
+    publicUrl: asset.publicUrl || asset.public_url || undefined,
+  };
+}
+
 export default function BuilderCenterChat({ activeModule, connection, onConnectionChange }: Props) {
   const pathname = usePathname();
   const [prompt, setPrompt] = useState("");
   const [agentPrompt, setAgentPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen.");
   const [status, setStatus] = useState("Connected to the real StreamsAI conversation service.");
   const [running, setRunning] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: "welcome", role: "assistant", content: "StreamsAI is connected. Ask a normal question here, or use Agent 1 Source Pull for an exact repository file." }]);
   const abortRef = useRef<AbortController | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useLayoutEffect(() => {
+    const element = composerRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    const nextHeight = Math.min(COMPOSER_MAX_HEIGHT, Math.max(COMPOSER_MIN_HEIGHT, element.scrollHeight));
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+  }, [prompt, attachments.length]);
 
   function addMessage(role: ChatMessage["role"], content: string, extra: Partial<ChatMessage> = {}) {
     const id = createId(role);
@@ -72,7 +101,34 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
     publishSummary("bridge", "StreamsAI chat disconnected from workstation context.");
   }
 
-  async function sendRealChat(clean: string) {
+  async function uploadFiles(files: FileList | File[]) {
+    const selected = Array.from(files || []);
+    if (!selected.length || uploading) return;
+    setUploading(true);
+    setStatus(`Uploading ${selected.length} attachment${selected.length === 1 ? "" : "s"}…`);
+    try {
+      const form = new FormData();
+      selected.forEach((file) => form.append("file", file));
+      const response = await fetch("/api/streams-ai/assets", { method: "POST", credentials: "same-origin", body: form });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok === false || payload?.success === false) throw new Error(payload?.error || "Attachment upload failed.");
+      const uploaded = (Array.isArray(payload.assets) ? payload.assets : Array.isArray(payload.files) ? payload.files : []).map(normalizeAttachment);
+      if (!uploaded.length) throw new Error("The upload completed without an attachment record.");
+      setAttachments((current) => {
+        const merged = [...current];
+        for (const item of uploaded) if (!merged.some((existing) => existing.id === item.id)) merged.push(item);
+        return merged.slice(0, 20);
+      });
+      setStatus(`${uploaded.length} attachment${uploaded.length === 1 ? "" : "s"} ready.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Attachment upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function sendRealChat(clean: string, sentAttachments: ComposerAttachment[]) {
     const assistantId = addMessage("assistant", "", { streaming: true });
     const activeFile = readLastActiveFile();
     const controller = new AbortController();
@@ -89,7 +145,8 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         signal: controller.signal,
         body: JSON.stringify({
           sessionId: requestedSessionId || undefined,
-          message: clean,
+          message: clean || "\u200B",
+          attachments: sentAttachments,
           runAssistant: true,
           idempotencyKey: createId("builder-chat"),
           metadata: {
@@ -102,6 +159,7 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
             branch: activeFile?.branch || null,
             filePath: activeFile?.path || null,
             route: activeFile?.route || null,
+            attachmentCount: sentAttachments.length,
           },
         }),
       });
@@ -179,7 +237,18 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
   }
 
   async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) { event?.preventDefault(); await runAgentOneText(agentPrompt); }
-  async function sendFooterChat(event: FormEvent<HTMLFormElement>) { event.preventDefault(); event.stopPropagation(); const clean = prompt.trim(); if (!clean || running) return; setPrompt(""); addMessage("user", clean); await sendRealChat(clean); }
+  async function sendFooterChat(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const clean = prompt.trim();
+    if ((!clean && !attachments.length) || running || uploading) return;
+    const sentAttachments = attachments;
+    setPrompt("");
+    setAttachments([]);
+    const userSummary = clean || `Attached ${sentAttachments.length} file${sentAttachments.length === 1 ? "" : "s"}.`;
+    addMessage("user", sentAttachments.length ? `${userSummary}\n\n${sentAttachments.map((item) => `📎 ${item.name}`).join("\n")}` : userSummary);
+    await sendRealChat(clean, sentAttachments);
+  }
 
   return (
     <section className="builderChatFrame" aria-label="Connected StreamsAI Builder chat console">
@@ -190,9 +259,34 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
           {messages.map((message) => <div key={message.id} className={`msg ${message.role}${message.streaming ? " streaming" : ""}${message.error ? " error" : ""}`}>{message.content || "Thinking…"}</div>)}
         </div>
         <form className="footerComposer" onSubmit={sendFooterChat} aria-label="Connected StreamsAI composer">
-          <button type="button" aria-label="Add files">+</button>
-          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Ask anything" rows={1} disabled={running} />
-          {running ? <button type="button" aria-label="Stop response" onClick={() => abortRef.current?.abort()}>■</button> : <button type="submit" aria-label="Send message">↑</button>}
+          {attachments.length ? (
+            <div className="composerAttachments" aria-label="Message attachments">
+              {attachments.map((attachment) => (
+                <span className="attachmentChip" key={attachment.id}>
+                  <span className="attachmentName">{attachment.name}</span>
+                  <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>×</button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <input ref={fileInputRef} className="hiddenFileInput" type="file" multiple onChange={(event) => void uploadFiles(event.currentTarget.files || [])} />
+          <button type="button" aria-label="Add files" disabled={running || uploading} onClick={() => fileInputRef.current?.click()}>{uploading ? "…" : "+"}</button>
+          <textarea
+            ref={composerRef}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder={attachments.length ? "Add a message about these files" : "Ask anything"}
+            rows={1}
+            disabled={running}
+            aria-label="Message"
+          />
+          {running ? <button type="button" aria-label="Stop response" onClick={() => abortRef.current?.abort()}>■</button> : <button type="submit" aria-label="Send message" disabled={uploading || (!prompt.trim() && !attachments.length)}>↑</button>}
         </form>
         <nav className="mobileFooter" aria-label="Builder console modes">
           <button type="button">Chat</button><button type="button">Build</button><button type="button">Media</button><button type="button">More</button>
@@ -219,7 +313,9 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         .orb{justify-self:center;width:70px;height:70px;border-radius:22px;background:radial-gradient(circle at 50% 50%,#22d3ee 0 12%,#7c3aed 34%,#d946ef 72%);box-shadow:0 0 42px rgba(124,58,237,.45)}
         h2{margin:0;color:#f8fafc;font-size:23px;line-height:1.15;font-weight:900}.messageList{min-height:0;display:flex;flex-direction:column;gap:8px;overflow:auto;padding:2px 3px 8px;text-align:left}
         .msg{max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid rgba(148,163,184,.14);border-radius:14px;padding:10px 11px;color:#e2e8f0;font-size:14px;line-height:1.5;background:rgba(15,23,42,.72)}.msg.user{align-self:flex-end;background:rgba(124,58,237,.28);border-color:rgba(168,85,247,.32)}.msg.assistant{align-self:flex-start}.msg.streaming{border-color:rgba(34,211,238,.4)}.msg.error{border-color:rgba(248,113,113,.55);color:#fecaca}
-        .footerComposer{display:grid;grid-template-columns:36px minmax(0,1fr) 42px;gap:7px;align-items:end;border:1px solid rgba(168,85,247,.45);border-radius:22px;background:rgba(49,18,89,.78);box-shadow:0 0 32px rgba(124,58,237,.25);padding:6px}.footerComposer textarea{width:100%;min-height:38px;max-height:120px;resize:vertical;border:0;background:transparent;color:#fff;outline:none;padding:8px 4px;font:700 15px/1.4 inherit;box-sizing:border-box}.footerComposer textarea::placeholder{color:#fff;opacity:.82}.footerComposer button{height:38px;border:0;border-radius:999px;background:#7c3aed;color:#fff;font-size:16px;font-weight:900;cursor:pointer}.footerComposer button:first-child{background:rgba(30,41,59,.96)}
+        .footerComposer{display:grid;grid-template-columns:38px minmax(0,1fr) 42px;grid-template-rows:auto auto;gap:7px;align-items:end;border:1px solid rgba(168,85,247,.45);border-radius:24px;background:rgba(49,18,89,.78);box-shadow:0 0 32px rgba(124,58,237,.25);padding:7px;box-sizing:border-box;min-height:52px;max-height:248px;overflow:hidden;transition:min-height .12s ease,height .12s ease}
+        .composerAttachments{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;max-height:72px;overflow:auto;padding:1px 2px 4px;text-align:left}.attachmentChip{display:flex;align-items:center;min-width:0;max-width:100%;height:30px;border:1px solid rgba(196,181,253,.42);border-radius:999px;background:rgba(76,29,149,.74);padding:0 4px 0 10px;color:#ede9fe;font-size:11px;font-weight:800}.attachmentName{min-width:0;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachmentChip button{width:24px!important;height:24px!important;margin-left:4px;background:transparent!important;color:#ddd6fe!important;font-size:16px!important}.hiddenFileInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+        .footerComposer textarea{field-sizing:content;width:100%;min-width:0;min-height:38px;max-height:168px;resize:none;overflow-y:hidden;border:0;background:transparent;color:#fff;outline:none;padding:8px 4px;font:700 15px/1.4 inherit;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere}.footerComposer textarea::placeholder{color:#fff;opacity:.82}.footerComposer button{width:38px;height:38px;align-self:end;border:0;border-radius:999px;background:#7c3aed;color:#fff;font-size:16px;font-weight:900;cursor:pointer;flex:0 0 auto}.footerComposer button:first-of-type{background:rgba(30,41,59,.96)}.footerComposer button:disabled{opacity:.5;cursor:not-allowed}
         .mobileFooter{height:38px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;border-top:1px solid rgba(148,163,184,.14);padding-top:6px}.mobileFooter button{height:28px;border:0;border-radius:10px;background:rgba(15,23,42,.92);color:#cbd5e1;font-size:11px;font-weight:900;cursor:pointer}.mobileFooter button:first-child{background:#7c3aed;color:#fff}
         .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box}.connectionStatus{display:grid;gap:2px}.connectionStatus b{color:#6ee7b7;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.connectionStatus span{color:#fff;font-size:12px;font-weight:800}.connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.connectionActions button,.fallbackCommand button{height:32px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:11px;font-weight:900;cursor:pointer}.connectionActions button:first-child{background:#065f46;color:#6ee7b7}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed}.connectionBar p{margin:0;color:#cbd5e1;font-size:11px;line-height:1.4}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:10px;font-weight:900;text-transform:uppercase}.fallbackCommand form{display:grid;gap:6px;margin-top:6px}.fallbackCommand textarea{width:100%;height:68px;resize:vertical;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:12px;line-height:1.4;outline:none;box-sizing:border-box}
       `}</style>
