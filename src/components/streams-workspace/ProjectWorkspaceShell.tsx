@@ -19,6 +19,7 @@ function ShellLayout() {
       data-top-panels="removed"
       data-bottom-tray="removed"
       data-workstation-tabs="single-top-row"
+      data-agent-status-strip="removed"
     >
       <ActiveProjectContextBridge />
       <BuilderPrecisionCompatibilityBridge />
@@ -37,9 +38,9 @@ function ShellLayout() {
         .workspaceBody{min-height:0;display:grid;grid-template-columns:72px minmax(0,1fr);overflow:hidden}
         .workspaceCenter{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden;background:#020713}
         .workspaceCanvas{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden}.workspaceCanvas.fullscreen{position:fixed;inset:0;z-index:30000;background:#020713}
-        .existingBuilderSurface{min-width:0;min-height:0;overflow:auto;position:relative;background:#020713}.existingBuilderSurface .streamsBuilderShell{width:100%!important;max-width:100%!important;height:auto!important;min-height:100%!important}.existingBuilderSurface .centerWorkspace{min-height:100%!important}.existingBuilderSurface .workArea{min-height:calc(100dvh - 40px)!important}.existingBuilderSurface .workstationShell{min-height:calc(100dvh - 40px)!important;grid-template-rows:minmax(0,1fr) auto auto auto!important}
-        .existingBuilderSurface .connectionRibbon{display:none!important}
-        .existingBuilderSurface .stationViewport{position:relative!important;overflow:hidden!important}
+        .existingBuilderSurface{min-width:0;min-height:0;overflow:auto;position:relative;background:#020713}.existingBuilderSurface .streamsBuilderShell{width:100%!important;max-width:100%!important;height:auto!important;min-height:100%!important}.existingBuilderSurface .centerWorkspace{min-height:100%!important}.existingBuilderSurface .workArea{min-height:calc(100dvh - 40px)!important}.existingBuilderSurface .workstationShell{min-height:calc(100dvh - 40px)!important;grid-template-rows:minmax(0,1fr)!important}
+        .existingBuilderSurface .connectionRibbon,.existingBuilderSurface .workstationShell>.wsChrome,.existingBuilderSurface .liveWorkstation .debug{display:none!important}
+        .existingBuilderSurface .stationViewport{position:relative!important;overflow:hidden!important;grid-row:1!important;height:100%!important;min-height:0!important}
         .existingBuilderSurface .topRow{height:40px!important;min-height:40px!important;display:flex!important;align-items:center!important;gap:8px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0 4px!important;border-bottom:1px solid #30363d!important;background:#020617!important;scrollbar-width:thin}
         .existingBuilderSurface .topControlStrip{flex:1 0 650px!important;min-width:650px!important;height:36px!important;overflow:visible!important}
         .existingBuilderSurface .controls{flex:0 0 300px!important;min-width:300px!important;height:36px!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
@@ -49,7 +50,7 @@ function ShellLayout() {
         .existingBuilderSurface .builderUnifiedTopRowActions button.active{border-color:#2dd4bf;background:#065f46;color:#ccfbf1}
         .existingBuilderSurface .builderUnifiedTopRowActions button[data-unified-action="Attach"]{background:#0f766e;border-color:#2dd4bf;color:#ecfeff}
         .existingBuilderSurface [data-unified-duplicate="hidden"]{display:none!important}
-        .existingBuilderSurface .liveWorkstation .previewSide{grid-template-rows:auto minmax(0,1fr) auto!important}
+        .existingBuilderSurface .liveWorkstation .previewSide{grid-template-rows:minmax(0,1fr) auto auto!important;height:100%!important}
         .existingBuilderSurface .topControlStrip label:has(select),.existingBuilderSurface .controls label:has(select){position:relative!important;display:grid!important;grid-template-columns:auto 12px minmax(0,1fr)!important;gap:4px!important;align-items:center!important}
         .existingBuilderSurface .topControlStrip label:has(select)::after,.existingBuilderSurface .controls label:has(select)::after{content:"▾";grid-column:2;color:#cbd5e1;font-size:11px;line-height:1;pointer-events:none;align-self:center}
         .existingBuilderSurface .topControlStrip label:has(select)>b,.existingBuilderSurface .controls label:has(select)>b{grid-column:1}
