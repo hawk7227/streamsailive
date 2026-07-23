@@ -9,7 +9,6 @@ import MessageActionBridge from "../message-actions/MessageActionBridge";
 
 const MODES = ["Thinking", "Configure..."];
 const COMPOSER_TEXTAREA_MIN_HEIGHT = 30;
-const COMPOSER_TEXTAREA_MAX_HEIGHT = 168;
 const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
@@ -20,12 +19,11 @@ const TOOL_ITEMS = [
   { id: "web_search", icon: "◎", label: "Web search", enabled: true, feature: "research" },
 ];
 
-function autosizeComposerTextarea(node) {
+export function autosizeComposerTextarea(node) {
   if (!node) return;
   node.style.height = "0px";
-  const nextHeight = Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT, Math.max(COMPOSER_TEXTAREA_MIN_HEIGHT, node.scrollHeight));
-  node.style.height = `${nextHeight}px`;
-  node.style.overflowY = node.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+  node.style.overflowY = "hidden";
+  node.style.height = `${Math.max(COMPOSER_TEXTAREA_MIN_HEIGHT, node.scrollHeight)}px`;
 }
 
 function isTerminalActivity(activity) {
@@ -56,6 +54,24 @@ export default function StreamsComposer({
   useEffect(() => {
     autosizeComposerTextarea(inputRef.current);
   }, [message, selectedTool]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer || typeof ResizeObserver === "undefined") return undefined;
+    const publishHeight = () => {
+      const height = Math.ceil(composer.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--streams-composer-height", `${height}px`);
+    };
+    publishHeight();
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(composer);
+    window.addEventListener("resize", publishHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", publishHeight);
+      document.documentElement.style.removeProperty("--streams-composer-height");
+    };
+  }, []);
 
   useEffect(() => {
     if (isStreaming) {
