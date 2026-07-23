@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
-import { CHAT_MARKDOWN_STYLE_VARS } from "./markdown-semantic-colors";
 import "./chat-markdown.css";
 
 const STREAM_PACING = { largeDeltaThresholdChars: 220, sentenceChunkMaxChars: 180, lineChunkMaxChars: 160, fallbackChunkMaxChars: 120, minimumChunkDelayMs: 24, maximumChunkDelayMs: 72, millisecondsPerCharacter: 0.55, autoScrollOnlyWithinPx: 220 };
@@ -37,7 +36,7 @@ function ChatMarkdownMessage({ content }) {
     step(); return () => window.clearTimeout(timerRef.current);
   }, [fullMarkdown]);
 
-  return <div className="chatMarkdown" style={CHAT_MARKDOWN_STYLE_VARS}><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={{ p: Paragraph, code: CodeBlock, table: Table, a: SafeLink, h1: ({ children }) => <h1>{children}</h1>, h2: ({ children }) => <h2>{children}</h2>, h3: ({ children }) => <h3>{children}</h3>, h4: ({ children }) => <h4>{children}</h4>, ul: ({ children }) => <ul>{children}</ul>, ol: ({ children }) => <ol>{children}</ol>, li: ({ children }) => <li>{children}</li>, blockquote: ({ children }) => <blockquote>{children}</blockquote> }}>{displayMarkdown}</ReactMarkdown></div>;
+  return <div className="chatMarkdown"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={{ p: Paragraph, code: CodeBlock, table: Table, a: SafeLink, h1: ({ children }) => <h1>{children}</h1>, h2: ({ children }) => <h2>{children}</h2>, h3: ({ children }) => <h3>{children}</h3>, h4: ({ children }) => <h4>{children}</h4>, ul: ({ children }) => <ul>{children}</ul>, ol: ({ children }) => <ol>{children}</ol>, li: ({ children }) => <li>{children}</li>, blockquote: ({ children }) => <blockquote>{children}</blockquote> }}>{displayMarkdown}</ReactMarkdown></div>;
 }
 
-export default memo(ChatMarkdownMessage);
+export default memo(ChatMarkdownMessage;
