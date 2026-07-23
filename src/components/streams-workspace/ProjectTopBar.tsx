@@ -6,10 +6,8 @@ export default function ProjectTopBar() {
   const { state, setGlobalNav, setTrayTab, toggleFullscreenCanvas, toggleTray } = useProjectWorkspace();
 
   function returnToChat() {
-    const url = new URL(window.location.href);
-    url.searchParams.set("view", "chat");
     window.localStorage.setItem("streams-ai:experience-view", "chat");
-    window.location.assign(url.toString());
+    window.dispatchEvent(new CustomEvent("streams-ai:set-experience-view", { detail: { view: "chat" } }));
   }
 
   function openPreview() {
