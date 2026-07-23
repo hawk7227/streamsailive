@@ -8,8 +8,6 @@ export default function ProjectTopBar() {
     setGlobalNav,
     setTrayTab,
     toggleFullscreenCanvas,
-    toggleProjectPanel,
-    toggleInspector,
     toggleTray,
   } = useProjectWorkspace();
 
@@ -68,8 +66,6 @@ export default function ProjectTopBar() {
         <button type="button" onClick={exportProject}>Export</button>
         <button type="button" className="primaryAction" onClick={openCompletionReview}>Publish / Complete</button>
         <button type="button" aria-label="User profile" className="profileButton" onClick={() => setGlobalNav("Settings")}>MH</button>
-        <button type="button" className="panelControl" onClick={toggleProjectPanel} aria-pressed={state.projectPanelOpen} aria-label="Toggle project context panel">Context</button>
-        <button type="button" className="panelControl" onClick={toggleInspector} aria-pressed={state.inspectorOpen} aria-label="Toggle contextual utility panel">Utility</button>
         <button type="button" className="trayControl" onClick={toggleTray} aria-pressed={state.trayOpen} aria-label="Toggle bottom tray">Tray</button>
       </nav>
     </header>
