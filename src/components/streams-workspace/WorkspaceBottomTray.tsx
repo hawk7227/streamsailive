@@ -26,7 +26,7 @@ export default function WorkspaceBottomTray() {
             {tab}
           </button>
         ))}
-        <button type="button" className="trayToggle" onClick={toggleTray}>{state.trayOpen ? "Collapse" : "Expand"}</button>
+        <button type="button" className="trayToggle" onClick={toggleTray} aria-label="Toggle bottom tray" aria-expanded={state.trayOpen}>{state.trayOpen ? "Collapse" : "Expand"}</button>
       </div>
       {state.trayOpen ? (
         <div className="trayContent" role="tabpanel">
