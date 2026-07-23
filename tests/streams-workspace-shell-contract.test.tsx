@@ -33,20 +33,19 @@ describe("universal project workspace shell", () => {
     expect(html).toContain(">Publish / Complete<");
   });
 
-  it("keeps the builder canvas dominant and exposes panels only through the floating switcher", () => {
+  it("keeps the builder canvas dominant and removes both side-panel systems", () => {
     const html = renderShell();
     expect(html).toContain('aria-label="Main workspace canvas"');
     expect(html).toContain('aria-label="Workspace supporting materials"');
-    expect(html).toContain('data-side-panels="floating"');
+    expect(html).toContain('data-side-panels="removed"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
-    expect(html).toContain('aria-label="Workspace panel preview switcher"');
-    for (const tab of ["Project", "Properties", "Content", "Generate", "Guidance", "Ask AI"]) {
-      expect(html).toContain(`>${tab}<`);
-    }
+    expect(html).not.toContain('aria-label="Workspace panel preview switcher"');
+    expect(html).not.toContain("floatingWorkspaceSwitcher");
+    expect(html).not.toContain("floatingWorkspaceDrawer");
   });
 
-  it("renders the complete global navigation contract", () => {
+  it("renders the complete clean global navigation rail", () => {
     const html = renderShell();
     expect(html).toContain('aria-label="StreamsAI global navigation"');
     for (const item of ["Home", "Projects", "Workspace", "Files", "Create", "Generate", "Build", "Assets", "Tasks", "History", "Ask AI", "Settings"]) {
@@ -54,7 +53,7 @@ describe("universal project workspace shell", () => {
     }
   });
 
-  it("renders overview, canvas, and tray controls without permanent Context or Utility buttons", () => {
+  it("renders overview, canvas, and tray controls without Context or Utility buttons", () => {
     const html = renderShell();
     for (const label of ["Project Goal", "Current Stage", "Progress", "Next Recommended Action"]) {
       expect(html).toContain(label);
