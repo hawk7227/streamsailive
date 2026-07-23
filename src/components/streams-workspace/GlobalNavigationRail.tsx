@@ -44,7 +44,7 @@ export default function GlobalNavigationRail() {
       window.setTimeout(() => {
         const chat = document.querySelector<HTMLElement>(".builderChatFrame");
         chat?.scrollIntoView({ behavior: "smooth", block: "center" });
-        chat?.querySelector<HTMLInputElement>(".footerComposer input")?.focus({ preventScroll: true });
+        chat?.querySelector<HTMLTextAreaElement>(".footerComposer textarea")?.focus({ preventScroll: true });
       }, 40);
       return;
     }
