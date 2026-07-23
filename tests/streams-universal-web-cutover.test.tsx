@@ -24,21 +24,20 @@ describe("universal Streams web cutover", () => {
     expect(html).not.toContain("workspace-navigation");
   });
 
-  it("removes permanent side panels, bottom tray, and top overlays from the active builder workspace", () => {
+  it("renders the complete restored universal workspace around the preserved builder", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
-    expect(html).toContain('data-side-panels="removed"');
-    expect(html).toContain('data-top-panels="removed"');
-    expect(html).toContain('data-bottom-tray="removed"');
+    expect(html).toContain('data-side-panels="restored"');
+    expect(html).toContain('data-top-panels="restored"');
+    expect(html).toContain('data-bottom-tray="restored"');
     expect(html).toContain('data-preserved-builder-surface="true"');
     expect(html).toContain('data-first-working-row="manual-github-controls"');
     expect(html).toContain('aria-label="StreamsAI global navigation"');
-    expect(html).not.toContain('aria-label="Project context"');
-    expect(html).not.toContain('aria-label="Contextual utility panel"');
-    expect(html).not.toContain('aria-label="Workspace supporting materials"');
-    expect(html).not.toContain('class="workspaceBottomTray"');
-    expect(html).not.toContain('class="projectTopBar"');
-    expect(html).not.toContain('class="projectOverviewBlock"');
-    expect(html).not.toContain('class="canvasHeader"');
+    expect(html).toContain('aria-label="Project context"');
+    expect(html).toContain('aria-label="Contextual utility panel"');
+    expect(html).toContain('aria-label="Workspace supporting materials"');
+    expect(html).toContain('class="workspaceBottomTray"');
+    expect(html).toContain('class="projectTopBar"');
+    expect(html).toContain('class="projectOverviewBlock"');
   });
 
   it("does not render the floating experience overlay inside workspace mode", () => {
