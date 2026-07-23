@@ -1,3 +1,5 @@
+import "../media/frameless-inline-media.css";
+
 function imageUrl(image) {
   return image?.url || image?.previewUrl || image?.storageUrl || image?.artifactUrl || image?.imageUrl || "";
 }
