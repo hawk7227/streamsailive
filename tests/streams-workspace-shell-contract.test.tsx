@@ -33,13 +33,17 @@ describe("universal project workspace shell", () => {
     expect(html).toContain(">Publish / Complete<");
   });
 
-  it("keeps the builder canvas dominant without permanent side panels", () => {
+  it("keeps the builder canvas dominant and exposes panels only through the floating switcher", () => {
     const html = renderShell();
     expect(html).toContain('aria-label="Main workspace canvas"');
     expect(html).toContain('aria-label="Workspace supporting materials"');
-    expect(html).toContain('data-side-panels="removed"');
+    expect(html).toContain('data-side-panels="floating"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
+    expect(html).toContain('aria-label="Workspace panel preview switcher"');
+    for (const tab of ["Project", "Properties", "Content", "Generate", "Guidance", "Ask AI"]) {
+      expect(html).toContain(`>${tab}<`);
+    }
   });
 
   it("renders the complete global navigation contract", () => {
@@ -50,7 +54,7 @@ describe("universal project workspace shell", () => {
     }
   });
 
-  it("renders overview, canvas, and tray controls without Context or Utility buttons", () => {
+  it("renders overview, canvas, and tray controls without permanent Context or Utility buttons", () => {
     const html = renderShell();
     for (const label of ["Project Goal", "Current Stage", "Progress", "Next Recommended Action"]) {
       expect(html).toContain(label);
