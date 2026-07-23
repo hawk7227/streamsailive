@@ -25,10 +25,10 @@ describe("universal Streams web cutover", () => {
     expect(html).not.toContain("workspace-navigation");
   });
 
-  it("renders the centered universal workspace around the preserved builder", () => {
+  it("renders the restored builder without permanent side or top overlays", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
     expect(html).toContain('data-side-panels="removed"');
-    expect(html).toContain('data-top-panels="restored"');
+    expect(html).toContain('data-top-overlays="removed"');
     expect(html).toContain('data-bottom-tray="restored"');
     expect(html).toContain('data-workstation-screens="restored"');
     expect(html).toContain('data-preserved-builder-surface="true"');
@@ -36,10 +36,10 @@ describe("universal Streams web cutover", () => {
     expect(html).toContain('aria-label="StreamsAI global navigation"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
+    expect(html).not.toContain('class="projectTopBar"');
+    expect(html).not.toContain('class="projectOverviewBlock"');
     expect(html).toContain('aria-label="Workspace supporting materials"');
     expect(html).toContain('class="workspaceBottomTray"');
-    expect(html).toContain('class="projectTopBar"');
-    expect(html).toContain('class="projectOverviewBlock"');
   });
 
   it("restores every preserved workstation screen inside the center canvas", () => {
