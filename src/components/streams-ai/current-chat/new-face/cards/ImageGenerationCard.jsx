@@ -2,11 +2,6 @@ function imageUrl(image) {
   return image?.url || image?.previewUrl || image?.storageUrl || image?.artifactUrl || image?.imageUrl || "";
 }
 
-function canShareImage(image) {
-  const url = imageUrl(image);
-  return Boolean(image?.artifactPersisted || image?.storageUrl || (url && !String(url).startsWith("data:")));
-}
-
 export default function ImageGenerationCard({
   image,
   onOpen,
@@ -18,43 +13,28 @@ export default function ImageGenerationCard({
   onShare,
 }) {
   const url = imageUrl(image);
-  const size =
-    image?.width && image?.height
-      ? `${image.width} × ${image.height}`
-      : image?.requestSizeLabel || image?.size || image?.sizeLabel || "";
-
   const isReady = image?.status === "ready" || image?.status === "completed" || Boolean(url);
-  const shareable = canShareImage(image);
-  const statusText = isReady ? "Image ready" : image?.status === "failed" ? image?.statusText || "Image failed" : image?.statusText || "Generating image…";
+  const statusText = image?.status === "failed"
+    ? image?.statusText || "Image generation failed"
+    : image?.statusText || "Generating image…";
+
+  if (!isReady) {
+    return <div className="streamsInlineMediaPending" role="status" aria-live="polite">{statusText}</div>;
+  }
 
   return (
-    <article aria-label="Image generation card" className="streamsGeneratedMediaCard streamsGeneratedImageCard">
-      <strong>{isReady ? "Image ready" : "Generating image"}</strong>
-
-      <button type="button" className="streamsGeneratedMediaPreview" disabled={!isReady} onClick={isReady ? onOpen : undefined}>
-        {url ? (
-          <img src={url} alt={image?.alt || image?.prompt || "Generated"} />
-        ) : (
-          <div className="streamsGeneratedMediaSkeleton">{statusText}</div>
-        )}
+    <figure className="streamsInlineMedia streamsInlineImage" data-feature="image">
+      <button type="button" className="streamsInlineMediaSurface" onClick={onOpen} aria-label="Open generated image">
+        <img src={url} alt={image?.alt || image?.prompt || "Generated image"} />
       </button>
-
-      <div className="streamsGeneratedMediaMeta">
-        <span>{statusText}</span>
-        {size ? <span>{size}</span> : null}
+      <div className="streamsInlineMediaActions" aria-label="Image actions">
+        {onEdit ? <button type="button" onClick={onEdit}>Edit</button> : null}
+        {onAnimate ? <button type="button" onClick={onAnimate}>Animate</button> : null}
+        {onAnalyze ? <button type="button" onClick={onAnalyze}>Analyze</button> : null}
+        {onDownload ? <button type="button" onClick={onDownload}>Download</button> : null}
+        {onCopyUrl ? <button type="button" onClick={onCopyUrl}>Copy link</button> : null}
+        {onShare && typeof navigator !== "undefined" && navigator.share ? <button type="button" onClick={onShare}>Share</button> : null}
       </div>
-
-      <div className="streamsGeneratedMediaActions">
-        <button type="button" disabled={!isReady} onClick={onOpen}>Open</button>
-        <button type="button" disabled={!isReady} onClick={onDownload}>Download</button>
-        <button type="button" disabled={!shareable} title={shareable ? "Copy image link" : "Copy link unavailable until the image is saved"} onClick={onCopyUrl}>Copy link</button>
-        <button type="button" disabled={!isReady} onClick={onAnalyze}>Analyze</button>
-        <button type="button" disabled={!isReady} onClick={onEdit}>Edit</button>
-        <button type="button" disabled={!isReady} onClick={onAnimate}>Animate</button>
-        {typeof navigator !== "undefined" && navigator.share ? (
-          <button type="button" disabled={!shareable} title={shareable ? "Share image" : "Share unavailable until the image is saved"} onClick={onShare}>Share</button>
-        ) : null}
-      </div>
-    </article>
+    </figure>
   );
 }
