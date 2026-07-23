@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import StreamsUnifiedRoot from "../src/components/streams-ai/current-chat/StreamsUnifiedRoot";
 import StreamsUniversalExperience from "../src/components/streams-ai/current-chat/StreamsUniversalExperience";
-import { isWorkspaceNavigationIntent } from "../src/components/streams-ai/current-chat/WorkspaceNavigationCommandBridge";
 import { ProjectWorkspaceController } from "../src/components/streams-workspace/ProjectWorkspaceController";
 import GlobalNavigationRail from "../src/components/streams-workspace/GlobalNavigationRail";
 import ProjectTopBar from "../src/components/streams-workspace/ProjectTopBar";
@@ -20,10 +19,10 @@ describe("universal Streams web cutover", () => {
     expect(html).toContain("Streams loading");
   });
 
-  it("recognizes workspace-opening chat commands locally", () => {
-    expect(isWorkspaceNavigationIntent("Open the merged Streams Builder preview workspace for my active project.")).toBe(true);
-    expect(isWorkspaceNavigationIntent("Switch to the workspace and keep this chat connected.")).toBe(true);
-    expect(isWorkspaceNavigationIntent("Explain how the workspace works.")).toBe(false);
+  it("keeps workspace navigation behind explicit UI controls", () => {
+    const html = renderToStaticMarkup(<StreamsUnifiedRoot />);
+    expect(html).not.toContain("Opening merged workspace");
+    expect(html).not.toContain("workspace-navigation");
   });
 
   it("renders real project actions rather than an inert project header", () => {
