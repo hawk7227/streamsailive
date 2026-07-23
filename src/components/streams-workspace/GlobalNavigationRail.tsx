@@ -22,6 +22,9 @@ const MENU_GROUPS: MenuGroup[] = [
       { label: "Projects", action: "Projects" },
       { label: "Workspace", action: "Workspace" },
       { label: "Files", action: "Files" },
+      { label: "Create", action: "Create" },
+      { label: "Generate", action: "Generate" },
+      { label: "Build", action: "Build" },
     ],
   },
   {
@@ -63,6 +66,7 @@ const MENU_GROUPS: MenuGroup[] = [
 ];
 
 const BUILDER_ITEMS = new Set([
+  "Build",
   "Business Builder",
   "Visual Concepts",
   "Website Builder",
@@ -150,7 +154,7 @@ export default function GlobalNavigationRail() {
               const active = state.activeGlobalNav === action || (state.activeGlobalNav === "Build" && action === "Business Builder");
               return (
                 <button
-                  key={item.label}
+                  key={`${group.label}:${item.label}`}
                   type="button"
                   className={active ? "streamsMenuItem active" : "streamsMenuItem"}
                   onClick={() => activate(item)}
