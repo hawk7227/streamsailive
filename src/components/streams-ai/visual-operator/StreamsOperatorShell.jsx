@@ -9,11 +9,9 @@ import useAuthoritativeStreamsRuntime from "./useAuthoritativeStreamsRuntime";
 import "./streams-operator-shell.css";
 
 const NAV_GROUPS = [
-  { title: "MAIN", items: [["home", "Home"], ["portfolio", "Portfolio"], ["projects", "Projects"]] },
-  { title: "BUILD", items: [["business", "Business Builder"], ["revenue", "Revenue"], ["visuals", "Visual Concepts"], ["website", "Website Builder"], ["app", "App Builder"], ["preview-launch", "Preview + Launch"]] },
-  { title: "CREATE", items: [["studio", "Creator Studio"], ["image", "Image Studio"], ["video", "Video Studio"], ["voice", "Voice Studio"], ["captions", "Captions"], ["content", "Content"], ["ideas", "Ideas"], ["turn-you", "Turn This Into You"], ["calendar", "Calendar"], ["social", "Social Research"], ["growth-feed", "Growth Feed"], ["assets", "Assets"]] },
-  { title: "GROW", items: [["checklist", "Launch Checklist"], ["growth", "Growth Dashboard"], ["notifications", "Notifications"]] },
-  { title: "ACCOUNT", items: [["billing", "Billing / Credits"], ["notification-settings", "Notification Settings"], ["settings", "Settings"]] },
+  { title: "MAIN", items: [["home", "Home", "H"], ["projects", "Projects", "P"], ["workspace", "Workspace", "W"]] },
+  { title: "CREATE", items: [["files", "Files", "F"], ["create", "Create", "C"], ["generate", "Generate", "G"], ["build", "Build", "B"], ["assets", "Assets", "A"]] },
+  { title: "MANAGE", items: [["tasks", "Tasks", "T"], ["history", "History", "H"], ["ask-ai", "Ask AI", "A"], ["settings", "Settings", "S"]] },
 ];
 
 const ACCOUNT_PAGE_MAP = { profile: "profile", personalization: "personalization", settings: "settings", billing: "billing", upgrade: "modules", help: "help", apps: "apps", credits: "credits", privacy: "privacy", modules: "modules", language: "language", gift: "gift", "notification-settings": "settings" };
@@ -27,12 +25,25 @@ function useMobile() {
   return mobile;
 }
 
-function SidebarNav({ activeSection, setActiveSection, collapsed = false, onNavigate }) {
-  return <nav className="operatorNav" aria-label="Streams navigation">{NAV_GROUPS.map((group) => <section className="operatorNavGroup" key={group.title}><h3>{group.title}</h3>{group.items.map(([id, label]) => <button key={id} type="button" className={activeSection === id ? "active" : ""} title={collapsed ? label : undefined} onClick={() => { setActiveSection(id); onNavigate?.(); }}><span>{label}</span>{collapsed ? label.slice(0, 1) : null}</button>)}</section>)}</nav>;
+function navigateUniversalDestination(id, setActiveSection, onNavigate) {
+  if (id === "workspace" || id === "build") {
+    window.location.assign("/streams-ai/streams-builder/workspace");
+    return;
+  }
+  if (id === "generate") {
+    window.location.assign("/streams-ai/streams-builder/gen-video");
+    return;
+  }
+  setActiveSection(id === "ask-ai" ? "home" : id);
+  onNavigate?.();
 }
 
-function Sidebar({ activeSection, setActiveSection, collapsed, setCollapsed, onNewChat }) {
-  return <aside className="operatorSidebar"><div className="operatorBrand"><div className="operatorBrandMark" aria-hidden="true" /><div className="operatorBrandText"><b>STREAMS AI</b><span>Your AI Business Operator</span></div><button type="button" className="operatorCollapse" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed((value) => !value)}>{collapsed ? "›" : "‹"}</button></div><button type="button" className="operatorNewChat" onClick={onNewChat}>{collapsed ? "+" : "+ New session"}</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} collapsed={collapsed} /></aside>;
+function SidebarNav({ activeSection, setActiveSection, onNavigate }) {
+  return <nav className="operatorNav" aria-label="Streams navigation">{NAV_GROUPS.map((group) => <section className="operatorNavGroup" key={group.title}><h3>{group.title}</h3>{group.items.map(([id, label, icon]) => <button key={id} type="button" className={activeSection === id || ((id === "ask-ai") && activeSection === "home") ? "active" : ""} title={label} aria-label={label} onClick={() => navigateUniversalDestination(id, setActiveSection, onNavigate)}><i className="operatorNavIndicator" aria-hidden="true" /><span className="operatorNavIcon" aria-hidden="true">{icon}</span><small>{label}</small></button>)}</section>)}</nav>;
+}
+
+function Sidebar({ activeSection, setActiveSection, onNewChat }) {
+  return <aside className="operatorSidebar"><button type="button" className="operatorBrand" aria-label="Streams AI home" onClick={() => setActiveSection("home")}><span className="operatorBrandMark" aria-hidden="true">S</span></button><button type="button" className="operatorNewChat" aria-label="New session" title="New session" onClick={onNewChat}>+</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} /></aside>;
 }
 
 function MessageAttachments({ attachments = [] }) {
@@ -56,7 +67,7 @@ function ChatMessage({ message, chatRuntime }) {
   const text = String(message?.content || message?.text || "");
   const pending = !isUser && (message?.isStreaming || message?.status === "streaming") && !text && !message?.generatedImage && !message?.generatedVideoUrl;
   const failed = message?.status === "error" || message?.status === "failed";
-  return <article className={isUser ? "operatorMessage user" : `operatorMessage assistant${failed ? " failed" : ""}`} data-message-id={message?.id || undefined}>{!isUser ? <div className="operatorAvatar" aria-hidden="true">AI</div> : null}<div className="operatorBubble">{isUser ? <MessageAttachments attachments={message?.attachments} /> : null}{message?.generatedImage?.url ? <img className="operatorGenerated" src={message.generatedImage.url} alt={message.generatedImage.name || "Generated image"} /> : message?.generatedVideoUrl ? <video className="operatorGenerated" src={message.generatedVideoUrl} controls playsInline /> : pending ? <PendingAssistant label={message?.statusText || chatRuntime?.statusLabel} /> : isUser ? (text ? <div className="operatorUserText">{text}</div> : null) : <ChatMarkdownMessage content={text} />}{!isUser && !failed ? <MessageActions message={message} chatRuntime={chatRuntime} /> : null}</div></article>;
+  return <article className={isUser ? "operatorMessage user" : `operatorMessage assistant${failed ? " failed" : ""}`} data-message-id={message?.id || undefined}>{!isUser ? <div className="operatorAvatar" aria-hidden="true">S</div> : null}<div className="operatorBubble">{isUser ? <MessageAttachments attachments={message?.attachments} /> : null}{message?.generatedImage?.url ? <img className="operatorGenerated" src={message.generatedImage.url} alt={message.generatedImage.name || "Generated image"} /> : message?.generatedVideoUrl ? <video className="operatorGenerated" src={message.generatedVideoUrl} controls playsInline /> : pending ? <PendingAssistant label={message?.statusText || chatRuntime?.statusLabel} /> : isUser ? (text ? <div className="operatorUserText">{text}</div> : null) : <ChatMarkdownMessage content={text} />}{!isUser && !failed ? <MessageActions message={message} chatRuntime={chatRuntime} /> : null}</div></article>;
 }
 
 function Composer({ chatRuntime }) {
@@ -67,7 +78,7 @@ function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
   const messages = useMemo(() => {
     const source = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
     const seen = new Set();
-    return source.filter((message, index) => {
+    return source.filter((message) => {
       const id = String(message?.id || "").trim();
       if (!id) return true;
       if (seen.has(id)) return false;
@@ -76,17 +87,17 @@ function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
     });
   }, [chatRuntime?.messages]);
   const isEmpty = messages.length === 0 && !chatRuntime?.isLoadingMessages && !chatRuntime?.isRefreshingMessages;
-  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><h1>Ask, build, create, launch.</h1><p>Chat is ready. Open Portfolio when you want project<br className="operatorDesktopBreak" /> memory and inline visual build.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} /></div></div></section>;
-  return <section className="operatorChatPanel operatorConversationView"><header className="operatorTopbar"><div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div><div><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Inline Build</button> : null}</div></header><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} /></div></section>;
+  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><span className="operatorEyebrow">STREAMS AI WORKSPACE</span><h1>Ask, build, create, launch.</h1><p>Start with a conversation. Open the project workspace when the idea is ready to become real work.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} /></div></div></section>;
+  return <section className="operatorChatPanel operatorConversationView"><header className="operatorTopbar"><div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div><div className="operatorTopbarStatus"><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Project preview</button> : null}</div></header><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} /></div></section>;
 }
 
 function ProjectPicker({ sessions, activeProject, onSelectProject, onStartCleanProject }) {
   const recent = (Array.isArray(sessions) ? sessions : []).slice(0, 24);
-  return <section className="operatorModule"><span>PORTFOLIO</span><h1>Open a brand or project</h1><p>Selecting a project loads its server-backed conversation and assets.</p><button type="button" className="operatorNewChat" onClick={onStartCleanProject}>Start clean project</button><div className="operatorProjectGrid">{recent.map((session, index) => { const title = String(session?.title || session?.name || `Project ${index + 1}`); const id = session?.id || session?.sessionId || title; return <button key={id} type="button" className={activeProject?.id === id ? "operatorProjectCard active" : "operatorProjectCard"} onClick={() => onSelectProject({ id, title, source: "chat-session" })}><b>{title}</b><br /><small>Open conversation</small></button>; })}</div></section>;
+  return <section className="operatorModule"><span>PROJECTS</span><h1>Open a project conversation</h1><p>Selecting a project loads its server-backed conversation and connected assets.</p><button type="button" className="operatorModuleAction" onClick={onStartCleanProject}>Start clean project</button><div className="operatorProjectGrid">{recent.map((session, index) => { const title = String(session?.title || session?.name || `Project ${index + 1}`); const id = session?.id || session?.sessionId || title; return <button key={id} type="button" className={activeProject?.id === id ? "operatorProjectCard active" : "operatorProjectCard"} onClick={() => onSelectProject({ id, title, source: "chat-session" })}><b>{title}</b><br /><small>Open conversation</small></button>; })}</div></section>;
 }
 
-function ModuleScreen({ id }) { const accountKind = ACCOUNT_PAGE_MAP[id]; if (accountKind) return <div className="operatorModule"><StreamsAccountActionPanel pageKind={accountKind} title={titleFor(id)} description={`Manage ${titleFor(id).toLowerCase()} through the connected account system.`} /></div>; return <section className="operatorModule"><span>STREAMS</span><h1>{titleFor(id)}</h1><p>This module opens only connected project and generation workflows.</p></section>; }
-function InlinePanel({ activeProject, onClose }) { return <aside className="operatorInline"><div className="operatorInlineHead"><div><span>INLINE BUILD</span><h2>{activeProject?.title}</h2></div><button type="button" aria-label="Close inline build" onClick={onClose}>×</button></div><p>Project visuals and verified artifacts appear here when generated.</p></aside>; }
+function ModuleScreen({ id }) { const accountKind = ACCOUNT_PAGE_MAP[id]; if (accountKind) return <div className="operatorModule"><StreamsAccountActionPanel pageKind={accountKind} title={titleFor(id)} description={`Manage ${titleFor(id).toLowerCase()} through the connected account system.`} /></div>; return <section className="operatorModule"><span>STREAMS</span><h1>{titleFor(id)}</h1><p>This destination uses connected project, file, generation, and history systems.</p></section>; }
+function InlinePanel({ activeProject, onClose }) { return <aside className="operatorInline"><div className="operatorInlineHead"><div><span>PROJECT PREVIEW</span><h2>{activeProject?.title}</h2></div><button type="button" aria-label="Close project preview" onClick={onClose}>×</button></div><p>Project visuals and verified artifacts appear here when generated.</p></aside>; }
 
 export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {
   const chatRuntime = useAuthoritativeStreamsRuntime(baseRuntime);
@@ -95,12 +106,9 @@ export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {
   const [activeProject, setActiveProject] = useState(null);
   const [inlineOpen, setInlineOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => { try { setCollapsed(window.localStorage.getItem("streams-ai.sidebar.collapsed.v2") === "1"); } catch {} }, []);
-  useEffect(() => { try { window.localStorage.setItem("streams-ai.sidebar.collapsed.v2", collapsed ? "1" : "0"); } catch {} }, [collapsed]);
-  const shellClass = useMemo(() => ["streamsOperator", collapsed ? "sidebarCollapsed" : "", inlineOpen ? "inlineOpen" : ""].filter(Boolean).join(" "), [collapsed, inlineOpen]);
+  const shellClass = useMemo(() => ["streamsOperator", inlineOpen ? "inlineOpen" : ""].filter(Boolean).join(" "), [inlineOpen]);
   const newGeneralChat = () => { setActiveProject(null); setInlineOpen(false); setActiveSection("home"); chatRuntime?.newChat?.(); if (typeof window !== "undefined") window.history.pushState(null, "", "/streams-ai"); };
   const selectProject = (project) => { setActiveProject(project); setInlineOpen(false); setActiveSection("home"); if (project?.id) chatRuntime?.selectSession?.(project.id); };
   const startCleanProject = () => { chatRuntime?.newChat?.(); setActiveProject({ id: `draft-${Date.now()}`, title: "New clean project", source: "draft" }); setActiveSection("home"); };
-  return <div className={shellClass}>{!mobile ? <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} collapsed={collapsed} setCollapsed={setCollapsed} onNewChat={newGeneralChat} /> : null}{mobile ? <button type="button" className="operatorMobileMenu" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}>☰</button> : null}<main className="operatorMain">{activeSection === "home" ? <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} /> : activeSection === "portfolio" || activeSection === "projects" ? <ProjectPicker sessions={chatRuntime?.sessions || []} activeProject={activeProject} onSelectProject={selectProject} onStartCleanProject={startCleanProject} /> : <ModuleScreen id={activeSection} />}</main>{inlineOpen && activeProject ? <InlinePanel activeProject={activeProject} onClose={() => setInlineOpen(false)} /> : null}{mobile ? <div className={drawerOpen ? "operatorMobileDrawer open" : "operatorMobileDrawer"}><aside><button type="button" className="operatorNewChat" onClick={() => { newGeneralChat(); setDrawerOpen(false); }}>+ New session</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} onNavigate={() => setDrawerOpen(false)} /></aside><button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /></div> : null}</div>;
+  return <div className={shellClass}>{!mobile ? <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} onNewChat={newGeneralChat} /> : null}{mobile ? <button type="button" className="operatorMobileMenu" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}>☰</button> : null}<main className="operatorMain">{activeSection === "home" ? <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} /> : activeSection === "projects" ? <ProjectPicker sessions={chatRuntime?.sessions || []} activeProject={activeProject} onSelectProject={selectProject} onStartCleanProject={startCleanProject} /> : <ModuleScreen id={activeSection} />}</main>{inlineOpen && activeProject ? <InlinePanel activeProject={activeProject} onClose={() => setInlineOpen(false)} /> : null}{mobile ? <div className={drawerOpen ? "operatorMobileDrawer open" : "operatorMobileDrawer"}><aside><button type="button" className="operatorModuleAction" onClick={() => { newGeneralChat(); setDrawerOpen(false); }}>+ New session</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} onNavigate={() => setDrawerOpen(false)} /></aside><button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /></div> : null}</div>;
 }
