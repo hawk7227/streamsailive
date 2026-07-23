@@ -2,6 +2,7 @@
 
 import ActiveProjectContextBridge from "./ActiveProjectContextBridge";
 import BuilderPrecisionCompatibilityBridge from "./BuilderPrecisionCompatibilityBridge";
+import BuilderTopRowAttachmentBridge from "./BuilderTopRowAttachmentBridge";
 import BuilderWorkspacePersistenceBridge from "./BuilderWorkspacePersistenceBridge";
 import ReviewedChangePersistenceBridge from "./ReviewedChangePersistenceBridge";
 import GlobalNavigationRail from "./GlobalNavigationRail";
@@ -20,6 +21,7 @@ function ShellLayout() {
     >
       <ActiveProjectContextBridge />
       <BuilderPrecisionCompatibilityBridge />
+      <BuilderTopRowAttachmentBridge />
       <BuilderWorkspacePersistenceBridge />
       <ReviewedChangePersistenceBridge />
       <div className="workspaceBody">
@@ -42,6 +44,8 @@ function ShellLayout() {
         .existingBuilderSurface .liveWorkstation .topTabs button:hover{background:#0d1117!important;color:#f0f6fc!important}
         .existingBuilderSurface .liveWorkstation .topTabs button.active{border-bottom-color:#f78166!important;background:#0d1117!important;color:#f0f6fc!important}
         .existingBuilderSurface .liveWorkstation .routePill{height:40px!important;border-left:1px solid #30363d!important}
+        .existingBuilderSurface .liveWorkstation .toolStrip button[aria-label="Attach files"]{order:-20!important;background:#0f766e!important;border-color:#2dd4bf!important;color:#ecfeff!important}
+        .existingBuilderSurface .liveWorkstation .toolStrip button[aria-label="Attach files"]:disabled{opacity:.65!important;cursor:wait!important}
         .globalNavigationRail .railItem small{font-size:11px!important;line-height:1.2!important}.globalNavigationRail .railItem span{font-size:17px!important}.globalNavigationRail .railItem{min-height:54px!important}
         .builderChatFrame .msg{font-size:15px!important;line-height:1.5!important;padding:11px 12px!important}.builderChatFrame .footerComposer input{font-size:16px!important;font-weight:700!important}.builderChatFrame .mobileFooter button{font-size:12px!important}.builderChatFrame .connectionStatus b{font-size:11px!important}.builderChatFrame .connectionStatus span{font-size:13px!important}.builderChatFrame .connectionActions button,.builderChatFrame .fallbackCommand button{font-size:12px!important}.builderChatFrame p{font-size:12px!important;line-height:1.45!important}.builderChatFrame .fallbackCommand summary{font-size:11px!important}.builderChatFrame textarea{font-size:14px!important;line-height:1.45!important}
         .streamsBuilderShell label b,.streamsBuilderShell .statusDrop b{font-size:11px!important}.streamsBuilderShell select,.streamsBuilderShell input,.streamsBuilderShell button{font-size:13px}.streamsBuilderShell .statusDrop span{font-size:12px!important;line-height:1.4!important}
