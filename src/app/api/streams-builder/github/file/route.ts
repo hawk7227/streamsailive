@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
+import { requireStreamsBuilderRepositoryAccess } from "@/lib/streams-builder/repository-route-auth";
 import { RepositoryActionService, repositoryActionError } from "@/lib/streams-builder/repository-action-service";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ const repositories = new RepositoryActionService();
 
 export async function GET(request: NextRequest) {
   try {
-    await requireStreamsAIScope(request);
+    await requireStreamsBuilderRepositoryAccess(request);
     const repo = request.nextUrl.searchParams.get("repo") || "";
     const path = request.nextUrl.searchParams.get("path") || "";
     const branch = request.nextUrl.searchParams.get("ref") || "main";
