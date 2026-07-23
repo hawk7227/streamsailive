@@ -1,3 +1,5 @@
+import "../media/frameless-inline-media.css";
+
 function videoUrl(video) {
   return video?.url || video?.previewUrl || video?.storageUrl || video?.artifactUrl || video?.generatedVideoUrl || "";
 }
