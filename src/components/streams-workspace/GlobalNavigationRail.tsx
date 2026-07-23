@@ -139,7 +139,7 @@ export default function GlobalNavigationRail() {
   }
 
   return (
-    <nav className="globalNavigationRail streamsProductMenu" aria-label="Streams AI product navigation">
+    <nav className="globalNavigationRail streamsProductMenu" aria-label="StreamsAI global navigation">
       <header className="streamsMenuBrand">
         <span className="streamsMenuOrb" aria-hidden="true"><i /></span>
         <span><strong>STREAMS AI</strong><small>Your AI Business Operator</small></span>
@@ -159,6 +159,8 @@ export default function GlobalNavigationRail() {
                   className={active ? "streamsMenuItem active" : "streamsMenuItem"}
                   onClick={() => activate(item)}
                   aria-current={active ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
                 >
                   {item.label}
                 </button>
