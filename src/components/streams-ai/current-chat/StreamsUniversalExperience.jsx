@@ -145,18 +145,18 @@ export default function StreamsUniversalExperience() {
         <>
           {showNewChatSample ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}
           <StreamsClientShell />
+          <nav className="experienceSwitcher" aria-label="Streams experience">
+            <div className="experienceIdentity"><strong>StreamsAI</strong><span>{activeProjectName || "General assistant"}</span></div>
+            <div className="experienceModes">
+              <button type="button" className="active" onClick={() => changeView("chat")}>Chat</button>
+              <button type="button" onClick={() => changeView("workspace")}>Workspace</button>
+            </div>
+            <button type="button" className="createProjectAction" onClick={() => setCreating(true)}>New project</button>
+          </nav>
         </>
       ) : (
         <ProjectWorkspaceShell />
       )}
-      <nav className="experienceSwitcher" aria-label="Streams experience">
-        <div className="experienceIdentity"><strong>StreamsAI</strong><span>{activeProjectName || "General assistant"}</span></div>
-        <div className="experienceModes">
-          <button type="button" className={activeView === "chat" ? "active" : ""} onClick={() => changeView("chat")}>Chat</button>
-          <button type="button" className={activeView === "workspace" ? "active" : ""} onClick={() => changeView("workspace")}>Workspace</button>
-        </div>
-        <button type="button" className="createProjectAction" onClick={() => setCreating(true)}>New project</button>
-      </nav>
       <ProjectCreationDialog
         open={creating}
         onClose={() => setCreating(false)}
@@ -167,10 +167,9 @@ export default function StreamsUniversalExperience() {
         }}
       />
       <style jsx global>{`
-        .streamsUniversalExperience{min-height:100svh;background:#020713}.streamsUniversalExperience[data-active-view="workspace"] .projectTopBar{padding-right:390px}
+        .streamsUniversalExperience{min-height:100svh;background:#020713}
         .streamsUniversalExperience.withNewChatVisualSample .experienceSwitcher{left:244px}
         .experienceSwitcher{position:fixed;top:8px;left:84px;right:12px;z-index:50000;height:42px;display:grid;grid-template-columns:minmax(150px,1fr) auto auto;align-items:center;gap:10px;padding:0 8px 0 12px;border:1px solid rgba(148,163,184,.2);border-radius:11px;background:rgba(7,16,31,.96);box-shadow:0 10px 30px rgba(0,0,0,.28);backdrop-filter:blur(14px);transition:left .25s ease}
-        .streamsUniversalExperience[data-active-view="workspace"] .experienceSwitcher{left:auto;width:360px}
         .experienceIdentity{min-width:0;display:grid;gap:1px}.experienceIdentity strong{font-size:12px;color:#f8fafc}.experienceIdentity span{font-size:9px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .experienceModes{display:flex;align-items:center;gap:4px}.experienceSwitcher button{min-height:30px;max-width:220px;padding:0 11px;border:1px solid transparent;border-radius:8px;background:transparent;color:#aebed4;font-size:10px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.experienceSwitcher button:hover{background:#111c31;color:#e2e8f0}.experienceSwitcher button.active{background:#1d4ed8;border-color:#3b82f6;color:#fff}.experienceSwitcher .createProjectAction{background:#065f46;border-color:#047857;color:#d1fae5}
         .projectCreationBackdrop{position:fixed;inset:0;z-index:70000;display:grid;place-items:center;padding:18px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}
@@ -178,7 +177,7 @@ export default function StreamsUniversalExperience() {
         .projectCreationDialog header,.projectCreationDialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}.projectCreationDialog header div{display:grid;gap:3px}.projectCreationDialog header strong{font-size:17px}.projectCreationDialog header span{font-size:11px;color:#94a3b8}.projectCreationDialog header button{width:34px;height:34px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#fff;font-size:20px}
         .projectCreationDialog label{display:grid;gap:6px}.projectCreationDialog label span{font-size:11px;font-weight:800;color:#bfdbfe}.projectCreationDialog textarea{min-height:72px;resize:vertical;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:#0b1424;color:#f8fafc;padding:10px;font:inherit;line-height:1.45}.projectCreationDialog textarea:focus{outline:2px solid #3b82f6;outline-offset:1px}
         .detectedProjectType{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-radius:10px;background:#0f1a2d}.detectedProjectType span{font-size:10px;color:#94a3b8}.detectedProjectType strong{font-size:12px;color:#6ee7b7}.projectCreationDialog p{margin:0;color:#fca5a5;font-size:12px}.projectCreationDialog footer{justify-content:flex-end}.projectCreationDialog footer button{min-height:38px;padding:0 14px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#e2e8f0;font-weight:800}.projectCreationDialog footer button[type=submit]{background:#1d4ed8;border-color:#3b82f6;color:#fff}.projectCreationDialog footer button:disabled{opacity:.6}
-        @media(max-width:900px){.experienceSwitcher,.streamsUniversalExperience.withNewChatVisualSample .experienceSwitcher,.streamsUniversalExperience[data-active-view="workspace"] .experienceSwitcher{top:7px;left:202px;right:8px;width:auto;height:42px;grid-template-columns:minmax(0,1fr) auto;padding-left:10px}.experienceModes{display:flex}.experienceSwitcher .createProjectAction{min-width:96px}.experienceIdentity strong{font-size:11px}.experienceIdentity span{font-size:8px}.streamsUniversalExperience[data-active-view="workspace"] .projectTopBar{padding-right:8px;padding-top:56px;height:auto}}
+        @media(max-width:900px){.experienceSwitcher,.streamsUniversalExperience.withNewChatVisualSample .experienceSwitcher{top:7px;left:202px;right:8px;width:auto;height:42px;grid-template-columns:minmax(0,1fr) auto;padding-left:10px}.experienceModes{display:flex}.experienceSwitcher .createProjectAction{min-width:96px}.experienceIdentity strong{font-size:11px}.experienceIdentity span{font-size:8px}}
         @media(max-width:560px){.experienceSwitcher,.streamsUniversalExperience.withNewChatVisualSample .experienceSwitcher{left:58px}.experienceIdentity{display:none}.experienceSwitcher{grid-template-columns:1fr auto}.experienceModes{justify-self:start}.experienceSwitcher .createProjectAction{min-width:84px;padding:0 8px}.projectCreationBackdrop{padding:10px}.projectCreationDialog{max-height:calc(100svh - 20px);border-radius:14px;padding:14px}}
       `}</style>
     </div>
