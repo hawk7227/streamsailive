@@ -7,6 +7,7 @@ import { ProjectWorkspaceController } from "../src/components/streams-workspace/
 import GlobalNavigationRail from "../src/components/streams-workspace/GlobalNavigationRail";
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
 
+
 describe("universal Streams web cutover", () => {
   it("keeps the unified experience hydration-safe before client restoration", () => {
     const html = renderToStaticMarkup(<StreamsUnifiedRoot />);
@@ -29,6 +30,7 @@ describe("universal Streams web cutover", () => {
     expect(html).toContain('data-side-panels="removed"');
     expect(html).toContain('data-top-panels="restored"');
     expect(html).toContain('data-bottom-tray="restored"');
+    expect(html).toContain('data-workstation-screens="restored"');
     expect(html).toContain('data-preserved-builder-surface="true"');
     expect(html).toContain('data-first-working-row="manual-github-controls"');
     expect(html).toContain('aria-label="StreamsAI global navigation"');
@@ -38,6 +40,19 @@ describe("universal Streams web cutover", () => {
     expect(html).toContain('class="workspaceBottomTray"');
     expect(html).toContain('class="projectTopBar"');
     expect(html).toContain('class="projectOverviewBlock"');
+  });
+
+  it("restores every preserved workstation screen inside the center canvas", () => {
+    const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
+    for (const screen of ["Frontend UI", "Code Editor", "Diff", "Logs", "Media"]) {
+      expect(html).toContain(screen);
+    }
+    for (const mode of ["Editor", "Browser", "Mobile", "Advanced", "Refresh", "Proof", "Dup", "Reset"]) {
+      expect(html).toContain(`>${mode}<`);
+    }
+    expect(html).toContain('aria-label="Frontend workstation views"');
+    expect(html).not.toContain("builderUnifiedTopRowActions");
+    expect(html).not.toContain("data-unified-duplicate");
   });
 
   it("does not render the floating experience overlay inside workspace mode", () => {
