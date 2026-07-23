@@ -24,16 +24,16 @@ describe("universal Streams web cutover", () => {
     expect(html).not.toContain("workspace-navigation");
   });
 
-  it("renders the complete restored universal workspace around the preserved builder", () => {
+  it("renders the centered universal workspace around the preserved builder", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
-    expect(html).toContain('data-side-panels="restored"');
+    expect(html).toContain('data-side-panels="removed"');
     expect(html).toContain('data-top-panels="restored"');
     expect(html).toContain('data-bottom-tray="restored"');
     expect(html).toContain('data-preserved-builder-surface="true"');
     expect(html).toContain('data-first-working-row="manual-github-controls"');
     expect(html).toContain('aria-label="StreamsAI global navigation"');
-    expect(html).toContain('aria-label="Project context"');
-    expect(html).toContain('aria-label="Contextual utility panel"');
+    expect(html).not.toContain('aria-label="Project context"');
+    expect(html).not.toContain('aria-label="Contextual utility panel"');
     expect(html).toContain('aria-label="Workspace supporting materials"');
     expect(html).toContain('class="workspaceBottomTray"');
     expect(html).toContain('class="projectTopBar"');
