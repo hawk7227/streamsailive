@@ -1,5 +1,6 @@
 "use client";
 
+import ActiveProjectContextBridge from "./ActiveProjectContextBridge";
 import BuilderPrecisionCompatibilityBridge from "./BuilderPrecisionCompatibilityBridge";
 import BuilderWorkspacePersistenceBridge from "./BuilderWorkspacePersistenceBridge";
 import ReviewedChangePersistenceBridge from "./ReviewedChangePersistenceBridge";
@@ -23,6 +24,7 @@ function ShellLayout() {
 
   return (
     <main className="universalWorkspaceShell" data-replacement-conversion="true">
+      <ActiveProjectContextBridge />
       <BuilderPrecisionCompatibilityBridge />
       <BuilderWorkspacePersistenceBridge />
       <ReviewedChangePersistenceBridge />
