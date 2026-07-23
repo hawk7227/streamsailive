@@ -16,8 +16,8 @@
   z-index: 360 !important;
 }
 
-/* Remove the expanded/two-row legacy appearance without replacing the working
-   composer component or disconnecting uploads, tools, voice, or send actions. */
+/* Preserve the working composer, but let it expand as one surface like modern
+   ChatGPT/Claude composers. The textarea never becomes its own scroll area. */
 .startComposerWrap .streamsComposer {
   min-height: 58px !important;
   height: auto !important;
@@ -35,7 +35,7 @@
   height: auto !important;
   display: flex !important;
   flex-wrap: nowrap !important;
-  align-items: center !important;
+  align-items: flex-end !important;
   gap: 8px !important;
   padding: 0 !important;
 }
@@ -62,7 +62,12 @@
   order: 3 !important;
   flex: 1 1 auto !important;
   min-width: 0 !important;
-  max-height: 104px !important;
+  min-height: 30px !important;
+  max-height: none !important;
+  height: auto;
+  overflow-y: hidden !important;
+  resize: none !important;
+  field-sizing: content;
   font-size: 14px !important;
   line-height: 1.35 !important;
   font-weight: 700 !important;
@@ -99,18 +104,21 @@
   display: none !important;
 }
 
-/* The conversation fills the viewport above the compact console. */
+/* The conversation viewport tracks the measured composer height. Long prompts
+   expand the composer upward and reduce the conversation viewport instead of
+   adding a scrollbar inside the textarea. */
 .startWorkspaceActive .startChatSurface {
   position: absolute !important;
   top: 0 !important;
   right: 0 !important;
-  bottom: 112px !important;
+  bottom: calc(var(--streams-composer-height, 58px) + 54px) !important;
   left: 0 !important;
   min-height: 0 !important;
   overflow-y: auto !important;
   overscroll-behavior: contain !important;
   padding: 72px 24px 28px !important;
   scroll-padding-bottom: 28px !important;
+  transition: bottom 120ms ease-out !important;
 }
 
 .startWorkspaceActive .startConversationColumn {
@@ -124,12 +132,13 @@
   height: 12px !important;
 }
 
-/* Persisted work history remains above the console and never replaces it. */
+/* Persisted work history remains above the expanding console. */
 .streamsAIWorkHistory {
-  bottom: 104px !important;
+  bottom: calc(var(--streams-composer-height, 58px) + 46px) !important;
   width: min(860px, calc(100vw - 96px)) !important;
   z-index: 420 !important;
   pointer-events: auto !important;
+  transition: bottom 120ms ease-out !important;
 }
 
 .streamsAIWorkHistory__bar {
@@ -171,6 +180,7 @@
   .startComposerWrap .streamsComposerRow {
     min-height: 44px !important;
     gap: 6px !important;
+    align-items: flex-end !important;
   }
 
   .startComposerWrap .streamsComposerIconButton {
@@ -190,12 +200,12 @@
 
   .startWorkspaceActive .startChatSurface {
     top: 0 !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 82px) !important;
+    bottom: calc(var(--streams-composer-height, 54px) + env(safe-area-inset-bottom, 0px) + 34px) !important;
     padding: 58px 12px 20px !important;
   }
 
   .streamsAIWorkHistory {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 76px) !important;
+    bottom: calc(var(--streams-composer-height, 54px) + env(safe-area-inset-bottom, 0px) + 28px) !important;
     width: calc(100vw - 24px) !important;
   }
 
