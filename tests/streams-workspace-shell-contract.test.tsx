@@ -34,14 +34,22 @@ describe("universal project workspace shell", () => {
     }
   });
 
-  it("keeps the left project-context panel mounted and open by default", () => {
+  it("keeps the left project-context panel mounted and open with its complete data contract", () => {
     const html = renderShell();
     expect(DEFAULT_WORKSPACE_STATE.projectPanelOpen).toBe(true);
     expect(html).toContain('aria-label="Project context"');
     expect(html).toContain("Project Context");
-    for (const item of [...PROJECT_CONTEXT_GROUPS.overview, ...PROJECT_CONTEXT_GROUPS.filesAndInputs, ...PROJECT_CONTEXT_GROUPS.memory, ...PROJECT_CONTEXT_GROUPS.codingStructure]) {
-      expect(html).toContain(item);
+    expect(html).toContain("Project Overview");
+    expect(html).toContain("Files and Inputs");
+    expect(html).toContain("Project Memory");
+    expect(html).toContain("Project Structure");
+    for (const renderedPrefix of ["Goal:", "Audience:", "Status:", "Description:", "Instructions:", "Brand / style:", "Workspace type:", "Project ID:", "Current stage:", "Progress:", "Next action:"]) {
+      expect(html).toContain(renderedPrefix);
     }
+    expect(PROJECT_CONTEXT_GROUPS.overview).toEqual(expect.arrayContaining(["Project name", "Goal", "Audience", "Current status", "Project description", "Important instructions", "Brand or style preferences"]));
+    expect(PROJECT_CONTEXT_GROUPS.filesAndInputs).toEqual(expect.arrayContaining(["Documents", "Images", "Screenshots", "Videos", "Audio", "Spreadsheets", "Code files", "Links", "Notes", "Original prompt"]));
+    expect(PROJECT_CONTEXT_GROUPS.memory).toEqual(expect.arrayContaining(["User decisions", "Selected concepts", "Approved styles", "Rejected options", "Requirements", "Constraints", "Previous outputs"]));
+    expect(PROJECT_CONTEXT_GROUPS.codingStructure).toEqual(expect.arrayContaining(["Files", "Routes", "Components", "Data", "APIs", "Repository", "Source truth", "Checkpoints"]));
   });
 
   it("keeps the right utility panel and all contextual functions mounted and open by default", () => {
@@ -54,6 +62,9 @@ describe("universal project workspace shell", () => {
     for (const item of RIGHT_PANEL_SECTIONS.Properties) {
       expect(html).toContain(item);
     }
+    expect(RIGHT_PANEL_SECTIONS.Content).toEqual(expect.arrayContaining(["Title", "Description", "Button text", "Image", "Links", "Metadata"]));
+    expect(RIGHT_PANEL_SECTIONS.Generate).toEqual(expect.arrayContaining(["Generate variation", "Replace", "Rewrite", "Expand", "Shorten", "Restyle", "Create alternatives"]));
+    expect(RIGHT_PANEL_SECTIONS["Project Guidance"]).toEqual(expect.arrayContaining(["Missing items", "Recommended next steps", "Validation warnings", "Completion checklist"]));
   });
 
   it("renders the complete clean global navigation rail", () => {
