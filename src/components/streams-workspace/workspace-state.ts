@@ -8,6 +8,16 @@ export type UniversalWorkspaceState = {
   projectName: string;
   projectType: string;
   projectStatus: string;
+  projectGoal: string;
+  projectAudience: string;
+  projectDescription: string;
+  projectInstructions: string;
+  projectStyle: string;
+  projectFiles: Array<Record<string, unknown>>;
+  projectDecisions: string[];
+  projectRequirements: string[];
+  projectConstraints: string[];
+  originalPrompt: string;
   saveStatus: string;
   durableState: WorkspaceDurableState;
   durableRevision: number;
@@ -29,6 +39,16 @@ export const DEFAULT_WORKSPACE_STATE: UniversalWorkspaceState = {
   projectName: "Streams Builder",
   projectType: "Coding / Application",
   projectStatus: "In Progress",
+  projectGoal: "Complete the active project using the preserved Streams builder capabilities.",
+  projectAudience: "Project collaborators and end users",
+  projectDescription: "Universal project workspace connected to the existing StreamsAI chat and builder.",
+  projectInstructions: "Preserve working systems and complete only verified gaps.",
+  projectStyle: "Use the project’s approved visual and technical decisions.",
+  projectFiles: [],
+  projectDecisions: [],
+  projectRequirements: [],
+  projectConstraints: [],
+  originalPrompt: "",
   saveStatus: "Restoring project state…",
   durableState: "idle",
   durableRevision: 0,
