@@ -1,4 +1,4 @@
-import StreamsClientShell from "@/components/streams-ai/current-chat/StreamsClientShell";
+import StreamsUniversalExperience from "@/components/streams-ai/current-chat/StreamsUniversalExperience";
 import StreamsAIWorkHistoryBridge from "@/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge";
 import StreamsAIMobileKeyboardBridge from "./StreamsAIMobileKeyboardBridge";
 import "@/components/streams-ai/visual-operator/streams-operator-message-states.css";
@@ -11,7 +11,7 @@ export default function StreamsAIPage() {
   return (
     <>
       <StreamsAIMobileKeyboardBridge />
-      <StreamsClientShell />
+      <StreamsUniversalExperience />
       <StreamsAIWorkHistoryBridge />
     </>
   );
