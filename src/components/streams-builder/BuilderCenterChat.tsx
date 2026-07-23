@@ -1,123 +1,152 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { isStudioVideoRequest, runStudioVideoLane } from "./BuilderStudioGenerationLane";
 
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
 type BuilderChatConnection = { connected: boolean; activeWorkstationId: string; activeWorkstationName: string; sessionId: string };
+type Props = { activeModule: string; connection: BuilderChatConnection; onConnectionChange: (next: BuilderChatConnection) => void };
+type FileResult = { ok: boolean; error?: string; path?: string; sha?: string; frontendRoute?: string; content?: string; sourceTruth?: { route?: string; file?: string } };
+type ChatMessage = { id: string; role: "assistant" | "user"; content: string; streaming?: boolean; error?: boolean };
 
-type Props = {
-  activeModule: string;
-  connection: BuilderChatConnection;
-  onConnectionChange: (next: BuilderChatConnection) => void;
-};
-
-type FileResult = {
-  ok: boolean;
-  error?: string;
-  path?: string;
-  sha?: string;
-  frontendRoute?: string;
-  content?: string;
-  sourceTruth?: { route?: string; file?: string };
-};
-
-type LocalMessage = { id: string; role: "assistant" | "user"; content: string };
+const UUID_PATH = /\/streams-ai\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i;
 
 async function readJson(response: Response) {
   const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`);
+  try { return JSON.parse(text); } catch { throw new Error(`Expected JSON but received: ${text.slice(0, 140)}`); }
+}
+
+function createId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+function workstationId(name: string) { return String(name || "workstation").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workstation"; }
+function routeFromFile(path: string) { if (!path.startsWith("src/app/") || (!path.endsWith("/page.tsx") && !path.endsWith("/page.jsx"))) return "/"; return path.replace(/^src\/app/, "").replace(/\/page\.(tsx|jsx)$/, "").replace(/\/\([^)]*\)/g, "") || "/"; }
+function routeFromPrompt(prompt: string, fallback: string) { return prompt.match(/route\s+(\/[^\s]+)/i)?.[1] || fallback || "/"; }
+function activeProjectId() { try { return window.localStorage.getItem("streams-ai:active-project-id") || ""; } catch { return ""; } }
+function activeProjectName() { try { return window.localStorage.getItem("streams-ai:active-project-name") || "StreamsAI project"; } catch { return "StreamsAI project"; } }
+function readLastActiveFile() { try { const raw = window.localStorage.getItem("streams-builder:active-file"); return raw ? JSON.parse(raw) as Partial<PulledFileDetail> : null; } catch { return null; } }
+function readTopRowSourceTruth() { const strip = document.querySelector(".topControlStrip"); const selects = strip?.querySelectorAll("select"); const inputs = strip?.querySelectorAll("input"); return { repo: selects?.[0] instanceof HTMLSelectElement ? selects[0].value : "", path: selects?.[2] instanceof HTMLSelectElement ? selects[2].value : "", branch: inputs?.[0] instanceof HTMLInputElement ? inputs[0].value : "" }; }
+function parseAgentOnePrompt(prompt: string) { const live = readTopRowSourceTruth(); const last = readLastActiveFile(); return { repo: prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || live.repo || last?.repo || "hawk7227/streamsailive", branch: prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || live.branch || last?.branch || "main", path: prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || live.path || last?.path || "src/app/page.tsx" }; }
+function publishSummary(phase: string, message: string) { window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase, message } })); }
+function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail) { window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } })); }
+
+function parseSseBlock(block: string) {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
   }
-}
-
-function createId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function workstationId(name: string) {
-  return String(name || "workstation").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workstation";
-}
-
-function routeFromFile(path: string) {
-  if (!path.startsWith("src/app/")) return "/";
-  if (!path.endsWith("/page.tsx") && !path.endsWith("/page.jsx")) return "/";
-  const route = path.replace(/^src\/app/, "").replace(/\/page\.(tsx|jsx)$/, "").replace(/\/\([^)]*\)/g, "");
-  return route || "/";
-}
-
-function routeFromPrompt(prompt: string, fallback: string) {
-  return prompt.match(/route\s+(\/[^\s]+)/i)?.[1] || fallback || "/";
-}
-
-function readLastActiveFile() {
-  try {
-    const raw = window.localStorage.getItem("streams-builder:active-file");
-    return raw ? JSON.parse(raw) as Partial<PulledFileDetail> : null;
-  } catch {
-    return null;
-  }
-}
-
-function readTopRowSourceTruth() {
-  const strip = document.querySelector(".topControlStrip");
-  const selects = strip?.querySelectorAll("select");
-  const inputs = strip?.querySelectorAll("input");
-  const repo = selects?.[0] instanceof HTMLSelectElement ? selects[0].value : "";
-  const path = selects?.[2] instanceof HTMLSelectElement ? selects[2].value : "";
-  const branch = inputs?.[0] instanceof HTMLInputElement ? inputs[0].value : "";
-  return { repo, branch, path };
-}
-
-function parseAgentOnePrompt(prompt: string) {
-  const live = readTopRowSourceTruth();
-  const last = readLastActiveFile();
-  const repo = prompt.match(/(?:repo|repository)\s+([\w.-]+\/[\w.-]+)/i)?.[1] || live.repo || last?.repo || "hawk7227/streamsailive";
-  const branch = prompt.match(/(?:branch|ref)\s+([\w./-]+)/i)?.[1] || live.branch || last?.branch || "main";
-  const path = prompt.match(/(src\/[\w./()\[\]-]+\.(?:tsx|jsx|ts|js))/i)?.[1] || live.path || last?.path || "src/app/page.tsx";
-  return { repo, branch, path };
-}
-
-function publishSummary(phase: string, message: string) {
-  window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase, message } }));
-}
-
-function sendAgentLog(prompt: string, intent: string, pulled?: PulledFileDetail) {
-  window.dispatchEvent(new CustomEvent("streams-builder:agent-one-command", { detail: { prompt, intent, pulled } }));
+  if (!data.length) return null;
+  try { return { event, payload: JSON.parse(data.join("\n")) as Record<string, any> }; } catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
 export default function BuilderCenterChat({ activeModule, connection, onConnectionChange }: Props) {
+  const pathname = usePathname();
   const [prompt, setPrompt] = useState("");
   const [agentPrompt, setAgentPrompt] = useState("Agent 1, pull the selected frontend file and show it on the workscreen.");
-  const [status, setStatus] = useState("Local chat console restored. Embedded iframe is disabled so the builder stays stable.");
+  const [status, setStatus] = useState("Connected to the real StreamsAI conversation service.");
   const [running, setRunning] = useState(false);
-  const [messages, setMessages] = useState<LocalMessage[]>([
-    { id: "welcome", role: "assistant", content: "Chat console is ready. Use the footer composer for notes, or Agent 1 Source Pull to pull a file into the workscreen." },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{ id: "welcome", role: "assistant", content: "StreamsAI is connected. Ask a normal question here, or use Agent 1 Source Pull for an exact repository file." }]);
+  const abortRef = useRef<AbortController | null>(null);
 
-  function addMessage(role: LocalMessage["role"], content: string) {
-    setMessages((current) => [...current.slice(-20), { id: createId(role), role, content }]);
+  function addMessage(role: ChatMessage["role"], content: string, extra: Partial<ChatMessage> = {}) {
+    const id = createId(role);
+    setMessages((current) => [...current.slice(-49), { id, role, content, ...extra }]);
+    return id;
+  }
+
+  function updateMessage(id: string, patch: Partial<ChatMessage>) {
+    setMessages((current) => current.map((message) => message.id === id ? { ...message, ...patch } : message));
   }
 
   function connectToActiveWorkstation() {
-    const next = {
-      connected: true,
-      activeWorkstationId: workstationId(activeModule),
-      activeWorkstationName: activeModule,
-      sessionId: "agent-1",
-    };
+    const next = { connected: true, activeWorkstationId: workstationId(activeModule), activeWorkstationName: activeModule, sessionId: connection.sessionId || pathname.match(UUID_PATH)?.[1] || "" };
     onConnectionChange(next);
-    setStatus(`Connected local Agent 1 controls to ${activeModule}.`);
-    publishSummary("bridge", `Local Agent 1 controls connected to ${activeModule}.`);
+    setStatus(`Connected StreamsAI context to ${activeModule}.`);
+    publishSummary("bridge", `StreamsAI context connected to ${activeModule}.`);
   }
 
   function disconnectWorkstation() {
-    const next = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
-    onConnectionChange(next);
-    setStatus("Local Agent 1 controls are standalone.");
-    publishSummary("bridge", "Local Agent 1 controls disconnected from workstation.");
+    onConnectionChange({ connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: connection.sessionId || "" });
+    setStatus("StreamsAI chat is standalone from the workstation.");
+    publishSummary("bridge", "StreamsAI chat disconnected from workstation context.");
+  }
+
+  async function sendRealChat(clean: string) {
+    const assistantId = addMessage("assistant", "", { streaming: true });
+    const activeFile = readLastActiveFile();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setStatus("StreamsAI is responding…");
+
+    try {
+      const requestedSessionId = connection.sessionId || pathname.match(UUID_PATH)?.[1] || "";
+      const response = await fetch("/api/streams-ai/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        signal: controller.signal,
+        body: JSON.stringify({
+          sessionId: requestedSessionId || undefined,
+          message: clean,
+          runAssistant: true,
+          idempotencyKey: createId("builder-chat"),
+          metadata: {
+            source: "streams-builder-connected-chat",
+            projectId: activeProjectId() || undefined,
+            projectName: activeProjectName(),
+            activeModule,
+            connectedWorkstation: connection.connected ? connection.activeWorkstationName : null,
+            repository: activeFile?.repo || null,
+            branch: activeFile?.branch || null,
+            filePath: activeFile?.path || null,
+            route: activeFile?.route || null,
+          },
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error((await response.text().catch(() => "")) || `Chat request failed: ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          const parsed = parseSseBlock(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+          if (!parsed) continue;
+          if (parsed.event === "response" && typeof parsed.payload.token === "string") {
+            answer += parsed.payload.token;
+            updateMessage(assistantId, { content: answer, streaming: true });
+          }
+          if (parsed.event === "activity") setStatus(String(parsed.payload.statusText || "StreamsAI is working…"));
+          if (parsed.event === "complete") {
+            const sessionId = String(parsed.payload.sessionId || requestedSessionId || "");
+            if (sessionId && sessionId !== connection.sessionId) onConnectionChange({ ...connection, sessionId });
+            updateMessage(assistantId, { content: answer || "StreamsAI completed without visible text.", streaming: false });
+            setStatus("Response complete.");
+          }
+          if (parsed.event === "error") throw new Error(String(parsed.payload.message || parsed.payload.detail || "StreamsAI could not complete the response."));
+        }
+      }
+      updateMessage(assistantId, { content: answer || "StreamsAI completed without visible text.", streaming: false });
+      publishSummary("chat.response.complete", "StreamsAI completed a connected builder chat response.");
+    } catch (error) {
+      const cancelled = error instanceof DOMException && error.name === "AbortError";
+      const message = cancelled ? "Response stopped." : error instanceof Error ? error.message : "StreamsAI chat failed.";
+      updateMessage(assistantId, { content: message, streaming: false, error: !cancelled });
+      setStatus(message);
+      publishSummary(cancelled ? "chat.response.cancelled" : "chat.response.failed", message);
+    } finally {
+      abortRef.current = null;
+      setRunning(false);
+    }
   }
 
   async function runAgentOneText(nextPrompt: string) {
@@ -125,33 +154,15 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
     if (!cleanPrompt || running) return;
     setRunning(true);
     addMessage("user", cleanPrompt);
-    setStatus("Agent 1 running: pulling source truth...");
-
+    setStatus("Agent 1 running: pulling source truth…");
     try {
-      if (isStudioVideoRequest(cleanPrompt)) {
-        await runStudioVideoLane(cleanPrompt, setStatus);
-        addMessage("assistant", "Studio video lane started.");
-        return;
-      }
-
+      if (isStudioVideoRequest(cleanPrompt)) { await runStudioVideoLane(cleanPrompt, setStatus); addMessage("assistant", "Studio video lane started."); return; }
       const command = parseAgentOnePrompt(cleanPrompt);
-      const params = new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path });
-      const response = await fetch(`/api/streams-builder/github/file?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/streams-builder/github/file?${new URLSearchParams({ repo: command.repo, ref: command.branch, path: command.path })}`, { cache: "no-store" });
       const json = (await readJson(response)) as FileResult;
       if (!json.ok) throw new Error(json.error || "Agent 1 could not pull the requested file.");
-
       const pulledPath = json.path || command.path;
-      const route = routeFromPrompt(cleanPrompt, json.frontendRoute || json.sourceTruth?.route || routeFromFile(pulledPath));
-      const detail: PulledFileDetail = {
-        repo: command.repo,
-        branch: command.branch,
-        path: pulledPath,
-        folder: pulledPath.split("/").slice(0, -1).join("/"),
-        sha: json.sha || "",
-        content: json.content || "",
-        route,
-      };
-
+      const detail: PulledFileDetail = { repo: command.repo, branch: command.branch, path: pulledPath, folder: pulledPath.split("/").slice(0, -1).join("/"), sha: json.sha || "", content: json.content || "", route: routeFromPrompt(cleanPrompt, json.frontendRoute || json.sourceTruth?.route || routeFromFile(pulledPath)) };
       window.localStorage.setItem("streams-builder:active-file", JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail }));
       window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-pulled", source: "agent-one", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message: `Agent 1 pulled ${detail.repo}@${detail.branch}:${detail.path}.` } }));
@@ -159,64 +170,42 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
       publishSummary("file-pulled", `Agent 1 pulled ${detail.repo}@${detail.branch}:${detail.path}.`);
       setStatus(`Pulled ${detail.path} to the workscreen.`);
       addMessage("assistant", `Pulled ${detail.path} into the workscreen. Route: ${detail.route}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "unknown command failure";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown command failure";
       sendAgentLog(`Agent 1 blocked: ${message}`, "agent-blocked");
       setStatus(`Agent 1 blocked: ${message}`);
-      addMessage("assistant", `Agent 1 blocked: ${message}`);
-    } finally {
-      setRunning(false);
-    }
+      addMessage("assistant", `Agent 1 blocked: ${message}`, { error: true });
+    } finally { setRunning(false); }
   }
 
-  async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    await runAgentOneText(agentPrompt);
-  }
-
-  function sendFooterChat(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const clean = prompt.trim();
-    if (!clean) return;
-    setPrompt("");
-    addMessage("user", clean);
-    const response = clean.toLowerCase().includes("pull") || clean.toLowerCase().includes("agent 1")
-      ? "Use Agent 1 Source Pull below to pull real source into the workscreen without loading the freezing iframe."
-      : "I’m in stable local console mode. The embedded iPhone iframe is disabled to prevent freezes, but the footer composer and Agent 1 controls are available.";
-    addMessage("assistant", response);
-  }
+  async function runAgentOnePrompt(event?: FormEvent<HTMLFormElement>) { event?.preventDefault(); await runAgentOneText(agentPrompt); }
+  async function sendFooterChat(event: FormEvent<HTMLFormElement>) { event.preventDefault(); event.stopPropagation(); const clean = prompt.trim(); if (!clean || running) return; setPrompt(""); addMessage("user", clean); await sendRealChat(clean); }
 
   return (
-    <section className="builderChatFrame" aria-label="Stable Streams Builder chat console">
+    <section className="builderChatFrame" aria-label="Connected StreamsAI Builder chat console">
       <section className="localChatConsole">
         <div className="orb" />
         <h2>Ask, build, create, launch.</h2>
-        <div className="messageList" aria-label="Local chat messages">
-          {messages.map((message) => <div key={message.id} className={message.role === "user" ? "msg user" : "msg assistant"}>{message.content}</div>)}
+        <div className="messageList" aria-label="Connected chat messages" aria-live="polite">
+          {messages.map((message) => <div key={message.id} className={`msg ${message.role}${message.streaming ? " streaming" : ""}${message.error ? " error" : ""}`}>{message.content || "Thinking…"}</div>)}
         </div>
-        <form className="footerComposer" onSubmit={sendFooterChat} aria-label="Chat console composer">
-          <button type="button" aria-label="Add">+</button>
-          <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask anything" />
-          <button type="submit" aria-label="Send">↑</button>
+        <form className="footerComposer" onSubmit={sendFooterChat} aria-label="Connected StreamsAI composer">
+          <button type="button" aria-label="Add files">+</button>
+          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Ask anything" rows={1} disabled={running} />
+          {running ? <button type="button" aria-label="Stop response" onClick={() => abortRef.current?.abort()}>■</button> : <button type="submit" aria-label="Send message">↑</button>}
         </form>
-        <nav className="mobileFooter" aria-label="Mobile footer">
-          <button type="button">Chat</button>
-          <button type="button">Build</button>
-          <button type="button">Media</button>
-          <button type="button">More</button>
+        <nav className="mobileFooter" aria-label="Builder console modes">
+          <button type="button">Chat</button><button type="button">Build</button><button type="button">Media</button><button type="button">More</button>
         </nav>
       </section>
       <section className="connectionBar" aria-label="Agent 1 workstation connection">
-        <div className="connectionStatus">
-          <b>Agent 1 connection</b>
-          <span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone stable mode"}</span>
-        </div>
+        <div className="connectionStatus"><b>Agent 1 connection</b><span>{connection.connected ? `Connected to ${connection.activeWorkstationName}` : "Standalone chat mode"}</span></div>
         <div className="connectionActions">
           {connection.connected ? <button type="button" onClick={disconnectWorkstation}>Disconnect</button> : <button type="button" onClick={connectToActiveWorkstation}>Connect {activeModule}</button>}
-          <button type="button" onClick={() => setStatus("Local chat console and footer are active. Iframe remains parked for stability.")}>Test Stable</button>
+          <button type="button" onClick={() => setStatus("The real StreamsAI message endpoint and source-pull controls are active.")}>Test connection</button>
         </div>
         <p>{status}</p>
-        <details className="fallbackCommand" open>
+        <details className="fallbackCommand">
           <summary>Agent 1 source pull</summary>
           <form onSubmit={runAgentOnePrompt} aria-label="Agent 1 source pull prompt">
             <textarea value={agentPrompt} onChange={(event) => setAgentPrompt(event.target.value)} placeholder="Agent 1, pull src/app/page.tsx and show it on the workscreen" />
@@ -225,21 +214,14 @@ export default function BuilderCenterChat({ activeModule, connection, onConnecti
         </details>
       </section>
       <style jsx>{`
-        .builderChatFrame{width:min(100%,430px);max-width:430px;min-width:320px;height:min(932px,calc(100dvh - 24px));min-height:640px;overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;}
-        .localChatConsole{min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;align-items:start;gap:14px;padding:42px 14px 10px;background:linear-gradient(180deg,#020713,#04111f);text-align:center;overflow:hidden;}
-        .orb{justify-self:center;width:76px;height:76px;border-radius:24px;background:radial-gradient(circle at 50% 50%,#22d3ee 0 12%,#7c3aed 34%,#d946ef 72%);box-shadow:0 0 42px rgba(124,58,237,.45);}
-        h2{margin:0;color:#f8fafc;font-size:23px;line-height:1.15;font-weight:900;}
-        .messageList{min-height:0;display:flex;flex-direction:column;gap:8px;overflow:auto;padding:2px 3px 8px;text-align:left;}
-        .msg{max-width:92%;border:1px solid rgba(148,163,184,.14);border-radius:14px;padding:9px 10px;color:#e2e8f0;font-size:11px;line-height:1.35;background:rgba(15,23,42,.72);}
-        .msg.user{align-self:flex-end;background:rgba(124,58,237,.28);border-color:rgba(168,85,247,.32);}.msg.assistant{align-self:flex-start;}
-        .footerComposer{display:grid;grid-template-columns:36px minmax(0,1fr) 42px;gap:7px;align-items:center;border:1px solid rgba(168,85,247,.45);border-radius:22px;background:rgba(49,18,89,.78);box-shadow:0 0 32px rgba(124,58,237,.25);padding:6px;}
-        .footerComposer input{height:36px;min-width:0;border:0;background:transparent;color:#fff;outline:none;font-size:12px;font-weight:800;}.footerComposer input::placeholder{color:#fff;opacity:.92;}.footerComposer button{height:36px;border:0;border-radius:999px;background:#7c3aed;color:#fff;font-size:16px;font-weight:900;cursor:pointer;}.footerComposer button:first-child{background:rgba(30,41,59,.96);}
-        .mobileFooter{height:38px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;border-top:1px solid rgba(148,163,184,.14);padding-top:6px;}
-        .mobileFooter button{height:28px;border:0;border-radius:10px;background:rgba(15,23,42,.92);color:#cbd5e1;font-size:10px;font-weight:900;cursor:pointer;}.mobileFooter button:first-child{background:#7c3aed;color:#fff;}
-        .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box;}
-        .connectionStatus{display:grid;gap:2px;}.connectionStatus b{color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em;}.connectionStatus span{color:#fff;font-size:11px;font-weight:800;}
-        .connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}.connectionActions button,.fallbackCommand button{height:30px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:10px;font-weight:900;cursor:pointer;}.connectionActions button:first-child{background:#065f46;color:#6ee7b7;}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed;}
-        p{margin:0;color:#cbd5e1;font-size:9px;line-height:1.35;}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617;}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;}.fallbackCommand form{display:grid;gap:6px;margin-top:6px;}textarea{width:100%;height:64px;resize:none;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:10px;line-height:1.35;outline:none;box-sizing:border-box;}
+        .builderChatFrame{width:min(100%,430px);max-width:430px;min-width:320px;height:min(932px,calc(100dvh - 24px));min-height:640px;overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.78);box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto}
+        .localChatConsole{min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;align-items:start;gap:14px;padding:30px 14px 10px;background:linear-gradient(180deg,#020713,#04111f);text-align:center;overflow:hidden}
+        .orb{justify-self:center;width:70px;height:70px;border-radius:22px;background:radial-gradient(circle at 50% 50%,#22d3ee 0 12%,#7c3aed 34%,#d946ef 72%);box-shadow:0 0 42px rgba(124,58,237,.45)}
+        h2{margin:0;color:#f8fafc;font-size:23px;line-height:1.15;font-weight:900}.messageList{min-height:0;display:flex;flex-direction:column;gap:8px;overflow:auto;padding:2px 3px 8px;text-align:left}
+        .msg{max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid rgba(148,163,184,.14);border-radius:14px;padding:10px 11px;color:#e2e8f0;font-size:14px;line-height:1.5;background:rgba(15,23,42,.72)}.msg.user{align-self:flex-end;background:rgba(124,58,237,.28);border-color:rgba(168,85,247,.32)}.msg.assistant{align-self:flex-start}.msg.streaming{border-color:rgba(34,211,238,.4)}.msg.error{border-color:rgba(248,113,113,.55);color:#fecaca}
+        .footerComposer{display:grid;grid-template-columns:36px minmax(0,1fr) 42px;gap:7px;align-items:end;border:1px solid rgba(168,85,247,.45);border-radius:22px;background:rgba(49,18,89,.78);box-shadow:0 0 32px rgba(124,58,237,.25);padding:6px}.footerComposer textarea{width:100%;min-height:38px;max-height:120px;resize:vertical;border:0;background:transparent;color:#fff;outline:none;padding:8px 4px;font:700 15px/1.4 inherit;box-sizing:border-box}.footerComposer textarea::placeholder{color:#fff;opacity:.82}.footerComposer button{height:38px;border:0;border-radius:999px;background:#7c3aed;color:#fff;font-size:16px;font-weight:900;cursor:pointer}.footerComposer button:first-child{background:rgba(30,41,59,.96)}
+        .mobileFooter{height:38px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;border-top:1px solid rgba(148,163,184,.14);padding-top:6px}.mobileFooter button{height:28px;border:0;border-radius:10px;background:rgba(15,23,42,.92);color:#cbd5e1;font-size:11px;font-weight:900;cursor:pointer}.mobileFooter button:first-child{background:#7c3aed;color:#fff}
+        .connectionBar{display:grid;gap:7px;padding:8px;border-top:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.96);box-sizing:border-box}.connectionStatus{display:grid;gap:2px}.connectionStatus b{color:#6ee7b7;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.connectionStatus span{color:#fff;font-size:12px;font-weight:800}.connectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.connectionActions button,.fallbackCommand button{height:32px;border:1px solid rgba(110,231,183,.32);border-radius:10px;background:#7c3aed;color:#fff;font-size:11px;font-weight:900;cursor:pointer}.connectionActions button:first-child{background:#065f46;color:#6ee7b7}.connectionActions button:disabled,.fallbackCommand button:disabled{opacity:.55;cursor:not-allowed}.connectionBar p{margin:0;color:#cbd5e1;font-size:11px;line-height:1.4}.fallbackCommand{border:1px solid rgba(148,163,184,.12);border-radius:10px;padding:6px;background:#020617}.fallbackCommand summary{cursor:pointer;color:#94a3b8;font-size:10px;font-weight:900;text-transform:uppercase}.fallbackCommand form{display:grid;gap:6px;margin-top:6px}.fallbackCommand textarea{width:100%;height:68px;resize:vertical;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#020617;color:#fff;padding:8px;font-size:12px;line-height:1.4;outline:none;box-sizing:border-box}
       `}</style>
     </section>
   );
