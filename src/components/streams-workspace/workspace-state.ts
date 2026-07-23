@@ -59,8 +59,8 @@ export const DEFAULT_WORKSPACE_STATE: UniversalWorkspaceState = {
   activeGlobalNav: "Build",
   activeInspectorTab: "Properties",
   activeTrayTab: "Activity",
-  projectPanelOpen: true,
-  inspectorOpen: true,
+  projectPanelOpen: false,
+  inspectorOpen: false,
   trayOpen: false,
   fullscreenCanvas: false,
 };
