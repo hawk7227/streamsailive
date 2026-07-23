@@ -3,7 +3,7 @@
 import { useProjectWorkspace } from "./ProjectWorkspaceController";
 
 export default function ProjectTopBar() {
-  const { state, setInspectorTab, setTrayTab, toggleFullscreenCanvas, toggleProjectPanel, toggleInspector, toggleTray } = useProjectWorkspace();
+  const { state, setGlobalNav, setTrayTab, toggleFullscreenCanvas, toggleTray } = useProjectWorkspace();
 
   function returnToChat() {
     const url = new URL(window.location.href);
@@ -43,7 +43,6 @@ export default function ProjectTopBar() {
   }
 
   function openCompletionReview() {
-    setInspectorTab("Project Guidance");
     setTrayTab("Verification");
   }
 
@@ -62,10 +61,8 @@ export default function ProjectTopBar() {
         <button type="button" onClick={() => void shareProject()}>Share</button>
         <button type="button" onClick={exportProject}>Export</button>
         <button type="button" className="primaryAction" onClick={openCompletionReview}>Publish / Complete</button>
-        <button type="button" aria-label="User profile" className="profileButton" onClick={() => setInspectorTab("Project Guidance")}>MH</button>
-        <button type="button" onClick={toggleProjectPanel} aria-label="Toggle project context">Context</button>
-        <button type="button" onClick={toggleInspector} aria-label="Toggle utility panel">Utility</button>
-        <button type="button" onClick={toggleTray} aria-label="Toggle bottom tray">Tray</button>
+        <button type="button" aria-label="User profile" className="profileButton" onClick={() => setGlobalNav("Settings")}>MH</button>
+        <button type="button" className="trayControl" onClick={toggleTray} aria-label="Toggle bottom tray">Tray</button>
       </nav>
     </header>
   );
