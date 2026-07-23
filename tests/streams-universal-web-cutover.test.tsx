@@ -7,7 +7,6 @@ import { ProjectWorkspaceController } from "../src/components/streams-workspace/
 import GlobalNavigationRail from "../src/components/streams-workspace/GlobalNavigationRail";
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
 
-
 describe("universal Streams web cutover", () => {
   it("keeps the unified experience hydration-safe before client restoration", () => {
     const html = renderToStaticMarkup(<StreamsUnifiedRoot />);
@@ -25,15 +24,18 @@ describe("universal Streams web cutover", () => {
     expect(html).not.toContain("workspace-navigation");
   });
 
-  it("removes both permanent side panels and all top overlays from the active builder workspace", () => {
+  it("removes permanent side panels, bottom tray, and top overlays from the active builder workspace", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
     expect(html).toContain('data-side-panels="removed"');
     expect(html).toContain('data-top-panels="removed"');
+    expect(html).toContain('data-bottom-tray="removed"');
     expect(html).toContain('data-preserved-builder-surface="true"');
     expect(html).toContain('data-first-working-row="manual-github-controls"');
     expect(html).toContain('aria-label="StreamsAI global navigation"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
+    expect(html).not.toContain('aria-label="Workspace supporting materials"');
+    expect(html).not.toContain('class="workspaceBottomTray"');
     expect(html).not.toContain('class="projectTopBar"');
     expect(html).not.toContain('class="projectOverviewBlock"');
     expect(html).not.toContain('class="canvasHeader"');
