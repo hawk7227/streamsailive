@@ -33,7 +33,6 @@ describe("universal project workspace shell", () => {
   it("keeps the builder canvas dominant and removes both side-panel systems", () => {
     const html = renderShell();
     expect(html).toContain('aria-label="Main workspace canvas"');
-    expect(html).toContain('aria-label="Workspace supporting materials"');
     expect(html).toContain('data-side-panels="removed"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
@@ -50,12 +49,13 @@ describe("universal project workspace shell", () => {
     }
   });
 
-  it("keeps the supporting tray while removing Context and Utility controls", () => {
+  it("removes the permanent supporting tray from the builder workspace", () => {
     const html = renderShell();
-    for (const tab of ["Outputs", "Activity", "Proof", "Verification"]) {
-      expect(html).toContain(`>${tab}<`);
+    expect(html).toContain('data-bottom-tray="removed"');
+    expect(html).not.toContain('aria-label="Workspace supporting materials"');
+    expect(html).not.toContain('class="workspaceBottomTray"');
+    for (const tab of ["Outputs", "Activity", "Versions", "Comments", "Console", "Logs", "Diff", "Proof", "Verification"]) {
+      expect(html).not.toContain(`>${tab}<`);
     }
-    expect(html).not.toContain('aria-label="Toggle project context"');
-    expect(html).not.toContain('aria-label="Toggle utility panel"');
   });
 });
