@@ -12,6 +12,23 @@ export default function ContextInspectorPanel() {
   if (!state.inspectorOpen) return null;
 
   const items = RIGHT_PANEL_SECTIONS[state.activeInspectorTab];
+
+  function openConnectedBuilderChat() {
+    const chat = document.querySelector<HTMLElement>(".builderChatFrame");
+    chat?.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    chat?.querySelector<HTMLInputElement>(".footerComposer input")?.focus();
+    window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", {
+      detail: {
+        phase: "chat.intervention.required",
+        source: "universal-workspace-inspector",
+        projectId: state.projectId,
+        projectName: state.projectName,
+        projectType: state.projectType,
+        message: `Opened the connected builder chat for ${state.projectName}.`,
+      },
+    }));
+  }
+
   return (
     <aside className="contextInspectorPanel" aria-label="Contextual utility panel">
       <div className="inspectorTabs" role="tablist" aria-label="Utility panel tabs">
@@ -32,8 +49,8 @@ export default function ContextInspectorPanel() {
         <header><strong>{state.activeInspectorTab}</strong><span>Context follows the current project and selection</span></header>
         {state.activeInspectorTab === "Ask AI" ? (
           <div className="askAiPlaceholder" data-contextual-ask-ai="true">
-            <p>Ask AI remains a supporting project tool. The existing builder chat connection stays authoritative while it is moved into this panel.</p>
-            <button type="button">Open connected Builder Chat</button>
+            <p>The existing builder chat remains authoritative and receives the active project, source file, selection, patch, preview, verification, and approval context.</p>
+            <button type="button" onClick={openConnectedBuilderChat}>Open connected Builder Chat</button>
           </div>
         ) : state.activeInspectorTab === "Project Guidance" ? (
           <div className="projectGuidancePanel">
