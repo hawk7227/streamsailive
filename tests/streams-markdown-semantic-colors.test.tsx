@@ -1,33 +1,33 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import markdownCss from "../src/components/streams-ai/current-chat/new-face/markdown/chat-markdown.css?raw";
+import ChatMarkdownMessage from "../src/components/streams-ai/current-chat/new-face/markdown/ChatMarkdownMessage";
+import { CHAT_MARKDOWN_SEMANTIC_COLORS, CHAT_MARKDOWN_STYLE_VARS } from "../src/components/streams-ai/current-chat/new-face/markdown/markdown-semantic-colors";
 
 describe("Streams markdown semantic colors", () => {
   it("keeps heading and bold colors different from response body text", () => {
-    expect(markdownCss).toContain("--chat-response-text: #dbe7f7");
-    expect(markdownCss).toContain("--chat-heading-text: #67e8f9");
-    expect(markdownCss).toContain("--chat-strong-text: #f0abfc");
-    expect(markdownCss).toContain("color: var(--chat-response-text)");
-    expect(markdownCss).toContain("color: var(--chat-heading-text)");
-    expect(markdownCss).toContain("color: var(--chat-strong-text)");
-    expect("#dbe7f7").not.toBe("#67e8f9");
-    expect("#dbe7f7").not.toBe("#f0abfc");
+    expect(CHAT_MARKDOWN_SEMANTIC_COLORS.responseText).not.toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.headingText);
+    expect(CHAT_MARKDOWN_SEMANTIC_COLORS.responseText).not.toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.strongText);
+    expect(CHAT_MARKDOWN_SEMANTIC_COLORS.headingText).not.toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.strongText);
   });
 
-  it("gives other markdown artifacts their own semantic colors", () => {
-    for (const token of ["--chat-marker-text", "--chat-link-text", "--chat-quote-text", "--chat-code-label", "--chat-table-heading"]) {
-      expect(markdownCss).toContain(token);
-    }
-    expect(markdownCss).toContain(".chatMarkdown li::marker");
-    expect(markdownCss).toContain(".chatMarkdown blockquote");
-    expect(markdownCss).toContain(".chatMarkdown a");
-    expect(markdownCss).toContain(".chatCodeHeader");
-    expect(markdownCss).toContain(".chatTableWrap th");
+  it("defines separate colors for all markdown artifacts", () => {
+    const values = Object.values(CHAT_MARKDOWN_SEMANTIC_COLORS);
+    expect(new Set(values).size).toBe(values.length);
+    expect(CHAT_MARKDOWN_STYLE_VARS["--chat-marker-text"]).toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.markerText);
+    expect(CHAT_MARKDOWN_STYLE_VARS["--chat-link-text"]).toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.linkText);
+    expect(CHAT_MARKDOWN_STYLE_VARS["--chat-quote-text"]).toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.quoteText);
+    expect(CHAT_MARKDOWN_STYLE_VARS["--chat-code-label"]).toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.codeLabel);
+    expect(CHAT_MARKDOWN_STYLE_VARS["--chat-table-heading"]).toBe(CHAT_MARKDOWN_SEMANTIC_COLORS.tableHeading);
   });
 
-  it("protects semantic colors from page-level overrides", () => {
-    expect(markdownCss).toContain("color: var(--chat-heading-text) !important");
-    expect(markdownCss).toContain("color: var(--chat-strong-text) !important");
-    expect(markdownCss).toContain("color: var(--chat-link-text) !important");
-    expect(markdownCss).toContain("color: var(--chat-quote-text) !important");
+  it("applies the semantic color variables to the live markdown renderer", () => {
+    const html = renderToStaticMarkup(<ChatMarkdownMessage content="# Heading\n\nBody with **bold text**." />);
+    expect(html).toContain('class="chatMarkdown"');
+    expect(html).toContain("--chat-response-text:#dbe7f7");
+    expect(html).toContain("--chat-heading-text:#67e8f9");
+    expect(html).toContain("--chat-strong-text:#f0abfc");
+    expect(html).toContain("<h1>Heading</h1>");
+    expect(html).toContain("<strong>bold text</strong>");
   });
 });
