@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STREAMS_VISIONS_EXPERIENCE_CONTRACT } from "../src/lib/streams-visions/experience-contract";
+import { VISIONS_CAPTURE_TYPES, VISIONS_IDENTITY_NOTICE, canEnterVisions } from "../src/lib/streams-visions/identity";
 import { STREAMS_VISIONS_SYSTEM_PROMPT } from "../src/lib/streams-visions/prompts";
 
 describe("Streams Visions isolation", () => {
@@ -24,6 +25,51 @@ describe("Streams Visions isolation", () => {
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.conversationsTable).toBe("streams_visions_conversations");
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.messagesTable).toBe("streams_visions_messages");
     expect(STREAMS_VISIONS_EXPERIENCE_CONTRACT.persistence.activePreviewField).toBe("active_preview");
+  });
+
+  it("requires a private identity, likeness and device-lock gate", () => {
+    const identity = STREAMS_VISIONS_EXPERIENCE_CONTRACT.identity;
+    expect(identity.privateBucket).toBe("streams-visions-likeness");
+    expect(identity.profileTable).toBe("streams_visions_identity_profiles");
+    expect(identity.assetsTable).toBe("streams_visions_likeness_assets");
+    expect(identity.eventsTable).toBe("streams_visions_identity_events");
+    expect(identity.requiredCaptures).toBe(4);
+    expect(VISIONS_CAPTURE_TYPES).toHaveLength(4);
+    expect(identity.publicAssetUrls).toBe(false);
+    expect(identity.legalIdentityClaim).toBe(false);
+    expect(identity.requiresEmailVerification).toBe(true);
+    expect(identity.requiresPhoneVerification).toBe(true);
+    expect(identity.requiresAccountDetails).toBe(true);
+    expect(identity.requiresIdentityNotice).toBe(true);
+    expect(identity.requiresVerifiedLiveness).toBe(true);
+    expect(identity.requiresApprovedLikeness).toBe(true);
+    expect(identity.requiresDeviceLock).toBe(true);
+  });
+
+  it("does not unlock Visions until every required gate is satisfied", () => {
+    const approved = {
+      emailVerified: true,
+      phoneVerified: true,
+      accountDetailsComplete: true,
+      noticeAccepted: true,
+      livenessStatus: "verified" as const,
+      likenessProfileStatus: "approved" as const,
+      biometricLockEnabled: true,
+    };
+    expect(canEnterVisions(approved)).toBe(true);
+    expect(canEnterVisions({ ...approved, phoneVerified: false })).toBe(false);
+    expect(canEnterVisions({ ...approved, accountDetailsComplete: false })).toBe(false);
+    expect(canEnterVisions({ ...approved, livenessStatus: "manual_review" })).toBe(false);
+    expect(canEnterVisions({ ...approved, likenessProfileStatus: "pending_review" })).toBe(false);
+    expect(canEnterVisions({ ...approved, biometricLockEnabled: false })).toBe(false);
+  });
+
+  it("uses the approved identity and privacy notice", () => {
+    expect(VISIONS_IDENTITY_NOTICE.title).toBe("Identity and Privacy Notice");
+    expect(VISIONS_IDENTITY_NOTICE.paragraphs.join(" ")).toContain("privacy-first company");
+    expect(VISIONS_IDENTITY_NOTICE.paragraphs.join(" ")).toContain("does not allow blank, fake, misleading, or impersonated profile images");
+    expect(VISIONS_IDENTITY_NOTICE.uses).toContain("Used to portray you consistently inside your private Streams Visions experiences");
+    expect(VISIONS_IDENTITY_NOTICE.confirmations).toHaveLength(3);
   });
 
   it("reveals visions without visible generator indicators", () => {
