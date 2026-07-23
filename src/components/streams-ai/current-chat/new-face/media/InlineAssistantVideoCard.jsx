@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import "./frameless-inline-media.css";
 
 export default function InlineAssistantVideoCard({ video, onOpen, onDownload, onCopyUrl }) {
   const url = video?.url || video?.generatedVideoUrl || "";
