@@ -1,4 +1,4 @@
-import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspaceShell";
+import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
 import PreviewCanvasFixStyles from "@/components/streams-builder/PreviewCanvasFixStyles";
 import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEditorCanvasFixStyles";
 import VisualEditorCodeDock from "@/components/streams-builder/VisualEditorCodeDock";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default function StreamsAIStreamsBuilderPage() {
   return (
     <>
-      <ProjectWorkspaceShell />
+      <WorkspaceGrid />
       <WorkspaceBridgeSourceOfTruth />
       <BuilderContextEventSink />
       <CanonicalPreviewEventBridge />
