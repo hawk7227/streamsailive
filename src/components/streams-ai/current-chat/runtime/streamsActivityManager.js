@@ -2,8 +2,8 @@ import { canShowStreamsStatus, normalizeStatusText } from "./streamsStatusRegist
 
 const LABELS = {
   chat: {
-    created: ["Thinking…", "The request was accepted."],
-    thinking: ["Thinking…", "The request is being prepared."],
+    created: ["Sent", "The message was sent."],
+    thinking: ["Sent", "Waiting for the response stream."],
     understanding: ["Understanding your request…", "Streams is identifying the requested outcome."],
     reviewing: ["Reviewing your request…", "Relevant context is being reviewed."],
     preparing: ["Preparing response…", "The response is being prepared."],
@@ -115,9 +115,16 @@ function isInternal(text = "", source = "") {
   return String(source).toLowerCase().includes("history") || INTERNAL.some((pattern) => pattern.test(String(text)));
 }
 
+function isUnverifiedLocalChatState(activity = {}) {
+  return activity.mode === "chat"
+    && ["created", "thinking"].includes(activity.phase)
+    && !activity.backendProof
+    && !String(activity.source || "").includes("server");
+}
+
 export function isPublicStreamsActivity(activity = {}) {
   const text = normalizeStatusText(activity?.statusText);
-  return Boolean(text && canShowStreamsStatus(text) && !isInternal(text, activity?.source) && activity?.visible !== false);
+  return Boolean(text && canShowStreamsStatus(text) && !isInternal(text, activity?.source) && !isUnverifiedLocalChatState(activity) && activity?.visible !== false);
 }
 
 function publish(activity) {
