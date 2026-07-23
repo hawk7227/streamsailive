@@ -9,6 +9,8 @@ const ACTIVE_PROJECT_NAME_KEY = "streams-ai:active-project-name";
 type StreamsProject = {
   id?: string;
   name?: string;
+  instructions?: string;
+  files?: Array<Record<string, unknown>>;
   metadata?: Record<string, any>;
 };
 
@@ -18,6 +20,10 @@ function selectedProjectId() {
   } catch {
     return "";
   }
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 50) : [];
 }
 
 export default function ActiveProjectContextBridge() {
@@ -58,6 +64,16 @@ export default function ActiveProjectContextBridge() {
         projectName: project.name || current.projectName,
         projectType: String(metadata.projectType || current.projectType),
         projectStatus: String(metadata.projectStatus || metadata.status || current.projectStatus),
+        projectGoal: String(metadata.goal || metadata.projectGoal || current.projectGoal),
+        projectAudience: String(metadata.audience || current.projectAudience),
+        projectDescription: String(metadata.description || metadata.finishedResult || current.projectDescription),
+        projectInstructions: String(project.instructions || metadata.instructions || current.projectInstructions),
+        projectStyle: String(metadata.stylePreferences || metadata.brandStyle || current.projectStyle),
+        projectFiles: Array.isArray(project.files) ? project.files : Array.isArray(metadata.projectFiles) ? metadata.projectFiles : current.projectFiles,
+        projectDecisions: stringList(metadata.decisions || metadata.approvedDecisions || metadata.approvedConcepts),
+        projectRequirements: stringList(metadata.requirements),
+        projectConstraints: stringList(metadata.constraints),
+        originalPrompt: String(metadata.originalPrompt || current.originalPrompt),
         currentStage: String(metadata.currentStage || current.currentStage),
         progress: Number.isFinite(Number(metadata.progress)) ? Math.max(0, Math.min(100, Number(metadata.progress))) : current.progress,
         nextAction: String(metadata.nextRecommendedAction || metadata.nextAction || current.nextAction),
