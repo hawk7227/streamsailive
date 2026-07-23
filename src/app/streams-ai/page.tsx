@@ -1,4 +1,4 @@
-import StreamsUniversalExperience from "@/components/streams-ai/current-chat/StreamsUniversalExperience";
+import StreamsUnifiedRoot from "@/components/streams-ai/current-chat/StreamsUnifiedRoot";
 import StreamsAIWorkHistoryBridge from "@/components/streams-ai/current-chat/StreamsAIWorkHistoryBridge";
 import StreamsAIMobileKeyboardBridge from "./StreamsAIMobileKeyboardBridge";
 import "@/components/streams-ai/visual-operator/streams-operator-message-states.css";
@@ -12,7 +12,7 @@ export default function StreamsAIPage() {
   return (
     <>
       <StreamsAIMobileKeyboardBridge />
-      <StreamsUniversalExperience />
+      <StreamsUnifiedRoot />
       <StreamsAIWorkHistoryBridge />
     </>
   );
