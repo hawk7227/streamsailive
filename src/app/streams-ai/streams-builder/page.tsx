@@ -8,6 +8,7 @@ import CanonicalPreviewEventBridge from "@/components/streams-builder/CanonicalP
 import CanonicalPreviewWorkspaceSurface from "@/components/streams-builder/CanonicalPreviewWorkspaceSurface";
 import VisualSelectionPatchPanel from "@/components/streams-builder/VisualSelectionPatchPanel";
 import WorkspaceBridgeSourceOfTruth from "@/components/streams-builder/WorkspaceBridgeSourceOfTruth";
+import DefaultSplitWorkstationOpener from "@/components/streams-builder/DefaultSplitWorkstationOpener";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default function StreamsAIStreamsBuilderPage() {
   return (
     <>
       <WorkspaceGrid />
+      <DefaultSplitWorkstationOpener />
       <WorkspaceBridgeSourceOfTruth />
       <BuilderContextEventSink />
       <CanonicalPreviewEventBridge />
