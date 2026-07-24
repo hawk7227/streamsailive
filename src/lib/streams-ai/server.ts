@@ -96,4 +96,6 @@ export const streamsAITables = {
   uploadSessions: "streams_ai_upload_sessions",
   uploadChunks: "streams_ai_upload_chunks",
   featureFlags: "streams_ai_feature_flags",
+  operations: "streams_ai_operations",
+  operationEvents: "streams_ai_operation_events",
 } as const;
