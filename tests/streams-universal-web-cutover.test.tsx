@@ -46,9 +46,10 @@ describe("universal Streams web cutover", () => {
   it("preserves every workstation screen behind the hydration gate", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
     expect(html).toContain('<main class="streamsBuilderShell" aria-hidden="true"></main>');
-    for (const screen of ["Frontend UI", "Code Editor", "Diff", "Logs", "Media"]) {
-      expect(html).not.toContain(screen);
-    }
+    expect(html).not.toContain('class="liveWorkstation"');
+    expect(html).not.toContain('class="visualEditor"');
+    expect(html).not.toContain('class="workstationShell"');
+    expect(html).not.toContain('aria-label="Frontend workstation views"');
 
     const source = WorkspaceGrid.toString();
     for (const component of [
