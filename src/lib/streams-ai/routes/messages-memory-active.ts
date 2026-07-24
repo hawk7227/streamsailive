@@ -216,6 +216,9 @@ async function repairCandidateWithModel(input: {
 
 async function verifyAssistantOnlyRequest(scope: any, body: Body, requestedContent: string) {
   if (body.metadata?.skipUserPersistence !== true) return { content: requestedContent, attachments: body.attachments || [] };
+  if (body.metadata?.executionPrePersisted === true && String(body.metadata?.sourceUserMessageId || "").trim()) {
+    return { content: requestedContent, attachments: body.attachments || [] };
+  }
   const sessionId = String(body.sessionId || "").trim();
   const sourceUserMessageId = String(body.metadata?.sourceUserMessageId || "").trim();
   const regeneratedFromMessageId = String(body.metadata?.regeneratedFromMessageId || "").trim();
