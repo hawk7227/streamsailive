@@ -19,18 +19,21 @@ function validatedPatch(value: unknown): WorkspacePatch | null {
   const source = value as Record<string, unknown>;
   const patch: WorkspacePatch = {};
   for (const key of ["chatRevision", "codeRevision", "gitRevision", "runtimeRevision", "previewRevision"] as const) {
-    if (source[key] !== undefined) {
-      if (typeof source[key] !== "string") return null;
-      patch[key] = source[key];
+    const candidate = source[key];
+    if (candidate !== undefined) {
+      if (typeof candidate !== "string") return null;
+      patch[key] = candidate;
     }
   }
-  if (source.activeJobId !== undefined) {
-    if (typeof source.activeJobId !== "string") return null;
-    patch.activeJobId = source.activeJobId;
+  const activeJobId = source.activeJobId;
+  if (activeJobId !== undefined) {
+    if (typeof activeJobId !== "string") return null;
+    patch.activeJobId = activeJobId;
   }
-  if (source.steeringRevision !== undefined) {
-    if (!Number.isInteger(source.steeringRevision) || Number(source.steeringRevision) < 0) return null;
-    patch.steeringRevision = Number(source.steeringRevision);
+  const steeringRevision = source.steeringRevision;
+  if (steeringRevision !== undefined) {
+    if (typeof steeringRevision !== "number" || !Number.isInteger(steeringRevision) || steeringRevision < 0) return null;
+    patch.steeringRevision = steeringRevision;
   }
   return patch;
 }
