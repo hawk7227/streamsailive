@@ -1,1 +1,42 @@
 /* Mobile /streams-ai BuilderCenterChat exact visual overrides. */
+@media (max-width: 640px) {
+  .builderChatFrame h2 {
+    font-size: 28px !important;
+    line-height: 1.12 !important;
+    font-weight: 950 !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  .builderChatFrame .msg {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+    font-weight: 800 !important;
+    padding: 12px 13px !important;
+  }
+
+  .builderChatFrame .footerComposer textarea {
+    font-size: 17px !important;
+    line-height: 1.45 !important;
+    font-weight: 800 !important;
+  }
+
+  .builderChatFrame .footerComposer textarea::placeholder {
+    font-weight: 800 !important;
+    opacity: 0.96 !important;
+  }
+
+  .builderChatFrame .mobileFooter button,
+  .builderChatFrame .connectionStatus span,
+  .builderChatFrame .connectionBar p,
+  .builderChatFrame .connectionActions button,
+  .builderChatFrame .fallbackCommand button {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+  }
+
+  .builderChatFrame .connectionStatus b,
+  .builderChatFrame .fallbackCommand summary {
+    font-size: 12px !important;
+    font-weight: 950 !important;
+  }
+}
