@@ -58,14 +58,20 @@ export async function executeDurableRuntime(options: RuntimeStageExecutorOptions
 
   const heartbeatEvery = Math.max(1_000, Math.min(options.heartbeatIntervalMs ?? 10_000, Math.max(1_000, (options.leaseTtlMs ?? 30_000) / 2)));
   const heartbeat = setInterval(() => {
-    void heartbeatRuntime({ store: options.store, runtimeId: options.runtimeId, ownerId: options.ownerId, ttlMs: options.leaseTtlMs })
+    const heartbeatInput = {
+      store: options.store,
+      runtimeId: options.runtimeId,
+      ownerId: options.ownerId,
+      ...(options.leaseTtlMs !== undefined ? { ttlMs: options.leaseTtlMs } : {}),
+    };
+    void heartbeatRuntime(heartbeatInput)
       .then((next) => { runtime = next; })
       .catch(() => controller.abort("runtime heartbeat failed"));
   }, heartbeatEvery);
 
   try {
     const start = resumePoint(runtime).stage;
-    let startIndex = Math.max(0, STAGE_ORDER.indexOf(start));
+    const startIndex = Math.max(0, STAGE_ORDER.indexOf(start));
 
     for (let index = startIndex; index < STAGE_ORDER.length; index += 1) {
       const stage = STAGE_ORDER[index];
@@ -108,7 +114,7 @@ export async function executeDurableRuntime(options: RuntimeStageExecutorOptions
             stage,
             inputDigest: digest({ stage, steering, version: runtime.version }),
             output: result.output,
-            evidenceUris: result.evidenceUris,
+            ...(result.evidenceUris ? { evidenceUris: result.evidenceUris } : {}),
           });
           await emit(options, runtime, "checkpointed", `Completed ${stage} stage and persisted evidence.`);
           lastError = null;
