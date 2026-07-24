@@ -1,13 +1,13 @@
 import { type NextRequest } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 
-function requestHostname(request: NextRequest) {
+export function requestHostname(request: NextRequest) {
   const rawHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
   const firstForwardedHost = rawHost.split(",")[0]?.trim() || "";
   return firstForwardedHost.split(":")[0].toLowerCase();
 }
 
-function isVercelGitPreview(request: NextRequest) {
+export function isVercelGitPreview(request: NextRequest) {
   const hostname = requestHostname(request);
 
   // Vercel branch aliases keep the explicit `-git-` hostname even when the
