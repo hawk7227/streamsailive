@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
   try {
     await requireStreamsAIScope(request);
     const runtimeId = request.nextUrl.searchParams.get("runtimeId");
-    if (!runtimeId) return streamsAIJson({ ok: false, error: "runtimeId is required" }, { status: 400 });
+    if (!runtimeId) return streamsAIJson({ ok: false, error: "runtimeId is required" }, 400);
     const record = await store.get(runtimeId);
-    if (!record) return streamsAIJson({ ok: false, error: "Runtime not found" }, { status: 404 });
+    if (!record) return streamsAIJson({ ok: false, error: "Runtime not found" }, 404);
     return streamsAIJson({ ok: true, runtime: record });
   } catch (error) { return streamsAIError(error); }
 }
@@ -34,24 +34,25 @@ export async function POST(request: NextRequest) {
       const projectId = String(body.projectId ?? "");
       const workspaceId = String(body.workspaceId ?? "");
       const jobId = String(body.jobId ?? "");
-      if (!projectId || !workspaceId || !jobId) return streamsAIJson({ ok: false, error: "projectId, workspaceId, and jobId are required" }, { status: 400 });
+      if (!projectId || !workspaceId || !jobId) return streamsAIJson({ ok: false, error: "projectId, workspaceId, and jobId are required" }, 400);
       const record = createDurableRuntime({ projectId, workspaceId, jobId });
       await store.create(record);
-      return streamsAIJson({ ok: true, runtime: record }, { status: 201 });
+      return streamsAIJson({ ok: true, runtime: record }, 201);
     }
     const runtimeId = String(body.runtimeId ?? "");
-    if (!runtimeId) return streamsAIJson({ ok: false, error: "runtimeId is required" }, { status: 400 });
+    if (!runtimeId) return streamsAIJson({ ok: false, error: "runtimeId is required" }, 400);
     if (action === "claim") {
-      const ownerId = String(body.ownerId ?? scope.userId ?? "");
+      const ownerId = String(body.ownerId ?? scope.userId);
       const record = await claimRuntime({ store, runtimeId, ownerId, force: body.force === true });
       return streamsAIJson({ ok: true, runtime: record });
     }
     if (action === "command") {
       const type = String(body.type ?? "") as RuntimeCommand["type"];
-      if (!(["pause", "resume", "cancel", "steer"] as string[]).includes(type)) return streamsAIJson({ ok: false, error: "Invalid runtime command" }, { status: 400 });
-      const record = await appendRuntimeCommand({ store, runtimeId, actorId: String(scope.userId), type, payload: typeof body.payload === "object" && body.payload ? body.payload as Record<string, unknown> : undefined });
+      if (!( ["pause", "resume", "cancel", "steer"] as string[]).includes(type)) return streamsAIJson({ ok: false, error: "Invalid runtime command" }, 400);
+      const payload = typeof body.payload === "object" && body.payload ? body.payload as Record<string, unknown> : undefined;
+      const record = await appendRuntimeCommand({ store, runtimeId, actorId: scope.userId, type, payload });
       return streamsAIJson({ ok: true, runtime: record });
     }
-    return streamsAIJson({ ok: false, error: "Unsupported action" }, { status: 400 });
+    return streamsAIJson({ ok: false, error: "Unsupported action" }, 400);
   } catch (error) { return streamsAIError(error); }
 }
