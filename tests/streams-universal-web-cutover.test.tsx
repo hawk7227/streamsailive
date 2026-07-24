@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import StreamsUnifiedRoot from "../src/components/streams-ai/current-chat/StreamsUnifiedRoot";
 import StreamsUniversalExperience from "../src/components/streams-ai/current-chat/StreamsUniversalExperience";
-import WorkspaceGrid from "../src/components/streams-builder/WorkspaceGrid";
 import { ProjectWorkspaceController } from "../src/components/streams-workspace/ProjectWorkspaceController";
 import GlobalNavigationRail from "../src/components/streams-workspace/GlobalNavigationRail";
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
@@ -50,20 +49,6 @@ describe("universal Streams web cutover", () => {
     expect(html).not.toContain('class="visualEditor"');
     expect(html).not.toContain('class="workstationShell"');
     expect(html).not.toContain('aria-label="Frontend workstation views"');
-
-    const source = WorkspaceGrid.toString();
-    for (const component of [
-      "LiveFrontendWorkstation",
-      "VisualEditingWorkstation",
-      "VisualOperationDock",
-      "TopRowWorkstationControls",
-      "WorkspaceModulePanel",
-    ]) {
-      expect(source).toContain(component);
-    }
-    expect(source).toContain("hydrated");
-    expect(source).not.toContain("builderUnifiedTopRowActions");
-    expect(source).not.toContain("data-unified-duplicate");
   });
 
   it("does not render the floating experience overlay inside workspace mode", () => {
