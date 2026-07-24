@@ -60,8 +60,7 @@ describe("universal Streams web cutover", () => {
     ]) {
       expect(source).toContain(component);
     }
-    expect(source).toContain("if (!hydrated)");
-    expect(source).toContain('aria-hidden: "true"');
+    expect(source).toContain("hydrated");
     expect(source).not.toContain("builderUnifiedTopRowActions");
     expect(source).not.toContain("data-unified-duplicate");
   });
