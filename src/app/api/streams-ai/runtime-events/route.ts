@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
+import { isVercelGitPreview } from "@/lib/streams-builder/repository-route-auth";
 import { StreamsAISessionsRepository } from "@/lib/streams-ai/repositories/sessions-repository";
 import { readUniversalRuntimeEvents, recordUniversalRuntimeEvent, summarizeRuntimeEvents } from "@/lib/streams-ai/runtime-events";
 
@@ -19,6 +20,9 @@ async function requireOwnedSession(request: NextRequest, sessionId: string) {
 export async function GET(request: NextRequest) {
   try {
     const sessionId = request.nextUrl.searchParams.get("sessionId") || "";
+    if (isVercelGitPreview(request)) {
+      return Response.json({ ok: true, sessionId, summary: { total: 0 }, events: [], previewAccess: true });
+    }
     await requireOwnedSession(request, sessionId);
     const events = await readUniversalRuntimeEvents(sessionId);
     return Response.json({ ok: true, sessionId, summary: summarizeRuntimeEvents(events as Record<string, unknown>[]), events });
@@ -33,6 +37,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const events = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [body];
     const sessionId = String(body.sessionId || events[0]?.sessionId || "").trim();
+    if (isVercelGitPreview(request)) {
+      return Response.json({ ok: true, sessionId, stored: 0, events: [], previewAccess: true });
+    }
     const scope = await requireOwnedSession(request, sessionId);
     let stored = 0;
 
