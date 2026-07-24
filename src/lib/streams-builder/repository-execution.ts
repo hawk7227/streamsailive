@@ -40,6 +40,7 @@ export interface StreamsRepositoryExecutionRequest {
   maxFilesTouched?: number;
   runBuildAfterPatch?: boolean;
   requireApprovalBeforePush?: boolean;
+  resumeWorkspace?: boolean;
 }
 
 export interface StreamsRepositoryExecutionStep {
@@ -68,6 +69,7 @@ export interface StreamsRepositoryExecutionPlan {
     maxFilesTouched: number;
     runBuildAfterPatch: boolean;
     requireApprovalBeforePush: boolean;
+    resumeWorkspace: boolean;
   };
 }
 
@@ -118,7 +120,7 @@ const COMMAND_DETAILS: Record<StreamsRepositoryExecutionCommand, Omit<StreamsRep
     requiresCheckpoint: false,
     requiresApproval: false,
     truthState: "UNPROVEN",
-    description: "Run npm run build inside the sandbox and capture logs as proof evidence.",
+    description: "Run the repository-declared build command inside the sandbox and capture logs as proof evidence.",
   },
   git_status: {
     stage: "git_review",
@@ -257,6 +259,7 @@ export function createRepositoryExecutionPlan(
       maxFilesTouched,
       runBuildAfterPatch: request.runBuildAfterPatch !== false,
       requireApprovalBeforePush: request.requireApprovalBeforePush !== false,
+      resumeWorkspace: request.resumeWorkspace !== false,
     },
   };
 }
