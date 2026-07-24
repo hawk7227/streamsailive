@@ -4,6 +4,7 @@ import "./streams-ai/mobile-buildercenterchat-exact.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
 import StreamsGlobalAccountNavLinks from "@/components/account/StreamsGlobalAccountNavLinks";
+import BuilderChatPreviewContextBridge from "@/components/streams-builder/BuilderChatPreviewContextBridge";
 
 const inter = { variable: "--font-inter", className: "font-inter" };
 
@@ -33,6 +34,7 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
+            <BuilderChatPreviewContextBridge />
             <StreamsGlobalAccountNavLinks />
             {children}
           </AuthProvider>
