@@ -1,4 +1,5 @@
 import VisionsClient from "./VisionsClient";
+import SampleVisionApparition from "./SampleVisionApparition";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +15,10 @@ export default function StreamsVisionsPage() {
     );
   }
 
-  return <VisionsClient />;
+  return (
+    <>
+      <VisionsClient />
+      <SampleVisionApparition />
+    </>
+  );
 }
