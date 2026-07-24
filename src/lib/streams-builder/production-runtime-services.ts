@@ -22,7 +22,7 @@ export interface BuilderModelRoutingInput {
   repairAttempt?: number;
 }
 
-export function routeBuilderModel(input: BuilderModelRoutingInput, profiles: BuilderModelProfile[]) {
+export function routeBuilderModel(input: BuilderModelRoutingInput, profiles: BuilderModelProfile[]): BuilderModelProfile {
   const eligible = profiles.filter((profile) =>
     profile.maxContextTokens >= input.estimatedInputTokens &&
     (!input.requiresVision || profile.supportsVision) &&
@@ -30,12 +30,15 @@ export function routeBuilderModel(input: BuilderModelRoutingInput, profiles: Bui
   );
   if (!eligible.length) throw new Error("No model profile satisfies the task requirements.");
   const depthBias = input.risk === "high" || input.task === "repair" || (input.repairAttempt ?? 0) > 1 ? 8 : input.risk === "medium" ? 3 : 0;
-  return eligible
+  const ranked = eligible
     .map((profile) => ({
       profile,
       score: profile.costWeight + profile.latencyWeight + (profile.tier === "deep" ? -depthBias : profile.tier === "fast" ? depthBias : 0),
     }))
-    .sort((a, b) => a.score - b.score || b.profile.maxContextTokens - a.profile.maxContextTokens)[0].profile;
+    .sort((a, b) => a.score - b.score || b.profile.maxContextTokens - a.profile.maxContextTokens);
+  const selected = ranked[0];
+  if (!selected) throw new Error("Model routing produced no selection.");
+  return selected.profile;
 }
 
 export type VerificationStage = "lint" | "typecheck" | "test" | "build" | "browser" | "preview" | "deployment";
@@ -51,12 +54,12 @@ export function createIncrementalVerificationPlan(input: {
   affectedFiles: string[];
   hasFrontendChanges: boolean;
   deploymentRequested: boolean;
-}) {
+}): VerificationPlanStage[] {
   const allFiles = [...new Set([...input.changedFiles, ...input.affectedFiles])].sort();
   const testsChanged = allFiles.some((file) => /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:spec|test)\./.test(file));
   const sourceChanged = allFiles.some((file) => /\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(file));
   const configChanged = allFiles.some((file) => /(?:package\.json|pnpm-lock\.yaml|tsconfig|next\.config|vite\.config)/.test(file));
-  const plan: VerificationPlanStage[] = [
+  return [
     { stage: "lint", required: sourceChanged, reason: sourceChanged ? "source files changed" : "no lintable source files changed", affectedFiles: allFiles },
     { stage: "typecheck", required: sourceChanged || configChanged, reason: sourceChanged || configChanged ? "typed source or compiler configuration changed" : "no typed inputs changed", affectedFiles: allFiles },
     { stage: "test", required: sourceChanged || testsChanged, reason: testsChanged ? "tests changed" : sourceChanged ? "source behavior changed" : "no test-relevant files changed", affectedFiles: allFiles },
@@ -65,7 +68,6 @@ export function createIncrementalVerificationPlan(input: {
     { stage: "preview", required: input.hasFrontendChanges, reason: input.hasFrontendChanges ? "preview must match the verified commit" : "no preview verification required", affectedFiles: allFiles },
     { stage: "deployment", required: input.deploymentRequested, reason: input.deploymentRequested ? "deployment proof requested" : "deployment not requested", affectedFiles: allFiles },
   ];
-  return plan;
 }
 
 export interface WorkspaceVersionedState {
@@ -97,7 +99,7 @@ export async function synchronizeWorkspaceState(input: {
   expectedGeneration: number;
   patch: Partial<Omit<WorkspaceVersionedState, "workspaceId" | "generation" | "updatedAt">>;
   now?: string;
-}) {
+}): Promise<WorkspaceVersionedState> {
   const current = await input.store.get(input.workspaceId);
   if (!current) throw new Error("Workspace state not found.");
   if (current.generation !== input.expectedGeneration) throw new Error("Workspace state generation conflict.");
@@ -160,13 +162,13 @@ export interface RuntimeBenchmarkSample {
 export function summarizeRuntimeBenchmark(samples: RuntimeBenchmarkSample[]) {
   if (!samples.length) throw new Error("At least one benchmark sample is required.");
   const sorted = samples.map((sample) => sample.latencyMs).sort((a, b) => a - b);
-  const percentile = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))];
+  const percentile = (p: number): number => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))] ?? 0;
   const count = samples.length;
   return {
     count,
     successRate: samples.filter((sample) => sample.success).length / count,
     repairRate: samples.filter((sample) => sample.repaired).length / count,
     hallucinationRate: samples.filter((sample) => sample.hallucination).length / count,
-    latencyMs: { p50: percentile(0.5), p95: percentile(0.95), p99: percentile(0.99), max: sorted[sorted.length - 1] },
+    latencyMs: { p50: percentile(0.5), p95: percentile(0.95), p99: percentile(0.99), max: sorted[sorted.length - 1] ?? 0 },
   };
 }
