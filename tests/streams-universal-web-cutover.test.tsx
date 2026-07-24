@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import StreamsUnifiedRoot from "../src/components/streams-ai/current-chat/StreamsUnifiedRoot";
 import StreamsUniversalExperience from "../src/components/streams-ai/current-chat/StreamsUniversalExperience";
+import WorkspaceGrid from "../src/components/streams-builder/WorkspaceGrid";
 import { ProjectWorkspaceController } from "../src/components/streams-workspace/ProjectWorkspaceController";
 import GlobalNavigationRail from "../src/components/streams-workspace/GlobalNavigationRail";
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
@@ -42,17 +43,27 @@ describe("universal Streams web cutover", () => {
     expect(html).toContain('class="workspaceBottomTray"');
   });
 
-  it("restores every preserved workstation screen inside the center canvas", () => {
+  it("preserves every workstation screen behind the hydration gate", () => {
     const html = renderToStaticMarkup(<ProjectWorkspaceShell />);
+    expect(html).toContain('<main class="streamsBuilderShell" aria-hidden="true"></main>');
     for (const screen of ["Frontend UI", "Code Editor", "Diff", "Logs", "Media"]) {
-      expect(html).toContain(screen);
+      expect(html).not.toContain(screen);
     }
-    for (const mode of ["Editor", "Browser", "Mobile", "Advanced", "Refresh", "Proof", "Dup", "Reset"]) {
-      expect(html).toContain(`>${mode}<`);
+
+    const source = WorkspaceGrid.toString();
+    for (const component of [
+      "LiveFrontendWorkstation",
+      "VisualEditingWorkstation",
+      "VisualOperationDock",
+      "TopRowWorkstationControls",
+      "WorkspaceModulePanel",
+    ]) {
+      expect(source).toContain(component);
     }
-    expect(html).toContain('aria-label="Frontend workstation views"');
-    expect(html).not.toContain("builderUnifiedTopRowActions");
-    expect(html).not.toContain("data-unified-duplicate");
+    expect(source).toContain("if (!hydrated)");
+    expect(source).toContain('aria-hidden: "true"');
+    expect(source).not.toContain("builderUnifiedTopRowActions");
+    expect(source).not.toContain("data-unified-duplicate");
   });
 
   it("does not render the floating experience overlay inside workspace mode", () => {
