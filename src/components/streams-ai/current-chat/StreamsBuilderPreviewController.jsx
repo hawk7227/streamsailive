@@ -35,6 +35,21 @@ function setActiveState(value) {
   try { window.sessionStorage.setItem(ACTIVE_KEY, JSON.stringify(value)); } catch {}
 }
 
+function previewCompletionFromMessage(message = {}) {
+  const metadata = message?.metadata || message?.meta || {};
+  const failure = metadata?.failure || {};
+  if (message?.status === "failed" || failure?.code) return null;
+  const previewId = String(metadata?.previewId || metadata?.preview_id || "").trim();
+  const previewUrl = String(metadata?.previewUrl || metadata?.preview_url || (previewId ? `/streams-builder/preview/${previewId}` : "")).trim();
+  if (!previewId || !previewUrl) return null;
+  return {
+    previewId,
+    previewUrl,
+    operationId: metadata?.operationId || metadata?.operation_id || "",
+    artifacts: metadata?.artifacts || [],
+  };
+}
+
 async function linkSessionAssets(previewId, sessionId) {
   const linked = [];
   try {
@@ -122,11 +137,30 @@ export default function StreamsBuilderPreviewController({ chatRuntime }) {
   useEffect(() => {
     const messages = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
     if (!messages.length || !chatRuntime?.sessionId) return;
-    const latestAssistant = [...messages].reverse().find((message) => message?.role === "assistant" && String(message.content || "").trim());
+    const latestAssistant = [...messages].reverse().find((message) => message?.role === "assistant");
+    const completion = previewCompletionFromMessage(latestAssistant);
+    if (completion) {
+      const key = `${chatRuntime.sessionId}:${latestAssistant?.id || messages.length}:${completion.previewId}`;
+      if (key === lastKey.current) return;
+      lastKey.current = key;
+      const nextActive = {
+        previewId: completion.previewId,
+        sessionId: chatRuntime.sessionId,
+        previewUrl: completion.previewUrl,
+        operationId: completion.operationId,
+        artifacts: completion.artifacts,
+        open: true,
+      };
+      setActiveState(nextActive);
+      window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { ...nextActive, mode: "embedded", source: "builder-runtime", reason: "completed_builder_operation" } }));
+      return;
+    }
+
+    const latestAssistantWithContent = [...messages].reverse().find((message) => message?.role === "assistant" && String(message.content || "").trim());
     const latestUser = [...messages].reverse().find((message) => message?.role === "user" && String(message.content || "").trim());
-    const source = extractSource(latestAssistant?.content || "");
+    const source = extractSource(latestAssistantWithContent?.content || "");
     if (!source) return;
-    const key = `${chatRuntime.sessionId}:${latestAssistant?.id || messages.length}:${source.slice(0, 120)}`;
+    const key = `${chatRuntime.sessionId}:${latestAssistantWithContent?.id || messages.length}:${source.slice(0, 120)}`;
     if (key === lastKey.current) return;
     lastKey.current = key;
 
