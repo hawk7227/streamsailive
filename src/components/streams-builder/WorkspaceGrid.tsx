@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import BuilderCenterChat from "./BuilderCenterChat";
 import BuilderControlLayers from "./BuilderControlLayers";
+import CodexCursorHybridBuilder from "./CodexCursorHybridBuilder";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import TopRowWorkstationControls from "./TopRowWorkstationControls";
@@ -114,7 +115,7 @@ export default function WorkspaceGrid() {
     if (sessionId) setChatConnection({ connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId });
     setHydrated(true);
     if (previewId) void hydratePreview(previewId, `/streams-builder/preview/${previewId}`, initial.sha || previewId);
-    emit("workspace-audit-ready", "Original researched builder canvas restored: real session chat, code/frontend workstation, and visual editor share one source.");
+    emit("workspace-audit-ready", "Original researched builder canvas restored with the Codex/Cursor autonomous repair runtime.");
     function onPulledFile(event: Event) { const detail = (event as CustomEvent<PulledFileDetail>).detail; if (!detail?.path) return; setActiveFile(detail); const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`; setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]); window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } })); }
     function onSummaryEvent(event: Event) { const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail; if (!detail?.message) return; setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]); if (detail.phase === "chat.response.complete") window.setTimeout(() => void mountLatestGeneratedPreview(), 100); }
     function onManualClick(event: MouseEvent) { const target = event.target as HTMLElement | null; if (!target || target.closest("iframe")) return; const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']"); if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return; emit("manual-workspace-click", `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.`); }
@@ -135,7 +136,7 @@ export default function WorkspaceGrid() {
         <section className="workArea">
           <section className="operatorColumn"><BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} /><BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} summaryItems={visualEditorLog} /></section>
           <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
-            <div className="connectionRibbon">{chatConnection.connected ? `Session ${chatConnection.sessionId} connected to the original Builder canvas.` : "Connect a StreamsAI session to this Builder canvas."}</div>
+            <div className="connectionRibbon">{chatConnection.connected ? `Session ${chatConnection.sessionId} connected to the researched Codex/Cursor Builder canvas.` : "Connect a StreamsAI session to the researched Builder canvas."}</div>
             {primaryCanvas ? (
               <div className="stationViewport" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 1, background: "#172033" }}>
                 <section style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }} aria-label="Code and frontend source workstation"><LiveFrontendWorkstation activeFile={activeFile} /></section>
@@ -144,9 +145,9 @@ export default function WorkspaceGrid() {
             ) : (
               <div className="stationViewport">{activeModule === "Visual Editing" ? <VisualEditingWorkstation stationLabel="Agent 1" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <LiveFrontendWorkstation activeFile={activeFile} />}</div>
             )}
-            <div className="stationContext">{activeModule === "Visual Editing" ? <VisualOperationDock activeFile={activeFile} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <WorkspaceModulePanel moduleName={activeModule} />}</div>
+            <div className="stationContext">{primaryCanvas ? <CodexCursorHybridBuilder activeFile={activeFile} connection={chatConnection} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : activeModule === "Visual Editing" ? <VisualOperationDock activeFile={activeFile} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <WorkspaceModulePanel moduleName={activeModule} />}</div>
             <button className="statusToggle" type="button" onClick={() => { const next = !statusOpen; setStatusOpen(next); emit("workspace-toggle", `${next ? "Opened" : "Closed"} Status / Readiness / Files / Context panel.`); }}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Original research Builder / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Preview source mounted for code and visual editing."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? chatConnection.sessionId : "Disconnected"}</span></p></div> : null}
+            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Researched Codex/Cursor Best Builder / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Preview source mounted for code, autonomous repair, and visual editing."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? chatConnection.sessionId : "Disconnected"}</span></p></div> : null}
           </section>
         </section>
       </section>
