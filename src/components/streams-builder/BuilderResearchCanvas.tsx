@@ -5,9 +5,6 @@ import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveBuilderAgentBridge from "./LiveBuilderAgentBridge";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
-import TopRowWorkstationControls from "./TopRowWorkstationControls";
-import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
-import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import type { PulledFileDetail } from "./builderSystemContract";
 
 const EMPTY_FILE: PulledFileDetail = {
@@ -83,19 +80,18 @@ export default function BuilderResearchCanvas({ preview }: Props) {
     setProof((items) => [...items.slice(-30), message]);
   }
 
+  const toolbar = (
+    <>
+      <GitHubRepositoryPicker />
+      <LiveBuilderAgentBridge activeFile={activeFile} sessionId={preview?.sessionId} onProof={addProof} />
+    </>
+  );
+
   return (
     <section className="builderResearchCanvas" aria-label="Streams researched Builder canvas">
-      <header className="builderResearchTopbar">
-        <GitHubRepositoryPicker />
-        <div className="builderResearchIdentity">
-          <span>BUILDER</span>
-          <b>Code + Frontend Visual Editor</b>
-          <LiveBuilderAgentBridge activeFile={activeFile} sessionId={preview?.sessionId} onProof={addProof} />
-        </div>
-      </header>
       <main className="builderResearchWorkarea">
         <section className="builderResearchSource" aria-label="Code and frontend source canvas">
-          <LiveFrontendWorkstation activeFile={activeFile} />
+          <LiveFrontendWorkstation activeFile={activeFile} toolbar={toolbar} />
         </section>
         <section className="builderResearchVisual" aria-label="Original frontend visual editor">
           <VisualEditingWorkstation
@@ -111,21 +107,18 @@ export default function BuilderResearchCanvas({ preview }: Props) {
           />
         </section>
       </main>
-      <footer className="builderResearchFooter">
-        <span>{activeFile.path || "Waiting for generated preview source"}</span>
-        <span>{proof.slice(-1)[0] || "The left canvas controls code/frontend views; the right canvas is the visual editor."}</span>
-      </footer>
-      <TopRowWorkstationControls />
-      <VisualEditorScrollBehavior />
-      <WorkstationChromeEnhancer />
       <style jsx>{`
-        .builderResearchCanvas{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:#020617;color:#e5e7eb}
-        .builderResearchTopbar{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(45,212,191,.28);background:#020617;padding:0 12px}
-        .builderResearchIdentity{min-width:0;display:flex;align-items:center;gap:10px;white-space:nowrap;overflow:hidden}.builderResearchIdentity span{font-size:10px;font-weight:900;color:#5eead4;letter-spacing:.12em}.builderResearchIdentity b{font-size:12px;color:#fff}
-        .builderResearchWorkarea{min-height:0;display:grid;grid-template-columns:minmax(480px,1fr) minmax(480px,1fr);gap:1px;background:#172033;overflow:hidden}
+        .builderResearchCanvas{height:100%;min-height:0;overflow:hidden;background:#020617;color:#e5e7eb}
+        .builderResearchWorkarea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(480px,1fr) minmax(480px,1fr);gap:1px;background:#172033;overflow:hidden}
         .builderResearchSource,.builderResearchVisual{min-width:0;min-height:0;overflow:hidden;background:#020617}
-        .builderResearchFooter{min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px;border-top:1px solid rgba(148,163,184,.18);background:#020617;color:#94a3b8;font-size:10px;overflow:hidden}.builderResearchFooter span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         @media(max-width:1100px){.builderResearchWorkarea{grid-template-columns:minmax(0,1fr)}.builderResearchVisual{display:none}}
+      `}</style>
+      <style jsx global>{`
+        .builderResearchCanvas .builderResearchVisual .editorHeader,
+        .builderResearchCanvas .builderResearchVisual .editorStatus{display:none!important}
+        .builderResearchCanvas .builderResearchVisual .visualEditor{grid-template-rows:auto minmax(0,1fr)!important;min-height:0!important}
+        .builderResearchCanvas .builderResearchVisual .editorActions{min-height:40px;padding:5px 8px!important}
+        .builderResearchCanvas .workstationToolbar .githubRepositoryPicker{min-width:0!important}
       `}</style>
     </section>
   );
