@@ -34,14 +34,14 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
   const projectType = useMemo(() => detectProjectType(goal, finishedResult), [goal, finishedResult]);
   if (!open) return null;
 
-  async function resolveAccessToken() {
+  async function resolveAuthHeaders() {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) throw new Error(sessionError.message || "Unable to read your login session.");
-    if (sessionData.session?.access_token) return sessionData.session.access_token;
-
-    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) throw new Error(refreshError.message || "Unable to refresh your login session.");
-    return refreshedData.session?.access_token || "";
+    if (sessionError) {
+      console.warn("[streams-ai] Unable to read browser auth session", sessionError);
+      return {};
+    }
+    const accessToken = sessionData.session?.access_token?.trim();
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }
 
   async function createProject(event) {
@@ -53,11 +53,7 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
     setSaving(true);
     setError("");
     try {
-      const accessToken = await resolveAccessToken();
-      if (!accessToken) {
-        throw new Error("Your login session is unavailable. Sign in again, then retry project creation.");
-      }
-
+      const authHeaders = await resolveAuthHeaders();
       const name = goal.trim().slice(0, 90);
       const instructions = [
         `Goal: ${goal.trim()}`,
@@ -70,9 +66,9 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": `project-${Date.now()}`,
-          Authorization: `Bearer ${accessToken}`,
+          ...authHeaders,
         },
-        credentials: "same-origin",
+        credentials: "include",
         body: JSON.stringify({
           name,
           instructions,
