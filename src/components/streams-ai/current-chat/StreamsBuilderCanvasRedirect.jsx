@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const OPEN_EVENT = "streams:open-builder-preview";
+const CANVAS_EVENT = "streams:builder-canvas-open";
 const ACTIVE_KEY = "streams-ai:active-builder-preview";
 const ACTIVE_FILE_KEY = "streams-builder:active-file";
 
@@ -27,11 +28,9 @@ function openBuilderCanvas(detail = {}) {
   const preview = normalizePreview(detail);
   if (!preview) return;
 
-  // A generated runtime preview is a same-origin virtual source. The canonical
-  // Builder workstation owns its editor, diff, logs, Codex state, and iframe.
   const activeFile = {
-    repo: "generated/",
-    branch: "runtime",
+    repo: "hawk7227/streamsailive",
+    branch: "runtime-preview",
     path: `generated/previews/${preview.previewId}.html`,
     folder: "generated/previews",
     sha: preview.operationId,
@@ -39,29 +38,24 @@ function openBuilderCanvas(detail = {}) {
     route: preview.previewUrl,
   };
 
+  const next = {
+    ...detail,
+    ...preview,
+    open: true,
+    handedOff: true,
+    handedOffAt: new Date().toISOString(),
+    targetPane: "research-builder-canvas",
+  };
+
   try {
     window.localStorage.setItem(ACTIVE_FILE_KEY, JSON.stringify(activeFile));
-    window.sessionStorage.setItem(
-      ACTIVE_KEY,
-      JSON.stringify({
-        ...detail,
-        ...preview,
-        open: false,
-        handedOff: true,
-        handedOffAt: new Date().toISOString(),
-        targetPane: "frontend",
-      }),
-    );
+    window.sessionStorage.setItem(ACTIVE_KEY, JSON.stringify(next));
   } catch {}
 
-  const query = new URLSearchParams();
-  if (preview.sessionId) query.set("sessionId", preview.sessionId);
-  query.set("previewId", preview.previewId);
-  const destination = `/streams-ai/streams-builder?${query.toString()}`;
-
-  if (`${window.location.pathname}${window.location.search}` !== destination) {
-    window.location.assign(destination);
-  }
+  // Do not navigate and do not mount a second chat. The current authoritative
+  // conversation remains mounted and simply narrows to the left while the
+  // researched Builder canvas opens beside it.
+  window.dispatchEvent(new CustomEvent(CANVAS_EVENT, { detail: next }));
 }
 
 export default function StreamsBuilderCanvasRedirect() {
