@@ -16,6 +16,7 @@ import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemCon
 const MODULES = ["Primary Builder", "Visual Editing", "Component Mapping", "Approval Center", "Browser Verification", "Repository Truth", "Projects Dashboard", "Truth Panel"] as const;
 type ModuleName = (typeof MODULES)[number];
 type ViewMode = "Single" | "Multi" | "Focus" | "Stack";
+type StoredMessage = { role?: string; status?: string; metadata?: Record<string, unknown> };
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
 const EMPTY_CONNECTION: BuilderChatConnection = { connected: false, activeWorkstationId: "", activeWorkstationName: "", sessionId: "agent-1" };
 
@@ -24,6 +25,7 @@ function compact(value: string) { return String(value || "").replace(/\s+/g, " "
 function controlName(element: HTMLElement) { return compact(element.innerText || element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || element.id || element.tagName.toLowerCase()).slice(0, 120); }
 function fieldName(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const label = element.closest("label")?.querySelector("b")?.textContent || element.closest("label")?.textContent || ""; const placeholder = element instanceof HTMLSelectElement ? "" : element.placeholder; return compact(element.getAttribute("aria-label") || element.name || element.id || label || placeholder || element.tagName.toLowerCase()).slice(0, 120); }
 function safeFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { if (element instanceof HTMLSelectElement) return compact(element.value).slice(0, 120); if (element instanceof HTMLTextAreaElement) return `${element.value.length} chars`; if (element.type === "password") return "[redacted]"; if (element.type === "file") return `${element.files?.length || 0} file(s)`; return compact(element.value).slice(0, 120) || `${element.value.length} chars`; }
+function previewIdFromUrl(value: string) { return value.match(/\/streams-builder\/preview\/([0-9a-f-]{36})/i)?.[1] || ""; }
 
 export default function WorkspaceGrid() {
   const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
@@ -35,6 +37,9 @@ export default function WorkspaceGrid() {
   const [hydrated, setHydrated] = useState(false);
   const lastManualEventRef = useRef("");
   const inputTimerRef = useRef<number | null>(null);
+  const chatConnectionRef = useRef<BuilderChatConnection>(EMPTY_CONNECTION);
+  const previewLookupRunningRef = useRef(false);
+  const lastMountedPreviewRef = useRef("");
 
   function emit(phase: string, message: string, extra: Record<string, unknown> = {}) {
     const detail = { source: "workspace-grid", repo: activeFile.repo, branch: activeFile.branch, filePath: activeFile.path, route: activeFile.route, activeModule, viewMode, at: new Date().toISOString(), phase, message, ...extra };
@@ -48,12 +53,53 @@ export default function WorkspaceGrid() {
 
   function handleContentChange(next: string) { setActiveFile((current) => ({ ...current, content: next })); emit("workspace-content-change", `Active file draft changed manually in ${activeFile.path || "the open file"}.`, { draftDirty: true, saved: false, patchState: "not_generated" }); }
 
+  async function mountLatestGeneratedPreview() {
+    if (previewLookupRunningRef.current) return;
+    const sessionId = chatConnectionRef.current.sessionId;
+    if (!sessionId || sessionId === "agent-1") return;
+    previewLookupRunningRef.current = true;
+    try {
+      const response = await fetch(`/api/streams-ai/messages?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store", credentials: "same-origin" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; messages?: StoredMessage[] } | null;
+      if (!response.ok || !payload?.ok || !Array.isArray(payload.messages)) return;
+      const completed = [...payload.messages].reverse().find((message) => {
+        const previewUrl = String(message.metadata?.previewUrl || message.metadata?.preview_url || "");
+        return message.role === "assistant" && message.status === "complete" && Boolean(previewUrl);
+      });
+      const previewUrl = String(completed?.metadata?.previewUrl || completed?.metadata?.preview_url || "");
+      if (!previewUrl || previewUrl === lastMountedPreviewRef.current) return;
+      const previewId = String(completed?.metadata?.previewId || completed?.metadata?.preview_id || previewIdFromUrl(previewUrl));
+      const operationId = String(completed?.metadata?.operationId || completed?.metadata?.operation_id || previewId || "generated-preview");
+      const mounted: PulledFileDetail = {
+        repo: "generated/",
+        branch: "runtime",
+        path: `generated/previews/${previewId || operationId}.html`,
+        folder: "generated/previews",
+        sha: operationId,
+        content: "",
+        route: previewUrl,
+      };
+      lastMountedPreviewRef.current = previewUrl;
+      window.localStorage.setItem("streams-builder:active-file", JSON.stringify(mounted));
+      setActiveFile(mounted);
+      setActiveModule("Primary Builder");
+      setViewMode("Single");
+      setVisualEditorLog((items) => [...items.slice(-40), `preview-mounted: ${previewUrl}`]);
+      window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
+      window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", { detail: { previewId, previewUrl, operationId, targetPane: "frontend" } }));
+    } finally {
+      previewLookupRunningRef.current = false;
+    }
+  }
+
+  useEffect(() => { chatConnectionRef.current = chatConnection; }, [chatConnection]);
+
   useEffect(() => {
     setActiveFile(readActiveFile());
     setHydrated(true);
     emit("workspace-audit-ready", "Workspace audit bridge is tracking manual selections, options, clicks, inputs, file pulls, editor changes, preview actions, save/patch/push states, and chat connection actions.");
     function onPulledFile(event: Event) { const detail = (event as CustomEvent<PulledFileDetail>).detail; if (!detail?.path) return; setActiveFile(detail); const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`; setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]); window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } })); }
-    function onSummaryEvent(event: Event) { const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail; if (!detail?.message) return; setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]); }
+    function onSummaryEvent(event: Event) { const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail; if (!detail?.message) return; setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]); if (detail.phase === "chat.response.complete") window.setTimeout(() => void mountLatestGeneratedPreview(), 100); }
     function onManualClick(event: MouseEvent) { const target = event.target as HTMLElement | null; if (!target || target.closest("iframe")) return; const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']"); if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return; emit("manual-workspace-click", `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.`); }
     function onManualChange(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return; if (target.closest(".controls")) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; emit("manual-workspace-change", `User changed ${fieldName(target)} to ${safeFieldValue(target)}.`); }
     function onManualInput(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return; if (target.closest(".controls")) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current); inputTimerRef.current = window.setTimeout(() => emit("manual-workspace-input", `User typed in ${fieldName(target)} (${safeFieldValue(target)}).`), 900); }
