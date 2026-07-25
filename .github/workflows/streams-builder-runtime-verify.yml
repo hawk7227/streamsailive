@@ -50,12 +50,27 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: >-
-          pnpm vitest run
-          tests/streams-builder-repository-intelligence.test.ts
-          tests/streams-builder-repository-graph.test.ts
-          tests/streams-builder-durable-orchestrator.test.ts
-          tests/streams-builder-production-runtime-services.test.ts
-          tests/streams-builder-runtime-stage-executor.test.ts
-          tests/streams-builder-runtime-load-benchmark.test.ts
-          src/lib/streams-builder/__tests__/browser-observation-runtime.test.ts
+      - name: Capture focused runtime test diagnostics
+        id: runtime_tests
+        shell: bash
+        run: |
+          set +e
+          pnpm vitest run \
+            tests/streams-builder-repository-intelligence.test.ts \
+            tests/streams-builder-repository-graph.test.ts \
+            tests/streams-builder-durable-orchestrator.test.ts \
+            tests/streams-builder-production-runtime-services.test.ts \
+            tests/streams-builder-runtime-stage-executor.test.ts \
+            tests/streams-builder-runtime-load-benchmark.test.ts \
+            src/lib/streams-builder/__tests__/browser-observation-runtime.test.ts \
+            > runtime-test-diagnostics.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: streams-builder-runtime-test-diagnostics
+          path: runtime-test-diagnostics.txt
+          if-no-files-found: error
+      - name: Enforce focused runtime tests
+        run: test "${{ steps.runtime_tests.outputs.exit_code }}" = "0"
