@@ -72,7 +72,7 @@ describe("Codex repair loop core", () => {
       contextProvider: ({ stderr }) => { evidence.push(stderr); return "FILE: src/app/page.tsx\nold"; },
       generatePatch: async ({ attempt }) => repairDiff(`old${attempt}`, `new${attempt}`),
       applyPatch: async () => ({ ok: true }),
-      rerunCommand: async ({ } as never) => ({ ok: false, stderr: evidence.length === 1 ? "second causal failure" : "third failure" }),
+      rerunCommand: async () => ({ ok: false, stderr: evidence.length === 1 ? "second causal failure" : "third failure" }),
     });
 
     expect(result.repaired).toBe(false);
