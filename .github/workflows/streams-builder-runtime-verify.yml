@@ -62,6 +62,7 @@ jobs:
             tests/streams-builder-production-runtime-services.test.ts \
             tests/streams-builder-runtime-stage-executor.test.ts \
             tests/streams-builder-runtime-load-benchmark.test.ts \
+            tests/streams-builder-autonomous-runtime-core.test.ts \
             src/lib/streams-builder/__tests__/browser-observation-runtime.test.ts \
             > runtime-test-diagnostics.txt 2>&1
           code=$?
