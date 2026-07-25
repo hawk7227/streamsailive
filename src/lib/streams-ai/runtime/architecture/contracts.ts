@@ -38,6 +38,7 @@ export type OperationFailure = {
   safeMessage: string;
   retryable: boolean;
   detail?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type RuntimeOperation = {
