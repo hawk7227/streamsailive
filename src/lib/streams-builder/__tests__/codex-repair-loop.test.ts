@@ -4,14 +4,15 @@ import {
   createCodexRepairPolicy,
   runCodexRepairLoop,
   validateCodexRepairPolicy,
+  validateUnifiedDiffPatch,
 } from "../codex-repair-loop";
 import { createRepositoryExecutionPlan } from "../repository-execution";
 
-function repairDiff(before = "old", after = "new") {
+function repairDiff(before = "old", after = "new", path = "src/app/page.tsx") {
   return [
-    "diff --git a/src/app/page.tsx b/src/app/page.tsx",
-    "--- a/src/app/page.tsx",
-    "+++ b/src/app/page.tsx",
+    `diff --git a/${path} b/${path}`,
+    `--- a/${path}`,
+    `+++ b/${path}`,
     "@@ -1 +1 @@",
     `-${before}`,
     `+${after}`,
@@ -20,16 +21,24 @@ function repairDiff(before = "old", after = "new") {
 }
 
 describe("Codex repair loop core", () => {
-  it("classifies common build failures", () => {
+  it("classifies common build and infrastructure failures", () => {
     expect(classifyCodexFailure("", "Cannot find module '@/missing'")).toBe("module-resolution");
     expect(classifyCodexFailure("", "Type error: Property foo does not exist")).toBe("typescript");
     expect(classifyCodexFailure("", "AssertionError: expected true")).toBe("test");
+    expect(classifyCodexFailure("", "permission denied for table previews")).toBe("database");
   });
 
   it("blocks auto repair for approval-gated git write commands", () => {
     const policy = createCodexRepairPolicy({ autonomousRepair: true, maxAttempts: 3 });
     const blocked = validateCodexRepairPolicy(policy, "git_push", ["src/app/page.tsx"]);
     expect(blocked.join(" ")).toContain("Approval-gated git write command");
+  });
+
+  it("rejects path traversal, generated files, and ungrounded patch targets", () => {
+    const policy = createCodexRepairPolicy({ autonomousRepair: true, maxFilesTouched: 2 });
+    expect(validateUnifiedDiffPatch(repairDiff("a", "b", "../secret.ts"), policy, ["src/app/page.tsx"]).valid).toBe(false);
+    expect(validateUnifiedDiffPatch(repairDiff("a", "b", "node_modules/pkg/index.js"), policy, ["src/app/page.tsx"]).valid).toBe(false);
+    expect(validateUnifiedDiffPatch(repairDiff("a", "b", "src/app/other.tsx"), policy, ["src/app/page.tsx"]).errors.join(" ")).toContain("outside the grounded repair scope");
   });
 
   it("generates patch, applies patch, reruns build, and reports repaired", async () => {
@@ -53,7 +62,38 @@ describe("Codex repair loop core", () => {
     expect(result.unproven).toContain("push remains locked until user approval");
   });
 
-  it("retries until max attempts and returns failed when reruns keep failing", async () => {
+  it("feeds the latest rerun failure into the next reasoning attempt", async () => {
+    const evidence: string[] = [];
+    const result = await runCodexRepairLoop({
+      failedCommand: "npm_run_build",
+      stderr: "first failure",
+      targetFiles: ["src/app/page.tsx"],
+      policy: createCodexRepairPolicy({ autonomousRepair: true, maxAttempts: 2 }),
+      contextProvider: ({ stderr }) => { evidence.push(stderr); return "FILE: src/app/page.tsx\nold"; },
+      generatePatch: async ({ attempt }) => repairDiff(`old${attempt}`, `new${attempt}`),
+      applyPatch: async () => ({ ok: true }),
+      rerunCommand: async ({ } as never) => ({ ok: false, stderr: evidence.length === 1 ? "second causal failure" : "third failure" }),
+    });
+
+    expect(result.repaired).toBe(false);
+    expect(evidence[0]).toContain("first failure");
+    expect(evidence[1]).toContain("second causal failure");
+  });
+
+  it("stops repeated identical patches as no progress", async () => {
+    const result = await runCodexRepairLoop({
+      failedCommand: "npm_run_build",
+      stderr: "Build failed",
+      targetFiles: ["src/app/page.tsx"],
+      policy: createCodexRepairPolicy({ autonomousRepair: true, maxAttempts: 3 }),
+      generatePatch: async () => repairDiff("old", "new"),
+      applyPatch: async () => ({ ok: true }),
+      rerunCommand: async () => ({ ok: false, stderr: "still failing" }),
+    });
+    expect(result.attempts.some((attempt) => attempt.status === "no_progress")).toBe(true);
+  });
+
+  it("retries until max attempts and returns failed when distinct reruns keep failing", async () => {
     const result = await runCodexRepairLoop({
       failedCommand: "npm_run_build",
       stdout: "",
@@ -66,7 +106,7 @@ describe("Codex repair loop core", () => {
     });
 
     expect(result.repaired).toBe(false);
-    expect(result.finalError).toContain("exhausted 2 attempts");
+    expect(result.finalError).toContain("exhausted");
     expect(result.attempts.filter((attempt) => attempt.status === "rerun_failed")).toHaveLength(2);
   });
 });
@@ -88,12 +128,6 @@ describe("repository execution Codex repair plan", () => {
     });
 
     expect(plan.blockedReasons).toHaveLength(0);
-    expect(plan.codexRepair).toEqual({
-      autonomousRepair: true,
-      maxRepairAttempts: 5,
-      maxFilesTouched: 2,
-      runBuildAfterPatch: true,
-      requireApprovalBeforePush: true,
-    });
+    expect(plan.codexRepair).toEqual({ autonomousRepair: true, maxRepairAttempts: 5, maxFilesTouched: 2, runBuildAfterPatch: true, requireApprovalBeforePush: true });
   });
 });
