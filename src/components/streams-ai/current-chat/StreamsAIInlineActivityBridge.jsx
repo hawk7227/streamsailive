@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import StreamsBuilderPreviewController from "./StreamsBuilderPreviewController";
-import StreamsBuilderPreviewHost from "./StreamsBuilderPreviewHost";
+import StreamsBuilderCanvasRedirect from "./StreamsBuilderCanvasRedirect";
 import { canShowStreamsStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 const HIDDEN_TEXT = new Set(["Ready", "Ask anything", "Chat is ready"]);
@@ -84,7 +84,7 @@ export default function StreamsAIInlineActivityBridge({ chatRuntime }) {
   return (
     <>
       <StreamsBuilderPreviewController chatRuntime={chatRuntime} />
-      <StreamsBuilderPreviewHost chatRuntime={chatRuntime} />
+      <StreamsBuilderCanvasRedirect />
     </>
   );
 }
