@@ -23,10 +23,11 @@ class MemoryRuntimeStore implements DurableRuntimeStore {
 describe("runtime stage executor", () => {
   it("resumes, consumes steering, checkpoints every stage, and completes", async () => {
     const store = new MemoryRuntimeStore();
-    const created = createDurableRuntime({ projectId: "project", workspaceId: "workspace", jobId: "job" }, 1_000);
+    const now = Date.now();
+    const created = createDurableRuntime({ projectId: "project", workspaceId: "workspace", jobId: "job" }, now);
     await store.create(created);
-    await claimRuntime({ store, runtimeId: created.runtimeId, ownerId: "worker", nowMs: 2_000, ttlMs: 60_000 });
-    await appendRuntimeCommand({ store, runtimeId: created.runtimeId, actorId: "user", type: "steer", payload: { instruction: "preserve API" }, nowMs: 3_000 });
+    await claimRuntime({ store, runtimeId: created.runtimeId, ownerId: "worker", nowMs: now + 1, ttlMs: 60_000 });
+    await appendRuntimeCommand({ store, runtimeId: created.runtimeId, actorId: "user", type: "steer", payload: { instruction: "preserve API" }, nowMs: now + 2 });
 
     const seenSteering: Record<string, unknown>[][] = [];
     const handler = async ({ steering }: { steering: Record<string, unknown>[] }) => {
