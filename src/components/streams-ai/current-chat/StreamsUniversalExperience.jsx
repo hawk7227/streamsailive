@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspaceShell";
 import StreamsClientShell from "./StreamsClientShell";
 import NewChatNavigationVisualSample from "./NewChatNavigationVisualSample";
@@ -23,6 +24,7 @@ function detectProjectType(goal = "", finishedResult = "") {
 }
 
 function ProjectCreationDialog({ open, onClose, onCreated }) {
+  const { session, refreshSession } = useAuth();
   const [goal, setGoal] = useState("");
   const [references, setReferences] = useState("");
   const [finishedResult, setFinishedResult] = useState("");
@@ -41,6 +43,12 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
     setSaving(true);
     setError("");
     try {
+      let accessToken = session?.access_token || "";
+      if (!accessToken) {
+        await refreshSession();
+        throw new Error("Your login session is still initializing. Please try again in a moment.");
+      }
+
       const name = goal.trim().slice(0, 90);
       const instructions = [
         `Goal: ${goal.trim()}`,
@@ -50,7 +58,11 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
       ].filter(Boolean).join("\n\n");
       const response = await fetch("/api/v1/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": `project-${Date.now()}` },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `project-${Date.now()}`,
+          Authorization: `Bearer ${accessToken}`,
+        },
         credentials: "same-origin",
         body: JSON.stringify({
           name,
