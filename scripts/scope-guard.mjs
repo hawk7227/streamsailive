@@ -29,6 +29,7 @@ const policies = {
       'src/components/streams-builder/',
       'src/components/streams-workspace/',
       'tests/streams-builder-',
+      'tests/streams-frameless-inline-media.test.tsx',
       '.github/workflows/streams-builder-runtime-verify.yml',
       'package.json',
       'pnpm-lock.yaml'
@@ -120,6 +121,7 @@ function inferPolicyFromFiles(files) {
     f.startsWith('src/components/streams-builder/') ||
     f.startsWith('src/components/streams-workspace/') ||
     f.startsWith('tests/streams-builder-') ||
+    f === 'tests/streams-frameless-inline-media.test.tsx' ||
     f === 'docs/merge-policies/streams-engineering-runtime-reconstruction-slice.md' ||
     f === '.github/workflows/streams-builder-runtime-verify.yml'
   );
