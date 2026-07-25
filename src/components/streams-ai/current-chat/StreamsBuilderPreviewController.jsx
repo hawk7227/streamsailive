@@ -6,6 +6,7 @@ import CanonicalPreviewEventBridge from "@/components/streams-builder/CanonicalP
 const OPEN_EVENT = "streams:open-builder-preview";
 const ACTIVE_KEY = "streams-ai:active-builder-preview";
 const EDIT_FOLLOWUP = /\b(make|change|update|edit|fix|adjust|resize|move|add|remove|replace|use|apply|turn|show|open|render|preview)\b/i;
+const PREVIEW_URL_PATTERN = /\/streams-builder\/preview\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i;
 
 function extractSource(text = "") {
   const value = String(text || "");
@@ -36,17 +37,36 @@ function setActiveState(value) {
 }
 
 function previewCompletionFromMessage(message = {}) {
+  // Stored messages are flattened by useStreamsChatRuntime.mapStoredMessages(),
+  // while live messages may retain a nested metadata object. Read both shapes.
   const metadata = message?.metadata || message?.meta || {};
-  const failure = metadata?.failure || {};
+  const failure = metadata?.failure || message?.failure || {};
   if (message?.status === "failed" || failure?.code) return null;
-  const previewId = String(metadata?.previewId || metadata?.preview_id || "").trim();
-  const previewUrl = String(metadata?.previewUrl || metadata?.preview_url || (previewId ? `/streams-builder/preview/${previewId}` : "")).trim();
+
+  const contentMatch = String(message?.content || "").match(PREVIEW_URL_PATTERN);
+  const previewId = String(
+    message?.previewId
+      || message?.preview_id
+      || metadata?.previewId
+      || metadata?.preview_id
+      || contentMatch?.[1]
+      || "",
+  ).trim();
+  const previewUrl = String(
+    message?.previewUrl
+      || message?.preview_url
+      || metadata?.previewUrl
+      || metadata?.preview_url
+      || contentMatch?.[0]
+      || (previewId ? `/streams-builder/preview/${previewId}` : ""),
+  ).trim();
   if (!previewId || !previewUrl) return null;
+
   return {
     previewId,
     previewUrl,
-    operationId: metadata?.operationId || metadata?.operation_id || "",
-    artifacts: metadata?.artifacts || [],
+    operationId: message?.operationId || message?.operation_id || metadata?.operationId || metadata?.operation_id || "",
+    artifacts: message?.artifacts || metadata?.artifacts || [],
   };
 }
 
