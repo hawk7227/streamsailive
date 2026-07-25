@@ -1,5 +1,6 @@
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
 import type { StreamsAIJobsRepository } from "@/lib/streams-ai/repositories/jobs-repository";
+import { createActiveRuntimeSession } from "./active-runtime-integration";
 import {
   buildLiveProofTimeline,
   createBrowserVerificationHook,
@@ -32,6 +33,7 @@ function inputOf(row: WorkerRow) {
 export async function processBestRepositoryExecutionJob(scope: StreamsAIScope, row: WorkerRow, jobs: StreamsAIJobsRepository): Promise<RepositoryWorkerResult> {
   const jobId = String(row.id);
   const input = inputOf(row);
+  const projectId = rowString(input, "projectId") || rowString(row, "project_id") || "project-pending";
   const repo = rowString(input, "repoFullName");
   const branch = rowString(input, "branchName") || "main";
   const route = rowString(input, "route") || "/";
@@ -39,6 +41,7 @@ export async function processBestRepositoryExecutionJob(scope: StreamsAIScope, r
   let lifecycle = createCodexRepairLifecycle();
   const rollback = markRollbackReady(createRollbackCheckpoint({ repo, branch, files: targetFiles.length ? targetFiles : ["unknown"] }));
   const browserVerification = createBrowserVerificationHook({ route, enabled: true, requiredBeforeApproval: true });
+  const runtimeSession = await createActiveRuntimeSession({ scope, jobId, projectId, repository: repo, branch, route, targetFiles, jobs });
 
   async function emit(state: CodexLifecycleState, message: string, severity: CodexProofSeverity = "info", data?: Record<string, unknown>) {
     lifecycle = transitionCodexLifecycle(lifecycle, state, message, severity, data);
@@ -48,14 +51,17 @@ export async function processBestRepositoryExecutionJob(scope: StreamsAIScope, r
       message,
       data: { state, severity, ...(data || {}) },
     });
+    await runtimeSession.emit("lifecycle", state.toLowerCase(), message, { severity, ...(data || {}) });
   }
 
-  await emit("REQUEST_RECEIVED", "Best-builder worker received job.", "info", { repo, branch, route, targetFiles });
+  await emit("REQUEST_RECEIVED", "Best-builder worker received job.", "info", { repo, branch, route, targetFiles, model: runtimeSession.model });
   await emit("SOURCE_TRUTH_READY", "Source truth was resolved before worker execution.", "success", { repo, branch, route, targetFiles });
   await emit("SANDBOX_READY", "Worker will execute in an isolated repository sandbox.", "info");
   await emit("ROLLBACK_READY", "Rollback checkpoint is available before patch or repair.", "success", { checkpointId: rollback.checkpointId, restoreCommand: rollback.restoreCommand });
 
+  await runtimeSession.emit("worker", "execution-started", "canonical runtime delegated execution to the repository worker", { jobId, projectId, repo, branch });
   const result = await processRepositoryExecutionJob(scope, row, jobs);
+  const runtimeTrace = await runtimeSession.finalize(result);
   const buildPassed = result.ok && result.truthState !== "FAILED";
 
   if (buildPassed) {
@@ -78,6 +84,8 @@ export async function processBestRepositoryExecutionJob(scope: StreamsAIScope, r
         browserVerification,
         diffApproval,
         result,
+        runtimeTrace,
+        selectedModel: runtimeSession.model,
       },
     },
   });
