@@ -26,6 +26,7 @@ const policies = {
       'docs/merge-policies/streams-engineering-runtime-reconstruction-slice.md',
       'src/lib/streams-builder/',
       'src/app/api/streams-builder/',
+      'src/app/api/v1/uploads/route.ts',
       'src/components/streams-builder/',
       'src/components/streams-workspace/',
       'tests/streams-builder-',
@@ -118,6 +119,7 @@ function inferPolicyFromFiles(files) {
   const hasEngineeringRuntimeFiles = files.some((f) =>
     f.startsWith('src/lib/streams-builder/') ||
     f.startsWith('src/app/api/streams-builder/') ||
+    f === 'src/app/api/v1/uploads/route.ts' ||
     f.startsWith('src/components/streams-builder/') ||
     f.startsWith('src/components/streams-workspace/') ||
     f.startsWith('tests/streams-builder-') ||
