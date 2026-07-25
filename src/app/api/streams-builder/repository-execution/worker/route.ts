@@ -8,8 +8,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const jobs = new StreamsAIJobsRepository();
-const WORKER_NAME = "streams-builder-best-repository-worker";
-const BATCH_LIMIT = 1;
+const WORKER_NAME = "streams-builder-autonomous-repository-worker";
+const BATCH_LIMIT = Math.max(1, Math.min(Number(process.env.STREAMS_BUILDER_WORKER_BATCH_LIMIT || 8), 32));
+const PARALLELISM = Math.max(1, Math.min(Number(process.env.STREAMS_BUILDER_WORKER_PARALLELISM || 4), BATCH_LIMIT));
 
 function isAuthorized(request: NextRequest) {
   const expected = (process.env.STREAMS_BUILDER_WORKER_SECRET || process.env.STREAMS_AI_WORKER_SECRET || process.env.CRON_SECRET || "").trim();
@@ -44,6 +45,24 @@ async function fetchWorkBatch() {
   return (data || []) as Array<Record<string, unknown>>;
 }
 
+async function runWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<Array<PromiseSettledResult<R>>> {
+  const results: Array<PromiseSettledResult<R>> = new Array(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      const item = items[index];
+      if (item === undefined) continue;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(item) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }));
+  return results;
+}
+
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized repository execution worker" }, { status: 401 });
@@ -51,30 +70,35 @@ export async function POST(request: NextRequest) {
 
   try {
     const rows = await fetchWorkBatch();
-    const results = [];
-
-    for (const row of rows) {
+    const settled = await runWithConcurrency(rows, PARALLELISM, async (row) => {
       const scope = toScope(row);
       const jobId = String(row.id);
       await jobs.createEvent(scope, {
         jobId,
         eventType: "repository.worker.dispatch",
-        message: "Best-builder repository worker dispatching job",
-        data: { worker: WORKER_NAME },
+        message: "Autonomous repository worker dispatching job",
+        data: { worker: WORKER_NAME, parallelism: PARALLELISM, batchLimit: BATCH_LIMIT },
       });
-      results.push(await processBestRepositoryExecutionJob(scope, row, jobs));
-    }
+      return processBestRepositoryExecutionJob(scope, row, jobs);
+    });
+
+    const results = settled.map((entry) => entry.status === "fulfilled"
+      ? entry.value
+      : { ok: false, status: "failed", truthState: "FAILED", error: entry.reason instanceof Error ? entry.reason.message : String(entry.reason) });
+    const failed = settled.filter((entry) => entry.status === "rejected").length;
 
     return NextResponse.json({
-      ok: true,
+      ok: failed === 0,
       worker: WORKER_NAME,
       claimed: rows.length,
+      failed,
+      parallelism: PARALLELISM,
       results,
-      proof: rows.length ? ["worker authorized", "repository_execution batch fetched", "best-builder job processor invoked"] : ["worker authorized", "no repository_execution jobs queued"],
-      unproven: rows.length ? ["browser screenshot artifact requires browser verification job completion", "approval workflow requires user review"] : [],
-    });
+      proof: rows.length ? ["worker authorized", "repository_execution batch fetched", "autonomous runtime processor invoked"] : ["worker authorized", "no repository_execution jobs queued"],
+      unproven: failed ? [`${failed} worker executions rejected`] : [],
+    }, { status: failed ? 207 : 200 });
   } catch (error) {
-    console.error("[streams-builder-best-repository-worker]", error);
+    console.error("[streams-builder-autonomous-repository-worker]", error);
     return NextResponse.json(
       { ok: false, worker: WORKER_NAME, error: error instanceof Error ? error.message : "Unknown repository worker error" },
       { status: 500 },
