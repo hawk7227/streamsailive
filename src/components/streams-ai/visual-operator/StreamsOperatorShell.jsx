@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import StreamsComposer from "../current-chat/new-face/composer/StreamsComposer";
 import ChatMarkdownMessage from "../current-chat/new-face/markdown/ChatMarkdownMessage";
 import StreamsAccountActionPanel from "@/components/account/StreamsAccountActionPanel";
+import BuilderResearchCanvas from "@/components/streams-builder/BuilderResearchCanvas";
 import MessageActions from "./MessageActions";
 import useAuthoritativeStreamsRuntime from "./useAuthoritativeStreamsRuntime";
 import "./streams-operator-shell.css";
@@ -15,6 +16,7 @@ const NAV_GROUPS = [
 ];
 
 const ACCOUNT_PAGE_MAP = { profile: "profile", personalization: "personalization", settings: "settings", billing: "billing", upgrade: "modules", help: "help", apps: "apps", credits: "credits", privacy: "privacy", modules: "modules", language: "language", gift: "gift", "notification-settings": "settings" };
+const BUILDER_CANVAS_EVENT = "streams:builder-canvas-open";
 
 function titleFor(id) { return NAV_GROUPS.flatMap((group) => group.items).find(([key]) => key === id)?.[1] || "Streams AI"; }
 
@@ -106,9 +108,39 @@ export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {
   const [activeProject, setActiveProject] = useState(null);
   const [inlineOpen, setInlineOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const shellClass = useMemo(() => ["streamsOperator", inlineOpen ? "inlineOpen" : ""].filter(Boolean).join(" "), [inlineOpen]);
-  const newGeneralChat = () => { setActiveProject(null); setInlineOpen(false); setActiveSection("home"); chatRuntime?.newChat?.(); if (typeof window !== "undefined") window.history.pushState(null, "", "/streams-ai"); };
-  const selectProject = (project) => { setActiveProject(project); setInlineOpen(false); setActiveSection("home"); if (project?.id) chatRuntime?.selectSession?.(project.id); };
-  const startCleanProject = () => { chatRuntime?.newChat?.(); setActiveProject({ id: `draft-${Date.now()}`, title: "New clean project", source: "draft" }); setActiveSection("home"); };
-  return <div className={shellClass}>{!mobile ? <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} onNewChat={newGeneralChat} /> : null}{mobile ? <button type="button" className="operatorMobileMenu" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}>☰</button> : null}<main className="operatorMain">{activeSection === "home" ? <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} /> : activeSection === "projects" ? <ProjectPicker sessions={chatRuntime?.sessions || []} activeProject={activeProject} onSelectProject={selectProject} onStartCleanProject={startCleanProject} /> : <ModuleScreen id={activeSection} />}</main>{inlineOpen && activeProject ? <InlinePanel activeProject={activeProject} onClose={() => setInlineOpen(false)} /> : null}{mobile ? <div className={drawerOpen ? "operatorMobileDrawer open" : "operatorMobileDrawer"}><aside><button type="button" className="operatorModuleAction" onClick={() => { newGeneralChat(); setDrawerOpen(false); }}>+ New session</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} onNavigate={() => setDrawerOpen(false)} /></aside><button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /></div> : null}</div>;
+  const [builderPreview, setBuilderPreview] = useState(null);
+  const shellClass = useMemo(() => ["streamsOperator", inlineOpen ? "inlineOpen" : "", builderPreview ? "builderOpen" : ""].filter(Boolean).join(" "), [inlineOpen, builderPreview]);
+
+  useEffect(() => {
+    const openBuilder = (event) => {
+      const detail = event?.detail || {};
+      if (!detail?.previewId) return;
+      setActiveSection("home");
+      setInlineOpen(false);
+      setBuilderPreview(detail);
+    };
+    window.addEventListener(BUILDER_CANVAS_EVENT, openBuilder);
+    return () => window.removeEventListener(BUILDER_CANVAS_EVENT, openBuilder);
+  }, []);
+
+  const newGeneralChat = () => { setActiveProject(null); setInlineOpen(false); setBuilderPreview(null); setActiveSection("home"); chatRuntime?.newChat?.(); if (typeof window !== "undefined") window.history.pushState(null, "", "/streams-ai"); };
+  const selectProject = (project) => { setActiveProject(project); setInlineOpen(false); setBuilderPreview(null); setActiveSection("home"); if (project?.id) chatRuntime?.selectSession?.(project.id); };
+  const startCleanProject = () => { chatRuntime?.newChat?.(); setBuilderPreview(null); setActiveProject({ id: `draft-${Date.now()}`, title: "New clean project", source: "draft" }); setActiveSection("home"); };
+
+  const homeContent = builderPreview ? (
+    <div style={{ height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(320px,28vw) minmax(0,1fr)", overflow: "hidden", background: "#020617" }}>
+      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", borderRight: "1px solid rgba(148,163,184,.18)" }}>
+        <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} />
+      </div>
+      <div style={{ minWidth: 0, minHeight: 0, display: "grid", gridTemplateRows: "36px minmax(0,1fr)", overflow: "hidden" }}>
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 10px", background: "#020617", borderBottom: "1px solid rgba(45,212,191,.25)", color: "#fff" }}>
+          <b style={{ fontSize: 12 }}>Streams Builder</b>
+          <button type="button" onClick={() => setBuilderPreview(null)} style={{ border: "1px solid rgba(148,163,184,.28)", borderRadius: 8, background: "#0f172a", color: "#fff", padding: "5px 10px", cursor: "pointer" }}>Close Builder</button>
+        </header>
+        <BuilderResearchCanvas preview={builderPreview} />
+      </div>
+    </div>
+  ) : <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} />;
+
+  return <div className={shellClass}>{!mobile ? <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} onNewChat={newGeneralChat} /> : null}{mobile ? <button type="button" className="operatorMobileMenu" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}>☰</button> : null}<main className="operatorMain">{activeSection === "home" ? homeContent : activeSection === "projects" ? <ProjectPicker sessions={chatRuntime?.sessions || []} activeProject={activeProject} onSelectProject={selectProject} onStartCleanProject={startCleanProject} /> : <ModuleScreen id={activeSection} />}</main>{inlineOpen && activeProject ? <InlinePanel activeProject={activeProject} onClose={() => setInlineOpen(false)} /> : null}{mobile ? <div className={drawerOpen ? "operatorMobileDrawer open" : "operatorMobileDrawer"}><aside><button type="button" className="operatorModuleAction" onClick={() => { newGeneralChat(); setDrawerOpen(false); }}>+ New session</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} onNavigate={() => setDrawerOpen(false)} /></aside><button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /></div> : null}</div>;
 }
