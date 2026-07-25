@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspaceShell";
 import StreamsClientShell from "./StreamsClientShell";
 import NewChatNavigationVisualSample from "./NewChatNavigationVisualSample";
@@ -24,7 +24,7 @@ function detectProjectType(goal = "", finishedResult = "") {
 }
 
 function ProjectCreationDialog({ open, onClose, onCreated }) {
-  const { session, refreshSession } = useAuth();
+  const supabase = useMemo(() => createClient(), []);
   const [goal, setGoal] = useState("");
   const [references, setReferences] = useState("");
   const [finishedResult, setFinishedResult] = useState("");
@@ -33,6 +33,16 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
   const [error, setError] = useState("");
   const projectType = useMemo(() => detectProjectType(goal, finishedResult), [goal, finishedResult]);
   if (!open) return null;
+
+  async function resolveAccessToken() {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw new Error(sessionError.message || "Unable to read your login session.");
+    if (sessionData.session?.access_token) return sessionData.session.access_token;
+
+    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) throw new Error(refreshError.message || "Unable to refresh your login session.");
+    return refreshedData.session?.access_token || "";
+  }
 
   async function createProject(event) {
     event.preventDefault();
@@ -43,10 +53,9 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
     setSaving(true);
     setError("");
     try {
-      let accessToken = session?.access_token || "";
+      const accessToken = await resolveAccessToken();
       if (!accessToken) {
-        await refreshSession();
-        throw new Error("Your login session is still initializing. Please try again in a moment.");
+        throw new Error("Your login session is unavailable. Sign in again, then retry project creation.");
       }
 
       const name = goal.trim().slice(0, 90);
