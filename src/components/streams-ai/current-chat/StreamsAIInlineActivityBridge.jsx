@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import StreamsBuilderPreviewController from "./StreamsBuilderPreviewController";
+import StreamsBuilderPreviewHost from "./StreamsBuilderPreviewHost";
 import { canShowStreamsStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 const HIDDEN_TEXT = new Set(["Ready", "Ask anything", "Chat is ready"]);
@@ -79,5 +81,10 @@ export default function StreamsAIInlineActivityBridge({ chatRuntime }) {
     else if (!chatRuntime?.isStreaming) hideInlineActivity();
   }, [chatRuntime?.activity?.statusText, chatRuntime?.isStreaming]);
 
-  return null;
+  return (
+    <>
+      <StreamsBuilderPreviewController chatRuntime={chatRuntime} />
+      <StreamsBuilderPreviewHost chatRuntime={chatRuntime} />
+    </>
+  );
 }
