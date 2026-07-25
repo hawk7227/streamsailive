@@ -17,6 +17,7 @@ const NAV_GROUPS = [
 
 const ACCOUNT_PAGE_MAP = { profile: "profile", personalization: "personalization", settings: "settings", billing: "billing", upgrade: "modules", help: "help", apps: "apps", credits: "credits", privacy: "privacy", modules: "modules", language: "language", gift: "gift", "notification-settings": "settings" };
 const BUILDER_CANVAS_EVENT = "streams:builder-canvas-open";
+const BUILDER_COMMAND_EVENT = "streams:authoritative-chat-command";
 
 function titleFor(id) { return NAV_GROUPS.flatMap((group) => group.items).find(([key]) => key === id)?.[1] || "Streams AI"; }
 
@@ -72,11 +73,30 @@ function ChatMessage({ message, chatRuntime }) {
   return <article className={isUser ? "operatorMessage user" : `operatorMessage assistant${failed ? " failed" : ""}`} data-message-id={message?.id || undefined}>{!isUser ? <div className="operatorAvatar" aria-hidden="true">S</div> : null}<div className="operatorBubble">{isUser ? <MessageAttachments attachments={message?.attachments} /> : null}{message?.generatedImage?.url ? <img className="operatorGenerated" src={message.generatedImage.url} alt={message.generatedImage.name || "Generated image"} /> : message?.generatedVideoUrl ? <video className="operatorGenerated" src={message.generatedVideoUrl} controls playsInline /> : pending ? <PendingAssistant label={message?.statusText || chatRuntime?.statusLabel} /> : isUser ? (text ? <div className="operatorUserText">{text}</div> : null) : <ChatMarkdownMessage content={text} />}{!isUser && !failed ? <MessageActions message={message} chatRuntime={chatRuntime} /> : null}</div></article>;
 }
 
-function Composer({ chatRuntime }) {
-  return <StreamsComposer onSubmit={(payload) => chatRuntime?.sendMessage?.({ message: payload.message, composerMode: payload.composerMode, mode: payload.mode, webSearchEnabled: payload.webSearchEnabled })} onFilesSelected={(files) => chatRuntime?.uploadFiles?.(files)} onProviderChange={(provider) => chatRuntime?.setSelectedProvider?.(provider)} onModeChange={(mode) => chatRuntime?.setSelectedMode?.(mode)} libraryFiles={chatRuntime?.composerAttachments || []} onRemoveFile={(fileId) => chatRuntime?.removeComposerAttachment?.(fileId)} isStreaming={chatRuntime?.isStreaming} />;
+function runtimeSessionId(chatRuntime) {
+  return String(chatRuntime?.activeSessionId || chatRuntime?.selectedSessionId || chatRuntime?.currentSessionId || chatRuntime?.sessionId || "");
 }
 
-function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
+function Composer({ chatRuntime, builderActive = false }) {
+  const submit = (payload) => {
+    const message = String(payload?.message || "").trim();
+    if (builderActive && message) {
+      window.dispatchEvent(new CustomEvent(BUILDER_COMMAND_EVENT, {
+        detail: {
+          message,
+          sessionId: runtimeSessionId(chatRuntime),
+          projectId: chatRuntime?.activeProjectId || chatRuntime?.projectId || "",
+          source: "authoritative-streams-chat",
+          at: new Date().toISOString(),
+        },
+      }));
+    }
+    return chatRuntime?.sendMessage?.({ message: payload.message, composerMode: payload.composerMode, mode: payload.mode, webSearchEnabled: payload.webSearchEnabled });
+  };
+  return <StreamsComposer onSubmit={submit} onFilesSelected={(files) => chatRuntime?.uploadFiles?.(files)} onProviderChange={(provider) => chatRuntime?.setSelectedProvider?.(provider)} onModeChange={(mode) => chatRuntime?.setSelectedMode?.(mode)} libraryFiles={chatRuntime?.composerAttachments || []} onRemoveFile={(fileId) => chatRuntime?.removeComposerAttachment?.(fileId)} isStreaming={chatRuntime?.isStreaming} />;
+}
+
+function ChatPanel({ chatRuntime, activeProject, onOpenInline, builderActive = false }) {
   const messages = useMemo(() => {
     const source = Array.isArray(chatRuntime?.messages) ? chatRuntime.messages : [];
     const seen = new Set();
@@ -89,8 +109,8 @@ function ChatPanel({ chatRuntime, activeProject, onOpenInline }) {
     });
   }, [chatRuntime?.messages]);
   const isEmpty = messages.length === 0 && !chatRuntime?.isLoadingMessages && !chatRuntime?.isRefreshingMessages;
-  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><span className="operatorEyebrow">STREAMS AI WORKSPACE</span><h1>Ask, build, create, launch.</h1><p>Start with a conversation. Open the project workspace when the idea is ready to become real work.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} /></div></div></section>;
-  return <section className="operatorChatPanel operatorConversationView"><header className="operatorTopbar"><div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div><div className="operatorTopbarStatus"><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Project preview</button> : null}</div></header><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} /></div></section>;
+  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><span className="operatorEyebrow">STREAMS AI WORKSPACE</span><h1>Ask, build, create, launch.</h1><p>Start with a conversation. Open the project workspace when the idea is ready to become real work.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} builderActive={builderActive} /></div></div></section>;
+  return <section className="operatorChatPanel operatorConversationView"><header className="operatorTopbar"><div><span>STREAMS AI</span><b>{activeProject?.title || "General assistant"}</b></div><div className="operatorTopbarStatus"><small>{chatRuntime?.isStreaming ? "Working" : chatRuntime?.isRefreshingMessages ? "Syncing" : "Online"}</small>{activeProject ? <button type="button" onClick={onOpenInline}>Project preview</button> : null}</div></header><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} builderActive={builderActive} /></div></section>;
 }
 
 function ProjectPicker({ sessions, activeProject, onSelectProject, onStartCleanProject }) {
@@ -130,14 +150,14 @@ export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {
   const homeContent = builderPreview ? (
     <div style={{ height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(320px,28vw) minmax(0,1fr)", overflow: "hidden", background: "#020617" }}>
       <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", borderRight: "1px solid rgba(148,163,184,.18)" }}>
-        <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} />
+        <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} builderActive />
       </div>
       <div style={{ minWidth: 0, minHeight: 0, display: "grid", gridTemplateRows: "36px minmax(0,1fr)", overflow: "hidden" }}>
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 10px", background: "#020617", borderBottom: "1px solid rgba(45,212,191,.25)", color: "#fff" }}>
-          <b style={{ fontSize: 12 }}>Streams Builder</b>
+          <b style={{ fontSize: 12 }}>Streams Builder · Live Agent</b>
           <button type="button" onClick={() => setBuilderPreview(null)} style={{ border: "1px solid rgba(148,163,184,.28)", borderRadius: 8, background: "#0f172a", color: "#fff", padding: "5px 10px", cursor: "pointer" }}>Close Builder</button>
         </header>
-        <BuilderResearchCanvas preview={builderPreview} />
+        <BuilderResearchCanvas preview={{ ...builderPreview, sessionId: builderPreview?.sessionId || runtimeSessionId(chatRuntime) }} />
       </div>
     </div>
   ) : <ChatPanel chatRuntime={chatRuntime} activeProject={activeProject} onOpenInline={() => activeProject && setInlineOpen(true)} />;
