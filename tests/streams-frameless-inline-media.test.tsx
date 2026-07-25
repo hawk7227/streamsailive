@@ -6,9 +6,22 @@ import VideoGenerationCard from "../src/components/streams-ai/current-chat/new-f
 import InlineAssistantImageCard from "../src/components/streams-ai/current-chat/new-face/media/InlineAssistantImageCard";
 import InlineAssistantVideoCard from "../src/components/streams-ai/current-chat/new-face/media/InlineAssistantVideoCard";
 
+const noop = () => undefined;
+
 describe("frameless inline chat media", () => {
   it("renders generated images directly without card status or metadata chrome", () => {
-    const html = renderToStaticMarkup(<ImageGenerationCard image={{ status: "ready", url: "https://example.com/image.png" }} />);
+    const html = renderToStaticMarkup(
+      <ImageGenerationCard
+        image={{ status: "ready", url: "https://example.com/image.png" }}
+        onOpen={noop}
+        onDownload={noop}
+        onCopyUrl={noop}
+        onAnalyze={noop}
+        onEdit={noop}
+        onAnimate={noop}
+        onShare={noop}
+      />,
+    );
     expect(html).toContain("streamsInlineMedia streamsInlineImage");
     expect(html).toContain("https://example.com/image.png");
     expect(html).not.toContain("Image ready");
@@ -17,7 +30,18 @@ describe("frameless inline chat media", () => {
   });
 
   it("renders generated videos directly without footer or provider labels", () => {
-    const html = renderToStaticMarkup(<VideoGenerationCard video={{ status: "ready", url: "https://example.com/video.mp4", provider: "provider" }} />);
+    const html = renderToStaticMarkup(
+      <VideoGenerationCard
+        video={{ status: "ready", url: "https://example.com/video.mp4", provider: "provider" }}
+        onOpen={noop}
+        onDownload={noop}
+        onCopyUrl={noop}
+        onViewTranscript={noop}
+        onViewScenes={noop}
+        onExtractFrame={noop}
+        onRegenerateFromFrame={noop}
+      />,
+    );
     expect(html).toContain("streamsInlineMedia streamsInlineVideo");
     expect(html).toContain("https://example.com/video.mp4");
     expect(html).not.toContain("Video ready");
@@ -26,8 +50,27 @@ describe("frameless inline chat media", () => {
   });
 
   it("uses the same direct media surface for assistant image and video streams", () => {
-    const imageHtml = renderToStaticMarkup(<InlineAssistantImageCard image={{ status: "ready", url: "https://example.com/assistant.png" }} />);
-    const videoHtml = renderToStaticMarkup(<InlineAssistantVideoCard video={{ url: "https://example.com/assistant.mp4" }} />);
+    const imageHtml = renderToStaticMarkup(
+      <InlineAssistantImageCard
+        image={{ status: "ready", url: "https://example.com/assistant.png" }}
+        onLoaded={noop}
+        onOpen={noop}
+        onCopy={noop}
+        onCopyUrl={noop}
+        onSave={noop}
+        onDownload={noop}
+        onShare={noop}
+        onEdit={noop}
+      />,
+    );
+    const videoHtml = renderToStaticMarkup(
+      <InlineAssistantVideoCard
+        video={{ url: "https://example.com/assistant.mp4" }}
+        onOpen={noop}
+        onDownload={noop}
+        onCopyUrl={noop}
+      />,
+    );
     expect(imageHtml).toContain("streamsInlineMedia streamsInlineImage");
     expect(videoHtml).toContain("streamsInlineMedia streamsInlineVideo");
     expect(imageHtml).not.toContain("inlineAssistantImageMetaRow");
