@@ -6,6 +6,7 @@ import { StreamsOperationRepository } from "../streams-ai/runtime/architecture/o
 import { withStageTimeout } from "../streams-ai/runtime/architecture/timeout-policy";
 import { normalizeFailure } from "../streams-ai/runtime/architecture/failure-taxonomy";
 import { assertToolAllowed } from "../streams-ai/runtime/architecture/tool-policy";
+import { normalizeOpenAIProviderFailure, withOpenAIRetry } from "./openai-retry";
 
 const operations = new StreamsOperationRepository();
 function db() { return streamsAISchema(createStreamsAIServiceClient()); }
@@ -55,7 +56,15 @@ async function generateFrontendHtml(prompt: string, signal?: AbortSignal) {
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(body || `BUILDER_PROVIDER_FAILED_${response.status}`);
+    const parsed = (() => { try { return JSON.parse(body); } catch { return null; } })();
+    const providerError = Object.assign(new Error(parsed?.error?.message || body || `BUILDER_PROVIDER_FAILED_${response.status}`), {
+      status: response.status,
+      body,
+      requestId: response.headers.get("x-request-id") || undefined,
+      type: parsed?.error?.type,
+      code: parsed?.error?.code,
+    });
+    throw providerError;
   }
   return normalizeHtml(extractOutputText(await response.json()));
 }
@@ -90,11 +99,7 @@ async function createPreview(scope: StreamsAIScope, input: { sessionId: string; 
   }).select("*").single();
   if (versionError) {
     try {
-      await db().from("streams_ai_previews")
-        .delete()
-        .eq("tenant_id", scope.tenantId)
-        .eq("user_id", scope.userId)
-        .eq("id", preview.id);
+      await db().from("streams_ai_previews").delete().eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", preview.id);
     } catch {
       // Preserve the original version-create failure; orphan cleanup is best effort.
     }
@@ -102,9 +107,7 @@ async function createPreview(scope: StreamsAIScope, input: { sessionId: string; 
   }
   const { error: activateError } = await db().from("streams_ai_previews")
     .update({ active_version_id: version.id, updated_at: new Date().toISOString() })
-    .eq("tenant_id", scope.tenantId)
-    .eq("user_id", scope.userId)
-    .eq("id", preview.id);
+    .eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", preview.id);
   if (activateError) throw new Error(`PREVIEW_ACTIVATION_FAILED:${activateError.message}`);
   return { previewId: String(preview.id), previewUrl: `/streams-builder/preview/${preview.id}`, versionId: String(version.id) };
 }
@@ -145,7 +148,20 @@ export async function executeWebsiteBuild(input: {
     stage = "FILES_GENERATING";
     input.emit(stage, "Generating the frontend…", { operationId: operation.operationId });
     operation = await operations.transition(input.scope, operation.operationId, stage);
-    const html = await withStageTimeout(stage, (signal) => generateFrontendHtml(input.userMessage, signal), input.signal);
+    const html = await withStageTimeout(stage, (signal) => withOpenAIRetry(
+      () => generateFrontendHtml(input.userMessage, signal),
+      {
+        onRetry: (failure, nextAttempt, delayMs) => {
+          input.emit(stage, `Frontend provider retry ${nextAttempt} scheduled…`, {
+            operationId: operation.operationId,
+            retryAttempt: nextAttempt,
+            retryDelayMs: delayMs,
+            providerCode: failure.code,
+            providerRequestId: failure.requestId,
+          });
+        },
+      },
+    ), input.signal);
     await operations.heartbeat(input.scope, operation.operationId, leaseOwner);
 
     stage = "FILES_WRITTEN";
@@ -174,7 +190,18 @@ export async function executeWebsiteBuild(input: {
     input.emit(stage, "Complete", { operationId: operation.operationId, ...preview, artifacts: operation.artifacts });
     return operation;
   } catch (error) {
+    const normalizedProviderFailure = normalizeOpenAIProviderFailure(error);
     const failure = normalizeFailure(error, stage);
+    if (stage === "FILES_GENERATING" && normalizedProviderFailure.code !== "openai_provider_error") {
+      failure.code = normalizedProviderFailure.code;
+      failure.retryable = normalizedProviderFailure.retryable;
+      failure.detail = normalizedProviderFailure.detail;
+      failure.metadata = {
+        ...(failure.metadata || {}),
+        providerRequestId: normalizedProviderFailure.requestId,
+        providerStatus: normalizedProviderFailure.status,
+      };
+    }
     operation = await operations.transition(input.scope, operation.operationId, "FAILED", { status: "failed", failure });
     input.emit("FAILED", failure.safeMessage, { operationId: operation.operationId, failure });
     throw Object.assign(new Error(failure.safeMessage), { operation });
