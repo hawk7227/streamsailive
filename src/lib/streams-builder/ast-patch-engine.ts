@@ -30,13 +30,28 @@ function scriptKind(path: string) {
   return ts.ScriptKind.TS;
 }
 function lineSpan(value: string) { return value ? value.split(/\r?\n/).length : 0; }
+function statementName(statement: ts.Statement) {
+  if (
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isEnumDeclaration(statement) ||
+    ts.isModuleDeclaration(statement)
+  ) return statement.name && ts.isIdentifier(statement.name) ? statement.name.text : "";
+  if (ts.isVariableStatement(statement)) {
+    return statement.declarationList.declarations
+      .map((declaration) => ts.isIdentifier(declaration.name) ? declaration.name.text : declaration.name.getText())
+      .join(",");
+  }
+  return "";
+}
 function topLevelSignature(source: ts.SourceFile) {
   return source.statements.map((statement) => {
     if (ts.isImportDeclaration(statement)) return `import:${statement.moduleSpecifier.getText(source)}`;
     if (ts.isExportDeclaration(statement)) return `export:${statement.moduleSpecifier?.getText(source) ?? statement.exportClause?.getText(source) ?? ""}`;
-    const named = statement as ts.NamedDeclaration;
-    const name = named.name && ts.isIdentifier(named.name) ? named.name.text : "";
-    const exported = Boolean(ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword));
+    const name = statementName(statement);
+    const exported = Boolean(ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
     return `${ts.SyntaxKind[statement.kind]}:${name}:${exported}`;
   });
 }
@@ -44,7 +59,8 @@ function parse(file: string, sourceText: string) {
   return ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, scriptKind(file));
 }
 function diagnostics(source: ts.SourceFile) {
-  return source.parseDiagnostics.map((item) => ts.flattenDiagnosticMessageText(item.messageText, "\n"));
+  const parsed = source as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] };
+  return (parsed.parseDiagnostics ?? []).map((item: ts.Diagnostic) => ts.flattenDiagnosticMessageText(item.messageText, "\n"));
 }
 function locateSymbol(graph: RepositoryGraph, file: string, symbolName: string): RepositorySymbolNode {
   const matches = graph.symbols.filter((symbol) => symbol.file === file && symbol.name === symbolName);
@@ -63,7 +79,8 @@ export function createAstSymbolPatchPlan(input: {
   const symbol = locateSymbol(input.graph, input.file, input.symbolName);
   const before = input.sourceText.slice(symbol.start, symbol.end);
   const beforeSource = parse(input.file, input.sourceText);
-  if (diagnostics(beforeSource).length) throw new Error(`Source contains parse errors before patch: ${diagnostics(beforeSource).join("; ")}`);
+  const beforeDiagnostics = diagnostics(beforeSource);
+  if (beforeDiagnostics.length) throw new Error(`Source contains parse errors before patch: ${beforeDiagnostics.join("; ")}`);
   const result = `${input.sourceText.slice(0, symbol.start)}${input.replacement}${input.sourceText.slice(symbol.end)}`;
   const afterSource = parse(input.file, result);
   const afterDiagnostics = diagnostics(afterSource);
@@ -90,7 +107,15 @@ export function createAstSymbolPatchPlan(input: {
     replacement: input.replacement,
     expectedBeforeHash: hash(before),
   };
-  return { id: hash(operation), file: input.file, operations: [operation], touchedLinesBefore, touchedLinesAfter, preservesImports, preservesExports };
+  return {
+    id: hash(JSON.stringify(operation)),
+    file: input.file,
+    operations: [operation],
+    touchedLinesBefore,
+    touchedLinesAfter,
+    preservesImports,
+    preservesExports,
+  };
 }
 
 export function applyAstPatchPlan(input: { plan: AstPatchPlan; sourceText: string }) {
