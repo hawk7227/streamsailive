@@ -30,8 +30,8 @@ function openBuilderCanvas(detail = {}) {
   if (!preview) return;
 
   const activeFile = {
-    repo: "generated/runtime-preview",
-    branch: "runtime",
+    repo: "hawk7227/streamsailive",
+    branch: "runtime-preview",
     path: `generated/previews/${preview.previewId}.html`,
     folder: "generated/previews",
     sha: preview.operationId,
