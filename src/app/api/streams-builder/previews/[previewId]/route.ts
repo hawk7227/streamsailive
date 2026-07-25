@@ -26,10 +26,17 @@ async function signedUrl(asset: Record<string, any>) {
 
 async function loadPreviewAssets(scope: PreviewScope, previewId: string) {
   const { data: links, error } = await db().from("streams_ai_preview_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("created_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    console.warn("[streams-builder-preview] optional preview assets unavailable", { previewId, message: error.message });
+    return [];
+  }
   const assetIds = (links || []).map((row) => row.asset_id).filter(Boolean);
   if (!assetIds.length) return [];
-  const { data: assets } = await db().from("streams_ai_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).in("id", assetIds);
+  const { data: assets, error: assetsError } = await db().from("streams_ai_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).in("id", assetIds);
+  if (assetsError) {
+    console.warn("[streams-builder-preview] optional assets unavailable", { previewId, message: assetsError.message });
+    return [];
+  }
   const byId = new Map((assets || []).map((asset) => [asset.id, asset]));
   return Promise.all((links || []).map(async (link) => {
     const asset = byId.get(link.asset_id) || null;
@@ -70,7 +77,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!preview || !scope) return streamsAIJson({ ok: false, error: "Preview not found" }, 404);
     const assets = await loadPreviewAssets(scope, previewId);
     const { data: versions, error: versionsError } = await db().from("streams_ai_preview_versions").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(25);
-    if (versionsError) throw versionsError;
+    if (versionsError) {
+      console.warn("[streams-builder-preview] optional preview versions unavailable", { previewId, message: versionsError.message });
+    }
     return streamsAIJson({ ok: true, preview, assets, versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
   } catch (error) { return streamsAIError(error); }
 }
