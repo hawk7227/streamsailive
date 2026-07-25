@@ -1,29 +1,50 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function GET(request: Request) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const envAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
-  const origin = envAppUrl ?? (forwardedHost ? `${forwardedProto ?? 'https'}://${forwardedHost}` : requestUrl.origin)
-  const requestedNext = requestUrl.searchParams.get('next') || '/streams-ai'
-  const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/streams-ai'
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/streams-ai";
+  return value;
+}
 
-  if (code) {
-    const supabase = await createClient()
-    await supabase.auth.exchangeCodeForSession(code)
-    
-    // Check if user is logged in after exchanging code
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (user) {
-      // User is logged in, redirect to dashboard
-      return NextResponse.redirect(`${origin}${safeNext}`)
-    }
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const next = safeNextPath(requestUrl.searchParams.get("next"));
+  const errorDescription = requestUrl.searchParams.get("error_description");
+
+  if (errorDescription || !code) {
+    const loginUrl = new URL("/login", requestUrl.origin);
+    loginUrl.searchParams.set(
+      "error",
+      errorDescription || "Authentication callback did not include an authorization code.",
+    );
+    return NextResponse.redirect(loginUrl);
   }
 
-  // User is not logged in, redirect to landing page
-  return NextResponse.redirect(`${origin}/streams-ai`)
+  const redirectResponse = NextResponse.redirect(new URL(next, requestUrl.origin));
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          for (const { name, value, options } of cookiesToSet) {
+            redirectResponse.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    const loginUrl = new URL("/login", requestUrl.origin);
+    loginUrl.searchParams.set("error", error.message);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return redirectResponse;
 }
