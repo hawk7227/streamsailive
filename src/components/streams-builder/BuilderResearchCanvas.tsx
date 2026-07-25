@@ -115,9 +115,9 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       `}</style>
       <style jsx global>{`
         .builderResearchCanvas .builderResearchVisual .editorHeader,
-        .builderResearchCanvas .builderResearchVisual .editorStatus{display:none!important}
-        .builderResearchCanvas .builderResearchVisual .visualEditor{grid-template-rows:auto minmax(0,1fr)!important;min-height:0!important}
-        .builderResearchCanvas .builderResearchVisual .editorActions{min-height:40px;padding:5px 8px!important}
+        .builderResearchCanvas .builderResearchVisual .editorStatus,
+        .builderResearchCanvas .builderResearchVisual .editorActions{display:none!important}
+        .builderResearchCanvas .builderResearchVisual .visualEditor{grid-template-rows:minmax(0,1fr)!important;min-height:0!important}
         .builderResearchCanvas .workstationToolbar .githubRepositoryPicker{min-width:0!important}
       `}</style>
     </section>
