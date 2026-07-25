@@ -19,6 +19,29 @@ const policies = {
     allowed: ['docs/streams-current-status.md','docs/streams-knowledge/','docs/merge-policies/streams-self-build-runtime-foundation-slice.md','src/lib/streams/build-runtime/','src/app/api/streams/build/tasks/','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/','src/app/api/streams/video/','src/app/api/streams/image/']
   },
+  'streams-engineering-runtime-reconstruction-slice': {
+    allowed: [
+      'scripts/scope-guard.mjs',
+      'docs/streams-current-status.md',
+      'docs/merge-policies/streams-engineering-runtime-reconstruction-slice.md',
+      'src/lib/streams-builder/',
+      'src/app/api/streams-builder/',
+      'src/app/api/v1/uploads/route.ts',
+      'src/components/streams-builder/',
+      'src/components/streams-workspace/',
+      'tests/streams-builder-',
+      'tests/streams-frameless-inline-media.test.tsx',
+      '.github/workflows/streams-builder-runtime-verify.yml',
+      'package.json',
+      'pnpm-lock.yaml'
+    ],
+    forbidden: [
+      'public/build-report.json',
+      'scripts/validate-rule-confirmation.js',
+      'src/app/api/streams/video/',
+      'src/app/api/streams/image/'
+    ]
+  },
   'streams-ai-current-chat-runtime-slice': {
     allowed: ['src/components/streams-ai/current-chat/','docs/merge-policies/streams-ai-current-chat-runtime-slice.md','scripts/scope-guard.mjs'],
     forbidden: ['public/build-report.json','scripts/validate-rule-confirmation.js','supabase/migrations/']
@@ -93,6 +116,19 @@ const policies = {
 
 function inferPolicyFromFiles(files) {
   if (!files || files.length === 0) return null;
+  const hasEngineeringRuntimeFiles = files.some((f) =>
+    f.startsWith('src/lib/streams-builder/') ||
+    f.startsWith('src/app/api/streams-builder/') ||
+    f === 'src/app/api/v1/uploads/route.ts' ||
+    f.startsWith('src/components/streams-builder/') ||
+    f.startsWith('src/components/streams-workspace/') ||
+    f.startsWith('tests/streams-builder-') ||
+    f === 'tests/streams-frameless-inline-media.test.tsx' ||
+    f === 'docs/merge-policies/streams-engineering-runtime-reconstruction-slice.md' ||
+    f === '.github/workflows/streams-builder-runtime-verify.yml'
+  );
+  if (hasEngineeringRuntimeFiles) return 'streams-engineering-runtime-reconstruction-slice';
+
   const hasUniversalWorkspaceFiles = files.some((f) =>
     f.startsWith('src/components/streams-workspace/') ||
     f.startsWith('src/app/api/v1/builder/') ||
@@ -182,7 +218,7 @@ if (!cfg) {
   process.exit(1);
 }
 
-const matches = (file, pattern) => pattern.endsWith('/') ? file.startsWith(pattern) : file === pattern;
+const matches = (file, pattern) => pattern.endsWith('/') || pattern.endsWith('-') ? file.startsWith(pattern) : file === pattern;
 function validate(changedFiles) {
   const badForbidden = changedFiles.filter((file) => cfg.forbidden.some((pattern) => matches(file, pattern)));
   const badScope = changedFiles.filter((file) => !cfg.allowed.some((pattern) => matches(file, pattern)));

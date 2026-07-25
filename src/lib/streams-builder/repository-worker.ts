@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { StreamsAIScope } from "@/lib/streams-ai/auth";
@@ -13,6 +13,7 @@ import {
 } from "./codex-repair-loop";
 import { createRepositoryExecutionPlan, type StreamsRepositoryExecutionCommand } from "./repository-execution";
 import { createSandboxCommandBatch, type StreamsSandboxCommand } from "./sandbox-commands";
+import { loadRepositoryIntelligence, type StreamsRepositoryIntelligence } from "./repository-intelligence";
 
 const execFileAsync = promisify(execFile);
 const WORKSPACE_ROOT = "/tmp/streams-builder";
@@ -110,12 +111,24 @@ async function execResolved(command: StreamsSandboxCommand, resolved: { file: st
   });
 }
 
-async function runCommand(command: StreamsSandboxCommand, patchPath: string | null): Promise<CodexRepairCommandResult & { startedAt: string; completedAt: string; code?: unknown }> {
+async function pathExists(path: string) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runCommand(command: StreamsSandboxCommand, patchPath: string | null, intelligence: StreamsRepositoryIntelligence | null = null): Promise<CodexRepairCommandResult & { startedAt: string; completedAt: string; code?: unknown }> {
   assertInsideWorkspace(command.cwd);
   const startedAt = new Date().toISOString();
 
   try {
-    const check = await execResolved(command, commandForExecution(command, patchPath));
+    const resolved = command.command === "npm_run_build" && intelligence?.buildCommand?.length
+      ? { file: intelligence.buildCommand[0], args: intelligence.buildCommand.slice(1) }
+      : commandForExecution(command, patchPath);
+    const check = await execResolved(command, resolved);
     let stdout = cleanLog(check.stdout);
     let stderr = cleanLog(check.stderr);
 
@@ -193,6 +206,7 @@ export async function processRepositoryExecutionJob(
   const approvalGranted = input.approvalGranted === true;
   const autonomousRepair = rowBoolean(input, "autonomousRepair");
   const repairUnifiedDiffs = rowStringArray(input, "repairUnifiedDiffs");
+  const resumeWorkspace = input.resumeWorkspace !== false;
   const commands = requestedCommands.length ? requestedCommands : ["clone_repo", "read_full_file", "git_status", "git_diff"];
 
   await jobs.update(scope, jobId, { status: "running" });
@@ -213,6 +227,7 @@ export async function processRepositoryExecutionJob(
     maxFilesTouched: rowNumber(input, "maxFilesTouched", 4),
     runBuildAfterPatch: input.runBuildAfterPatch !== false,
     requireApprovalBeforePush: input.requireApprovalBeforePush !== false,
+    resumeWorkspace,
   });
 
   if (plan.blockedReasons.length > 0) {
@@ -224,15 +239,31 @@ export async function processRepositoryExecutionJob(
   const workspaceDir = workspacePath(projectId);
   const sandboxBatch = createSandboxCommandBatch({ projectId, sessionId, repoFullName, branchName, workspaceDir, commands: commands as StreamsRepositoryExecutionCommand[], targetFiles, commitMessage });
 
-  await rm(workspaceDir, { recursive: true, force: true });
   await mkdir(WORKSPACE_ROOT, { recursive: true });
-  await jobs.createEvent(scope, { jobId, eventType: "repository.sandbox.prepared", message: "Repository sandbox prepared", data: { workspaceDir, commandCount: sandboxBatch.commands.length } });
+  const existingWorkspace = await pathExists(join(workspaceDir, ".git"));
+  if (!resumeWorkspace || !existingWorkspace) {
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+  await jobs.createEvent(scope, {
+    jobId,
+    eventType: existingWorkspace && resumeWorkspace ? "repository.sandbox.resumed" : "repository.sandbox.prepared",
+    message: existingWorkspace && resumeWorkspace ? "Resumed durable repository workspace" : "Repository sandbox prepared",
+    data: { workspaceDir, commandCount: sandboxBatch.commands.length, resumeWorkspace, existingWorkspace, userVisible: true, statusText: existingWorkspace && resumeWorkspace ? "Resuming the existing code workspace…" : "Preparing an isolated code workspace…" },
+  });
 
+  let repositoryIntelligence: StreamsRepositoryIntelligence | null = null;
   let patchPath = unifiedDiff ? await writeUnifiedDiff(projectId, unifiedDiff) : null;
   const proof: string[] = ["worker claimed job", "plan validation passed", "sandbox prepared"];
   const unproven: string[] = [];
 
   for (const command of sandboxBatch.commands) {
+    if (command.command === "clone_repo" && existingWorkspace && resumeWorkspace) {
+      proof.push("durable workspace resumed without recloning");
+      await jobs.createEvent(scope, { jobId, eventType: "repository.command.skipped", message: "Clone skipped because the durable workspace already exists", data: { commandId: command.id, command: command.command, reason: "workspace_resumed", userVisible: true, statusText: "Reusing the existing repository checkout…" } });
+      repositoryIntelligence = await loadRepositoryIntelligence({ workspaceDir, targetFiles });
+      await jobs.createEvent(scope, { jobId, eventType: "repository.intelligence.loaded", message: "Repository instructions and package tooling loaded", data: { packageManager: repositoryIntelligence.packageManager, buildCommand: repositoryIntelligence.buildCommand, instructionFiles: repositoryIntelligence.instructions.map((item) => item.path), instructionCharacters: repositoryIntelligence.instructionCharacters, userVisible: true, statusText: `Loaded repository rules and ${repositoryIntelligence.packageManager} build tooling.` } });
+      continue;
+    }
     if (command.requiresApproval && !approvalGranted) {
       unproven.push(`${command.command} skipped because approval was not granted`);
       await jobs.createEvent(scope, { jobId, eventType: "repository.command.skipped", message: "Approval-gated command skipped", data: { commandId: command.id, command: command.command, reason: "approval_required" } });
@@ -241,8 +272,14 @@ export async function processRepositoryExecutionJob(
 
     await jobs.createEvent(scope, { jobId, eventType: "repository.command.started", message: `Starting ${command.command}`, data: { commandId: command.id, command: command.command, args: command.args, cwd: command.cwd } });
 
-    const result = await runCommand(command, patchPath);
-    await jobs.createEvent(scope, { jobId, eventType: result.ok ? "repository.command.completed" : "repository.command.failed", message: result.ok ? `Completed ${command.command}` : `Failed ${command.command}`, data: { commandId: command.id, command: command.command, ...result } });
+    const result = await runCommand(command, patchPath, repositoryIntelligence);
+    await jobs.createEvent(scope, { jobId, eventType: result.ok ? "repository.command.completed" : "repository.command.failed", message: result.ok ? `Completed ${command.command}` : `Failed ${command.command}`, data: { commandId: command.id, command: command.command, ...result, userVisible: true, statusText: result.ok ? `${command.proofLabel}` : `${command.command} failed; analyzing the failure…` } });
+
+    if (result.ok && command.command === "clone_repo") {
+      repositoryIntelligence = await loadRepositoryIntelligence({ workspaceDir, targetFiles });
+      proof.push(`repository intelligence loaded (${repositoryIntelligence.packageManager})`);
+      await jobs.createEvent(scope, { jobId, eventType: "repository.intelligence.loaded", message: "Repository instructions and package tooling loaded", data: { packageManager: repositoryIntelligence.packageManager, buildCommand: repositoryIntelligence.buildCommand, testCommand: repositoryIntelligence.testCommand, typecheckCommand: repositoryIntelligence.typecheckCommand, instructionFiles: repositoryIntelligence.instructions.map((item) => item.path), instructionCharacters: repositoryIntelligence.instructionCharacters, userVisible: true, statusText: `Loaded repository rules and ${repositoryIntelligence.packageManager} build tooling.` } });
+    }
 
     if (!result.ok) {
       if (!isRepairableCommand(command.command)) {
@@ -269,9 +306,9 @@ export async function processRepositoryExecutionJob(
           generatePatch: async (repairInput) => (await staticGenerator(repairInput)) || (await openAIGenerator(repairInput)),
           applyPatch: async (patch, attempt) => {
             patchPath = await writeUnifiedDiff(`${projectId}-repair-${attempt}`, patch);
-            return runCommand(repairApplyCommand(command, attempt), patchPath);
+            return runCommand(repairApplyCommand(command, attempt), patchPath, repositoryIntelligence);
           },
-          rerunCommand: async () => runCommand(command, patchPath),
+          rerunCommand: async () => runCommand(command, patchPath, repositoryIntelligence),
           emit: async (attempt) => {
             await jobs.createEvent(scope, { jobId, eventType: `repository.codex.${attempt.status}`, message: attempt.message, data: attempt });
           },
