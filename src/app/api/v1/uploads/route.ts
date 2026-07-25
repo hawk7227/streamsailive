@@ -7,7 +7,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const uploads = new StreamsResumableUploadsRepository();
+function uploadsRepository() {
+  return new StreamsResumableUploadsRepository();
+}
 
 function fail(error: unknown, status = 400) {
   return NextResponse.json({ ok: false, apiVersion: "v1", error: error instanceof Error ? error.message : "Unknown upload error" }, { status });
@@ -15,6 +17,7 @@ function fail(error: unknown, status = 400) {
 
 export async function GET(request: NextRequest) {
   try {
+    const uploads = uploadsRepository();
     const scope = await requireStreamsAIScope(request);
     const uploadId = request.nextUrl.searchParams.get("uploadId");
     if (uploadId) {
@@ -30,6 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const uploads = uploadsRepository();
     const scope = await requireStreamsAIScope(request);
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) {
@@ -65,6 +69,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const uploads = uploadsRepository();
     const scope = await requireStreamsAIScope(request);
     const body = sanitizeStreamsAIPayload(await request.json().catch(() => ({}))) as Record<string, any>;
     if (!body.uploadId || !body.action) return fail(new Error("uploadId and action are required"));
