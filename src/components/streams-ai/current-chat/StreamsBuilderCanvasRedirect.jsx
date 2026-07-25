@@ -13,14 +13,12 @@ function normalizePreview(detail = {}) {
   ).trim();
   if (!previewId || !previewUrl) return null;
 
-  const operationId = String(
-    detail.operationId || detail.activeBuilderRunId || previewId,
-  ).trim();
-
   return {
     previewId,
     previewUrl,
-    operationId,
+    operationId: String(
+      detail.operationId || detail.activeBuilderRunId || previewId,
+    ).trim(),
     sessionId: String(detail.sessionId || "").trim(),
   };
 }
@@ -29,9 +27,11 @@ function openBuilderCanvas(detail = {}) {
   const preview = normalizePreview(detail);
   if (!preview) return;
 
+  // A generated runtime preview is a same-origin virtual source. The canonical
+  // Builder workstation owns its editor, diff, logs, Codex state, and iframe.
   const activeFile = {
-    repo: "hawk7227/streamsailive",
-    branch: "runtime-preview",
+    repo: "generated/",
+    branch: "runtime",
     path: `generated/previews/${preview.previewId}.html`,
     folder: "generated/previews",
     sha: preview.operationId,
@@ -43,7 +43,14 @@ function openBuilderCanvas(detail = {}) {
     window.localStorage.setItem(ACTIVE_FILE_KEY, JSON.stringify(activeFile));
     window.sessionStorage.setItem(
       ACTIVE_KEY,
-      JSON.stringify({ ...detail, ...preview, open: true, targetPane: "frontend" }),
+      JSON.stringify({
+        ...detail,
+        ...preview,
+        open: false,
+        handedOff: true,
+        handedOffAt: new Date().toISOString(),
+        targetPane: "frontend",
+      }),
     );
   } catch {}
 
@@ -61,14 +68,6 @@ export default function StreamsBuilderCanvasRedirect() {
   useEffect(() => {
     const onOpen = (event) => openBuilderCanvas(event?.detail || {});
     window.addEventListener(OPEN_EVENT, onOpen);
-
-    try {
-      const active = JSON.parse(window.sessionStorage.getItem(ACTIVE_KEY) || "{}");
-      if (active?.previewId && active?.open) {
-        window.setTimeout(() => openBuilderCanvas(active), 0);
-      }
-    } catch {}
-
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, []);
 
