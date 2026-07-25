@@ -5,7 +5,6 @@ import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEdit
 import VisualEditorCodeDock from "@/components/streams-builder/VisualEditorCodeDock";
 import BuilderContextEventSink from "@/components/streams-builder/BuilderContextEventSink";
 import CanonicalPreviewEventBridge from "@/components/streams-builder/CanonicalPreviewEventBridge";
-import CanonicalPreviewWorkspaceSurface from "@/components/streams-builder/CanonicalPreviewWorkspaceSurface";
 import VisualSelectionPatchPanel from "@/components/streams-builder/VisualSelectionPatchPanel";
 import WorkspaceBridgeSourceOfTruth from "@/components/streams-builder/WorkspaceBridgeSourceOfTruth";
 import DefaultSplitWorkstationOpener from "@/components/streams-builder/DefaultSplitWorkstationOpener";
@@ -20,7 +19,6 @@ export default function StreamsAIStreamsBuilderPage() {
       <WorkspaceBridgeSourceOfTruth />
       <BuilderContextEventSink />
       <CanonicalPreviewEventBridge />
-      <CanonicalPreviewWorkspaceSurface />
       <VisualSelectionPatchPanel />
       <PreviewCanvasFixStyles />
       <VisualEditorCanvasFixStyles />
