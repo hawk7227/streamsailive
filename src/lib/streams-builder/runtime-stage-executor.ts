@@ -100,7 +100,12 @@ export async function executeDurableRuntime(options: RuntimeStageExecutorOptions
       }
 
       const handler = options.handlers[stage];
-      if (!handler) throw new Error(`No runtime handler is registered for required stage ${stage}.`);
+      if (!handler) {
+        const message = `No runtime handler is registered for required stage ${stage}.`;
+        runtime = await failRuntime({ store: options.store, runtimeId: runtime.runtimeId, ownerId: options.ownerId, message, retryable: false });
+        await emit(options, runtime, "failed", message);
+        return runtime;
+      }
       await emit(options, runtime, "started", `Starting ${stage} stage.`);
 
       let lastError: unknown = null;
