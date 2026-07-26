@@ -48,8 +48,13 @@ export default function BuilderResearchCanvas({ preview }: Props) {
   }, []);
 
   function updateContent(next: string) {
-    setActiveFile((current) => ({ ...current, content: next }));
-    setProof((items) => [...items.slice(-30), "Shared source updated from the code or visual editor."]);
+    setActiveFile((current) => {
+      const updated = { ...current, content: next };
+      try { window.localStorage.setItem("streams-builder:active-file", JSON.stringify(updated)); } catch {}
+      window.dispatchEvent(new CustomEvent("streams-builder:shared-source-change", { detail: updated }));
+      return updated;
+    });
+    setProof((items) => [...items.slice(-30), "Shared source updated from the code, worker, or visual editor."]);
   }
   function addProof(message: string) { setProof((items) => [...items.slice(-30), message]); }
 
@@ -60,7 +65,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       <BuilderFocusCoordinator />
       <main className="builderResearchWorkarea">
         <section className="builderResearchSource" aria-label="Code and frontend source canvas">
-          <LiveFrontendWorkstation activeFile={activeFile} toolbar={toolbar} />
+          <LiveFrontendWorkstation activeFile={activeFile} toolbar={toolbar} onContentChange={updateContent} />
         </section>
         <section className="builderResearchVisual" aria-label="Original frontend visual editor">
           <VisualEditingWorkstation stationLabel="Visual Editor" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={updateContent} onProof={addProof} onChat={addProof} />
