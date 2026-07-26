@@ -81,9 +81,16 @@ export function evaluateBuilderScenario(scenario: EvaluationScenario): Evaluatio
       }
     }
     if (event.type === "failure-reproduced") failureReproduced = true;
-    if (event.type === "build-failed") decisions.push("repair-from-build-evidence");
+    if (event.type === "build-failed") {
+      failureReproduced = true;
+      decisions.push("repair-from-build-evidence");
+    }
     if (event.type === "build-passed") buildPassed = true;
-    if (event.type === "browser-failed") { browserClean = false; decisions.push("open-devtools"); }
+    if (event.type === "browser-failed") {
+      failureReproduced = true;
+      browserClean = false;
+      decisions.push("open-devtools");
+    }
     if (event.type === "browser-passed") { browserClean = true; decisions.push("open-preview"); }
     if (event.type === "remote-preflight" && currentSha && event.sha && event.sha !== currentSha) {
       conflict = true;
