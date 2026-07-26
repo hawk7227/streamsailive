@@ -7,6 +7,7 @@ import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import BuilderFocusCoordinator from "./BuilderFocusCoordinator";
 import BuilderAutonomousTroubleshootingLoop from "./BuilderAutonomousTroubleshootingLoop";
+import BuilderAgentPresenceBridge from "./BuilderAgentPresenceBridge";
 import type { PulledFileDetail } from "./builderSystemContract";
 
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
@@ -66,6 +67,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
   return (
     <section className="builderResearchCanvas" aria-label="Streams researched Builder canvas">
       <BuilderFocusCoordinator />
+      <BuilderAgentPresenceBridge />
       <BuilderAutonomousTroubleshootingLoop activeFile={activeFile} sessionId={preview?.sessionId} onProof={addProof} />
       <main className="builderResearchWorkarea">
         <section className="builderResearchSource" aria-label="Code and frontend source canvas">
