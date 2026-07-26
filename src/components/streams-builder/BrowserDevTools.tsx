@@ -40,10 +40,12 @@ export default function BrowserDevTools({ frameRef, frameKey, active }: Props) {
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    const targetFrame: HTMLIFrameElement = frame;
+
     function install() {
       try {
-        const win = frame.contentWindow;
-        const doc = frame.contentDocument;
+        const win = targetFrame.contentWindow;
+        const doc = targetFrame.contentDocument;
         if (!win || !doc) throw new Error("Preview is cross-origin");
         if ((win as Window & { __streamsDevToolsInstalled?: boolean }).__streamsDevToolsInstalled) return;
         (win as Window & { __streamsDevToolsInstalled?: boolean }).__streamsDevToolsInstalled = true;
@@ -74,9 +76,9 @@ export default function BrowserDevTools({ frameRef, frameKey, active }: Props) {
         setStatus("Cross-origin preview: connect the Streams DevTools postMessage bridge for full telemetry");
       }
     }
-    frame.addEventListener("load", install);
+    targetFrame.addEventListener("load", install);
     install();
-    return () => frame.removeEventListener("load", install);
+    return () => targetFrame.removeEventListener("load", install);
   }, [frameRef, frameKey]);
 
   useEffect(() => {
