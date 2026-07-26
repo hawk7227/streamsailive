@@ -36,10 +36,12 @@ export function createSandboxCommandBatch(input: {
   commands: StreamsRepositoryExecutionCommand[];
   targetFiles?: string[];
   commitMessage?: string;
+  requireApprovalBeforePush?: boolean;
 }): StreamsSandboxCommandBatch {
   const cwd = input.workspaceDir || `/tmp/streams-builder/${input.projectId}`;
   const firstTarget = input.targetFiles?.[0] || "";
   const commitMessage = input.commitMessage || "Streams Builder update";
+  const writeApprovalRequired = input.requireApprovalBeforePush !== false;
 
   return {
     batchId: `sandbox-${input.projectId}-${Date.now()}`,
@@ -59,68 +61,23 @@ export function createSandboxCommandBatch(input: {
 
       switch (command) {
         case "clone_repo":
-          return {
-            ...base,
-            args: ["git", "clone", `https://github.com/${input.repoFullName}.git`, cwd],
-            requiresApproval: false,
-            proofLabel: "Repository cloned into isolated sandbox.",
-          };
+          return { ...base, args: ["git", "clone", "--branch", input.branchName, "--single-branch", `https://github.com/${input.repoFullName}.git`, cwd], requiresApproval: false, proofLabel: "Exact branch cloned into isolated sandbox." };
         case "read_full_file":
-          return {
-            ...base,
-            args: ["cat", firstTarget],
-            requiresApproval: false,
-            proofLabel: "Full target file content read before editing.",
-          };
+          return { ...base, args: ["cat", firstTarget], requiresApproval: false, proofLabel: "Full target file content read before editing." };
         case "apply_unified_diff":
-          return {
-            ...base,
-            args: ["git", "apply", "--check", "PATCH_FILE_THEN_APPLY"],
-            requiresApproval: false,
-            proofLabel: "Unified diff validated and applied.",
-          };
+          return { ...base, args: ["git", "apply", "--check", "PATCH_FILE_THEN_APPLY"], requiresApproval: false, proofLabel: "Unified diff validated and applied." };
         case "npm_run_build":
-          return {
-            ...base,
-            args: ["npm", "run", "build"],
-            requiresApproval: false,
-            proofLabel: "Build command completed and logs captured.",
-          };
+          return { ...base, args: ["npm", "run", "build"], requiresApproval: false, proofLabel: "Build command completed and logs captured." };
         case "git_status":
-          return {
-            ...base,
-            args: ["git", "status", "--short"],
-            requiresApproval: false,
-            proofLabel: "Working tree status captured.",
-          };
+          return { ...base, args: ["git", "status", "--short"], requiresApproval: false, proofLabel: "Working tree status captured." };
         case "git_diff":
-          return {
-            ...base,
-            args: ["git", "diff", "--", ...(input.targetFiles || [])],
-            requiresApproval: false,
-            proofLabel: "Exact file diff captured.",
-          };
+          return { ...base, args: ["git", "diff", "--", ...(input.targetFiles || [])], requiresApproval: false, proofLabel: "Exact file diff captured." };
         case "git_add_specific_file":
-          return {
-            ...base,
-            args: ["git", "add", ...(input.targetFiles || [])],
-            requiresApproval: true,
-            proofLabel: "Only explicitly selected files staged. git add dot is forbidden.",
-          };
+          return { ...base, args: ["git", "add", "--", ...(input.targetFiles || [])], requiresApproval: writeApprovalRequired, proofLabel: "Only explicitly locked files staged. git add dot is forbidden." };
         case "git_commit":
-          return {
-            ...base,
-            args: ["git", "commit", "-m", commitMessage],
-            requiresApproval: true,
-            proofLabel: "Approved changes committed with explicit message.",
-          };
+          return { ...base, args: ["git", "commit", "-m", commitMessage], requiresApproval: writeApprovalRequired, proofLabel: "Verified changes committed with explicit message." };
         case "git_push":
-          return {
-            ...base,
-            args: ["git", "push", "origin", `HEAD:${input.branchName}`],
-            requiresApproval: true,
-            proofLabel: "Approved branch pushed to origin using HEAD target ref.",
-          };
+          return { ...base, args: ["git", "push", "--porcelain", "origin", `HEAD:${input.branchName}`], requiresApproval: writeApprovalRequired, proofLabel: "Verified branch pushed with a normal non-force update." };
       }
     }),
   };
