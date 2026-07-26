@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { PulledFileDetail } from "./builderSystemContract";
 import { isFileConfirmation } from "./builderSourceDiscovery";
+import { emitBuilderAgentCommunication } from "./builderAgentInteraction";
 import { BUILDER_AGENT_FOCUS_EVENT, BUILDER_CONTEXT_EVENT, readBuilderSourceTruth, targetMatchesSourceTruth, writeBuilderSourceTruth, type BuilderSelectionRange } from "./builderLiveSourceTruth";
+import { createBuilderCognitivePlan, formatBuilderCognitivePlan } from "@/lib/streams-builder/builder-cognitive-orchestrator";
 
 type Props = { activeFile: PulledFileDetail; sessionId?: string; onProof?: (message: string) => void };
 type ChatCommandDetail = { message?: string; prompt?: string; sessionId?: string; projectId?: string; conversation?: string[]; screenshotText?: string; visibleText?: string; route?: string; references?: string[] };
 type ExecutionResponse = { ok?: boolean; error?: string; queuedJob?: { id?: string }; plan?: { blockedReasons?: string[] } };
 type EditorStateDetail = { repo?: string; branch?: string; filePath?: string; sha?: string; selection?: BuilderSelectionRange | null };
 
-const BUILD_INTENT = /\b(build|create|implement|change|edit|update|fix|repair|debug|troubleshoot|refactor|redesign|replace|remove|add|connect|wire|test|verify|deploy|preview|frontend|backend|api|database|component|page|route|code|push|commit|publish)\b/i;
+const BUILD_INTENT = /\b(build|create|implement|change|edit|update|fix|repair|debug|troubleshoot|refactor|redesign|replace|remove|add|connect|wire|test|verify|deploy|preview|frontend|backend|api|database|component|page|route|code|push|commit|publish|audit|research|analyze)\b/i;
 const DISCOVERY_INTENT = /\b(open|pull|load|show|find|locate|identify|search|display|preview|frontend|backend|file|component|screen|page|route|repo|repository|github)\b/i;
 
 export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof }: Props) {
@@ -45,6 +47,14 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
       const truth = readBuilderSourceTruth();
       const resolvedSessionId = String(detail.sessionId || sessionRef.current || "builder-live-session");
       const route = String(detail.route || file.route || truth?.route || "/");
+      const cognitivePlan = createBuilderCognitivePlan({
+        prompt,
+        lockedFile: truth?.mode === "github-file" ? truth.filePath : "",
+        route,
+        hasPreview: Boolean(route && route !== "/"),
+        hasRepositoryLock: truth?.mode === "github-file",
+      });
+      window.dispatchEvent(new CustomEvent(BUILDER_CONTEXT_EVENT, { detail: { kind: "cognitive-plan", prompt, cognitivePlan } }));
 
       if (isFileConfirmation(prompt)) {
         setState("Locking confirmed file");
@@ -55,6 +65,14 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
       const explicitDiscovery = DISCOVERY_INTENT.test(prompt) && (!BUILD_INTENT.test(prompt) || /\b(open|pull|show|find|locate|which file|this screen|screenshot)\b/i.test(prompt));
       if (explicitDiscovery || (!truth || truth.mode !== "github-file") && DISCOVERY_INTENT.test(prompt)) {
         setState("Locating source");
+        emitBuilderAgentCommunication({
+          phase: "github.discovery.started",
+          message: "Locating the most likely source",
+          detail: `Using conversation, screen evidence, route, references and repository structure. Risk ${cognitivePlan.risk}; uncertainty ${cognitivePlan.uncertainty.toFixed(2)}.`,
+          status: "working",
+          view: "frontend",
+          reason: "The candidate must be displayed for visual confirmation before any editing authority is granted.",
+        });
         window.dispatchEvent(new CustomEvent("streams-builder:github-discover", { detail: {
           prompt,
           conversation: detail.conversation || [],
@@ -65,8 +83,8 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
           currentRepo: truth?.repo || file.repo || "",
           currentBranch: truth?.branch || file.branch || "",
           scopeExpansion: Boolean(truth?.mode === "github-file"),
+          cognitivePlan,
         } }));
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.discovery.started", message: "Streams AI is using the conversation, visible screen evidence, route, recent files, and repository structure to locate the most likely source. It will open the candidate for verification without locking it." } }));
         return;
       }
 
@@ -74,7 +92,16 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
 
       if (!truth || truth.mode !== "github-file") {
         setState("Source confirmation required");
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.source-required", message: "I need a confirmed source file before editing. Ask me to find or open the relevant screen or file; I will locate and display it for confirmation." } }));
+        const question = cognitivePlan.clarificationQuestions[0] || "Which source candidate should I locate and open for confirmation?";
+        emitBuilderAgentCommunication({
+          phase: "builder.agent.source-required",
+          message: question,
+          detail: "I may discover candidates broadly, but I cannot read for implementation, edit, build from, commit or push repository source until you confirm and lock the exact file.",
+          status: "question",
+          requiresResponse: true,
+          view: "frontend",
+          reason: "Source authorization is missing.",
+        });
         return;
       }
 
@@ -83,13 +110,22 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
         const message = "Source lock mismatch. Autonomous GitHub access failed closed. Re-open and confirm the visible repository target before continuing.";
         setState("Blocked · source changed");
         onProof?.(`builder-agent-error: ${message}`);
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.source-lock-blocked", message } }));
+        emitBuilderAgentCommunication({ phase: "builder.agent.source-lock-blocked", message, status: "error", view: "logs", reason: "Repository capability no longer matches visible source truth." });
         return;
       }
 
       runningRef.current = true;
       const selectedRange = selectionRef.current || truth.selectedRange || null;
       setState(`Autonomous · ${truth.filePath}`);
+      emitBuilderAgentCommunication({
+        phase: "builder.plan.created",
+        message: `Planning ${cognitivePlan.taskKinds.join(", ")} work`,
+        detail: `Risk ${cognitivePlan.risk}; required evidence: ${cognitivePlan.requiredEvidence.join(", ")}.`,
+        status: cognitivePlan.risk === "critical" ? "warning" : "working",
+        view: "logs",
+        reason: "The agent is establishing evidence, scope and stop conditions before execution.",
+        filePath: truth.filePath,
+      });
       window.dispatchEvent(new CustomEvent(BUILDER_AGENT_FOCUS_EVENT, { detail: { repo: truth.repo, branch: truth.branch, filePath: truth.filePath, sourceSha: truth.sourceSha, selectedRange, phase: "inspect", message: prompt } }));
       window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: selectedRange ? { action: "goto-range", startLine: selectedRange.startLine, endLine: selectedRange.endLine } : { action: "focus" } }));
       onProof?.(`builder-agent: autonomous lock ${truth.repo}@${truth.branch}:${truth.filePath}#${truth.sourceSha.slice(0, 7)}`);
@@ -108,6 +144,8 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
             route,
             userPrompt: [
               "Act as the Streams principal autonomous Builder agent.",
+              "Treat this cognitive plan as an execution and evidence contract:",
+              formatBuilderCognitivePlan(cognitivePlan),
               "The confirmed source lock below is the only repository content you are authorized to read or change.",
               `Locked repository: ${truth.repo}`,
               `Locked branch: ${truth.branch}`,
@@ -115,19 +153,21 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
               `Expected source SHA: ${truth.sourceSha}`,
               `Lock token: ${truth.lockToken}`,
               selectedRange ? `Visible selected lines: ${selectedRange.startLine}-${selectedRange.endLine}` : "No line range is selected; inspect the locked file and choose the smallest causal range.",
-              "Use independent evidence from source, build output, browser telemetry, DOM state, and requested behavior. Do not collapse uncertainty into a success claim.",
-              "Never read an unlisted file. A filename in an import, error, stack trace, or search result is not authorization.",
-              "If another file appears necessary, stop before reading it and emit a source-scope request naming the exact reason and likely path. Wait for the user to grant discovery and confirm the displayed candidate.",
+              "Use independent evidence from source, build output, browser telemetry, DOM state, requested behavior and repository state. Preserve uncertainty instead of inventing success.",
+              "Never read an unlisted file. A filename in an import, error, stack trace, build log or search result is evidence, not authorization.",
+              "If another file appears necessary, stop before reading it and emit a source-scope request naming the exact reason and likely path. Wait for user-granted discovery and confirmation.",
               "Pull the exact branch into an isolated workspace. Never force push, rewrite history, switch branches, use git add dot, or stage an unlisted path.",
               "Before mutation, fail closed if repository, branch, path, lock token, or expected source SHA is stale or mismatched.",
-              "Make the smallest causal change, run build and browser proof, stage only the locked file, commit, and push with a normal fast-forward update.",
-              "If proof fails, repair and retest up to the bounded attempt limit. Do not push unverified code.",
+              "Decompose complicated requests into observable phases, use the smallest sufficient tools, and re-plan when evidence contradicts the current hypothesis.",
+              "Make the smallest causal change, run focused checks plus build and browser proof where applicable, stage only the locked file, commit, and push with a normal fast-forward update.",
+              "If proof fails, repair and retest up to the bounded attempt limit. Do not push unverified code and do not report completion without artifact-bound evidence.",
               `User request: ${prompt}`,
             ].join("\n"),
             requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff", "git_add_specific_file", "git_commit", "git_push"],
             targetFiles: [truth.filePath],
             commitMessage: `Streams AI: ${prompt.slice(0, 120)}`,
             sourceTruth: { ...truth, sessionId: resolvedSessionId, projectId: detail.projectId || "streams-live-builder" },
+            cognitivePlan,
             selectedRange,
             expectedSourceSha: truth.sourceSha,
             lockToken: truth.lockToken,
@@ -147,13 +187,13 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
         const jobId = String(payload.queuedJob?.id || "");
         if (!jobId) throw new Error("Builder worker did not return a job id.");
         setState(`Running · ${truth.filePath}`);
-        window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: { jobId, repo: truth.repo, branch: truth.branch, path: truth.filePath, sha: truth.sourceSha, lockToken: truth.lockToken, route, prompt, selectedRange, autonomousGitHub: true } }));
+        window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: { jobId, repo: truth.repo, branch: truth.branch, path: truth.filePath, sha: truth.sourceSha, lockToken: truth.lockToken, route, prompt, selectedRange, autonomousGitHub: true, cognitivePlan } }));
         window.dispatchEvent(new CustomEvent(BUILDER_AGENT_FOCUS_EVENT, { detail: { repo: truth.repo, branch: truth.branch, filePath: truth.filePath, sourceSha: truth.sourceSha, selectedRange, phase: "working", jobId } }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Builder agent command failed.";
         setState(`Blocked · ${message}`);
         onProof?.(`builder-agent-error: ${message}`);
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.failed", message } }));
+        emitBuilderAgentCommunication({ phase: "builder.agent.failed", message, status: "error", view: "logs", reason: "Execution did not satisfy the cognitive plan and source-truth contract." });
       } finally {
         runningRef.current = false;
       }
