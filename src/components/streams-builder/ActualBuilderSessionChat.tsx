@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { BuilderChatConnection } from "./builderSystemContract";
+import { BUILDER_AGENT_COMMUNICATION_EVENT, type BuilderAgentCommunication } from "./builderAgentInteraction";
 
 type Message = { id?: string; role?: string; content?: string; status?: string };
 type Props = { connection: BuilderChatConnection; onConnectionChange: (next: BuilderChatConnection) => void };
@@ -24,6 +25,7 @@ function parseSseBlock(block: string) {
 
 export default function ActualBuilderSessionChat({ connection, onConnectionChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [agentFeed, setAgentFeed] = useState<BuilderAgentCommunication[]>([]);
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState("Loading originating StreamsAI conversation…");
   const [running, setRunning] = useState(false);
@@ -42,7 +44,17 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
   }
 
   useEffect(() => { void hydrate(); }, [sessionId]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [messages.length, agentFeed.length]);
+  useEffect(() => {
+    function onAgentCommunication(event: Event) {
+      const detail = (event as CustomEvent<BuilderAgentCommunication>).detail;
+      if (!detail?.message) return;
+      setAgentFeed((items) => [...items.slice(-39), detail]);
+      setStatus(detail.requiresResponse ? "Builder agent is waiting for your response." : detail.message);
+    }
+    window.addEventListener(BUILDER_AGENT_COMMUNICATION_EVENT, onAgentCommunication);
+    return () => window.removeEventListener(BUILDER_AGENT_COMMUNICATION_EVENT, onAgentCommunication);
+  }, []);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -54,6 +66,7 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     const userId = `local-user-${Date.now()}`;
     const assistantId = `local-assistant-${Date.now()}`;
     setMessages((items) => [...items, { id: userId, role: "user", content: clean, status: "complete" }, { id: assistantId, role: "assistant", content: "", status: "streaming" }]);
+    window.dispatchEvent(new CustomEvent("streams:authoritative-chat-command", { detail: { message: clean, sessionId } }));
     try {
       const response = await fetch("/api/streams-ai/messages", {
         method: "POST",
@@ -100,6 +113,7 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
       <header><b>StreamsAI Session</b><span>{sessionId || "not connected"}</span></header>
       <div className="messageList">
         {messages.map((message, index) => <article key={message.id || `${message.role}-${index}`} className={message.role === "user" ? "user" : message.status === "failed" ? "assistant failed" : "assistant"}><b>{message.role === "user" ? "You" : "StreamsAI"}</b><p>{message.content || (message.status === "streaming" ? "Thinking…" : "")}</p></article>)}
+        {agentFeed.map((item) => <article key={item.id} className={`agentActivity ${item.status}`}><div className="activityHead"><b>Builder agent</b><span>{item.phase}</span></div><p>{item.message}</p>{item.detail ? <pre>{item.detail}</pre> : null}{item.reason ? <small>{item.reason}</small> : null}{item.requiresResponse ? <em>Reply in chat to continue.</em> : null}</article>)}
         <div ref={bottomRef} />
       </div>
       <form onSubmit={send}><textarea value={prompt} onChange={(event) => setPrompt(event.currentTarget.value)} placeholder="Continue the same Builder conversation" disabled={running || !sessionId} /><button type="submit" disabled={running || !prompt.trim()}>↑</button></form>
@@ -107,7 +121,8 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
       <style jsx>{`
         .actualBuilderChat{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:#030817;color:#e8eefc;border-right:1px solid rgba(56,189,248,.18)}
         header{height:48px;display:flex;flex-direction:column;justify-content:center;padding:0 14px;border-bottom:1px solid rgba(148,163,184,.16);background:#071124} header b{font-size:13px} header span{font:10px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;color:#7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .messageList{min-height:0;overflow:auto;padding:14px 12px 24px;display:flex;flex-direction:column;gap:12px}.messageList article{max-width:92%;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:10px 12px;background:#0b152a}.messageList article.user{align-self:flex-end;background:#2b1450;border-color:rgba(168,85,247,.42)}.messageList article.assistant{align-self:flex-start}.messageList article.failed{border-color:#ef4444}.messageList b{font-size:10px;color:#7dd3fc}.messageList p{margin:4px 0 0;white-space:pre-wrap;font-size:12px;line-height:1.45;color:#edf4ff}
+        .messageList{min-height:0;overflow:auto;padding:14px 12px 24px;display:flex;flex-direction:column;gap:12px}.messageList article{max-width:92%;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:10px 12px;background:#0b152a}.messageList article.user{align-self:flex-end;background:#2b1450;border-color:rgba(168,85,247,.42)}.messageList article.assistant,.messageList article.agentActivity{align-self:flex-start}.messageList article.failed,.messageList article.agentActivity.error{border-color:#ef4444}.messageList b{font-size:10px;color:#7dd3fc}.messageList p{margin:4px 0 0;white-space:pre-wrap;font-size:12px;line-height:1.45;color:#edf4ff}
+        .agentActivity{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#07111f!important;border-left:3px solid #38bdf8!important}.agentActivity.success{border-left-color:#22c55e!important}.agentActivity.warning,.agentActivity.question{border-left-color:#f59e0b!important}.activityHead{display:flex;justify-content:space-between;gap:10px}.activityHead span{font-size:9px;color:#94a3b8}.agentActivity pre{margin:8px 0 0;white-space:pre-wrap;font:11px/1.5 inherit;color:#cbd5e1}.agentActivity small,.agentActivity em{display:block;margin-top:8px;color:#94a3b8;font-size:10px;line-height:1.4}.agentActivity em{color:#fcd34d;font-style:normal;font-weight:800}
         form{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;margin:0 10px 8px;padding:8px;border:1px solid rgba(168,85,247,.44);border-radius:18px;background:#241044}textarea{min-height:44px;max-height:130px;resize:vertical;border:0;outline:0;background:transparent;color:#fff;font:12px/1.4 Inter,system-ui,sans-serif;padding:8px}button{width:44px;height:44px;border:0;border-radius:14px;background:linear-gradient(135deg,#9333ea,#22d3ee);color:white;font-size:22px;font-weight:900}button:disabled{opacity:.45}
         footer{padding:0 14px 10px;color:#94a3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       `}</style>
