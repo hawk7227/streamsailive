@@ -8,6 +8,14 @@ type DomEntry = { tag: string; id?: string; classes?: string; text?: string; sel
 type Message = { source?: string; type?: string; level?: string; args?: unknown[]; method?: string; url?: string; status?: number; duration?: number; element?: DomEntry; message?: string };
 
 type Props = { frameRef: RefObject<HTMLIFrameElement | null>; frameKey: number; active: boolean };
+type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug";
+type PreviewWindow = Window & {
+  console: Pick<Console, ConsoleLevel>;
+  fetch: typeof fetch;
+  performance: Performance;
+  __streamsDevToolsInstalled?: boolean;
+  __streamsInspect?: boolean;
+};
 
 function stringify(value: unknown) {
   if (typeof value === "string") return value;
@@ -44,28 +52,29 @@ export default function BrowserDevTools({ frameRef, frameKey, active }: Props) {
 
     function install() {
       try {
-        const win = targetFrame.contentWindow;
+        const contentWindow = targetFrame.contentWindow;
         const doc = targetFrame.contentDocument;
-        if (!win || !doc) throw new Error("Preview is cross-origin");
-        if ((win as Window & { __streamsDevToolsInstalled?: boolean }).__streamsDevToolsInstalled) return;
-        (win as Window & { __streamsDevToolsInstalled?: boolean }).__streamsDevToolsInstalled = true;
+        if (!contentWindow || !doc) throw new Error("Preview is cross-origin");
+        const win = contentWindow as unknown as PreviewWindow;
+        if (win.__streamsDevToolsInstalled) return;
+        win.__streamsDevToolsInstalled = true;
         const send = (payload: Message) => window.postMessage({ source: "streams-browser-devtools", ...payload }, "*");
         (["log", "info", "warn", "error", "debug"] as const).forEach((level) => {
           const original = win.console[level].bind(win.console);
           win.console[level] = (...args: unknown[]) => { send({ type: "console", level, args }); original(...args); };
         });
-        win.addEventListener("error", (event) => send({ type: "error", message: event.message }));
-        win.addEventListener("unhandledrejection", (event) => send({ type: "error", message: stringify(event.reason) }));
+        win.addEventListener("error", (event: ErrorEvent) => send({ type: "error", message: event.message }));
+        win.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => send({ type: "error", message: stringify(event.reason) }));
         const originalFetch = win.fetch.bind(win);
         win.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-          const started = performance.now();
+          const started = win.performance.now();
           const method = init?.method || "GET";
           const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-          try { const response = await originalFetch(input, init); send({ type: "network", method, url, status: response.status, duration: Math.round(performance.now() - started) }); return response; }
-          catch (error) { send({ type: "network", method, url, status: 0, duration: Math.round(performance.now() - started) }); throw error; }
+          try { const response = await originalFetch(input, init); send({ type: "network", method, url, status: response.status, duration: Math.round(win.performance.now() - started) }); return response; }
+          catch (error) { send({ type: "network", method, url, status: 0, duration: Math.round(win.performance.now() - started) }); throw error; }
         };
         doc.addEventListener("click", (event) => {
-          if (!(win as Window & { __streamsInspect?: boolean }).__streamsInspect) return;
+          if (!win.__streamsInspect) return;
           event.preventDefault(); event.stopPropagation();
           const node = event.target as HTMLElement;
           const selector = node.id ? `#${node.id}` : `${node.tagName.toLowerCase()}${Array.from(node.classList).slice(0, 3).map((name) => `.${name}`).join("")}`;
@@ -82,7 +91,10 @@ export default function BrowserDevTools({ frameRef, frameKey, active }: Props) {
   }, [frameRef, frameKey]);
 
   useEffect(() => {
-    try { const win = frameRef.current?.contentWindow as (Window & { __streamsInspect?: boolean }) | null; if (win) win.__streamsInspect = inspect; } catch {}
+    try {
+      const contentWindow = frameRef.current?.contentWindow;
+      if (contentWindow) (contentWindow as unknown as PreviewWindow).__streamsInspect = inspect;
+    } catch {}
   }, [inspect, frameRef, frameKey]);
 
   const counts = useMemo(() => ({ errors: consoleEntries.filter((entry) => entry.level === "error").length, requests: networkEntries.length }), [consoleEntries, networkEntries]);
