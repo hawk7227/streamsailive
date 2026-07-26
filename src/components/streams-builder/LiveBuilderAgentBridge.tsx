@@ -9,8 +9,7 @@ type ChatCommandDetail = { message?: string; prompt?: string; sessionId?: string
 type ExecutionResponse = { ok?: boolean; error?: string; queuedJob?: { id?: string }; plan?: { blockedReasons?: string[] } };
 type EditorStateDetail = { repo?: string; branch?: string; filePath?: string; sha?: string; selection?: BuilderSelectionRange | null };
 
-const BUILD_INTENT = /\b(build|create|implement|change|edit|update|fix|repair|debug|troubleshoot|refactor|redesign|replace|remove|add|connect|wire|test|verify|deploy|preview|frontend|backend|api|database|component|page|route|code)\b/i;
-const PUSH_INTENT = /\b(push|commit and push|save to github|send to github|publish to github)\b/i;
+const BUILD_INTENT = /\b(build|create|implement|change|edit|update|fix|repair|debug|troubleshoot|refactor|redesign|replace|remove|add|connect|wire|test|verify|deploy|preview|frontend|backend|api|database|component|page|route|code|push|commit|publish)\b/i;
 const PULL_INTENT = /\b(pull|load|open|select)\b.*\b(github|repo|repository|branch|file)\b|\b(github|repo|repository)\b.*\b(pull|load|open|select)\b/i;
 
 export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof }: Props) {
@@ -46,45 +45,26 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
       const resolvedSessionId = String(detail.sessionId || sessionRef.current || "builder-live-session");
       const route = file.route || truth?.route || "/";
 
-      if (PUSH_INTENT.test(prompt)) {
-        if (!truth || truth.mode !== "github-file") {
-          setState("Push blocked · no source lock");
-          window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.blocked", message: "Push blocked: select, pull, and visibly lock a GitHub file first." } }));
-          window.dispatchEvent(new CustomEvent("streams-builder:github-open-controls"));
-          return;
-        }
-        const target = { repo: file.repo, branch: file.branch, filePath: file.path, sourceSha: file.sha, lockToken: truth.lockToken };
-        if (!targetMatchesSourceTruth(truth, target)) {
-          setState("Push blocked · source changed");
-          window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.blocked", message: "Push blocked: the visible file no longer matches its source lock. Re-pull it first." } }));
-          return;
-        }
-        setState("Awaiting push approval");
-        window.dispatchEvent(new CustomEvent("streams-builder:push-approval-request", { detail: { message: `Streams AI: ${prompt}` } }));
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.approval-required", message: `Review the visible diff for ${truth.filePath}, then choose Approve & Push.` } }));
-        return;
-      }
-
-      if (PULL_INTENT.test(prompt)) {
-        setState("Select source to pull");
+      if (PULL_INTENT.test(prompt) && (!truth || truth.mode !== "github-file")) {
+        setState("Select source to lock");
         window.dispatchEvent(new CustomEvent("streams-builder:github-open-controls"));
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.pull.selection-required", message: "GitHub controls opened. Select the visible repository, branch, folder, and file, then choose Pull + Lock." } }));
+        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.pull.selection-required", message: "Select the repository, branch, folder, and file once. After it is locked, Streams AI may pull, repair, commit, and push that exact target autonomously." } }));
         return;
       }
 
-      if (!BUILD_INTENT.test(prompt)) return;
+      if (!BUILD_INTENT.test(prompt) && !PULL_INTENT.test(prompt)) return;
 
       if (!truth || truth.mode !== "github-file") {
         setState("Brainstorming");
         onProof?.(`builder-agent: brainstorming against the shared preview — ${prompt}`);
         window.dispatchEvent(new CustomEvent(BUILDER_CONTEXT_EVENT, { detail: { kind: "brainstorm-command", prompt, sessionId: resolvedSessionId, projectId: detail.projectId || "", route } }));
-        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.brainstorm", message: "Working in preview-only brainstorm mode. GitHub writes are locked because no file is selected." } }));
+        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.brainstorm", message: "Working in preview-only brainstorm mode. GitHub writes remain disabled because no repository target is locked." } }));
         return;
       }
 
       const target = { repo: file.repo, branch: file.branch, filePath: file.path, sourceSha: file.sha, lockToken: truth.lockToken };
       if (!targetMatchesSourceTruth(truth, target)) {
-        const message = "Source lock mismatch. Re-pull and visibly confirm the repository, branch, file, and SHA before the Builder can edit.";
+        const message = "Source lock mismatch. Autonomous GitHub access failed closed. Re-pull the visible repository target before continuing.";
         setState("Blocked · source changed");
         onProof?.(`builder-agent-error: ${message}`);
         window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "builder.agent.source-lock-blocked", message } }));
@@ -93,10 +73,10 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
 
       runningRef.current = true;
       const selectedRange = selectionRef.current || truth.selectedRange || null;
-      setState(`Inspecting ${truth.filePath}`);
+      setState(`Autonomous · ${truth.filePath}`);
       window.dispatchEvent(new CustomEvent(BUILDER_AGENT_FOCUS_EVENT, { detail: { repo: truth.repo, branch: truth.branch, filePath: truth.filePath, sourceSha: truth.sourceSha, selectedRange, phase: "inspect", message: prompt } }));
       window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: selectedRange ? { action: "goto-range", startLine: selectedRange.startLine, endLine: selectedRange.endLine } : { action: "focus" } }));
-      onProof?.(`builder-agent: locked to ${truth.repo}@${truth.branch}:${truth.filePath}#${truth.sourceSha.slice(0, 7)}`);
+      onProof?.(`builder-agent: autonomous lock ${truth.repo}@${truth.branch}:${truth.filePath}#${truth.sourceSha.slice(0, 7)}`);
 
       try {
         const response = await fetch("/api/streams-builder/repository-execution", {
@@ -111,38 +91,44 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
             baseBranch: truth.branch,
             route,
             userPrompt: [
-              "Act as the Streams principal Builder agent.",
-              "The visible source lock below is authoritative. Never read, edit, patch, build, commit, or push a different repository target.",
+              "Act as the Streams principal autonomous Builder agent.",
+              "The visible source lock below is the only authorized GitHub target.",
               `Locked repository: ${truth.repo}`,
               `Locked branch: ${truth.branch}`,
               `Locked file: ${truth.filePath}`,
-              `Locked source SHA: ${truth.sourceSha}`,
+              `Expected source SHA: ${truth.sourceSha}`,
               `Lock token: ${truth.lockToken}`,
-              selectedRange ? `Visible selected lines: ${selectedRange.startLine}-${selectedRange.endLine}` : "No line range is selected; inspect only the locked file before choosing a causal range.",
-              "Before every mutation, verify that the lock still matches. Fail closed on mismatch or stale SHA.",
-              "Use repository source truth, make the smallest causal change, run proof commands, and keep commit/push approval-gated.",
+              selectedRange ? `Visible selected lines: ${selectedRange.startLine}-${selectedRange.endLine}` : "No line range is selected; inspect the locked file and choose the smallest causal range.",
+              "Pull the exact branch into a fresh isolated workspace. Never force push, never rewrite history, never use git add dot, and never touch an unlisted file.",
+              "Before mutation, fail closed if repository, branch, path, lock token, or expected source SHA is stale or mismatched.",
+              "Make the smallest causal change, run build and browser proof, stage only the locked file, commit, and push with a normal fast-forward update.",
+              "If any proof fails, repair and retest up to the bounded attempt limit. Do not push unverified code.",
               `User request: ${prompt}`,
             ].join("\n"),
-            requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff"],
+            requestedCommands: ["clone_repo", "read_full_file", "npm_run_build", "git_status", "git_diff", "git_add_specific_file", "git_commit", "git_push"],
             targetFiles: [truth.filePath],
+            commitMessage: `Streams AI: ${prompt.slice(0, 120)}`,
             sourceTruth: { ...truth, sessionId: resolvedSessionId, projectId: detail.projectId || "streams-live-builder" },
             selectedRange,
+            expectedSourceSha: truth.sourceSha,
+            lockToken: truth.lockToken,
+            autonomousGitHub: true,
             enqueue: true,
             autoRunWorker: true,
             autonomousRepair: true,
             maxRepairAttempts: 5,
             maxFilesTouched: 1,
             runBuildAfterPatch: true,
-            requireApprovalBeforePush: true,
-            approvalGranted: false,
+            requireApprovalBeforePush: false,
+            approvalGranted: true,
           }),
         });
         const payload = await response.json().catch(() => null) as ExecutionResponse | null;
         if (!response.ok || !payload?.ok) throw new Error(payload?.error || payload?.plan?.blockedReasons?.join("; ") || `Builder execution request failed: ${response.status}`);
         const jobId = String(payload.queuedJob?.id || "");
         if (!jobId) throw new Error("Builder worker did not return a job id.");
-        setState(`Active · ${truth.filePath}`);
-        window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: { jobId, repo: truth.repo, branch: truth.branch, path: truth.filePath, sha: truth.sourceSha, lockToken: truth.lockToken, route, prompt, selectedRange } }));
+        setState(`Running · ${truth.filePath}`);
+        window.dispatchEvent(new CustomEvent("streams-builder:runtime-job", { detail: { jobId, repo: truth.repo, branch: truth.branch, path: truth.filePath, sha: truth.sourceSha, lockToken: truth.lockToken, route, prompt, selectedRange, autonomousGitHub: true } }));
         window.dispatchEvent(new CustomEvent(BUILDER_AGENT_FOCUS_EVENT, { detail: { repo: truth.repo, branch: truth.branch, filePath: truth.filePath, sourceSha: truth.sourceSha, selectedRange, phase: "working", jobId } }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Builder agent command failed.";
