@@ -26,9 +26,7 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
       const detail = (event as CustomEvent<EditorStateDetail>).detail || {};
       selectionRef.current = detail.selection || null;
       const truth = readBuilderSourceTruth();
-      if (truth?.mode === "github-file" && detail.filePath === truth.filePath && detail.sha === truth.sourceSha) {
-        writeBuilderSourceTruth({ ...truth, selectedRange: detail.selection || null });
-      }
+      if (truth?.mode === "github-file" && detail.filePath === truth.filePath && detail.sha === truth.sourceSha) writeBuilderSourceTruth({ ...truth, selectedRange: detail.selection || null });
       window.dispatchEvent(new CustomEvent(BUILDER_CONTEXT_EVENT, { detail: { kind: "editor", ...detail } }));
     }
     window.addEventListener("streams-builder:code-editor-state", onEditorState);
@@ -130,5 +128,5 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
     return () => window.removeEventListener("streams:authoritative-chat-command", onCommand);
   }, [onProof]);
 
-  return <div aria-live="polite" title="Live Builder source state" style={{ fontSize: 9, color: state.startsWith("Blocked") ? "#fca5a5" : "#6ee7b7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{state}</div>;
+  return <span className="builderAgentA11yState" aria-live="polite">{state}<style jsx>{`.builderAgentA11yState{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}`}</style></span>;
 }
