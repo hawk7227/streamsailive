@@ -10,6 +10,8 @@ type ExecutionResponse = { ok?: boolean; error?: string; queuedJob?: { id?: stri
 type EditorStateDetail = { repo?: string; branch?: string; filePath?: string; sha?: string; selection?: BuilderSelectionRange | null };
 
 const BUILD_INTENT = /\b(build|create|implement|change|edit|update|fix|repair|debug|troubleshoot|refactor|redesign|replace|remove|add|connect|wire|test|verify|deploy|preview|frontend|backend|api|database|component|page|route|code)\b/i;
+const PUSH_INTENT = /\b(push|commit and push|save to github|send to github|publish to github)\b/i;
+const PULL_INTENT = /\b(pull|load|open|select)\b.*\b(github|repo|repository|branch|file)\b|\b(github|repo|repository)\b.*\b(pull|load|open|select)\b/i;
 
 export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof }: Props) {
   const [state, setState] = useState("Ready");
@@ -37,12 +39,40 @@ export default function LiveBuilderAgentBridge({ activeFile, sessionId, onProof 
     async function onCommand(event: Event) {
       const detail = (event as CustomEvent<ChatCommandDetail>).detail || {};
       const prompt = String(detail.message || detail.prompt || "").trim();
-      if (!prompt || !BUILD_INTENT.test(prompt) || runningRef.current) return;
+      if (!prompt || runningRef.current) return;
 
       const file = activeFileRef.current;
       const truth = readBuilderSourceTruth();
       const resolvedSessionId = String(detail.sessionId || sessionRef.current || "builder-live-session");
       const route = file.route || truth?.route || "/";
+
+      if (PUSH_INTENT.test(prompt)) {
+        if (!truth || truth.mode !== "github-file") {
+          setState("Push blocked · no source lock");
+          window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.blocked", message: "Push blocked: select, pull, and visibly lock a GitHub file first." } }));
+          window.dispatchEvent(new CustomEvent("streams-builder:github-open-controls"));
+          return;
+        }
+        const target = { repo: file.repo, branch: file.branch, filePath: file.path, sourceSha: file.sha, lockToken: truth.lockToken };
+        if (!targetMatchesSourceTruth(truth, target)) {
+          setState("Push blocked · source changed");
+          window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.blocked", message: "Push blocked: the visible file no longer matches its source lock. Re-pull it first." } }));
+          return;
+        }
+        setState("Awaiting push approval");
+        window.dispatchEvent(new CustomEvent("streams-builder:push-approval-request", { detail: { message: `Streams AI: ${prompt}` } }));
+        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.push.approval-required", message: `Review the visible diff for ${truth.filePath}, then choose Approve & Push.` } }));
+        return;
+      }
+
+      if (PULL_INTENT.test(prompt)) {
+        setState("Select source to pull");
+        window.dispatchEvent(new CustomEvent("streams-builder:github-open-controls"));
+        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { phase: "github.pull.selection-required", message: "GitHub controls opened. Select the visible repository, branch, folder, and file, then choose Pull + Lock." } }));
+        return;
+      }
+
+      if (!BUILD_INTENT.test(prompt)) return;
 
       if (!truth || truth.mode !== "github-file") {
         setState("Brainstorming");
