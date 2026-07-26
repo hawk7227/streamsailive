@@ -6,6 +6,7 @@ import LiveBuilderAgentBridge from "./LiveBuilderAgentBridge";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import BuilderFocusCoordinator from "./BuilderFocusCoordinator";
+import BuilderAutonomousTroubleshootingLoop from "./BuilderAutonomousTroubleshootingLoop";
 import type { PulledFileDetail } from "./builderSystemContract";
 
 const EMPTY_FILE: PulledFileDetail = { repo: "", branch: "", path: "", folder: "", sha: "", content: "", route: "/" };
@@ -32,6 +33,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       const mounted: PulledFileDetail = { repo: "", branch: "", path: `generated/previews/${previewId}.html`, folder: "generated/previews", sha: String(preview?.operationId || previewId), content: source, route: previewUrl };
       setActiveFile(mounted);
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
+      window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "preview-mounted", previewId, previewUrl, sourceLength: source.length } }));
       setProof((items) => [...items.slice(-30), `Preview source mounted: ${previewUrl}`]);
     }
     void hydrate();
@@ -52,6 +54,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       const updated = { ...current, content: next };
       try { window.localStorage.setItem("streams-builder:active-file", JSON.stringify(updated)); } catch {}
       window.dispatchEvent(new CustomEvent("streams-builder:shared-source-change", { detail: updated }));
+      window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "source", file: updated, content: next } }));
       return updated;
     });
     setProof((items) => [...items.slice(-30), "Shared source updated from the code, worker, or visual editor."]);
@@ -63,6 +66,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
   return (
     <section className="builderResearchCanvas" aria-label="Streams researched Builder canvas">
       <BuilderFocusCoordinator />
+      <BuilderAutonomousTroubleshootingLoop activeFile={activeFile} sessionId={preview?.sessionId} onProof={addProof} />
       <main className="builderResearchWorkarea">
         <section className="builderResearchSource" aria-label="Code and frontend source canvas">
           <LiveFrontendWorkstation activeFile={activeFile} toolbar={toolbar} onContentChange={updateContent} />
