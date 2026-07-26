@@ -18,7 +18,8 @@
     "streams:pr-ready": "node scripts/check-pr-ready.mjs",
     "streams:scope-guard": "node scripts/scope-guard.mjs",
     "typecheck": "tsc --noEmit",
-    "test:architecture": "vitest run tests/architecture/product-intent-router.test.ts tests/architecture/execution-truth-validator.test.ts tests/architecture/runtime-foundation.test.ts",
+    "test:builder-e2e-evaluation": "vitest run tests/architecture/builder-end-to-end-evaluation.test.ts",
+    "test:architecture": "vitest run tests/architecture/product-intent-router.test.ts tests/architecture/execution-truth-validator.test.ts tests/architecture/runtime-foundation.test.ts tests/architecture/builder-cognitive-orchestrator.test.ts tests/architecture/builder-end-to-end-evaluation.test.ts",
     "validate:architecture": "node scripts/validate-architecture-repair.mjs",
     "verify:architecture": "pnpm run validate:architecture && pnpm run typecheck && pnpm run test:architecture"
   },
@@ -78,6 +79,8 @@
     "husky": "^9.1.7",
     "jsdom": "^29.0.0",
     "msw": "^2.12.13",
+    "postcss": "^8",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.0"
