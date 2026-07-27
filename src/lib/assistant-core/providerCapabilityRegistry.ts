@@ -18,7 +18,7 @@ export type ProviderCapability = {
   proofRequired: string[];
 };
 
-export const PROVIDER_CAPABILITY_REGISTRY_VERSION = "2026-06-13";
+export const PROVIDER_CAPABILITY_REGISTRY_VERSION = "2026-07-27";
 
 export const PROVIDER_CAPABILITY_REGISTRY: ProviderCapability[] = [
   {
@@ -114,10 +114,10 @@ export const PROVIDER_CAPABILITY_REGISTRY: ProviderCapability[] = [
     provider: "Luma / Pika / Sora-style providers",
     category: "video generation",
     capabilities: ["text-to-video", "image-to-video", "scene generation", "style/motion control"],
-    streamsStatus: "adapter_connected",
-    currentStreamsRoute: "configurable external video adapter or internal movie engine via Runway/Kling/Veo/fal",
-    envKeys: ["LUMA_API_KEY/PIKA_API_KEY/SORA_API_KEY when using those adapters"],
-    adapterGap: ["provider-perfect request schema per vendor", "provider-specific advanced controls"],
+    streamsStatus: "adapter_needed",
+    currentStreamsRoute: "use the internal movie engine through currently connected Runway/Kling/Veo/fal routes unless an exact vendor adapter is added",
+    envKeys: ["LUMA_API_KEY/PIKA_API_KEY/SORA_API_KEY only after the matching adapter exists"],
+    adapterGap: ["implement and verify each exact vendor request schema", "provider-specific advanced controls", "polling and artifact finalization"],
     proofRequired: ["generation route", "job/status", "asset URL", "provider/internal engine proof"],
   },
   {
@@ -125,10 +125,10 @@ export const PROVIDER_CAPABILITY_REGISTRY: ProviderCapability[] = [
     provider: "Midjourney / Adobe Firefly / Stability",
     category: "image generation/editing",
     capabilities: ["image generation", "brand/design assets", "style control", "creative image workflows"],
-    streamsStatus: "adapter_connected",
-    currentStreamsRoute: "internal creation engine using OpenAI Images/fal plus future provider-specific adapters",
-    envKeys: ["OPENAI_API_KEY", "FAL_API_KEY", "future provider keys if exact vendor output is required"],
-    adapterGap: ["exact vendor API parity", "rights/commercial-use metadata per vendor"],
+    streamsStatus: "adapter_needed",
+    currentStreamsRoute: "use the internal creation engine through OpenAI Images/fal unless an exact vendor adapter is added",
+    envKeys: ["OPENAI_API_KEY", "FAL_API_KEY", "exact vendor key only after the matching adapter exists"],
+    adapterGap: ["implement exact vendor API integration", "rights/commercial-use metadata per vendor", "provider-specific proof"],
     proofRequired: ["image URL", "provider/model", "artifact id", "quality/proof metadata"],
   },
   {
@@ -136,15 +136,15 @@ export const PROVIDER_CAPABILITY_REGISTRY: ProviderCapability[] = [
     provider: "HeyGen / Synthesia / Descript",
     category: "avatar/video/audio editing",
     capabilities: ["avatar video", "dubbing", "script-to-video", "screen/audio editing", "caption workflows"],
-    streamsStatus: "adapter_connected",
-    currentStreamsRoute: "configurable external video adapter plus Streams voice/video/editor primitives",
-    envKeys: ["HEYGEN_API_KEY/SYNTHESIA_API_KEY/DESCRIPT_API_KEY when using those adapters"],
-    adapterGap: ["avatar/dubbing exact parity", "timeline import/export", "caption/translation sync"],
+    streamsStatus: "adapter_needed",
+    currentStreamsRoute: "use Streams voice/video/editor primitives where applicable; exact vendor execution requires a dedicated adapter",
+    envKeys: ["HEYGEN_API_KEY/SYNTHESIA_API_KEY/DESCRIPT_API_KEY only after the matching adapter exists"],
+    adapterGap: ["implement avatar/dubbing adapters", "timeline import/export", "caption/translation sync", "provider polling and proof"],
     proofRequired: ["video/audio URL", "script/caption metadata", "provider/internal engine status"],
   },
   {
     id: "codex-cursor-devin-class",
-    provider: "Codex / Claude Code / Cursor / Devin / Replit Agent / Copilot Agent",
+    provider: "Codex / Claude Code / Gemini CLI / Cursor / Devin / Replit Agent / Copilot Agent",
     category: "coding agents and repo automation",
     capabilities: ["repo understanding", "file edits", "patches", "commands", "tests", "repair loop", "PR/deploy proof", "approval gates"],
     streamsStatus: "adapter_connected",
