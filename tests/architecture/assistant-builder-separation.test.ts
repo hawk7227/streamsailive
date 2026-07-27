@@ -53,6 +53,29 @@ describe("assistant and builder separation", () => {
     expect(route).toContain("return builderResponse(request, authoritativeBody, userContent)");
     expect(route).toContain("executeWebsiteBuild");
   });
+
+  it("attaches durable remote execution to Streams Builder as an upsell-ready capability", () => {
+    const durable = source("src/lib/streams-builder/durable-worker-capability.ts");
+    const manifest = source("src/lib/streams-ai/runtime/architecture/capability-registry.ts");
+
+    expect(durable).toContain('STREAMS_DURABLE_WORKER_FEATURE_KEY = "streams_builder_durable_worker"');
+    expect(durable).toContain("upsellEligible: true");
+    expect(durable).toContain('defaultEntitlement: "internal"');
+    expect(durable).toContain('"worker_minutes"');
+    expect(durable).toContain('"workspace_storage_gb_hours"');
+    expect(durable).toContain('"STREAMS_BUILDER_WORKER_URL"');
+    expect(durable).toContain('"STREAMS_BUILDER_WORKER_TOKEN"');
+    expect(durable).toContain("persistent project workspaces");
+    expect(durable).toContain("bounded repair loops with execution logs and proof");
+
+    expect(manifest).toContain("durableBuilderWorker");
+    expect(manifest).toContain("streamsBuilderDurableExecution");
+    expect(manifest).toContain("durableWorker.featureKey");
+    expect(manifest).toContain("durableWorker.monetization.upsellEligible");
+    expect(manifest).toContain('"browser.verify"');
+    expect(manifest).toContain('"deployment.verify"');
+    expect(manifest).toContain('"commission.run"');
+  });
 });
 
 describe("Streams company capability integrity", () => {
