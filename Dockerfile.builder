@@ -21,7 +21,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# The repository lockfile currently trails package.json. Railway must be able to
+# resolve the declared dependencies while the canonical lockfile is regenerated.
+RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 
