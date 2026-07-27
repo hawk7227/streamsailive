@@ -1,0 +1,15 @@
+FROM node:20-bookworm-slim
+
+ENV NODE_ENV=production \
+    STREAMS_PROVIDER_GATEWAY_PORT=8090
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY scripts/streams-provider-gateway.mjs ./scripts/streams-provider-gateway.mjs
+
+USER node
+EXPOSE 8090
+CMD ["node", "scripts/streams-provider-gateway.mjs"]
