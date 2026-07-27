@@ -13,7 +13,9 @@ export type CapabilityGroup =
 export type CapabilityId =
   | "chat-core"
   | "chat-uploads"
+  | "workspace-writes"
   | "builder-repair-loop"
+  | "builder-credentials"
   | "builder-github"
   | "builder-vercel"
   | "builder-proof"
@@ -53,11 +55,13 @@ export type CapabilityReadiness = {
   satisfied: string[];
   missing: string[];
   optionalMissing: string[];
+  warnings?: string[];
 };
 
 export type EnvReadinessReport = {
   ok: boolean;
   generatedAt: string;
+  runtime: "vercel" | "node";
   groups: Record<CapabilityGroup, { ok: boolean; items: CapabilityReadiness[] }>;
   capabilities: CapabilityReadiness[];
 };
@@ -86,7 +90,7 @@ const CAPABILITIES: CapabilityDefinition[] = [
   },
   {
     id: "chat-uploads",
-    label: "Chat Uploads",
+    label: "Chat Uploads and Artifacts",
     group: "chat",
     required: [
       { label: "Supabase URL", anyOf: ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"] },
@@ -100,7 +104,25 @@ const CAPABILITIES: CapabilityDefinition[] = [
     group: "storage",
     required: [
       { label: "Supabase URL", anyOf: ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"] },
+      { label: "Supabase anon key", anyOf: ["NEXT_PUBLIC_SUPABASE_ANON_KEY"] },
       { label: "Supabase service role", anyOf: ["SUPABASE_SERVICE_ROLE_KEY"] },
+    ],
+  },
+  {
+    id: "workspace-writes",
+    label: "Persistent Workspace Writes",
+    group: "builder",
+    required: [
+      { label: "Persistent workspace root", anyOf: ["STREAMS_PERSISTENT_WORKSPACE_ROOT"] },
+    ],
+  },
+  {
+    id: "builder-credentials",
+    label: "Builder Credential Encryption",
+    group: "builder",
+    required: [
+      { label: "Credential encryption key", anyOf: ["STREAMS_CREDENTIAL_KEY"] },
+      { label: "Connector encryption key", anyOf: ["CONNECTOR_ENCRYPTION_KEY"] },
     ],
   },
   {
@@ -197,8 +219,7 @@ const CAPABILITIES: CapabilityDefinition[] = [
     id: "gen-voice-elevenlabs",
     label: "Voice - ElevenLabs",
     group: "voice",
-    required: [],
-    optional: [{ label: "ElevenLabs key", anyOf: ["ELEVENLABS_API_KEY"] }],
+    required: [{ label: "ElevenLabs key", anyOf: ["ELEVENLABS_API_KEY"] }],
   },
   {
     id: "gen-voice-openai",
@@ -210,6 +231,19 @@ const CAPABILITIES: CapabilityDefinition[] = [
 
 export function getCapabilityDefinitions(): CapabilityDefinition[] {
   return CAPABILITIES;
+}
+
+function capabilityWarnings(id: CapabilityId): string[] {
+  const warnings: string[] = [];
+  if (id === "workspace-writes" && process.env.VERCEL) {
+    const root = process.env.STREAMS_PERSISTENT_WORKSPACE_ROOT?.trim();
+    if (root) {
+      warnings.push(
+        "Vercel Functions do not provide a durable local filesystem. A local workspace root is invocation-scoped unless it points to a separately mounted persistent worker volume.",
+      );
+    }
+  }
+  return warnings;
 }
 
 export function getEnvReadinessReport(): EnvReadinessReport {
@@ -225,6 +259,8 @@ export function getEnvReadinessReport(): EnvReadinessReport {
     if (missing.length > 0 && satisfied.length === 0) state = "missing";
     else if (missing.length > 0) state = "partial";
 
+    const warnings = capabilityWarnings(cap.id);
+
     return {
       id: cap.id,
       label: cap.label,
@@ -234,6 +270,7 @@ export function getEnvReadinessReport(): EnvReadinessReport {
       satisfied,
       missing,
       optionalMissing,
+      ...(warnings.length ? { warnings } : {}),
     };
   });
 
@@ -252,6 +289,7 @@ export function getEnvReadinessReport(): EnvReadinessReport {
   return {
     ok,
     generatedAt: new Date().toISOString(),
+    runtime: process.env.VERCEL ? "vercel" : "node",
     groups,
     capabilities,
   };
