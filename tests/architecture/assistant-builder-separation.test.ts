@@ -76,6 +76,51 @@ describe("assistant and builder separation", () => {
     expect(manifest).toContain('"deployment.verify"');
     expect(manifest).toContain('"commission.run"');
   });
+
+  it("preserves the Vercel control plane, Railway worker, and Provider Gateway boundaries", () => {
+    const manifest = source("src/lib/streams-ai/runtime/architecture/capability-registry.ts");
+    const gateway = source("src/lib/provider-gateway/capability.ts");
+    const gatewayRuntime = source("scripts/streams-provider-gateway.mjs");
+    const gatewayDockerfile = source("Dockerfile.gateway");
+
+    for (const responsibility of [
+      "authentication",
+      "conversation",
+      "orchestration",
+      "routing",
+      "billing",
+      "approvals",
+      "session_state",
+      "git",
+      "browser",
+      "builds",
+      "testing",
+      "repair",
+      "filesystem",
+      "deployment_verification",
+      "provider_brokerage",
+      "rate_limits",
+      "audit_logs",
+      "failover",
+      "usage_metering",
+      "secret_isolation",
+    ]) {
+      expect(manifest).toContain(`"${responsibility}"`);
+    }
+
+    expect(gateway).toContain('featureKey: "streams_provider_gateway"');
+    expect(gateway).toContain("upsellEligible: true");
+    expect(gateway).toContain('"gateway_requests"');
+    expect(gateway).toContain('"provider_cost_usd"');
+    expect(gateway).toContain('"STREAMS_PROVIDER_GATEWAY_URL"');
+    expect(gateway).toContain('"STREAMS_PROVIDER_GATEWAY_TOKEN"');
+    expect(gatewayRuntime).toContain('req.url === "/health"');
+    expect(gatewayRuntime).toContain('req.url === "/v1/generate"');
+    expect(gatewayRuntime).toContain("applyRateLimit");
+    expect(gatewayRuntime).toContain("allowFailover");
+    expect(gatewayRuntime).toContain("idempotency");
+    expect(gatewayDockerfile).toContain('CMD ["node", "scripts/streams-provider-gateway.mjs"]');
+  });
 });
 
 describe("Streams company capability integrity", () => {
