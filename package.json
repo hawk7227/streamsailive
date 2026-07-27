@@ -19,7 +19,8 @@
     "streams:scope-guard": "node scripts/scope-guard.mjs",
     "typecheck": "tsc --noEmit",
     "test:builder-e2e-evaluation": "vitest run tests/architecture/builder-end-to-end-evaluation.test.ts",
-    "test:architecture": "vitest run tests/architecture/product-intent-router.test.ts tests/architecture/execution-truth-validator.test.ts tests/architecture/runtime-foundation.test.ts tests/architecture/builder-cognitive-orchestrator.test.ts tests/architecture/builder-end-to-end-evaluation.test.ts",
+    "test:assistant-builder-separation": "vitest run tests/architecture/assistant-builder-separation.test.ts",
+    "test:architecture": "vitest run tests/architecture/product-intent-router.test.ts tests/architecture/execution-truth-validator.test.ts tests/architecture/runtime-foundation.test.ts tests/architecture/builder-cognitive-orchestrator.test.ts tests/architecture/builder-end-to-end-evaluation.test.ts tests/architecture/assistant-builder-separation.test.ts",
     "validate:architecture": "node scripts/validate-architecture-repair.mjs",
     "verify:architecture": "pnpm run validate:architecture && pnpm run typecheck && pnpm run test:architecture"
   },
@@ -52,7 +53,7 @@
     "react-markdown": "^10.1.0",
     "reactflow": "^11.11.4",
     "rehype-sanitize": "^6.0.0",
-    "remark-gfm": "^4.0.1",
+    "remark-gfm": "^4.1.0",
     "satori": "^0.25.0",
     "sharp": "^0.34.5",
     "stripe": "^20.2.0",
@@ -83,6 +84,7 @@
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite": "^7.3.1",
     "vitest": "^4.1.0"
   }
 }
