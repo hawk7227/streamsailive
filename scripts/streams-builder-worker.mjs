@@ -134,7 +134,7 @@ async function handle(req, res) {
     return json(res, workspaceWritable && authToken ? 200 : 503, {
       ok: workspaceWritable && Boolean(authToken),
       service: "streams-builder-worker",
-      version: "1",
+      version: "2",
       workspaceRoot,
       workspaceWritable,
       authConfigured: Boolean(authToken),
@@ -186,18 +186,33 @@ async function handle(req, res) {
   if (req.method === "POST" && url.pathname === "/v1/commission") {
     const root = projectRoot(body);
     await fs.mkdir(path.join(root, "tmp"), { recursive: true });
-    const nonce = crypto.randomUUID();
     const probe = path.join(root, "tmp", "commissioning.txt");
+    const phase = String(body.phase || "write");
+
+    if (phase === "check") {
+      const expectedNonce = String(body.expectedNonce || "");
+      const persisted = await fs.readFile(probe, "utf8").catch(() => "");
+      return json(res, persisted === `${expectedNonce}:patched` ? 200 : 409, {
+        ok: persisted === `${expectedNonce}:patched`,
+        phase: "check",
+        workspacePath: root,
+        persistenceProbePath: path.relative(root, probe),
+        persistedAcrossRestart: persisted === `${expectedNonce}:patched`,
+      });
+    }
+
+    const nonce = crypto.randomUUID();
     await fs.writeFile(probe, nonce, "utf8");
     const readBack = await fs.readFile(probe, "utf8");
     await fs.writeFile(probe, `${readBack}:patched`, "utf8");
     const patched = await fs.readFile(probe, "utf8");
     return json(res, 200, {
       ok: readBack === nonce && patched === `${nonce}:patched`,
+      phase: "write",
       workspacePath: root,
       persistenceProbePath: path.relative(root, probe),
       nonce,
-      nextStep: "restart_worker_then_call_commission_again_with_the_same_workspace",
+      nextStep: "restart_worker_then_call_with_phase_check_and_expectedNonce",
     });
   }
 
