@@ -1,9 +1,5 @@
-/* Shared Streams conversation interaction repair.
-   Loaded after legacy composer styles so the visible Builder conversation obeys
-   adaptive-composer and native-cursor behavior. */
+/* Shared Streams conversation interaction repair. */
 
-/* Restore native browser cursors. A legacy/custom cursor layer was reducing the
-   pointer to a small dark dot on the Builder page. */
 .streamsBuilderShell,
 .streamsBuilderShell *,
 .streamsUniversalExperience,
@@ -38,7 +34,33 @@
   cursor: not-allowed !important;
 }
 
-/* Adaptive Composer: compact start, vertical growth, then internal scrolling. */
+/* Disable every known decorative cursor layer. Native browser cursors remain. */
+.custom-cursor,
+.customCursor,
+.cursor-dot,
+.cursorDot,
+.cursor-follower,
+.cursorFollower,
+.cursor-follow,
+.mouse-dot,
+.mouse-follow,
+.pointer-dot,
+[data-custom-cursor],
+[data-cursor-dot],
+[id="custom-cursor"],
+[id="cursor-dot"],
+[class*="customCursor"],
+[class*="cursor-follow"],
+[class*="cursorFollower"],
+[class*="mouse-follow"],
+[class*="pointer-dot"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Legacy composer selectors remain for older chat surfaces. */
 .streamsComposer {
   width: 100% !important;
   min-height: 92px !important;
@@ -86,39 +108,12 @@
   scrollbar-width: thin;
 }
 
-.streamsComposerIconButton {
-  grid-area: add !important;
-  order: initial !important;
-}
+.streamsComposerIconButton { grid-area: add !important; order: initial !important; }
+.streamsComposerToolPill { grid-area: tool !important; order: initial !important; justify-self: start !important; min-width: 0 !important; max-width: 100% !important; }
+.streamsComposerPill { grid-area: mode !important; order: initial !important; }
+.streamsComposerMicButton { grid-area: mic !important; order: initial !important; margin-left: 0 !important; }
+.streamsComposerSendButton { grid-area: send !important; order: initial !important; justify-self: end !important; align-self: end !important; }
 
-.streamsComposerToolPill {
-  grid-area: tool !important;
-  order: initial !important;
-  justify-self: start !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-}
-
-.streamsComposerPill {
-  grid-area: mode !important;
-  order: initial !important;
-}
-
-.streamsComposerMicButton {
-  grid-area: mic !important;
-  order: initial !important;
-  margin-left: 0 !important;
-}
-
-.streamsComposerSendButton {
-  grid-area: send !important;
-  order: initial !important;
-  justify-self: end !important;
-  align-self: end !important;
-}
-
-/* Ensure the fixed composer wrapper grows with the composer rather than allowing
-   textarea content to paint outside it. */
 .startWorkspaceActive .startComposerWrap {
   height: auto !important;
   max-height: min(330px, 50dvh) !important;
@@ -130,24 +125,14 @@
 }
 
 @media (max-width: 760px) {
-  .streamsComposer {
-    max-height: min(270px, 42dvh) !important;
-  }
-
+  .streamsComposer { max-height: min(270px, 42dvh) !important; }
   .streamsComposerRow {
     grid-template-columns: 42px minmax(0, 1fr) 50px !important;
     grid-template-areas:
       "input input input"
       "add tool send" !important;
   }
-
-  .streamsComposerInput {
-    max-height: min(168px, 28dvh) !important;
-    font-size: 16px !important;
-  }
-
+  .streamsComposerInput { max-height: min(168px, 28dvh) !important; font-size: 16px !important; }
   .streamsComposerPill,
-  .streamsComposerMicButton {
-    display: none !important;
-  }
+  .streamsComposerMicButton { display: none !important; }
 }
