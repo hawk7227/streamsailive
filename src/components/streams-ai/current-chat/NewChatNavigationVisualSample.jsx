@@ -126,14 +126,48 @@ export default function NewChatNavigationVisualSample({ onNewProject }) {
         .sampleTopActions{display:flex;justify-content:flex-end;gap:5px;padding:0 12px 10px}.sampleTopActions button{width:31px;height:31px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#aebbd0;cursor:pointer}.sampleTopActions button:hover,.sampleTopActions button:focus-visible{background:rgba(59,130,246,.12);color:#fff;outline:none}
         .sampleMenuScroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 9px 16px;scrollbar-width:none}.sampleMenuScroll::-webkit-scrollbar{display:none}.sampleMenuGroup{display:grid;gap:1px;margin-bottom:13px}.sampleMenuGroup h2{margin:5px 8px 4px;color:#65748d;font-size:8px;line-height:1.2;text-transform:uppercase;letter-spacing:.16em}.sampleMenuItem{width:100%;min-height:33px;display:flex;align-items:center;gap:10px;border:0;border-radius:7px;background:transparent;color:#aab5c8;text-align:left;padding:7px 9px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}.sampleMenuItem:hover,.sampleMenuItem:focus-visible{background:rgba(59,130,246,.09);color:#fff;outline:none}.sampleMenuItem.active{background:linear-gradient(90deg,rgba(29,110,224,.95),rgba(89,48,184,.9));color:#fff}.adminMenuGroup{padding-top:4px;border-top:1px solid rgba(148,163,184,.08)}.adminMenuItem{color:#7dd3fc}
         .sampleAccountSummary{display:flex;align-items:center;gap:9px;margin:12px 4px 0;padding:8px 5px;border:0;background:transparent}.sampleAvatar{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#7c3aed);font-size:10px;font-weight:800;color:#fff}.sampleAccountText{display:grid;gap:1px;min-width:0}.sampleAccountText strong{overflow:hidden;text-overflow:ellipsis;font-size:9px;color:#e5e7eb}.sampleAccountText small{font-size:8px;color:#7f8ca3;text-transform:capitalize}
-        @media(max-width:760px){.newChatNavigationVisualSample{width:190px;min-width:190px}.sampleMenuBrand{padding-inline:11px}.sampleMenuItem{font-size:10px;padding-inline:8px}}
+        @media(max-width:900px){.newChatNavigationVisualSample{display:none}}
       `}</style>
 
       <style jsx global>{`
-        .withNewChatVisualSample .streamsOperator > .operatorSidebar{display:none!important}
-        .withNewChatVisualSample .streamsOperator{padding-left:224px!important}
-        .withNewChatVisualSample .operatorMain{width:100%!important;min-width:0!important}
-        @media(max-width:760px){.withNewChatVisualSample .streamsOperator{padding-left:190px!important}}
+        @media(min-width:901px){
+          .withNewChatVisualSample{width:100%;min-width:0;overflow:hidden}
+          .withNewChatVisualSample .streamsOperator{
+            display:block!important;
+            width:100vw!important;
+            min-width:0!important;
+            height:100dvh!important;
+            padding-left:224px!important;
+            box-sizing:border-box!important;
+            overflow:hidden!important;
+          }
+          .withNewChatVisualSample .streamsOperator > .operatorSidebar{display:none!important}
+          .withNewChatVisualSample .operatorMain{
+            display:block!important;
+            width:100%!important;
+            min-width:0!important;
+            height:100dvh!important;
+            min-height:0!important;
+            margin:0!important;
+            overflow:hidden!important;
+          }
+          .withNewChatVisualSample .operatorChatPanel{
+            width:100%!important;
+            min-width:0!important;
+            height:100%!important;
+          }
+          .withNewChatVisualSample .operatorEmptyLanding{
+            width:min(1120px,calc(100% - 64px))!important;
+            max-width:none!important;
+            margin-inline:auto!important;
+          }
+          .withNewChatVisualSample .operatorLandingComposer{
+            width:min(960px,100%)!important;
+          }
+        }
+        @media(max-width:900px){
+          .withNewChatVisualSample .streamsOperator{padding-left:0!important}
+        }
       `}</style>
     </aside>
   );
