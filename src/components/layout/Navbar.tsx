@@ -2,48 +2,35 @@
 
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSiteConfig } from "@/hooks/useSiteConfig";
 
 export default function Navbar() {
-  const config = useSiteConfig();
   const { user, loading } = useAuth();
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0fa0] backdrop-blur-[20px] border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center">
-            <img
-              src={config.logoUrl}
-              alt={`${config.appName} Logo`}
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <span className="text-xl font-bold text-white">{config.appName}</span>
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-[#02050de8] backdrop-blur-xl">
+      <div className="mx-auto flex min-h-[68px] max-w-[1180px] items-center justify-between gap-4 px-4 sm:px-8">
+        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Streams Workspace home">
+          <span className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#225db8] bg-[#081934] shadow-[0_0_24px_rgba(28,130,255,.3)]" aria-hidden="true">
+            <span className="h-3 w-3 rounded-full bg-[#42dfff] shadow-[0_0_14px_#24cfff]" />
+          </span>
+          <span className="truncate text-sm font-extrabold tracking-[0.05em] text-white sm:text-base">STREAMS WORKSPACE</span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-7 text-sm text-slate-300 md:flex" aria-label="Primary navigation">
+          <a href="#how-it-works" className="transition-colors hover:text-white">Product</a>
+          <a href="#how-it-works" className="transition-colors hover:text-white">Solutions</a>
+          <Link href="/pricing" className="transition-colors hover:text-white">Pricing</Link>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           {!loading && user ? (
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-accent-indigo to-accent-purple px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-            >
-              Dashboard
+            <Link href="/streams-ai" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#15aeef] via-[#585dff] to-[#a943e8] px-4 text-xs font-bold text-white shadow-[0_8px_25px_rgba(52,91,255,.25)] sm:px-5 sm:text-sm">
+              Open Workspace
             </Link>
           ) : (
             <>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center rounded-xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/5"
-              >
-                Login
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-accent-indigo to-accent-purple px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-              >
-                Sign up
-              </Link>
+              <Link href="/login" className="hidden min-h-10 items-center justify-center px-2 text-sm font-semibold text-slate-200 transition-colors hover:text-white sm:inline-flex">Sign in</Link>
+              <Link href="/signup" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#15aeef] via-[#585dff] to-[#a943e8] px-4 text-xs font-bold text-white shadow-[0_8px_25px_rgba(52,91,255,.25)] sm:px-5 sm:text-sm">Get Started for Free</Link>
             </>
           )}
         </div>
