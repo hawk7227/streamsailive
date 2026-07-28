@@ -105,19 +105,32 @@ main {
   background: #020713;
 }
 
-html:has(#home-fit-page) {
+html:has(#home-fit-page),
+html:has(.signup-scroll-root) {
   scrollbar-width: none;
 }
 
 html:has(#home-fit-page)::-webkit-scrollbar,
-body:has(#home-fit-page)::-webkit-scrollbar {
+body:has(#home-fit-page)::-webkit-scrollbar,
+html:has(.signup-scroll-root)::-webkit-scrollbar,
+body:has(.signup-scroll-root)::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
 }
 
-#home-fit-page section[id] {
+#home-fit-page section[id],
+.signup-scroll-root section[id] {
   scroll-margin-top: 76px;
+}
+
+.signup-scroll-root {
+  width: 100%;
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes growUp {
