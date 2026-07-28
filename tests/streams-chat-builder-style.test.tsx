@@ -21,11 +21,12 @@ vi.mock("../src/components/streams-ai/visual-operator/useAuthoritativeStreamsRun
 import StreamsOperatorShell from "../src/components/streams-ai/visual-operator/StreamsOperatorShell";
 
 describe("builder-style Streams chat shell", () => {
-  it("keeps the existing runtime and composer inside the new workspace presentation", () => {
+  it("keeps the existing runtime and composer inside the A.S.K. AI workspace presentation", () => {
     const html = renderToStaticMarkup(<StreamsOperatorShell chatRuntime={{ messages: [] }} />);
     expect(html).toContain('data-testid="preserved-streams-composer"');
-    expect(html).toContain("Ask, build, create, launch.");
-    expect(html).toContain("Start with a conversation");
+    expect(html).toContain("A.S.K. AI");
+    expect(html).toContain("Ask. Seek. Knock.");
+    expect(html).toContain("How can I help you move your work forward?");
   });
 
   it("uses the same compact universal navigation destinations as the builder", () => {
