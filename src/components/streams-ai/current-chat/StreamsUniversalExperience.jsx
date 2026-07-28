@@ -7,6 +7,7 @@ import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspa
 import StreamsClientShell from "./StreamsClientShell";
 import NewChatNavigationVisualSample from "./NewChatNavigationVisualSample";
 import StreamsDestinationWorkspace from "./StreamsDestinationWorkspace";
+import MarketingCampaignWorkspace from "./MarketingCampaignWorkspace";
 
 const ACTIVE_PROJECT_KEY = "streams-ai:active-project-id";
 const ACTIVE_PROJECT_NAME_KEY = "streams-ai:active-project-name";
@@ -170,17 +171,25 @@ export default function StreamsUniversalExperience() {
   if (!ready) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
 
   const showWorkspaceNavigation = pathname === "/streams-ai" && activeView === "chat";
+  const isCampaignDestination = destination === "business-builder";
   return (
     <div className={showWorkspaceNavigation ? "streamsUniversalExperience withNewChatVisualSample" : "streamsUniversalExperience"} data-active-view={activeView} data-one-streams-app="true">
       {activeView === "chat" ? (
         <>
           {showWorkspaceNavigation ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}
-          {destination ? <StreamsDestinationWorkspace destination={destination} onNewProject={() => setCreating(true)} /> : <StreamsClientShell />}
+          {destination ? (
+            <div className="streamsDestinationFrame">
+              {isCampaignDestination ? <MarketingCampaignWorkspace onNewProject={() => setCreating(true)} /> : <StreamsDestinationWorkspace destination={destination} onNewProject={() => setCreating(true)} />}
+            </div>
+          ) : <StreamsClientShell />}
         </>
       ) : <ProjectWorkspaceShell />}
       <ProjectCreationDialog open={creating} onClose={() => setCreating(false)} onCreated={(project) => { setActiveProjectName(project.name || "Project"); setCreating(false); changeView("workspace"); }} />
       <style jsx global>{`
         .streamsUniversalExperience{min-height:100svh;background:#020713}
+        .streamsDestinationFrame{min-width:0;min-height:100dvh;background:#fff}
+        @media(min-width:901px){.withNewChatVisualSample>.streamsDestinationFrame{margin-left:224px;width:calc(100% - 224px)}}
+        @media(max-width:900px){.streamsDestinationFrame{width:100%;margin-left:0}}
         .projectCreationBackdrop{position:fixed;inset:0;z-index:70000;display:grid;place-items:center;padding:18px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}
         .projectCreationDialog{width:min(680px,100%);max-height:calc(100svh - 36px);overflow:auto;display:grid;gap:14px;padding:18px;border:1px solid rgba(96,165,250,.35);border-radius:18px;background:#07101f;color:#f8fafc;box-shadow:0 24px 80px rgba(0,0,0,.55)}
         .projectCreationDialog header,.projectCreationDialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}.projectCreationDialog header div{display:grid;gap:3px}.projectCreationDialog header strong{font-size:17px}.projectCreationDialog header span{font-size:11px;color:#94a3b8}.projectCreationDialog header button{width:34px;height:34px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#fff;font-size:20px}
