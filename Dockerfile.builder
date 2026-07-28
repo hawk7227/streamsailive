@@ -27,7 +27,7 @@ RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 
-RUN mkdir -p /workspace \
+RUN mkdir -p /workspace /ms-playwright \
     && chown -R node:node /app /workspace /ms-playwright
 
 USER node
