@@ -13,8 +13,8 @@ describe("account scale and administrator navigation", () => {
     const signup = source("src/app/signup/page.tsx");
     expect(signup).toContain("supabase.auth.signUp");
     expect(signup).toContain("supabase.auth.signInWithOAuth");
-    expect(signup).toContain('provider: "google"');
-    expect(signup).toContain('provider: "github"');
+    expect(signup).toContain('handleOAuthSignup("google")');
+    expect(signup).toContain('handleOAuthSignup("github")');
     expect(signup).toContain('/auth/callback?next=/streams-ai');
     expect(signup).toContain('fetch("/api/team/ensure"');
   });
