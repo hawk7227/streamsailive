@@ -4,16 +4,9 @@ import { useEffect } from "react";
 
 const TARGET = "/api/streams-ai/messages";
 const CURSOR_SELECTORS = [
-  ".custom-cursor",
-  ".cursor-dot",
-  ".cursorDot",
-  "#custom-cursor",
-  "#cursor-dot",
-  "[data-custom-cursor]",
-  "[data-cursor-dot]",
-  "[class*='customCursor']",
-  "[class*='cursor-follow']",
-  "[class*='mouse-follow']",
+  ".custom-cursor", ".cursor-dot", ".cursorDot", ".cursor-follower", ".cursorFollower",
+  "#custom-cursor", "#cursor-dot", "[data-custom-cursor]", "[data-cursor-dot]",
+  "[class*='customCursor']", "[class*='cursor-follow']", "[class*='mouse-follow']", "[class*='pointer-dot']",
 ];
 
 function requestUrl(input) {
@@ -23,74 +16,86 @@ function requestUrl(input) {
 }
 
 function isTargetRequest(input, init) {
-  const url = requestUrl(input);
   const method = String(init?.method || (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET")).toUpperCase();
-  return method === "POST" && url.includes(TARGET);
+  return method === "POST" && requestUrl(input).includes(TARGET);
 }
 
-function sseBlock(eventName, payload) {
-  return `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
+function parseBlock(block) {
+  let event = "message";
+  const data = [];
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+  }
+  if (!data.length) return null;
+  try { return { event, payload: JSON.parse(data.join("\n")) }; }
+  catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
-function mergeResponseText(current, incoming) {
+function mergeCanonical(current, incoming) {
   const existing = String(current || "");
   const next = String(incoming || "");
   if (!next) return existing;
   if (!existing) return next;
   if (next === existing || existing.endsWith(next)) return existing;
   if (next.startsWith(existing)) return next;
-  const max = Math.min(existing.length, next.length, 600);
+  const max = Math.min(existing.length, next.length, 1200);
   for (let size = max; size > 0; size -= 1) {
     if (existing.slice(-size) === next.slice(0, size)) return existing + next.slice(size);
   }
   return existing + next;
 }
 
-function createCalmStream(response) {
+function sse(event, payload) {
+  return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+function createStableStream(response) {
   if (!response.body) return response;
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
-  let sourceBuffer = "";
-  let canonicalText = "";
-  let emittedText = "";
-  let timer = null;
+  let source = "";
+  let canonical = "";
+  let visibleLength = 0;
+  let closed = false;
+  let terminal = null;
+  let pumpTimer = 0;
   let controllerRef = null;
   let lastActivity = "";
 
-  function emit(name, payload) {
-    controllerRef?.enqueue(encoder.encode(sseBlock(name, payload)));
-  }
+  const emit = (event, payload) => controllerRef?.enqueue(encoder.encode(sse(event, payload)));
 
-  function flushText() {
-    if (canonicalText.length <= emittedText.length) return;
-    const delta = canonicalText.slice(emittedText.length);
-    emittedText = canonicalText;
-    emit("response", { token: delta });
-  }
+  const finishWhenDrained = () => {
+    if (!closed || visibleLength < canonical.length || !terminal) return;
+    emit(terminal.event, terminal.payload);
+    terminal = null;
+    controllerRef?.close();
+  };
 
-  function scheduleFlush(delay = 88) {
-    if (timer) return;
-    timer = window.setTimeout(() => {
-      timer = null;
-      flushText();
-    }, delay);
-  }
-
-  function consumeBlock(block) {
-    const lines = block.split("\n");
-    let eventName = "message";
-    const data = [];
-    for (const line of lines) {
-      if (line.startsWith("event:")) eventName = line.slice(6).trim();
-      if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+  const pump = () => {
+    pumpTimer = 0;
+    if (visibleLength < canonical.length) {
+      const remaining = canonical.length - visibleLength;
+      const size = Math.min(remaining, remaining > 240 ? 28 : remaining > 80 ? 18 : 10);
+      const token = canonical.slice(visibleLength, visibleLength + size);
+      visibleLength += token.length;
+      emit("response", { token });
+      pumpTimer = window.setTimeout(pump, 24);
+      return;
     }
-    if (!data.length) return;
-    let payload;
-    try { payload = JSON.parse(data.join("\n")); }
-    catch { payload = { token: data.join("\n") }; }
+    finishWhenDrained();
+  };
 
-    if (eventName === "reasoning" || eventName === "activity") {
+  const schedulePump = () => {
+    if (!pumpTimer) pumpTimer = window.setTimeout(pump, 16);
+  };
+
+  const consume = (block) => {
+    const parsed = parseBlock(block);
+    if (!parsed) return;
+    const { event, payload } = parsed;
+    if (event === "reasoning" || event === "activity") {
       const statusText = String(payload?.statusText || payload?.text || "Thinking…");
       if (statusText !== lastActivity) {
         lastActivity = statusText;
@@ -98,22 +103,19 @@ function createCalmStream(response) {
       }
       return;
     }
-
-    if (eventName === "response") {
-      const token = payload?.token || payload?.delta || payload?.text || "";
-      canonicalText = mergeResponseText(canonicalText, token);
-      if (canonicalText.length - emittedText.length >= 140 || /[.!?]\s$/.test(canonicalText)) flushText();
-      else scheduleFlush();
+    if (event === "response") {
+      canonical = mergeCanonical(canonical, payload?.token || payload?.delta || payload?.text || "");
+      schedulePump();
       return;
     }
-
-    if (timer) {
-      window.clearTimeout(timer);
-      timer = null;
+    if (event === "complete" || event === "error") {
+      terminal = { event, payload };
+      closed = true;
+      schedulePump();
+      return;
     }
-    flushText();
-    emit(eventName, payload);
-  }
+    emit(event, payload);
+  };
 
   const stream = new ReadableStream({
     start(controller) {
@@ -123,127 +125,69 @@ function createCalmStream(response) {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            sourceBuffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-            let boundary = sourceBuffer.indexOf("\n\n");
+            source += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+            let boundary = source.indexOf("\n\n");
             while (boundary >= 0) {
-              consumeBlock(sourceBuffer.slice(0, boundary));
-              sourceBuffer = sourceBuffer.slice(boundary + 2);
-              boundary = sourceBuffer.indexOf("\n\n");
+              consume(source.slice(0, boundary));
+              source = source.slice(boundary + 2);
+              boundary = source.indexOf("\n\n");
             }
           }
-          if (sourceBuffer.trim()) consumeBlock(sourceBuffer.trim());
-          if (timer) window.clearTimeout(timer);
-          timer = null;
-          flushText();
-          controller.close();
+          if (source.trim()) consume(source.trim());
+          closed = true;
+          if (!terminal) terminal = { event: "complete", payload: {} };
+          schedulePump();
         } catch (error) {
-          if (timer) window.clearTimeout(timer);
+          if (pumpTimer) window.clearTimeout(pumpTimer);
           controller.error(error);
         }
       })();
     },
     cancel(reason) {
-      if (timer) window.clearTimeout(timer);
+      if (pumpTimer) window.clearTimeout(pumpTimer);
       return reader.cancel(reason);
     },
   });
 
-  return new Response(stream, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
+  return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
-function removeCustomCursorArtifacts(root = document) {
+function removeCursorArtifacts(root = document) {
   for (const selector of CURSOR_SELECTORS) root.querySelectorAll?.(selector).forEach((node) => node.remove());
   root.querySelectorAll?.("[style*='cursor: none'],[style*='cursor:none']").forEach((node) => node.style.removeProperty("cursor"));
-
-  root.querySelectorAll?.("div,span").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    const style = window.getComputedStyle(node);
-    const rect = node.getBoundingClientRect();
-    const name = `${node.id} ${node.className}`.toLowerCase();
-    const cursorNamed = /cursor|mouse|pointer-follow|pointer-dot/.test(name);
-    const cursorShaped = style.position === "fixed" && style.pointerEvents === "none" && rect.width <= 40 && rect.height <= 40 && Number(style.zIndex || 0) >= 1000;
-    if (cursorNamed || cursorShaped) node.remove();
-  });
-
-  document.documentElement.style.removeProperty("cursor");
-  document.body?.style.removeProperty("cursor");
-}
-
-function installStableConversationScroll() {
-  const states = new WeakMap();
-
-  const prepare = (node) => {
-    if (!(node instanceof HTMLElement) || states.has(node)) return;
-    const state = { nearBottom: true, frame: 0, originalScrollTo: node.scrollTo.bind(node) };
-    const updateNearBottom = () => {
-      state.nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 140;
-    };
-    node.addEventListener("scroll", updateNearBottom, { passive: true });
-    node.style.scrollBehavior = "auto";
-    node.scrollTo = (optionsOrX, y) => {
-      if (typeof optionsOrX === "object") state.originalScrollTo({ ...optionsOrX, behavior: "auto" });
-      else state.originalScrollTo(optionsOrX, y);
-    };
-    state.cleanup = () => node.removeEventListener("scroll", updateNearBottom);
-    states.set(node, state);
-  };
-
-  const anchor = () => {
-    document.querySelectorAll(".startChatSurface").forEach((node) => {
-      prepare(node);
-      const state = states.get(node);
-      if (!state?.nearBottom) return;
-      cancelAnimationFrame(state.frame);
-      state.frame = requestAnimationFrame(() => { node.scrollTop = node.scrollHeight; });
-    });
-  };
-
-  anchor();
-  return { anchor, cleanup: () => states.forEach?.((state) => state.cleanup?.()) };
+  document.documentElement.style.setProperty("cursor", "auto", "important");
+  document.body?.style.setProperty("cursor", "auto", "important");
 }
 
 function installProgressiveDisclosure() {
-  const timers = new WeakMap();
   const process = (node, role) => {
     if (!(node instanceof HTMLElement) || node.dataset.disclosureReady === "true") return;
     const row = node.closest(role === "user" ? ".startUserRow" : ".startAssistantRow");
-    const isStreamingRow = role === "assistant" && row?.parentElement?.lastElementChild === row;
-    if (isStreamingRow) return;
+    const streaming = role === "assistant" && row?.parentElement?.lastElementChild === row;
+    if (streaming) return;
     const limit = role === "user" ? 168 : 380;
     if (node.scrollHeight <= limit + 8) return;
     node.dataset.disclosureReady = "true";
     node.dataset.expanded = "false";
     node.style.maxHeight = `${limit}px`;
     node.style.overflow = "hidden";
-    node.style.position = "relative";
     const button = document.createElement("button");
     button.type = "button";
     button.className = "streamsDisclosureToggle";
     button.textContent = "Show more";
-    button.addEventListener("click", () => {
+    button.onclick = () => {
       const expanded = node.dataset.expanded === "true";
       node.dataset.expanded = expanded ? "false" : "true";
       node.style.maxHeight = expanded ? `${limit}px` : "none";
       node.style.overflow = expanded ? "hidden" : "visible";
       button.textContent = expanded ? "Show more" : "Show less";
-    });
+    };
     node.insertAdjacentElement("afterend", button);
   };
-
-  const scan = () => {
+  return () => {
     document.querySelectorAll(".startUserBubble").forEach((node) => process(node, "user"));
-    document.querySelectorAll(".startAssistantBody").forEach((node) => {
-      const old = timers.get(node);
-      if (old) window.clearTimeout(old);
-      timers.set(node, window.setTimeout(() => process(node, "assistant"), 900));
-    });
+    document.querySelectorAll(".startAssistantBody").forEach((node) => window.setTimeout(() => process(node, "assistant"), 500));
   };
-  scan();
-  return scan;
 }
 
 export default function CalmChatRuntimeBridge() {
@@ -252,35 +196,28 @@ export default function CalmChatRuntimeBridge() {
     window.fetch = async (input, init) => {
       const response = await nativeFetch(input, init);
       if (!isTargetRequest(input, init)) return response;
-      const type = response.headers.get("content-type") || "";
-      return type.includes("text/event-stream") ? createCalmStream(response) : response;
+      return (response.headers.get("content-type") || "").includes("text/event-stream") ? createStableStream(response) : response;
     };
 
-    removeCustomCursorArtifacts();
+    removeCursorArtifacts();
     const disclosure = installProgressiveDisclosure();
-    const stableScroll = installStableConversationScroll();
+    disclosure();
     const observer = new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of record.addedNodes) if (node instanceof HTMLElement) removeCustomCursorArtifacts(node);
-      }
-      removeCustomCursorArtifacts();
+      for (const record of records) for (const node of record.addedNodes) if (node instanceof HTMLElement) removeCursorArtifacts(node);
+      removeCursorArtifacts();
       disclosure();
-      stableScroll.anchor();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
 
     return () => {
       window.fetch = nativeFetch;
       observer.disconnect();
-      stableScroll.cleanup?.();
     };
   }, []);
 
   return <style jsx global>{`
     .streamsDisclosureToggle{display:inline-flex;margin:7px 0 0;border:0;background:transparent;color:#7dd3fc;font:700 12px/1.2 Inter,system-ui,sans-serif;cursor:pointer;padding:0}
-    .startUserBubble[data-expanded="false"],.startAssistantBody[data-expanded="false"]{mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent)}
-    .startUserBubble[data-expanded="true"],.startAssistantBody[data-expanded="true"]{mask-image:none;-webkit-mask-image:none}
-    html,body,.startWorkspace,.startChatSurface,.startConversationColumn{cursor:auto!important;scroll-behavior:auto!important}
+    html,body,.streamsUniversalExperience,.streamsBuilderShell,.startWorkspace,.startChatSurface{cursor:auto!important;scroll-behavior:auto!important}
     textarea,input,[contenteditable="true"]{cursor:text!important}
     button,a,[role="button"],summary,label,select{cursor:pointer!important}
   `}</style>;
