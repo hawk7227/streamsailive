@@ -84,31 +84,31 @@ export default function BuilderResearchCanvas({ preview }: Props) {
         </section>
       </main>
       <style jsx>{`
-        .builderResearchCanvas{position:relative;height:100%;min-height:0;min-width:0;overflow:hidden;background:#020617;color:#e5e7eb;contain:layout paint}
-        .builderResearchWorkarea{height:100%;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:#172033;overflow:hidden}
-        .builderResearchSource,.builderResearchVisual{position:relative;min-width:0;min-height:0;width:100%;height:100%;overflow:hidden;background:#020617;isolation:isolate;contain:layout paint}
-        .builderResearchVisual{border-left:1px solid rgba(148,163,184,.18)}
-        @media(max-width:760px){.builderResearchWorkarea{grid-template-columns:minmax(0,1fr)}.builderResearchVisual{display:none}}
+        .builderResearchCanvas,.builderResearchWorkarea{display:contents}
+        .builderResearchSource{grid-column:2;position:relative;min-width:0;min-height:0;width:100%;height:100%;overflow:hidden;background:#020617;isolation:isolate;contain:layout paint}
+        .builderResearchVisual{grid-column:3;position:relative;min-width:0;min-height:0;width:100%;height:100%;overflow:hidden;background:#020617;border-left:1px solid rgba(148,163,184,.18);isolation:isolate;contain:layout paint}
+        @media(max-width:900px){.builderResearchSource{grid-column:1}.builderResearchVisual{display:none}}
       `}</style>
       <style jsx global>{`
         .streamsOperator.builderOpen{grid-template-columns:minmax(0,1fr)!important}
         .streamsOperator.builderOpen>.operatorSidebar{display:none!important}
         .streamsOperator.builderOpen .operatorMain{width:100%!important;min-width:0!important;overflow:hidden!important}
-        .streamsOperator.builderOpen .operatorMain>div{height:100%!important;min-height:0!important;display:grid!important;grid-template-columns:minmax(300px,30%) minmax(0,70%)!important;overflow:hidden!important}
+        .streamsOperator.builderOpen .operatorMain>div{height:100%!important;min-height:0!important;display:grid!important;grid-template-columns:minmax(300px,30%) minmax(420px,35%) minmax(420px,35%)!important;overflow:hidden!important}
         .streamsOperator.builderOpen .operatorMain>div>div{height:100%!important;min-height:0!important;overflow:hidden!important}
-        .builderResearchCanvas *{box-sizing:border-box}
-        .builderResearchCanvas .liveWorkstation{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;display:grid!important;grid-template-rows:minmax(0,1fr) 96px!important;overflow:hidden!important}
-        .builderResearchCanvas .workstationBody{grid-row:1!important;min-width:0!important;min-height:0!important;overflow:hidden!important}
-        .builderResearchCanvas .workstationToolbar{grid-row:2!important;height:96px!important;max-height:96px!important;min-height:96px!important;overflow:hidden!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:34px 54px!important;align-items:stretch!important;padding:4px 8px!important;gap:4px!important}
-        .builderResearchCanvas .workingTabs{grid-row:1!important;width:100%!important;min-width:0!important;height:34px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0!important;white-space:nowrap!important}
-        .builderResearchCanvas .sourceToolbar{grid-row:2!important;width:100%!important;min-width:0!important;height:54px!important;justify-content:flex-start!important;align-items:center!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;border-top:1px solid rgba(148,163,184,.14)!important;padding-top:4px!important;white-space:nowrap!important}
-        .builderResearchCanvas .workstationToolbar .githubSourceControl{min-width:max-content!important;max-width:none!important;flex:0 0 auto!important}
-        .builderResearchCanvas .workstationToolbar .routeValue{display:none!important}
-        .builderResearchCanvas .builderResearchVisual>.visualEditor{position:relative!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;display:grid!important;grid-template-rows:auto auto auto minmax(0,1fr)!important}
-        .builderResearchCanvas .builderResearchVisual .editorHeader,.builderResearchCanvas .builderResearchVisual .editorStatus,.builderResearchCanvas .builderResearchVisual .editorActions{min-width:0!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important}
-        .builderResearchCanvas .builderResearchVisual .previewPane,.builderResearchCanvas .builderResearchVisual .mobilePane,.builderResearchCanvas .builderResearchVisual .codePanel,.builderResearchCanvas .builderResearchVisual .splitMode,.builderResearchCanvas .builderResearchVisual .browserReview{min-width:0!important;min-height:0!important;width:100%!important;height:100%!important;overflow:hidden!important}
-        .builderResearchCanvas .builderResearchVisual iframe{display:block!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;border:0!important}
-        .builderResearchCanvas .builderResearchVisual [class*="drawer"],.builderResearchCanvas .builderResearchVisual [class*="Drawer"]{max-width:100%!important;max-height:100%!important}
+        .builderResearchSource *,.builderResearchVisual *{box-sizing:border-box}
+        .builderResearchSource .liveWorkstation{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;display:grid!important;grid-template-rows:minmax(0,1fr) 96px!important;overflow:hidden!important}
+        .builderResearchSource .workstationBody{grid-row:1!important;min-width:0!important;min-height:0!important;overflow:hidden!important}
+        .builderResearchSource .workstationToolbar{grid-row:2!important;height:96px!important;max-height:96px!important;min-height:96px!important;overflow:hidden!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:34px 54px!important;align-items:stretch!important;padding:4px 8px!important;gap:4px!important}
+        .builderResearchSource .workingTabs{grid-row:1!important;width:100%!important;min-width:0!important;height:34px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0!important;white-space:nowrap!important}
+        .builderResearchSource .sourceToolbar{grid-row:2!important;width:100%!important;min-width:0!important;height:54px!important;justify-content:flex-start!important;align-items:center!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;border-top:1px solid rgba(148,163,184,.14)!important;padding-top:4px!important;white-space:nowrap!important}
+        .builderResearchSource .workstationToolbar .githubSourceControl{min-width:max-content!important;max-width:none!important;flex:0 0 auto!important}
+        .builderResearchSource .workstationToolbar .routeValue{display:none!important}
+        .builderResearchVisual>.visualEditor{position:relative!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;display:grid!important;grid-template-rows:auto auto auto minmax(0,1fr)!important}
+        .builderResearchVisual .editorHeader,.builderResearchVisual .editorStatus,.builderResearchVisual .editorActions{min-width:0!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important}
+        .builderResearchVisual .previewPane,.builderResearchVisual .mobilePane,.builderResearchVisual .codePanel,.builderResearchVisual .splitMode,.builderResearchVisual .browserReview{min-width:0!important;min-height:0!important;width:100%!important;height:100%!important;overflow:hidden!important}
+        .builderResearchVisual iframe{display:block!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;border:0!important}
+        .builderResearchVisual [class*="drawer"],.builderResearchVisual [class*="Drawer"]{max-width:100%!important;max-height:100%!important}
+        @media(max-width:900px){.streamsOperator.builderOpen .operatorMain>div{grid-template-columns:minmax(0,1fr)!important}}
       `}</style>
     </section>
   );
