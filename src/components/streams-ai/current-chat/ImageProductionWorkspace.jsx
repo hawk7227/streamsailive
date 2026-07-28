@@ -4,18 +4,18 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight, ArrowUp, Camera, Image as ImageIcon, Layers3, Palette,
-  Paperclip, Portrait, Shirt, Sparkles, Store, Trash2, Upload, X,
+  Paperclip, Shirt, Sparkles, Store, Trash2, Upload, UserRound, X,
 } from "lucide-react";
 
 const QUICK_IDEAS = [
-  ["Product photo", Store], ["Portrait", Portrait], ["Social graphic", ImageIcon],
+  ["Product photo", Store], ["Portrait", UserRound], ["Social graphic", ImageIcon],
   ["Brand concept", Palette], ["Interior design", Layers3], ["Fashion editorial", Shirt],
   ["Concept art", Sparkles], ["Ad creative", Camera],
 ];
 
 const IMAGE_IDEAS = [
   { title:"Product Photography", description:"Premium product shots, ecommerce imagery, and campaign visuals.", prompt:"Create a premium studio product photograph with polished lighting, realistic materials, clean composition, and commercial detail.", image:"https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=88", icon:Store },
-  { title:"Portraits & Headshots", description:"Editorial portraits, professional headshots, and lifestyle people imagery.", prompt:"Create a natural editorial portrait of a real person with flattering light, authentic skin texture, and a refined photographic composition.", image:"https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=88", icon:Portrait },
+  { title:"Portraits & Headshots", description:"Editorial portraits, professional headshots, and lifestyle people imagery.", prompt:"Create a natural editorial portrait of a real person with flattering light, authentic skin texture, and a refined photographic composition.", image:"https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=88", icon:UserRound },
   { title:"Social & Ad Creative", description:"Scroll-stopping visuals for posts, campaigns, thumbnails, and promotions.", prompt:"Create a bold social advertising image with a real person, clear visual hierarchy, premium campaign styling, and space for copy.", image:"https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=88", icon:ImageIcon },
   { title:"Brand Identity Concepts", description:"Logo directions, packaging ideas, color worlds, and visual systems.", prompt:"Create a sophisticated brand identity concept with distinctive art direction, coordinated colors, packaging mockups, and a premium visual language.", image:"https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&w=1200&q=88", icon:Palette },
   { title:"Interior & Architecture", description:"Rooms, retail environments, property concepts, and spatial visualization.", prompt:"Create a photorealistic interior design visualization with natural materials, intentional lighting, believable scale, and editorial architectural photography.", image:"https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=88", icon:Layers3 },
