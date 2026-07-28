@@ -11,6 +11,7 @@ const COMPOSER_MAX_HEIGHT = 224;
 const USER_COLLAPSE_LINES = 7;
 const ASSISTANT_COLLAPSE_LINES = 14;
 const PREVIEW_PATH = /(?:https?:\/\/[^\s]+)?\/streams-builder\/preview\/[0-9a-f-]{20,}/gi;
+const GENERATED_PATH = /generated\/previews\/[0-9a-f-]{20,}\.html/gi;
 
 function querySessionId() {
   try { return new URLSearchParams(window.location.search).get("sessionId") || ""; } catch { return ""; }
@@ -28,12 +29,26 @@ function parseSseBlock(block: string) {
   catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
+function cleanInternalContent(value: string) {
+  PREVIEW_PATH.lastIndex = 0;
+  GENERATED_PATH.lastIndex = 0;
+  return value
+    .replace(PREVIEW_PATH, "")
+    .replace(GENERATED_PATH, "")
+    .replace(/Your frontend preview is ready:?/gi, "")
+    .replace(/Preview mounted:?/gi, "")
+    .replace(/Pulled generated\/?/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function displayContent(message: Message) {
   const content = String(message.content || "");
-  if (!PREVIEW_PATH.test(content)) return content;
+  const cleaned = cleanInternalContent(content);
+  const containedPreview = PREVIEW_PATH.test(content) || GENERATED_PATH.test(content);
   PREVIEW_PATH.lastIndex = 0;
-  const cleaned = content.replace(PREVIEW_PATH, "").replace(/Your frontend preview is ready:?/gi, "").trim();
-  return cleaned || "Your preview is ready in the Builder workspace.";
+  GENERATED_PATH.lastIndex = 0;
+  return cleaned || (containedPreview ? "The preview is open and updated in the Builder workspace." : content);
 }
 
 function messageNeedsCollapse(message: Message) {
@@ -55,6 +70,11 @@ function mergeMessages(current: Message[], incoming: Message[]) {
     seen.add(key);
     return true;
   });
+}
+
+function publishBuilderStatus(statusText: string, detail: Record<string, unknown> = {}) {
+  window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message: statusText, ...detail } }));
+  window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "agent-status", statusText, ...detail } }));
 }
 
 export default function ActualBuilderSessionChat({ connection, onConnectionChange }: Props) {
@@ -93,7 +113,8 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     const payload = await response.json().catch(() => null) as { ok?: boolean; messages?: Message[]; error?: string } | null;
     if (!response.ok || !payload?.ok) { setStatus(payload?.error || "Could not load the conversation."); return; }
     setMessages((current) => mergeMessages(current, Array.isArray(payload.messages) ? payload.messages : []));
-    setStatus("Conversation connected.");
+    setStatus("Builder connected");
+    publishBuilderStatus("Builder agent connected to this conversation.", { sessionId });
     onConnectionChange({ connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId });
   }
 
@@ -118,7 +139,8 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     setPrompt("");
     window.requestAnimationFrame(resetComposer);
     setRunning(true);
-    setStatus("Thinking…");
+    setStatus("Builder active — starting");
+    publishBuilderStatus("Builder active: starting request.", { sessionId });
     const stamp = Date.now();
     const userId = `local-user-${stamp}`;
     const assistantId = `local-assistant-${stamp}`;
@@ -149,19 +171,28 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
             answerRef.current += parsed.payload.token;
             paintAnswer(assistantId);
           }
-          if (parsed.event === "activity") setStatus(String(parsed.payload.statusText || "Working…"));
+          if (parsed.event === "activity") {
+            const activity = String(parsed.payload.statusText || "Builder active");
+            setStatus(activity);
+            publishBuilderStatus(activity, { sessionId, payload: parsed.payload });
+          }
           if (parsed.event === "error") throw new Error(String(parsed.payload.message || "StreamsAI could not complete the response."));
         }
       }
       if (paintFrameRef.current !== null) { window.cancelAnimationFrame(paintFrameRef.current); paintFrameRef.current = null; }
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answerRef.current || "Completed.", status: "complete" } : item));
-      setStatus(PREVIEW_PATH.test(answerRef.current) ? "Preview ready in Builder." : "Ready");
+      const previewReady = PREVIEW_PATH.test(answerRef.current) || GENERATED_PATH.test(answerRef.current);
       PREVIEW_PATH.lastIndex = 0;
+      GENERATED_PATH.lastIndex = 0;
+      const completedStatus = previewReady ? "Preview updated" : "Ready";
+      setStatus(completedStatus);
+      publishBuilderStatus(previewReady ? "Preview updated in the Builder workspace." : "Builder request completed.", { sessionId, previewReady });
       window.setTimeout(() => void hydrate(), 900);
     } catch (error) {
       const message = error instanceof Error ? error.message : "StreamsAI chat failed.";
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: message, status: "failed" } : item));
       setStatus(message);
+      publishBuilderStatus(`Builder failed: ${message}`, { sessionId, failed: true });
     } finally {
       setRunning(false);
     }
@@ -177,7 +208,7 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
           const content = displayContent(message);
           return <article key={key} className={message.role === "user" ? "user" : message.status === "failed" ? "assistant failed" : "assistant"}>
             <b>{message.role === "user" ? "You" : "StreamsAI"}</b>
-            <p className={collapsible && !expanded ? (message.role === "user" ? "collapsed userCollapsed" : "collapsed assistantCollapsed") : ""}>{content || (message.status === "streaming" ? "Thinking…" : "")}</p>
+            <p className={collapsible && !expanded ? (message.role === "user" ? "collapsed userCollapsed" : "collapsed assistantCollapsed") : ""}>{content || (message.status === "streaming" ? "Working…" : "")}</p>
             {collapsible ? <button type="button" className="messageToggle" aria-expanded={expanded} onClick={() => setExpandedMessages((items) => ({ ...items, [key]: !expanded }))}>{expanded ? "Show less" : "Show more"}</button> : null}
           </article>;
         })}
