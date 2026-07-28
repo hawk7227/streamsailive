@@ -11,6 +11,9 @@ const CURSOR_SELECTORS = [
   "#cursor-dot",
   "[data-custom-cursor]",
   "[data-cursor-dot]",
+  "[class*='customCursor']",
+  "[class*='cursor-follow']",
+  "[class*='mouse-follow']",
 ];
 
 function requestUrl(input) {
@@ -29,18 +32,18 @@ function sseBlock(eventName, payload) {
   return `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
 }
 
-function overlapAppend(existing, incoming) {
-  const current = String(existing || "");
+function mergeResponseText(current, incoming) {
+  const existing = String(current || "");
   const next = String(incoming || "");
-  if (!next) return current;
-  if (!current) return next;
-  if (current.endsWith(next)) return current;
-  if (next.startsWith(current)) return next;
-  const max = Math.min(current.length, next.length, 240);
+  if (!next) return existing;
+  if (!existing) return next;
+  if (next === existing || existing.endsWith(next)) return existing;
+  if (next.startsWith(existing)) return next;
+  const max = Math.min(existing.length, next.length, 600);
   for (let size = max; size > 0; size -= 1) {
-    if (current.slice(-size) === next.slice(0, size)) return current + next.slice(size);
+    if (existing.slice(-size) === next.slice(0, size)) return existing + next.slice(size);
   }
-  return current + next;
+  return existing + next;
 }
 
 function createCalmStream(response) {
@@ -49,31 +52,29 @@ function createCalmStream(response) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let sourceBuffer = "";
-  let pendingText = "";
+  let canonicalText = "";
   let emittedText = "";
   let timer = null;
   let controllerRef = null;
+  let lastActivity = "";
 
   function emit(name, payload) {
     controllerRef?.enqueue(encoder.encode(sseBlock(name, payload)));
   }
 
   function flushText() {
-    if (!pendingText) return;
-    const nextFull = overlapAppend(emittedText, pendingText);
-    const delta = nextFull.slice(emittedText.length);
-    pendingText = "";
-    if (!delta) return;
-    emittedText = nextFull;
+    if (canonicalText.length <= emittedText.length) return;
+    const delta = canonicalText.slice(emittedText.length);
+    emittedText = canonicalText;
     emit("response", { token: delta });
   }
 
-  function scheduleFlush() {
+  function scheduleFlush(delay = 88) {
     if (timer) return;
     timer = window.setTimeout(() => {
       timer = null;
       flushText();
-    }, 48);
+    }, delay);
   }
 
   function consumeBlock(block) {
@@ -89,17 +90,26 @@ function createCalmStream(response) {
     try { payload = JSON.parse(data.join("\n")); }
     catch { payload = { token: data.join("\n") }; }
 
-    if (eventName === "reasoning") {
-      const statusText = payload?.statusText || payload?.text || "Thinking…";
-      emit("activity", { ...payload, statusText });
+    if (eventName === "reasoning" || eventName === "activity") {
+      const statusText = String(payload?.statusText || payload?.text || "Thinking…");
+      if (statusText !== lastActivity) {
+        lastActivity = statusText;
+        emit("activity", { ...payload, statusText });
+      }
       return;
     }
+
     if (eventName === "response") {
       const token = payload?.token || payload?.delta || payload?.text || "";
-      pendingText = overlapAppend(pendingText, token);
-      if (pendingText.length >= 72 || /[.!?]\s$/.test(pendingText)) flushText();
+      canonicalText = mergeResponseText(canonicalText, token);
+      if (canonicalText.length - emittedText.length >= 140 || /[.!?]\s$/.test(canonicalText)) flushText();
       else scheduleFlush();
       return;
+    }
+
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
     }
     flushText();
     emit(eventName, payload);
@@ -147,16 +157,62 @@ function createCalmStream(response) {
 
 function removeCustomCursorArtifacts(root = document) {
   for (const selector of CURSOR_SELECTORS) root.querySelectorAll?.(selector).forEach((node) => node.remove());
-  root.querySelectorAll?.("[style*='cursor: none'],[style*='cursor:none']").forEach((node) => node.style.setProperty("cursor", "auto", "important"));
-  document.documentElement.style.setProperty("cursor", "auto", "important");
-  document.body?.style.setProperty("cursor", "auto", "important");
+  root.querySelectorAll?.("[style*='cursor: none'],[style*='cursor:none']").forEach((node) => node.style.removeProperty("cursor"));
+
+  root.querySelectorAll?.("div,span").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const style = window.getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    const name = `${node.id} ${node.className}`.toLowerCase();
+    const cursorNamed = /cursor|mouse|pointer-follow|pointer-dot/.test(name);
+    const cursorShaped = style.position === "fixed" && style.pointerEvents === "none" && rect.width <= 40 && rect.height <= 40 && Number(style.zIndex || 0) >= 1000;
+    if (cursorNamed || cursorShaped) node.remove();
+  });
+
+  document.documentElement.style.removeProperty("cursor");
+  document.body?.style.removeProperty("cursor");
+}
+
+function installStableConversationScroll() {
+  const states = new WeakMap();
+
+  const prepare = (node) => {
+    if (!(node instanceof HTMLElement) || states.has(node)) return;
+    const state = { nearBottom: true, frame: 0, originalScrollTo: node.scrollTo.bind(node) };
+    const updateNearBottom = () => {
+      state.nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 140;
+    };
+    node.addEventListener("scroll", updateNearBottom, { passive: true });
+    node.style.scrollBehavior = "auto";
+    node.scrollTo = (optionsOrX, y) => {
+      if (typeof optionsOrX === "object") state.originalScrollTo({ ...optionsOrX, behavior: "auto" });
+      else state.originalScrollTo(optionsOrX, y);
+    };
+    state.cleanup = () => node.removeEventListener("scroll", updateNearBottom);
+    states.set(node, state);
+  };
+
+  const anchor = () => {
+    document.querySelectorAll(".startChatSurface").forEach((node) => {
+      prepare(node);
+      const state = states.get(node);
+      if (!state?.nearBottom) return;
+      cancelAnimationFrame(state.frame);
+      state.frame = requestAnimationFrame(() => { node.scrollTop = node.scrollHeight; });
+    });
+  };
+
+  anchor();
+  return { anchor, cleanup: () => states.forEach?.((state) => state.cleanup?.()) };
 }
 
 function installProgressiveDisclosure() {
   const timers = new WeakMap();
   const process = (node, role) => {
     if (!(node instanceof HTMLElement) || node.dataset.disclosureReady === "true") return;
-    if (role === "assistant" && node.closest(".startAssistantRow") === node.closest(".startAssistantRow")?.parentElement?.lastElementChild) return;
+    const row = node.closest(role === "user" ? ".startUserRow" : ".startAssistantRow");
+    const isStreamingRow = role === "assistant" && row?.parentElement?.lastElementChild === row;
+    if (isStreamingRow) return;
     const limit = role === "user" ? 168 : 380;
     if (node.scrollHeight <= limit + 8) return;
     node.dataset.disclosureReady = "true";
@@ -183,7 +239,7 @@ function installProgressiveDisclosure() {
     document.querySelectorAll(".startAssistantBody").forEach((node) => {
       const old = timers.get(node);
       if (old) window.clearTimeout(old);
-      timers.set(node, window.setTimeout(() => process(node, "assistant"), 650));
+      timers.set(node, window.setTimeout(() => process(node, "assistant"), 900));
     });
   };
   scan();
@@ -201,38 +257,30 @@ export default function CalmChatRuntimeBridge() {
     };
 
     removeCustomCursorArtifacts();
-    const scanDisclosure = installProgressiveDisclosure();
+    const disclosure = installProgressiveDisclosure();
+    const stableScroll = installStableConversationScroll();
     const observer = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) if (node instanceof HTMLElement) removeCustomCursorArtifacts(node);
       }
       removeCustomCursorArtifacts();
-      scanDisclosure();
+      disclosure();
+      stableScroll.anchor();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
-
-    const pointerHandler = (event) => {
-      removeCustomCursorArtifacts();
-      const target = document.elementFromPoint(event.clientX, event.clientY);
-      if (!(target instanceof HTMLElement)) return;
-      const interactive = target.closest("button,a,[role='button'],summary,label,select,input[type='checkbox'],input[type='radio']");
-      const text = target.closest("textarea,input:not([type]),input[type='text'],input[type='search'],input[type='email'],[contenteditable='true']");
-      target.style.setProperty("cursor", text ? "text" : interactive ? "pointer" : "auto", "important");
-    };
-    window.addEventListener("pointermove", pointerHandler, { passive: true, capture: true });
 
     return () => {
       window.fetch = nativeFetch;
       observer.disconnect();
-      window.removeEventListener("pointermove", pointerHandler, { capture: true });
+      stableScroll.cleanup?.();
     };
   }, []);
 
   return <style jsx global>{`
-    .streamsDisclosureToggle{display:inline-flex;margin:7px 0 0;border:0;background:transparent;color:#7dd3fc;font:700 12px/1.2 Inter,system-ui,sans-serif;cursor:pointer!important;padding:0}
+    .streamsDisclosureToggle{display:inline-flex;margin:7px 0 0;border:0;background:transparent;color:#7dd3fc;font:700 12px/1.2 Inter,system-ui,sans-serif;cursor:pointer;padding:0}
     .startUserBubble[data-expanded="false"],.startAssistantBody[data-expanded="false"]{mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent)}
     .startUserBubble[data-expanded="true"],.startAssistantBody[data-expanded="true"]{mask-image:none;-webkit-mask-image:none}
-    html,body,.startWorkspace,.startChatSurface,.startConversationColumn{cursor:auto!important}
+    html,body,.startWorkspace,.startChatSurface,.startConversationColumn{cursor:auto!important;scroll-behavior:auto!important}
     textarea,input,[contenteditable="true"]{cursor:text!important}
     button,a,[role="button"],summary,label,select{cursor:pointer!important}
   `}</style>;
