@@ -1,83 +1,139 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import {
+  Bot,
+  CalendarDays,
+  CheckSquare,
+  FileText,
+  FolderKanban,
+  Home,
+  Image,
+  LayoutTemplate,
+  Mic2,
+  Plug,
+  Search,
+  Settings,
+  Sparkles,
+  Video,
+  Workflow,
+  Wrench,
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const GROUPS = [
-  { label: "Main", items: ["Home", "Portfolio", "Projects", "Workspace", "Files", "Create", "Generate", "Build"] },
-  { label: "Build", items: ["Business Builder", "Revenue", "Visual Concepts", "Website Builder", "App Builder", "Preview + Launch"] },
-  { label: "Create", items: ["Creator Studio", "Image Studio", "Video Studio", "Voice Studio", "Captions", "Content", "Ideas", "Turn This Into You", "Calendar", "Social Research"] },
-  { label: "Project Tools", items: ["Assets", "Tasks", "History", "Ask AI"] },
+  {
+    label: "Workspace",
+    items: [
+      ["Home", Home, "/streams-ai"],
+      ["Projects", FolderKanban, "/dashboard/projects"],
+      ["Workspace", Workflow, "/streams-ai?view=workspace"],
+      ["Files", FileText, "/dashboard/files"],
+      ["Calendar", CalendarDays, "/streams-ai?destination=calendar"],
+      ["Tasks", CheckSquare, "/dashboard/tasks"],
+      ["A.S.K. AI", Bot, "/streams-ai"],
+    ],
+  },
+  {
+    label: "Create",
+    items: [
+      ["A.S.K. Knock", Wrench, "/streams-ai/streams-builder/workspace"],
+      ["Image Studio", Image, "/streams-ai?destination=image-studio"],
+      ["Video Studio", Video, "/streams-ai/streams-builder/gen-video"],
+      ["Voice Studio", Mic2, "/streams-ai?destination=voice-studio"],
+      ["Automation", Sparkles, "/streams-ai?destination=automation"],
+    ],
+  },
+  {
+    label: "Manage",
+    items: [
+      ["Templates", LayoutTemplate, "/streams-ai?destination=templates"],
+      ["Integrations", Plug, "/streams-ai?destination=integrations"],
+      ["Settings", Settings, "/dashboard/settings"],
+    ],
+  },
 ];
-
-const ROUTES = {
-  Home: "/streams-ai",
-  Projects: "/dashboard/projects",
-  Workspace: "/streams-ai?view=workspace",
-  Files: "/dashboard/files",
-  Assets: "/dashboard/assets",
-  Tasks: "/dashboard/tasks",
-  History: "/dashboard/history",
-  "Ask AI": "/streams-ai",
-};
 
 export default function NewChatNavigationVisualSample({ onNewProject }) {
   const router = useRouter();
   const { user, profile, membershipRole, workspaceLoading } = useAuth();
   const canOperate = membershipRole === "owner" || membershipRole === "admin";
 
-  function navigate(item) {
-    const route = ROUTES[item];
+  function navigate(route) {
     if (route) router.push(route);
   }
 
   return (
-    <aside className="newChatNavigationVisualSample" aria-label="StreamsAI navigation">
+    <aside className="newChatNavigationVisualSample" aria-label="Streams Workspace navigation">
       <header className="sampleMenuBrand">
         <span className="sampleMenuOrb" aria-hidden="true"><i /></span>
-        <span><strong>STREAMS AI</strong><small>Your AI Business Operator</small></span>
+        <span>
+          <strong>STREAMS AI</strong>
+          <small>Streams Workspace</small>
+          <small>Hosted by A.S.K. AI</small>
+        </span>
       </header>
-      <button type="button" className="sampleNewSession" onClick={onNewProject}>+ New project</button>
+
+      <div className="sampleTopActions" aria-label="Workspace actions">
+        <button type="button" aria-label="Search workspace" title="Search workspace" onClick={() => router.push("/streams-ai?destination=search")}><Search size={17} /></button>
+        <button type="button" aria-label="Create new project" title="Create new project" onClick={onNewProject}>+</button>
+      </div>
+
       <div className="sampleMenuScroll">
         {GROUPS.map((group) => (
           <section className="sampleMenuGroup" key={group.label} aria-label={group.label}>
             <h2>{group.label}</h2>
-            {group.items.map((item) => (
-              <button key={`${group.label}:${item}`} type="button" onClick={() => navigate(item)} className={item === "Home" ? "sampleMenuItem active" : "sampleMenuItem"}>
-                {item}
+            {group.items.map(([label, Icon, route]) => (
+              <button
+                key={`${group.label}:${label}`}
+                type="button"
+                onClick={() => navigate(route)}
+                className={label === "Home" ? "sampleMenuItem active" : "sampleMenuItem"}
+                aria-label={label}
+                title={label}
+              >
+                <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                <span>{label}</span>
               </button>
             ))}
           </section>
         ))}
 
-        <section className="sampleMenuGroup" aria-label="Account">
-          <h2>Account</h2>
-          <button type="button" className="sampleMenuItem" onClick={() => router.push("/profile")}>Profile</button>
-          <button type="button" className="sampleMenuItem" onClick={() => router.push("/dashboard/settings")}>Settings</button>
-        </section>
-
         {canOperate ? (
           <section className="sampleMenuGroup adminMenuGroup" aria-label="Administration">
             <h2>Administration</h2>
-            <button type="button" className="sampleMenuItem adminMenuItem" onClick={() => router.push("/admin/operations")}>Operations</button>
+            <button type="button" className="sampleMenuItem adminMenuItem" onClick={() => router.push("/admin/operations")}>
+              <Wrench size={16} strokeWidth={1.75} aria-hidden="true" />
+              <span>Operations</span>
+            </button>
           </section>
         ) : null}
 
         {user ? (
           <footer className="sampleAccountSummary">
-            <strong>{profile?.full_name || user.email || "Signed in"}</strong>
-            <span>{workspaceLoading ? "Checking access…" : membershipRole || "member"}</span>
+            <span className="sampleAvatar" aria-hidden="true">{String(profile?.full_name || user.email || "S").charAt(0).toUpperCase()}</span>
+            <span className="sampleAccountText">
+              <strong>{profile?.full_name || user.email || "Signed in"}</strong>
+              <small>{workspaceLoading ? "Checking access…" : membershipRole || "member"}</small>
+            </span>
           </footer>
         ) : null}
       </div>
+
       <style jsx>{`
-        .newChatNavigationVisualSample{position:fixed;inset:0 auto 0 0;z-index:49000;width:232px;min-width:232px;height:100dvh;display:grid;grid-template-rows:auto auto minmax(0,1fr);background:#050719;border-right:1px solid rgba(148,163,184,.12);overflow:hidden;color:#f8fafc;opacity:0;transform:translateX(-18px);animation:newChatMenuFadeIn 3.2s cubic-bezier(.16,1,.3,1) .35s forwards;box-shadow:16px 0 48px rgba(0,0,0,.22)}
-        .sampleMenuBrand{display:flex;align-items:center;gap:10px;padding:13px 12px 9px}.sampleMenuBrand>span:last-child{display:grid;gap:2px}.sampleMenuBrand strong{font-size:13px;letter-spacing:.1em}.sampleMenuBrand small{font-size:9px;color:#93a4bf}.sampleMenuOrb{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#071426;border:1px solid #163a6a;box-shadow:0 0 18px rgba(37,99,235,.2)}.sampleMenuOrb i{width:11px;height:11px;border-radius:50%;background:#2dd4ff;box-shadow:0 0 12px #2dd4ff}
-        .sampleNewSession{margin:0 8px 10px;height:38px;border:0;border-radius:10px;background:linear-gradient(90deg,#28d7ff,#6d5cff);color:#031021;font-size:13px;font-weight:900;cursor:pointer}
-        .sampleMenuScroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 6px 18px;scrollbar-width:thin;scrollbar-color:#4b5563 transparent}.sampleMenuGroup{display:grid;gap:2px;margin-bottom:12px}.sampleMenuGroup h2{margin:4px 7px 3px;color:#7890bc;font-size:8px;line-height:1.2;text-transform:uppercase;letter-spacing:.16em}.sampleMenuItem{width:100%;min-height:31px;border:0;border-radius:8px;background:transparent;color:#edf2ff;text-align:left;padding:6px 10px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}.sampleMenuItem:hover,.sampleMenuItem:focus-visible{background:rgba(59,130,246,.14);outline:none}.sampleMenuItem.active{background:linear-gradient(90deg,#5933b9,#174ab6);color:#fff;box-shadow:inset 0 0 0 1px rgba(125,211,252,.12)}.adminMenuGroup{padding-top:5px;border-top:1px solid rgba(148,163,184,.12)}.adminMenuItem{color:#7dd3fc}.sampleAccountSummary{display:grid;gap:2px;margin:8px 7px 0;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:rgba(15,23,42,.7)}.sampleAccountSummary strong{overflow:hidden;text-overflow:ellipsis;font-size:10px}.sampleAccountSummary span{font-size:9px;color:#93c5fd;text-transform:capitalize}
-        @keyframes newChatMenuFadeIn{0%{opacity:0;transform:translateX(-18px);filter:blur(4px)}45%{opacity:.58;filter:blur(1px)}100%{opacity:1;transform:translateX(0);filter:blur(0)}}
-        @media(prefers-reduced-motion:reduce){.newChatNavigationVisualSample{animation:none;opacity:1;transform:none;filter:none}}
-        @media(max-width:760px){.newChatNavigationVisualSample{width:190px;min-width:190px}.sampleMenuBrand{padding-inline:9px}.sampleMenuItem{font-size:11px;padding-inline:8px}}
+        .newChatNavigationVisualSample{position:fixed;inset:0 auto 0 0;z-index:49000;width:224px;min-width:224px;height:100dvh;display:grid;grid-template-rows:auto auto minmax(0,1fr);background:linear-gradient(180deg,#030712 0%,#040817 100%);border-right:1px solid rgba(148,163,184,.1);overflow:hidden;color:#f8fafc}
+        .sampleMenuBrand{display:flex;align-items:flex-start;gap:10px;padding:18px 16px 13px}.sampleMenuBrand>span:last-child{display:grid;gap:1px;min-width:0}.sampleMenuBrand strong{font-size:12px;letter-spacing:.08em}.sampleMenuBrand small{font-size:8px;line-height:1.35;color:#8190aa}.sampleMenuOrb{width:29px;height:29px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:#071426;border:1px solid #163a6a;box-shadow:0 0 18px rgba(37,99,235,.2)}.sampleMenuOrb i{width:10px;height:10px;border-radius:50%;background:#2dd4ff;box-shadow:0 0 12px #2dd4ff}
+        .sampleTopActions{display:flex;justify-content:flex-end;gap:5px;padding:0 12px 10px}.sampleTopActions button{width:31px;height:31px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#aebbd0;cursor:pointer}.sampleTopActions button:hover,.sampleTopActions button:focus-visible{background:rgba(59,130,246,.12);color:#fff;outline:none}
+        .sampleMenuScroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 9px 16px;scrollbar-width:none}.sampleMenuScroll::-webkit-scrollbar{display:none}.sampleMenuGroup{display:grid;gap:1px;margin-bottom:13px}.sampleMenuGroup h2{margin:5px 8px 4px;color:#65748d;font-size:8px;line-height:1.2;text-transform:uppercase;letter-spacing:.16em}.sampleMenuItem{width:100%;min-height:33px;display:flex;align-items:center;gap:10px;border:0;border-radius:7px;background:transparent;color:#aab5c8;text-align:left;padding:7px 9px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}.sampleMenuItem:hover,.sampleMenuItem:focus-visible{background:rgba(59,130,246,.09);color:#fff;outline:none}.sampleMenuItem.active{background:linear-gradient(90deg,rgba(29,110,224,.95),rgba(89,48,184,.9));color:#fff}.adminMenuGroup{padding-top:4px;border-top:1px solid rgba(148,163,184,.08)}.adminMenuItem{color:#7dd3fc}
+        .sampleAccountSummary{display:flex;align-items:center;gap:9px;margin:12px 4px 0;padding:8px 5px;border:0;background:transparent}.sampleAvatar{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#7c3aed);font-size:10px;font-weight:800;color:#fff}.sampleAccountText{display:grid;gap:1px;min-width:0}.sampleAccountText strong{overflow:hidden;text-overflow:ellipsis;font-size:9px;color:#e5e7eb}.sampleAccountText small{font-size:8px;color:#7f8ca3;text-transform:capitalize}
+        @media(max-width:760px){.newChatNavigationVisualSample{width:190px;min-width:190px}.sampleMenuBrand{padding-inline:11px}.sampleMenuItem{font-size:10px;padding-inline:8px}}
+      `}</style>
+
+      <style jsx global>{`
+        .withNewChatVisualSample .streamsOperator > .operatorSidebar{display:none!important}
+        .withNewChatVisualSample .streamsOperator{padding-left:224px!important}
+        .withNewChatVisualSample .operatorMain{width:100%!important;min-width:0!important}
+        @media(max-width:760px){.withNewChatVisualSample .streamsOperator{padding-left:190px!important}}
       `}</style>
     </aside>
   );
