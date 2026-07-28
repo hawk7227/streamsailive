@@ -1,11 +1,6 @@
-/* Builder layout restoration: deterministic three-column test surface. */
+/* Builder workspace: chat left, code/preview center, visual editor right. */
 @media (min-width: 1101px) {
-  .existingBuilderSurface {
-    height: 100% !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-  }
-
+  .existingBuilderSurface,
   .existingBuilderSurface .streamsBuilderShell,
   .existingBuilderSurface .centerWorkspace {
     width: 100% !important;
@@ -17,41 +12,6 @@
   .existingBuilderSurface .centerWorkspace {
     position: relative !important;
     display: block !important;
-  }
-
-  /* Repository controls belong to the center workstation footer, not above chat. */
-  .existingBuilderSurface .topRow {
-    position: absolute !important;
-    z-index: 80 !important;
-    left: 29% !important;
-    bottom: 0 !important;
-    width: 35.5% !important;
-    height: 48px !important;
-    min-height: 48px !important;
-    margin: 0 !important;
-    padding: 5px 7px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 7px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    box-sizing: border-box !important;
-    border-top: 1px solid rgba(45, 212, 191, .28) !important;
-    border-bottom: 0 !important;
-    border-right: 1px solid rgba(148, 163, 184, .18) !important;
-    background: #020617 !important;
-  }
-
-  .existingBuilderSurface .topControlStrip {
-    flex: 1 1 auto !important;
-    min-width: 420px !important;
-    height: 36px !important;
-  }
-
-  .existingBuilderSurface .controls {
-    flex: 0 0 236px !important;
-    min-width: 236px !important;
-    height: 36px !important;
   }
 
   .existingBuilderSurface .workArea {
@@ -69,10 +29,14 @@
     min-height: 0 !important;
     height: 100% !important;
     display: grid !important;
-    grid-template-rows: minmax(0, 1fr) auto !important;
+    grid-template-rows: minmax(0, 1fr) !important;
     overflow: hidden !important;
-    border-right: 1px solid rgba(148, 163, 184, .18) !important;
+    border-right: 1px solid rgba(148,163,184,.18) !important;
     background: #030916 !important;
+  }
+
+  .existingBuilderSurface .operatorColumn > :not(:first-child) {
+    display: none !important;
   }
 
   .existingBuilderSurface .workstationShell {
@@ -80,24 +44,18 @@
     min-height: 0 !important;
     height: 100% !important;
     display: grid !important;
-    grid-template-rows: 30px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0,1fr) !important;
     overflow: hidden !important;
     background: #020617 !important;
   }
 
-  .existingBuilderSurface .connectionRibbon {
-    display: flex !important;
-    min-width: 0 !important;
-    height: 30px !important;
-    align-items: center !important;
-    padding: 0 10px !important;
-    overflow: hidden !important;
-    white-space: nowrap !important;
-    text-overflow: ellipsis !important;
-    border-bottom: 1px solid rgba(148, 163, 184, .16) !important;
-    background: #07101f !important;
-    color: #94a3b8 !important;
-    font-size: 10px !important;
+  /* Nothing belongs above the editing canvases. */
+  .existingBuilderSurface .connectionRibbon,
+  .existingBuilderSurface .stationContext,
+  .existingBuilderSurface .statusToggle,
+  .existingBuilderSurface .statusDrop,
+  .existingBuilderSurface .wsChrome {
+    display: none !important;
   }
 
   .existingBuilderSurface .stationViewport {
@@ -107,7 +65,7 @@
     width: 100% !important;
     height: 100% !important;
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important;
     gap: 1px !important;
     overflow: hidden !important;
     background: #172033 !important;
@@ -121,36 +79,49 @@
     background: #020617 !important;
   }
 
-  /* Reserve center-column room for the persistent repository footer. */
   .existingBuilderSurface .stationViewport > section:first-child {
-    padding-bottom: 48px !important;
+    padding-bottom: 52px !important;
     box-sizing: border-box !important;
   }
 
   .existingBuilderSurface .stationViewport > section + section {
-    border-left: 1px solid rgba(148, 163, 184, .16) !important;
+    border-left: 1px solid rgba(148,163,184,.16) !important;
   }
 
-  /* These panels displaced the permanent tabs and editor during the live test. */
-  .existingBuilderSurface .stationContext,
-  .existingBuilderSurface .statusToggle,
-  .existingBuilderSurface .statusDrop,
-  .existingBuilderSurface .wsChrome {
-    display: none !important;
-  }
-
-  .existingBuilderSurface .liveWorkstation,
-  .existingBuilderSurface .visualEditingWorkstation {
+  /* Center editor tabs and preview controls are a permanent bottom dock. */
+  .existingBuilderSurface .liveWorkstation {
     height: 100% !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-rows: minmax(0,1fr) auto !important;
+    overflow: hidden !important;
+    background: #020617 !important;
+  }
+
+  .existingBuilderSurface .liveWorkstation .workstationBody {
+    grid-row: 1 !important;
     min-height: 0 !important;
     overflow: hidden !important;
   }
 
-  .existingBuilderSurface .liveWorkstation .workstationToolbar,
+  .existingBuilderSurface .liveWorkstation .workstationToolbar {
+    grid-row: 2 !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    align-items: center !important;
+    border-top: 1px solid rgba(45,212,191,.28) !important;
+    border-bottom: 0 !important;
+    background: #020617 !important;
+    visibility: visible !important;
+  }
+
   .existingBuilderSurface .liveWorkstation .workingTabs,
   .existingBuilderSurface .liveWorkstation .sourceToolbar {
     display: flex !important;
     visibility: visible !important;
+    min-width: 0 !important;
   }
 
   .existingBuilderSurface .liveWorkstation .workingTabs {
@@ -158,11 +129,52 @@
     overflow-y: hidden !important;
     scrollbar-width: thin !important;
   }
+
+  .existingBuilderSurface .visualEditingWorkstation {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* GitHub controls belong below the center only. */
+  .existingBuilderSurface .topRow {
+    position: absolute !important;
+    z-index: 90 !important;
+    left: 29% !important;
+    bottom: 0 !important;
+    width: 35.5% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+    padding: 5px 7px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    box-sizing: border-box !important;
+    border-top: 1px solid rgba(45,212,191,.28) !important;
+    border-bottom: 0 !important;
+    border-right: 1px solid rgba(148,163,184,.18) !important;
+    background: #020617 !important;
+  }
+
+  .existingBuilderSurface .topControlStrip {
+    flex: 1 1 auto !important;
+    min-width: 420px !important;
+    height: 38px !important;
+  }
+
+  .existingBuilderSurface .controls {
+    flex: 0 0 236px !important;
+    min-width: 236px !important;
+    height: 38px !important;
+  }
 }
 
 @media (min-width: 1500px) {
   .existingBuilderSurface .workArea {
-    grid-template-columns: minmax(430px, 29%) minmax(0, 71%) !important;
+    grid-template-columns: minmax(430px,29%) minmax(0,71%) !important;
   }
 }
 
@@ -174,7 +186,7 @@
 
   .existingBuilderSurface .workArea {
     display: grid !important;
-    grid-template-columns: minmax(300px, 38%) minmax(0, 62%) !important;
+    grid-template-columns: minmax(300px,38%) minmax(0,62%) !important;
   }
 
   .existingBuilderSurface .stationViewport {
@@ -185,6 +197,10 @@
 
   .existingBuilderSurface .stationViewport > section {
     min-height: 560px !important;
+  }
+
+  .existingBuilderSurface .liveWorkstation {
+    grid-template-rows: minmax(0,1fr) auto !important;
   }
 }
 
