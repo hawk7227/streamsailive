@@ -35,26 +35,121 @@
   line-height: 1.55 !important;
 }
 
+/* Final visible composer layout. Text owns the full upper row; actions remain
+   beneath it like ChatGPT/Claude and can never cover the typed message. */
+.streamsComposer {
+  min-height: 92px !important;
+  max-height: min(318px, 48dvh) !important;
+  overflow: hidden !important;
+}
+
 .streamsComposerRow {
   display: grid !important;
-  grid-template-columns: 42px minmax(0, 1fr) 52px !important;
-  grid-template-rows: 34px 18px !important;
+  grid-template-columns: 46px minmax(0, 1fr) auto auto 58px !important;
+  grid-template-rows: minmax(30px, auto) 58px !important;
   grid-template-areas:
-    "tools input send"
-    ". mode send" !important;
+    "input input input input input"
+    "tools tool mode mic send" !important;
+  align-items: center !important;
+  gap: 8px 10px !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+.streamsComposerInput {
+  grid-area: input !important;
+  order: initial !important;
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  max-height: min(216px, 31dvh) !important;
+  margin: 0 !important;
+  padding: 8px 8px 4px !important;
+  resize: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-height: 1.45 !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin;
+}
+
+.streamsComposerIconButton {
+  grid-area: tools !important;
+  order: initial !important;
+  align-self: end !important;
+}
+
+.streamsComposerToolPill {
+  grid-area: tool !important;
+  order: initial !important;
+  justify-self: start !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
 }
 
 .streamsComposerPill {
   grid-area: mode !important;
-  justify-self: start !important;
-  align-self: start !important;
+  order: initial !important;
+  justify-self: end !important;
+  align-self: center !important;
+  margin: 0 !important;
 }
 
 .streamsComposerMicButton {
-  grid-area: mode !important;
-  justify-self: start !important;
-  align-self: start !important;
-  margin-left: 88px !important;
+  grid-area: mic !important;
+  order: initial !important;
+  justify-self: center !important;
+  align-self: center !important;
+  margin: 0 !important;
+}
+
+.streamsComposerSendButton {
+  grid-area: send !important;
+  order: initial !important;
+  justify-self: end !important;
+  align-self: end !important;
+}
+
+/* Restore the actual browser cursor and suppress common custom cursor layers. */
+html,
+body,
+body * {
+  cursor: auto !important;
+}
+
+textarea,
+input,
+[contenteditable="true"] {
+  cursor: text !important;
+}
+
+button,
+a,
+select,
+summary,
+[role="button"] {
+  cursor: pointer !important;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+
+.custom-cursor,
+.cursor-dot,
+.cursor-follower,
+.mouse-dot,
+[data-custom-cursor],
+[data-cursor-dot] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 @media (max-width: 760px) {
@@ -63,22 +158,32 @@
     line-height: 1.5 !important;
   }
 
-  .streamsComposerRow {
-    grid-template-columns: 40px minmax(0, 1fr) 50px !important;
-    grid-template-rows: 33px 18px !important;
+  .streamsComposer {
+    max-height: min(278px, 44dvh) !important;
   }
 
+  .streamsComposerRow {
+    grid-template-columns: 42px minmax(0, 1fr) 50px !important;
+    grid-template-rows: minmax(30px, auto) 50px !important;
+    grid-template-areas:
+      "input input input"
+      "tools tool send" !important;
+    gap: 7px 8px !important;
+  }
+
+  .streamsComposerInput {
+    max-height: min(168px, 28dvh) !important;
+    font-size: 16px !important;
+  }
+
+  .streamsComposerPill,
   .streamsComposerMicButton {
-    margin-left: 82px !important;
+    display: none !important;
   }
 }
 
 @media (max-width: 430px) {
   .shell .chatPanel .msg.assistant .bubble {
     font-size: 14px !important;
-  }
-
-  .streamsComposerMicButton {
-    margin-left: 76px !important;
   }
 }
