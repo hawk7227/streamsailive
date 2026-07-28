@@ -17,7 +17,7 @@ const GROUPS = [
     ["Image / Brand Project", Image, "/streams-ai?destination=image-studio", "image-studio"],
     ["App Project", MonitorSmartphone, "/streams-ai?destination=app-builder", "app-builder"],
     ["Document / Report Project", FileText, "/streams-ai?destination=content", "content"],
-    ["Marketing Campaign Project", BriefcaseBusiness, "/streams-ai?destination=business-builder", "business-builder"],
+    ["Product Campaign Project", BriefcaseBusiness, "/streams-ai?destination=business-builder", "business-builder"],
     ["Website Project", Globe2, "/streams-ai?destination=website-builder", "website-builder"],
   ]},
   { label: "Account", items: [
