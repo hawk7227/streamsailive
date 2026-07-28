@@ -12,16 +12,16 @@ const benefits = [
 
 export default function Features() {
   return (
-    <section id="solutions" className="relative overflow-hidden border-t border-white/8 bg-[#020713] px-5 py-14 sm:px-8 sm:py-20 lg:px-10">
+    <section id="workspace-benefits" className="relative overflow-hidden border-t border-white/8 bg-[#020713] px-5 py-14 sm:px-8 sm:py-20 lg:px-[clamp(2.5rem,5vw,7rem)] lg:py-24">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_50%_0%,rgba(14,165,233,.08),transparent_68%)]" />
-      <div className="relative mx-auto w-full max-w-7xl">
-        <h2 className="text-center text-2xl font-semibold tracking-[-.035em] text-white sm:text-3xl">Everything you need, in <span className="text-cyan-300">one connected workspace.</span></h2>
-        <div className="mt-12 grid grid-cols-1 gap-9 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="relative mx-auto w-full max-w-[1680px]">
+        <h2 className="text-center text-2xl font-semibold tracking-[-.035em] text-white sm:text-3xl lg:text-4xl">Everything you need, in <span className="text-cyan-300">one connected workspace.</span></h2>
+        <div className="mt-12 grid grid-cols-1 gap-9 sm:grid-cols-2 lg:grid-cols-5 lg:gap-[clamp(2rem,3vw,4rem)]">
           {benefits.map(({ title, description, icon: Icon }) => (
             <div key={title} className="text-center sm:text-left lg:text-center">
               <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-cyan-400/[.04] text-cyan-300 shadow-[0_0_28px_rgba(34,211,238,.16)] sm:mx-0 lg:mx-auto"><Icon size={25} strokeWidth={1.7} /></span>
               <h3 className="mt-5 text-sm font-semibold leading-5 text-white">{title}</h3>
-              <p className="mx-auto mt-2 max-w-[15rem] text-sm leading-6 text-slate-500 sm:mx-0 lg:mx-auto">{description}</p>
+              <p className="mx-auto mt-2 max-w-[17rem] text-sm leading-6 text-slate-500 sm:mx-0 lg:mx-auto">{description}</p>
             </div>
           ))}
         </div>
