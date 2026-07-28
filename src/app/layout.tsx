@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./streams-ai/mobile-buildercenterchat-exact.css";
+import "./streams-ai/website-project-parity.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
 import StreamsGlobalAccountNavLinks from "@/components/account/StreamsGlobalAccountNavLinks";
