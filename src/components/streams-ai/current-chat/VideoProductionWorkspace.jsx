@@ -1,171 +1,179 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, ChevronDown, CircleAlert, Clock3, Download, Film, Gauge, Image as ImageIcon, Layers3, LoaderCircle, Menu, Mic2, MonitorPlay, Music2, Play, Plus, RefreshCw, Save, Settings2, Share2, Sparkles, WandSparkles, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  ArrowRight, ArrowUp, CalendarDays, Clock3, Film, GraduationCap,
+  MessageSquareText, Mic2, Play, Smartphone, Sparkles, Star, Tag, Youtube,
+} from "lucide-react";
 
-const ACTIVE_PROJECT_KEY = "streams-ai:active-project-id";
-const CITY = "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1800&q=88";
-const PERSON = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=86";
-const ALT = [
-  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=82",
-  "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=82",
-  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=82",
-  "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=82",
+const QUICK_IDEAS = [
+  ["Product advertisement", Tag],
+  ["Social media reel", Smartphone],
+  ["Brand commercial", Star],
+  ["Customer testimonial", MessageSquareText],
+  ["Explainer video", Play],
+  ["Training video", GraduationCap],
+  ["YouTube video", Youtube],
+  ["Event highlight", CalendarDays],
 ];
 
-const DEFAULT_VIDEO = {
-  prompt: "A lone female engineer stands on a rain-soaked rooftop at night, looking across a futuristic megacity toward a massive AI tower glowing in blue and purple.",
-  duration: "8s",
-  ratio: "16:9",
-  style: "Cinematic",
-  mode: "Advanced Mode",
-  camera: "Slow push in",
-  lens: "18mm wide",
-  angle: "High angle",
-  resolution: "1920 × 1080",
-  frameRate: "24 fps",
-  estimatedCredits: 18,
-};
+const VIDEO_IDEAS = [
+  {
+    title: "Product Advertisement",
+    description: "Launch products with premium cinematic storytelling.",
+    duration: "15–60 sec",
+    prompt: "Create a premium cinematic product advertisement with dramatic lighting, polished close-ups, and a strong final brand reveal.",
+    image: "https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?auto=format&fit=crop&w=1200&q=88",
+    icon: Tag,
+  },
+  {
+    title: "Social Campaign",
+    description: "High-energy short-form content for TikTok, Instagram, Shorts, and Reels.",
+    duration: "15–45 sec",
+    prompt: "Create an energetic vertical social campaign with a real creator, quick cuts, bold hooks, and platform-ready pacing.",
+    image: "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1200&q=88",
+    icon: Smartphone,
+  },
+  {
+    title: "Brand Story",
+    description: "Tell the story behind your brand with emotional visual storytelling.",
+    duration: "30–120 sec",
+    prompt: "Create an emotional cinematic brand story with real people, natural environments, and a memorable narrative arc.",
+    image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=88",
+    icon: Star,
+  },
+  {
+    title: "Customer Testimonial",
+    description: "Build trust and credibility with authentic customer experiences.",
+    duration: "30–90 sec",
+    prompt: "Create an authentic customer testimonial with warm interview lighting, supporting product footage, and clear story beats.",
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=88",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Event Highlight",
+    description: "Capture the energy and excitement of your live event or conference.",
+    duration: "30–120 sec",
+    prompt: "Create a high-energy event highlight video with crowd reactions, stage moments, speakers, and a powerful closing montage.",
+    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=88",
+    icon: CalendarDays,
+  },
+  {
+    title: "Educational & Training",
+    description: "Teach, explain, and inspire with engaging training videos.",
+    duration: "30–180 sec",
+    prompt: "Create a clear professional training video with a real presenter, visual examples, structured chapters, and concise explanations.",
+    image: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=88",
+    icon: GraduationCap,
+  },
+];
 
-async function authHeaders(supabase) {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-export default function VideoProductionWorkspace({ onNewProject }) {
+export default function VideoProductionWorkspace() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-  const { user, profile, membershipRole } = useAuth();
-  const [project, setProject] = useState(null);
-  const [video, setVideo] = useState(DEFAULT_VIDEO);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [saveState, setSaveState] = useState("saved");
-  const [generating, setGenerating] = useState(false);
-  const [activeScene, setActiveScene] = useState(0);
-  const [activeVersion, setActiveVersion] = useState(0);
-  const [activeControl, setActiveControl] = useState("Prompt");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const canEdit = membershipRole === "owner" || membershipRole === "admin" || membershipRole === "member";
+  const [prompt, setPrompt] = useState("");
+  const [selected, setSelected] = useState("");
+  const canStart = useMemo(() => prompt.trim().length > 3, [prompt]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true); setError("");
-      try {
-        const headers = await authHeaders(supabase);
-        const id = window.localStorage.getItem(ACTIVE_PROJECT_KEY);
-        const endpoint = id ? `/api/v1/projects?projectId=${encodeURIComponent(id)}` : "/api/v1/projects?limit=1";
-        const response = await fetch(endpoint, { headers, credentials: "include" });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || data?.ok === false) throw new Error(data?.error || "Unable to load project.");
-        const next = data.project || data.projects?.[0] || null;
-        if (!cancelled) {
-          setProject(next);
-          setVideo({ ...DEFAULT_VIDEO, ...(next?.metadata?.videoWorkspace || {}) });
-        }
-      } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to load project.");
-      } finally { if (!cancelled) setLoading(false); }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [supabase]);
-
-  function update(field, value) {
-    setVideo((current) => ({ ...current, [field]: value }));
-    setSaveState("dirty");
+  function chooseIdea(label, ideaPrompt = "") {
+    setSelected(label);
+    setPrompt(ideaPrompt || `Create a ${label.toLowerCase()} with a polished professional production style.`);
+    window.requestAnimationFrame(() => document.querySelector(".vplPrompt input")?.focus());
   }
 
-  async function save() {
-    if (!project?.id || !canEdit) return;
-    setSaveState("saving");
-    try {
-      const headers = await authHeaders(supabase);
-      const response = await fetch("/api/v1/projects", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...headers },
-        credentials: "include",
-        body: JSON.stringify({ projectId: project.id, metadata: { videoWorkspace: video, projectType: "Video" } }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data?.ok === false) throw new Error(data?.error || "Save failed.");
-      setProject(data.project); setSaveState("saved");
-    } catch { setSaveState("failed"); }
+  function startProject(event) {
+    event?.preventDefault?.();
+    if (!canStart) return;
+    window.localStorage.setItem("streams-video-project:creative-brief", prompt.trim());
+    window.dispatchEvent(new CustomEvent("streams-video-project:brief-started", { detail: { prompt: prompt.trim() } }));
+    router.push("/streams-ai/streams-builder/gen-video");
   }
 
-  async function generate() {
-    if (!canEdit) return;
-    setGenerating(true);
-    await save();
-    setTimeout(() => { setGenerating(false); router.push("/streams-ai/streams-builder/gen-video"); }, 450);
-  }
+  return (
+    <main className="vpl" aria-label="Streams Video Project creative start">
+      <section className="vplInner">
+        <header className="vplHero">
+          <div className="vplTitle">Streams <span>Video Project</span></div>
+          <div className="vplHosted"><Sparkles aria-hidden="true" /> Hosted by <strong>A.S.K. Video Director</strong></div>
+          <h1>What video would you like to create today?</h1>
+          <p>Describe your idea in plain language and I’ll help you plan, storyboard, and produce it.</p>
 
-  async function share() {
-    const payload = { title: project?.name || "Streams Video Project", text: video.prompt, url: window.location.href };
-    if (navigator.share) await navigator.share(payload).catch(() => {}); else await navigator.clipboard?.writeText(window.location.href);
-  }
+          <form className="vplPrompt" onSubmit={startProject}>
+            <Sparkles className="vplPromptSpark" aria-hidden="true" />
+            <input
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Tell me the story you want to tell..."
+              aria-label="Describe the video you want to create"
+            />
+            <button type="button" className="vplMic" aria-label="Use voice input"><Mic2 /></button>
+            <button type="submit" className="vplSubmit" disabled={!canStart} aria-label="Start video project"><ArrowUp /></button>
+          </form>
 
-  if (loading) return <main className="vpwState"><LoaderCircle className="spin"/><strong>Loading video workspace…</strong></main>;
-  if (!user) return <main className="vpwState"><CircleAlert/><strong>Sign in to open this workspace.</strong><button onClick={() => router.push("/login")}>Sign in</button></main>;
-  if (error) return <main className="vpwState"><CircleAlert/><strong>{error}</strong><button onClick={() => location.reload()}><RefreshCw/>Retry</button></main>;
-  if (!project) return <main className="vpwState"><Film/><strong>No active video project</strong><button onClick={onNewProject}><Plus/>Create project</button></main>;
+          <p className="vplTry">Or try one of these ideas to get started</p>
+          <div className="vplChips" aria-label="Quick video ideas">
+            {QUICK_IDEAS.map(([label, Icon]) => (
+              <button key={label} type="button" className={selected === label ? "active" : ""} onClick={() => chooseIdea(label)}>
+                <Icon aria-hidden="true" />{label}
+              </button>
+            ))}
+          </div>
+        </header>
 
-  const ownerName = profile?.full_name || user.email || "Workspace owner";
-  const scenes = [CITY, PERSON, ...ALT];
-  return <main className="vpw">
-    <header className="vpwHeader">
-      <div className="vpwTitle"><span className="vpwMark"><Film/></span><div><strong>{project.name}</strong><small>Video Project · {saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Unsaved changes" : saveState === "failed" ? "Save failed" : "Saved"}</small></div></div>
-      <div className="vpwHeaderActions"><button onClick={save} disabled={!canEdit || saveState === "saving"}><Save/>Save</button><button onClick={share}><Share2/>Share</button><button onClick={() => window.print()}><Download/>Export</button><button className="primary" onClick={generate} disabled={generating}>{generating ? <LoaderCircle className="spin"/> : <Sparkles/>}{generating ? "Starting…" : "Generate video"}</button><button className="mobileOnly" onClick={() => setDrawerOpen(true)}><Menu/></button></div>
-    </header>
+        <section className="vplIdeas" aria-labelledby="popular-video-ideas">
+          <header>
+            <h2 id="popular-video-ideas"><Sparkles aria-hidden="true" /> Popular Video Ideas</h2>
+            <p>Choose a direction below and A.S.K. Video Director will build your production plan.</p>
+          </header>
 
-    <section className="vpwModes">{["Smart Mode","Advanced Mode","AI Assistant"].map((mode) => <button key={mode} className={video.mode === mode ? "active" : ""} onClick={() => update("mode", mode)}><Sparkles/>{mode}</button>)}</section>
-
-    <div className="vpwLayout">
-      <section className="vpwMain">
-        <div className="vpwCommand">
-          <label className="prompt"><span>Main prompt</span><textarea value={video.prompt} onChange={(event) => update("prompt", event.target.value)} /></label>
-          <label><span>Model tier</span><select defaultValue="Streams Cinema"><option>Streams Cinema</option><option>Streams Motion</option><option>Streams Fast</option></select></label>
-          <label><span>Duration</span><select value={video.duration} onChange={(event) => update("duration", event.target.value)}><option>5s</option><option>8s</option><option>10s</option><option>15s</option></select></label>
-          <label><span>Aspect ratio</span><select value={video.ratio} onChange={(event) => update("ratio", event.target.value)}><option>16:9</option><option>9:16</option><option>1:1</option><option>4:5</option></select></label>
-          <label><span>Style</span><select value={video.style} onChange={(event) => update("style", event.target.value)}><option>Cinematic</option><option>Realistic</option><option>Product</option><option>Music Video</option></select></label>
-          <button className="generate" onClick={generate} disabled={generating}><WandSparkles/>Generate · {video.estimatedCredits} credits</button>
-          <button className="advanced" onClick={() => setDrawerOpen(true)}><Settings2/>Advanced controls</button>
-        </div>
-
-        <div className="vpwPreview">
-          <img src={CITY} alt="Cinematic futuristic city video preview"/>
-          <div className="vpwPersonChip"><img src={PERSON} alt="Lead character reference"/><span><strong>Lead character</strong><small>Consistency locked</small></span></div>
-          <div className="vpwPlayer"><button aria-label="Play"><Play fill="currentColor"/></button><span>0:00 / {video.duration}</span><i/><span>CC</span><span>1×</span><span>⛶</span></div>
-        </div>
-
-        <section className="vpwTimeline"><header><strong>Timeline / Keyframes</strong><span>{video.duration} · {scenes.length} keyframes</span></header><div>{scenes.map((image, index) => <button key={image} className={activeScene === index ? "active" : ""} onClick={() => setActiveScene(index)}><img src={image} alt={`Scene ${index + 1}`}/><span>{index}s</span></button>)}</div></section>
-
-        <section className="vpwVersions"><header><strong>Related outputs / Previous versions</strong><button>View all versions →</button></header><div>{scenes.slice(0,5).map((image, index) => <button key={image} className={activeVersion === index ? "active" : ""} onClick={() => setActiveVersion(index)}><img src={image} alt={`Version ${index + 1}`}/><span><strong>{index === 0 ? "Version 2 (Current)" : `Variation ${index}`}</strong><small>{video.duration} · {video.ratio}</small></span></button>)}</div></section>
-
-        <section className="vpwControls"><header><strong>Advanced controls</strong></header><nav>{["Prompt","Camera","Lighting","Motion","Style","Output"].map((tab) => <button key={tab} className={activeControl === tab ? "active" : ""} onClick={() => setActiveControl(tab)}>{tab}</button>)}</nav><div className="vpwControlBody"><label><span>Camera movement</span><select value={video.camera} onChange={(e) => update("camera", e.target.value)}><option>Slow push in</option><option>Orbit</option><option>Handheld</option><option>Static</option></select></label><label><span>Lens</span><select value={video.lens} onChange={(e) => update("lens", e.target.value)}><option>18mm wide</option><option>35mm</option><option>50mm</option><option>85mm portrait</option></select></label><label><span>Angle</span><select value={video.angle} onChange={(e) => update("angle", e.target.value)}><option>High angle</option><option>Eye level</option><option>Low angle</option></select></label></div></section>
+          <div className="vplIdeaGrid">
+            {VIDEO_IDEAS.map((idea) => {
+              const Icon = idea.icon;
+              return (
+                <button
+                  key={idea.title}
+                  type="button"
+                  className={selected === idea.title ? "vplIdea active" : "vplIdea"}
+                  onClick={() => chooseIdea(idea.title, idea.prompt)}
+                  aria-label={`Start a ${idea.title} video project`}
+                >
+                  <img src={idea.image} alt="" loading="eager" />
+                  <span className="vplIdeaShade" />
+                  <span className="vplIdeaBody">
+                    <span className="vplIdeaIcon"><Icon aria-hidden="true" /></span>
+                    <strong>{idea.title}</strong>
+                    <small>{idea.description}</small>
+                    <span className="vplIdeaMeta"><span><Clock3 aria-hidden="true" />{idea.duration}</span><i><ArrowRight aria-hidden="true" /></i></span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </section>
 
-      <aside className={drawerOpen ? "vpwRail open" : "vpwRail"}>
-        <button className="railClose" onClick={() => setDrawerOpen(false)}><X/></button>
-        <section><h3><Sparkles/>Generation summary</h3><p>{video.prompt}</p></section>
-        <section><h3><ImageIcon/>Prompt snapshot</h3><p>{video.style}, {video.ratio}, rain, neon reflections, futuristic city, dramatic atmosphere.</p><button>View full prompt</button></section>
-        <section><h3><Camera/>Camera settings</h3><dl><div><dt>Movement</dt><dd>{video.camera}</dd></div><div><dt>Lens</dt><dd>{video.lens}</dd></div><div><dt>Angle</dt><dd>{video.angle}</dd></div></dl></section>
-        <section><h3><Gauge/>Generation details</h3><dl><div><dt>Resolution</dt><dd>{video.resolution}</dd></div><div><dt>Frame rate</dt><dd>{video.frameRate}</dd></div><div><dt>Estimated usage</dt><dd>{video.estimatedCredits} credits</dd></div><div><dt>Owner</dt><dd>{ownerName}</dd></div></dl></section>
-        <section><h3><Clock3/>System status</h3><p className="healthy">All systems operational</p><dl><div><dt>Render queue</dt><dd>2 rendering · 4 queued</dd></div><div><dt>Workspace storage</dt><dd>2.4 GB / 8 GB</dd></div></dl></section>
-      </aside>
-    </div>
-
-    <style jsx global>{`
-      .vpw{min-height:100dvh;background:#050b16;color:#eaf2ff;font-family:Inter,ui-sans-serif,system-ui;overflow:auto;scrollbar-width:none}.vpw::-webkit-scrollbar{display:none}.vpw button,.vpw input,.vpw select,.vpw textarea{font:inherit}.vpwHeader{position:sticky;top:0;z-index:30;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #172236;background:rgba(5,11,22,.96);backdrop-filter:blur(14px)}.vpwTitle{display:flex;align-items:center;gap:10px}.vpwMark{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,#185cff,#7c3aed)}.vpwMark svg{width:17px}.vpwTitle>div{display:grid}.vpwTitle strong{font-size:13px}.vpwTitle small{font-size:9px;color:#7f90aa}.vpwHeaderActions{display:flex;gap:7px}.vpwHeaderActions button,.vpwModes button,.vpwCommand button,.vpwRail button{border:1px solid #1c2a40;background:#0b1422;color:#d8e4f5;border-radius:7px;min-height:32px;padding:0 11px;display:flex;align-items:center;gap:6px;cursor:pointer}.vpwHeaderActions svg,.vpwModes svg,.vpwCommand button svg{width:14px}.vpwHeaderActions .primary,.vpwCommand .generate{border-color:#6d3bff;background:linear-gradient(135deg,#6d28d9,#7c3aed);color:#fff}.vpwModes{display:flex;gap:8px;padding:10px 16px 0}.vpwModes button{min-width:132px;justify-content:center}.vpwModes button.active{background:linear-gradient(135deg,#3e18ac,#6d28d9);border-color:#8b5cf6}.vpwLayout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:10px;padding:10px 16px 18px}.vpwMain{min-width:0}.vpwCommand{display:grid;grid-template-columns:minmax(230px,1.6fr) repeat(4,minmax(110px,.65fr)) auto auto;gap:8px;padding:10px;border:1px solid #172236;border-radius:8px;background:#08111e}.vpwCommand label{display:grid;gap:5px}.vpwCommand label span{font-size:8px;color:#8798b4}.vpwCommand textarea,.vpwCommand select{min-width:0;border:1px solid #1b2a40;border-radius:6px;background:#091321;color:#dce8f8;padding:8px;font-size:10px}.vpwCommand textarea{height:38px;resize:none}.vpwCommand button{align-self:end}.vpwPreview{height:min(48vw,430px);min-height:300px;position:relative;margin-top:10px;border:1px solid #172236;border-radius:8px;overflow:hidden;background:#02060d}.vpwPreview>img{width:100%;height:100%;object-fit:cover}.vpwPreview:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 65%,rgba(0,0,0,.85))}.vpwPersonChip{position:absolute;z-index:2;top:12px;left:12px;display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:999px;background:rgba(4,10,20,.78);backdrop-filter:blur(8px)}.vpwPersonChip img{width:32px;height:32px;border-radius:50%;object-fit:cover}.vpwPersonChip span{display:grid}.vpwPersonChip strong{font-size:9px}.vpwPersonChip small{font-size:7px;color:#91a0b7}.vpwPlayer{position:absolute;z-index:3;left:14px;right:14px;bottom:10px;display:flex;align-items:center;gap:10px;font-size:9px}.vpwPlayer button{border:0;background:transparent;color:#fff}.vpwPlayer button svg{width:18px}.vpwPlayer i{height:4px;flex:1;border-radius:999px;background:linear-gradient(90deg,#7c3aed 36%,#334155 36%)}.vpwTimeline,.vpwVersions,.vpwControls{margin-top:10px;border:1px solid #172236;border-radius:8px;background:#08111e}.vpwTimeline header,.vpwVersions header,.vpwControls header{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #172236}.vpwTimeline header strong,.vpwVersions header strong,.vpwControls header strong{font-size:10px}.vpwTimeline header span,.vpwVersions header button{font-size:8px;color:#8fa0ba;background:transparent;border:0}.vpwTimeline>div,.vpwVersions>div{display:flex;gap:7px;padding:8px;overflow:auto}.vpwTimeline button,.vpwVersions>div>button{min-width:118px;border:1px solid transparent;border-radius:6px;background:#060d18;color:#dce7f7;padding:3px;text-align:left}.vpwTimeline button.active,.vpwVersions>div>button.active{border-color:#8b5cf6}.vpwTimeline img{width:100%;height:60px;object-fit:cover;border-radius:4px}.vpwTimeline span{font-size:7px}.vpwVersions img{width:100%;height:58px;object-fit:cover;border-radius:4px}.vpwVersions span{display:grid;padding:5px}.vpwVersions strong{font-size:8px}.vpwVersions small{font-size:7px;color:#7f8ca0}.vpwControls nav{display:flex;gap:2px;overflow:auto;border-bottom:1px solid #172236}.vpwControls nav button{min-width:105px;border:0;border-bottom:2px solid transparent;background:transparent;color:#8d9cb3;padding:11px}.vpwControls nav button.active{color:#fff;border-color:#8b5cf6}.vpwControlBody{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px}.vpwControlBody label{display:grid;gap:5px}.vpwControlBody span{font-size:8px;color:#8798b4}.vpwControlBody select{border:1px solid #1b2a40;background:#091321;color:#dce8f8;border-radius:6px;padding:8px}.vpwRail{display:grid;align-content:start;gap:10px}.vpwRail section{border:1px solid #172236;border-radius:8px;background:#08111e;padding:12px}.vpwRail h3{display:flex;align-items:center;gap:7px;margin:0 0 8px;font-size:10px}.vpwRail h3 svg{width:14px;color:#b58cff}.vpwRail p{margin:0;font-size:9px;line-height:1.55;color:#9aabc2}.vpwRail section>button{width:100%;justify-content:center;margin-top:10px}.vpwRail dl{display:grid;gap:6px;margin:0}.vpwRail dl div{display:flex;justify-content:space-between;gap:12px;font-size:8px}.vpwRail dt{color:#8190a6}.vpwRail dd{margin:0;color:#d7e3f3;text-align:right}.vpwRail .healthy{color:#3ddc97}.railClose,.mobileOnly{display:none!important}.vpwState{min-height:100dvh;display:grid;place-items:center;align-content:center;gap:12px;background:#050b16;color:#fff}.vpwState button{border:0;border-radius:8px;background:#2563eb;color:#fff;padding:10px 14px;display:flex;gap:6px}.spin{animation:vpwSpin 1s linear infinite}@keyframes vpwSpin{to{transform:rotate(360deg)}}
-      @media(max-width:1180px){.vpwCommand{grid-template-columns:1fr 1fr 1fr}.vpwCommand .prompt{grid-column:1/-1}.vpwLayout{grid-template-columns:minmax(0,1fr) 250px}}
-      @media(max-width:900px){.vpwHeader{padding:0 10px}.vpwHeaderActions>button:not(.primary):not(.mobileOnly){display:none}.mobileOnly{display:flex!important}.vpwModes{overflow:auto;padding-inline:10px}.vpwModes button{min-width:118px}.vpwLayout{display:block;padding:10px}.vpwCommand{grid-template-columns:1fr 1fr}.vpwCommand .prompt{grid-column:1/-1}.vpwCommand .generate,.vpwCommand .advanced{grid-column:span 1}.vpwPreview{height:52svh;min-height:330px}.vpwRail{position:fixed;inset:0 0 0 auto;z-index:80;width:min(88vw,360px);padding:58px 10px 18px;background:#050b16;transform:translateX(105%);transition:transform .2s ease;overflow:auto}.vpwRail.open{transform:translateX(0)}.railClose{display:grid!important;position:absolute;top:12px;right:12px;width:34px;height:34px;padding:0;place-items:center}.vpwControlBody{grid-template-columns:1fr}.vpwPersonChip{display:none}}
-      @media(max-width:560px){.vpwTitle strong{font-size:11px}.vpwTitle small{font-size:7px}.vpwHeaderActions .primary{padding:0 9px;font-size:9px}.vpwCommand{grid-template-columns:1fr}.vpwCommand .generate,.vpwCommand .advanced{grid-column:auto}.vpwPreview{height:48svh}.vpwTimeline button,.vpwVersions>div>button{min-width:96px}.vpwModes button{min-width:105px}.vpwControlBody{padding:8px}}
-      @media print{.newChatNavigationVisualSample,.vpwModes,.vpwRail,.vpwHeaderActions,.vpwCommand,.vpwTimeline,.vpwVersions,.vpwControls{display:none!important}.vpwLayout{display:block;padding:0}.vpwPreview{height:70vh;border:0}.vpw{background:#fff}}
-    `}</style>
-  </main>;
+      <style jsx global>{`
+        .vpl{height:100dvh;min-height:620px;overflow:hidden;background:
+          radial-gradient(circle at 50% 0%,rgba(99,51,255,.12),transparent 35%),
+          linear-gradient(180deg,#02030a 0%,#050616 58%,#03040d 100%);color:#f8fafc;font-family:Inter,ui-sans-serif,system-ui}
+        .vpl *{box-sizing:border-box}.vpl button,.vpl input{font:inherit}
+        .vplInner{height:100%;width:min(1500px,100%);margin:auto;padding:clamp(14px,2.1vh,26px) clamp(18px,3.2vw,50px) clamp(14px,2vh,24px);display:grid;grid-template-rows:auto minmax(0,1fr);gap:clamp(16px,2vh,24px)}
+        .vplHero{text-align:center;display:grid;justify-items:center;gap:clamp(7px,1vh,12px)}
+        .vplTitle{font-size:clamp(30px,3vw,50px);font-weight:850;letter-spacing:-.04em;line-height:1}.vplTitle span{background:linear-gradient(90deg,#b45cff,#6285ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+        .vplHosted{display:flex;align-items:center;gap:8px;color:#afb4c5;font-size:clamp(13px,1.25vw,19px)}.vplHosted svg{width:19px;color:#b45cff}.vplHosted strong{color:#a77cff}
+        .vplHero h1{margin:clamp(8px,1.3vh,16px) 0 0;font-size:clamp(26px,2.7vw,44px);line-height:1.06;letter-spacing:-.035em}.vplHero>p:not(.vplTry){margin:0;color:#aeb4c5;font-size:clamp(12px,1vw,16px)}
+        .vplPrompt{width:min(1000px,84vw);height:clamp(60px,7.6vh,82px);margin-top:clamp(8px,1vh,14px);display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;padding:0 16px 0 22px;border:1px solid rgba(147,87,255,.58);border-radius:999px;background:linear-gradient(90deg,rgba(18,18,43,.96),rgba(20,22,44,.9));box-shadow:0 0 36px rgba(96,52,255,.1)}
+        .vplPromptSpark{width:21px;color:#b45cff}.vplPrompt input{width:100%;border:0;outline:0;background:transparent;color:#f8fafc;font-size:clamp(14px,1.15vw,18px)}.vplPrompt input::placeholder{color:#7e8294}
+        .vplMic,.vplSubmit{border:0;display:grid;place-items:center;cursor:pointer}.vplMic{width:36px;height:36px;background:transparent;color:#7e7cff}.vplMic svg{width:20px}.vplSubmit{width:48px;height:48px;border-radius:50%;background:linear-gradient(145deg,#7545ff,#a646f0);color:#fff;box-shadow:0 8px 22px rgba(110,66,255,.35)}.vplSubmit:disabled{opacity:.45;cursor:not-allowed}.vplSubmit svg{width:22px}
+        .vplTry{margin:5px 0 0;color:#aeb4c5;font-size:13px}.vplChips{width:100%;display:flex;justify-content:center;gap:10px;overflow-x:auto;scrollbar-width:none;padding:0 0 2px}.vplChips::-webkit-scrollbar{display:none}.vplChips button{flex:0 0 auto;min-height:42px;display:flex;align-items:center;gap:8px;padding:0 16px;border:1px solid rgba(123,113,175,.28);border-radius:999px;background:rgba(14,15,35,.72);color:#f0eff8;cursor:pointer;white-space:nowrap;font-size:13px}.vplChips button:hover,.vplChips button.active{border-color:#8254ff;background:rgba(87,54,182,.22)}.vplChips svg{width:17px;color:#b463ff}
+        .vplIdeas{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px}.vplIdeas>header h2{margin:0;display:flex;align-items:center;gap:9px;font-size:clamp(19px,1.8vw,27px)}.vplIdeas>header h2 svg{width:23px;color:#bd62ff}.vplIdeas>header p{margin:4px 0 0;color:#a9aebe;font-size:clamp(11px,.9vw,14px)}
+        .vplIdeaGrid{min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}.vplIdea{position:relative;min-width:0;height:100%;border:1px solid rgba(112,107,160,.3);border-radius:14px;overflow:hidden;background:#080913;color:#fff;text-align:left;cursor:pointer;padding:0;isolation:isolate}.vplIdea:hover,.vplIdea.active{border-color:#7f52ff;transform:translateY(-2px)}.vplIdea img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .35s ease}.vplIdea:hover img{transform:scale(1.035)}.vplIdeaShade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 24%,rgba(3,4,12,.42) 48%,rgba(3,4,12,.98) 78%)}
+        .vplIdeaBody{position:absolute;inset:auto 0 0;display:grid;gap:8px;padding:14px}.vplIdeaIcon{width:38px;height:38px;border:1px solid rgba(188,98,255,.75);border-radius:50%;display:grid;place-items:center;background:rgba(5,6,17,.72);color:#c469ff}.vplIdeaIcon svg{width:18px}.vplIdeaBody strong{font-size:clamp(14px,1.08vw,18px)}.vplIdeaBody small{min-height:3.1em;color:#c1c3cf;font-size:clamp(10px,.78vw,13px);line-height:1.55}.vplIdeaMeta{display:flex;align-items:center;justify-content:space-between;color:#9c79ff;font-size:12px}.vplIdeaMeta>span{display:flex;align-items:center;gap:6px}.vplIdeaMeta svg{width:15px}.vplIdeaMeta i{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#3f2379,#6840c8);color:#fff;font-style:normal}
+        @media(max-width:1150px){.vplIdeaGrid{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr}.vpl{overflow:auto}.vplInner{height:auto;min-height:100%;}.vplIdea{min-height:330px}}
+        @media(max-width:720px){.vpl{min-height:100dvh;height:100dvh;overflow:hidden}.vplInner{height:100%;padding:14px 14px 12px;grid-template-rows:auto minmax(0,1fr);gap:12px}.vplTitle{font-size:28px}.vplHosted{font-size:12px}.vplHero h1{font-size:24px;margin-top:4px}.vplHero>p:not(.vplTry){font-size:11px;max-width:350px}.vplPrompt{width:100%;height:58px;margin-top:4px;padding:0 8px 0 15px;gap:8px}.vplPrompt input{font-size:13px}.vplPromptSpark{width:18px}.vplMic{display:none}.vplSubmit{width:42px;height:42px}.vplTry{font-size:11px}.vplChips{justify-content:flex-start;margin-inline:-14px;width:calc(100% + 28px);padding-inline:14px}.vplChips button{min-height:36px;padding:0 12px;font-size:11px}.vplIdeas{gap:8px}.vplIdeas>header h2{font-size:18px}.vplIdeas>header p{font-size:10px}.vplIdeaGrid{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding-bottom:2px}.vplIdeaGrid::-webkit-scrollbar{display:none}.vplIdea{flex:0 0 min(74vw,270px);height:100%;min-height:0;scroll-snap-align:start}.vplIdeaBody{padding:12px;gap:6px}.vplIdeaIcon{width:34px;height:34px}.vplIdeaBody strong{font-size:15px}.vplIdeaBody small{font-size:11px}.vplIdeaMeta{font-size:11px}}
+        @media(max-height:720px) and (min-width:721px){.vplInner{padding-top:10px;padding-bottom:10px;gap:10px}.vplHero{gap:5px}.vplHero h1{margin-top:4px}.vplPrompt{height:58px;margin-top:4px}.vplChips button{min-height:34px}.vplIdeas{gap:7px}.vplIdeaBody{padding:10px;gap:5px}.vplIdeaIcon{width:32px;height:32px}.vplIdeaBody small{line-height:1.35}}
+        @media(prefers-reduced-motion:reduce){.vplIdea,.vplIdea img{transition:none}.vplIdea:hover{transform:none}}
+      `}</style>
+    </main>
+  );
 }
