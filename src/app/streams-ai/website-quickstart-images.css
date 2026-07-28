@@ -1,0 +1,14 @@
+/* Website Project quick starts — distinct real photography, no tile containers */
+.websiteLaunch .quickStart button > svg{display:none!important}
+.websiteLaunch .quickStart button::before{content:""!important;display:block!important;width:64px!important;height:44px!important;margin:0 auto 9px!important;border:0!important;border-radius:7px!important;background-position:center!important;background-size:cover!important;background-repeat:no-repeat!important;box-shadow:none!important;filter:saturate(.92) contrast(1.04)!important;transition:transform .22s ease,filter .22s ease!important}
+.websiteLaunch .quickStart button:nth-child(1)::before{background-image:url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(2)::before{background-image:url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(3)::before{background-image:url('https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(4)::before{background-image:url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(5)::before{background-image:url('https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(6)::before{background-image:url('https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(7)::before{background-image:url('https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:nth-child(8)::before{background-image:url('https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=320&q=82')!important}
+.websiteLaunch .quickStart button:hover::before,.websiteLaunch .quickStart button:focus-visible::before{transform:translateY(-3px) scale(1.04)!important;filter:saturate(1.06) contrast(1.06) brightness(1.06)!important}
+.websiteLaunch .quickStart button span{display:block!important;margin-top:0!important}
+@media(max-width:560px){.websiteLaunch .quickStart button::before{width:72px!important;height:48px!important}}
