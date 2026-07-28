@@ -109,7 +109,7 @@ function ChatPanel({ chatRuntime, builderActive = false }) {
     });
   }, [chatRuntime?.messages]);
   const isEmpty = messages.length === 0 && !chatRuntime?.isLoadingMessages && !chatRuntime?.isRefreshingMessages;
-  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><span className="operatorEyebrow">STREAMS AI WORKSPACE</span><h1>Ask, build, create, launch.</h1><p>Start with a conversation. Open the project workspace when the idea is ready to become real work.</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} builderActive={builderActive} /></div></div></section>;
+  if (isEmpty) return <section className="operatorChatPanel operatorNewChatLanding"><div className="operatorEmptyLanding"><div className="operatorLandingOrb" aria-hidden="true"><span /></div><span className="operatorEyebrow">A.S.K. AI</span><h1>Ask. Seek. Knock.</h1><p>How can I help you move your work forward?</p><div className="operatorLandingComposer"><Composer chatRuntime={chatRuntime} builderActive={builderActive} /></div></div></section>;
   return <section className="operatorChatPanel operatorConversationView"><div className="operatorChatScroll">{messages.map((message) => <ChatMessage key={message.id || `${message.role}-${message.createdAt}`} message={message} chatRuntime={chatRuntime} />)}</div><div className="operatorComposer"><Composer chatRuntime={chatRuntime} builderActive={builderActive} /></div></section>;
 }
 
