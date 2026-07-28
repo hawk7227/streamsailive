@@ -62,6 +62,7 @@ export default function BuilderResearchCanvas({ preview }: Props) {
     });
     setProof((items) => [...items.slice(-30), "Shared source updated from the code, worker, or visual editor."]);
   }
+
   function addProof(message: string) {
     setProof((items) => [...items.slice(-30), message]);
     window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message } }));
@@ -85,22 +86,23 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       <style jsx>{`
         .builderResearchCanvas{position:relative;height:100%;min-height:0;overflow:hidden;background:#020617;color:#e5e7eb}
         .builderResearchWorkarea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,1fr);gap:1px;background:#172033;overflow:hidden}
-        .builderResearchSource,.builderResearchVisual{min-width:0;min-height:0;overflow:hidden;background:#020617}
+        .builderResearchSource,.builderResearchVisual{height:100%;min-width:0;min-height:0;overflow:hidden;background:#020617}
         .builderResearchVisual{display:block;border-left:1px solid rgba(148,163,184,.18)}
         @media(max-width:760px){.builderResearchWorkarea{grid-template-columns:minmax(0,1fr)}.builderResearchVisual{display:none}}
       `}</style>
       <style jsx global>{`
-        .builderResearchCanvas .builderResearchVisual .editorHeader,.builderResearchCanvas .builderResearchVisual .editorStatus,.builderResearchCanvas .builderResearchVisual .editorActions{display:none!important}
-        .builderResearchCanvas .builderResearchVisual .visualEditor{height:100%!important;min-height:0!important;grid-template-rows:minmax(0,1fr)!important}
-        .builderResearchCanvas .builderResearchVisual .editorBody{height:100%!important;min-height:0!important;overflow:hidden!important}
+        .builderResearchCanvas .builderResearchSource .liveWorkstation{height:100%!important;min-height:0!important;display:grid!important;grid-template-rows:minmax(0,1fr) auto!important;overflow:hidden!important}
+        .builderResearchCanvas .builderResearchSource .workstationBody{grid-row:1!important;min-height:0!important;overflow:hidden!important}
+        .builderResearchCanvas .builderResearchSource .workstationToolbar{grid-row:2!important;max-height:104px!important;min-height:0!important;overflow:hidden!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:start!important;gap:4px!important;padding:4px 6px 6px!important;background:#020817!important}
+        .builderResearchCanvas .builderResearchSource .workingTabs{order:1!important;width:100%!important;min-width:0!important;overflow-x:auto!important;overflow-y:hidden!important;display:flex!important;flex-wrap:nowrap!important;gap:4px!important;padding:0 0 3px!important;white-space:nowrap!important}
+        .builderResearchCanvas .builderResearchSource .workingTabs button{min-height:28px!important;height:28px!important;padding:0 10px!important;white-space:nowrap!important}
+        .builderResearchCanvas .builderResearchSource .sourceToolbar{order:2!important;width:100%!important;min-width:0!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;flex-wrap:nowrap!important;gap:4px!important;overflow-x:auto!important;overflow-y:hidden!important;border-top:1px solid rgba(148,163,184,.14)!important;padding-top:4px!important;white-space:nowrap!important}
+        .builderResearchCanvas .builderResearchSource .sourceToolbar>*{flex:0 0 auto!important}
+        .builderResearchCanvas .builderResearchSource .githubSourceControl{min-width:max-content!important;max-width:none!important}
+        .builderResearchCanvas .builderResearchSource .routeValue{display:none!important}
+        .builderResearchCanvas .builderResearchVisual .visualEditor{height:100%!important;min-height:0!important;overflow:hidden!important}
+        .builderResearchCanvas .builderResearchVisual .editorBody{min-height:0!important;overflow:hidden!important}
         .builderResearchCanvas .builderResearchVisual iframe{display:block;width:100%!important;height:100%!important;min-height:0!important;border:0!important}
-        .builderResearchCanvas .liveWorkstation{grid-template-rows:minmax(0,1fr) auto!important}
-        .builderResearchCanvas .workstationBody{grid-row:1!important}
-        .builderResearchCanvas .workstationToolbar{grid-row:2!important;overflow:visible!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;grid-template-columns:1fr!important;align-items:stretch!important;padding:6px 8px 8px!important}
-        .builderResearchCanvas .workingTabs{order:1!important;width:100%!important;overflow-x:auto!important;padding-bottom:4px!important}
-        .builderResearchCanvas .sourceToolbar{order:2!important;width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;border-top:1px solid rgba(148,163,184,.14)!important;padding-top:6px!important}
-        .builderResearchCanvas .workstationToolbar .githubSourceControl{min-width:0!important;max-width:100%!important}
-        .builderResearchCanvas .workstationToolbar .routeValue{display:none!important}
       `}</style>
     </section>
   );
