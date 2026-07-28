@@ -6,7 +6,6 @@ import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
-import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
 import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemContract";
 
 const MODULES = ["Primary Builder", "Visual Editing", "Component Mapping", "Approval Center", "Browser Verification", "Repository Truth", "Projects Dashboard", "Truth Panel"] as const;
@@ -179,7 +178,6 @@ export default function WorkspaceGrid() {
         </section>
       </section>
       <VisualEditorScrollBehavior />
-      <WorkstationChromeEnhancer />
       <style jsx>{`
         .streamsBuilderShell{height:100%;min-height:0;overflow:hidden;background:#020713;color:#f8fafc}
         .workArea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(320px,.72fr) minmax(0,1fr) minmax(0,1fr);gap:1px;background:#172033;overflow:hidden}
