@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  isAdminAuthorizationError,
+  requireAdminSession,
+} from "@/lib/admin/require-admin-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,23 +35,32 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs = 20_000) {
   }
 }
 
-function authorized(request: NextRequest): boolean {
-  const expected = configured("STREAMS_COMMISSIONING_TOKEN");
-  if (!expected) return false;
-  const supplied = request.headers.get("x-streams-commissioning-token")?.trim();
-  return Boolean(supplied && supplied === expected);
-}
-
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  let administrator;
+  try {
+    administrator = await requireAdminSession();
+  } catch (error) {
+    if (isAdminAuthorizationError(error)) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ ok: false, error: "Unable to verify administrator session" }, { status: 500 });
   }
 
   const body = await request.json().catch(() => ({}));
   const action = String(body.action || "status");
-  const tenantId = String(body.tenantId || "streams-commissioning");
+  const tenantId = String(body.tenantId || administrator.workspaceId);
   const projectId = String(body.projectId || "infrastructure");
   const results: CheckResult[] = [];
+
+  console.log(JSON.stringify({
+    level: "info",
+    event: "ADMIN_COMMISSIONING_STARTED",
+    administratorUserId: administrator.userId,
+    administratorRole: administrator.role,
+    workspaceId: administrator.workspaceId,
+    action,
+    timestamp: new Date().toISOString(),
+  }));
 
   const workerUrl = configured("STREAMS_BUILDER_WORKER_URL");
   const workerToken = configured("STREAMS_BUILDER_WORKER_TOKEN");
@@ -180,12 +193,31 @@ export async function POST(request: NextRequest) {
   const passed = results.filter((result) => result.status === "passed").length;
   const failed = results.filter((result) => result.status === "failed").length;
   const blocked = results.filter((result) => result.status === "blocked").length;
+  const summary = { passed, failed, blocked, notTested: results.length - passed - failed - blocked };
+
+  console.log(JSON.stringify({
+    level: "info",
+    event: "ADMIN_COMMISSIONING_COMPLETED",
+    administratorUserId: administrator.userId,
+    administratorRole: administrator.role,
+    workspaceId: administrator.workspaceId,
+    action,
+    summary,
+    timestamp: new Date().toISOString(),
+  }));
 
   return NextResponse.json({
     ok: failed === 0 && blocked === 0,
     action,
     testedAt: new Date().toISOString(),
-    summary: { passed, failed, blocked, notTested: results.length - passed - failed - blocked },
+    administrator: {
+      userId: administrator.userId,
+      email: administrator.email,
+      role: administrator.role,
+      workspaceId: administrator.workspaceId,
+      workspaceName: administrator.workspaceName,
+    },
+    summary,
     results,
   });
 }
