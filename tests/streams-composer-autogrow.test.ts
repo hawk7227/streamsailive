@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { autosizeComposerTextarea } from "../src/components/streams-ai/current-chat/new-face/composer/StreamsComposer";
 
-describe("Streams composer auto-grow behavior", () => {
-  it("expands to the full scroll height and never enables inner vertical scrolling", () => {
+describe("Streams composer adaptive auto-grow behavior", () => {
+  it("caps long input at the desktop maximum and enables internal scrolling", () => {
     const node = {
       scrollHeight: 286,
       style: { height: "", overflowY: "" },
@@ -10,11 +10,11 @@ describe("Streams composer auto-grow behavior", () => {
 
     autosizeComposerTextarea(node);
 
-    expect(node.style.height).toBe("286px");
-    expect(node.style.overflowY).toBe("hidden");
+    expect(node.style.height).toBe("224px");
+    expect(node.style.overflowY).toBe("auto");
   });
 
-  it("keeps the one-line minimum height", () => {
+  it("keeps the compact two-line minimum height", () => {
     const node = {
       scrollHeight: 12,
       style: { height: "", overflowY: "" },
@@ -22,7 +22,7 @@ describe("Streams composer auto-grow behavior", () => {
 
     autosizeComposerTextarea(node);
 
-    expect(node.style.height).toBe("30px");
+    expect(node.style.height).toBe("48px");
     expect(node.style.overflowY).toBe("hidden");
   });
 });
