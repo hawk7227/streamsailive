@@ -3,16 +3,16 @@ import RealtimeVoicePanel from "../voice/RealtimeVoicePanel";
 import MessageActionBridge from "../message-actions/MessageActionBridge";
 
 const MODES = ["Thinking", "Configure..."];
-const MIN_HEIGHT = 48;
-const MAX_HEIGHT_DESKTOP = 224;
-const MAX_HEIGHT_MOBILE = 180;
+const MIN_HEIGHT = 34;
+const MAX_HEIGHT_DESKTOP = 176;
+const MAX_HEIGHT_MOBILE = 144;
 const ACCEPTED_UPLOAD_TYPES = "image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.json,.md,.html,.htm,.odt,.rtf,.epub";
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 const TOOL_ITEMS = [
-  { id: "files", icon: "↥", label: "Add photos & files", feature: "files" },
-  { id: "url", icon: "▣", label: "Add link", feature: "research" },
-  { id: "create_image", icon: "✦", label: "Create image", feature: "image" },
-  { id: "web_search", icon: "◎", label: "Web search", feature: "research" },
+  { id: "files", icon: "↥", label: "Add photos & files" },
+  { id: "url", icon: "▣", label: "Add link" },
+  { id: "create_image", icon: "✦", label: "Create image" },
+  { id: "web_search", icon: "◎", label: "Web search" },
 ];
 
 function maxTextareaHeight() {
@@ -29,17 +29,12 @@ export function autosizeComposerTextarea(node) {
   node.style.overflowY = node.scrollHeight > max ? "auto" : "hidden";
 }
 
-function isTerminalActivity(activity) {
-  return ["complete", "error", "failed", "cancelled"].includes(String(activity?.phase || "").toLowerCase());
-}
-
 export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelect, onModeChange, libraryFiles = [], onRemoveFile, isStreaming = false }) {
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
   const [mode, setMode] = useState("Thinking");
   const [selectedTool, setSelectedTool] = useState(null);
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
-  const [liveActivity, setLiveActivity] = useState(null);
   const composerRef = useRef(null);
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
@@ -75,22 +70,6 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
   }, [isStreaming]);
 
   useEffect(() => {
-    const handleActivity = (event) => {
-      const next = event?.detail;
-      if (!next?.statusText || next.visible === false || ["Ready", "Ask anything", "Chat is ready"].includes(next.statusText)) setLiveActivity(null);
-      else setLiveActivity(next);
-    };
-    window.addEventListener("streams:chat-activity", handleActivity);
-    return () => window.removeEventListener("streams:chat-activity", handleActivity);
-  }, []);
-
-  useEffect(() => {
-    if (!liveActivity || !isTerminalActivity(liveActivity)) return undefined;
-    const timer = window.setTimeout(() => setLiveActivity(null), 1400);
-    return () => window.clearTimeout(timer);
-  }, [liveActivity]);
-
-  useEffect(() => {
     if (!activeMenu) return undefined;
     const closeOnEscape = (event) => { if (event.key === "Escape") setActiveMenu(""); };
     const closeOnOutside = (event) => { if (composerRef.current && !composerRef.current.contains(event.target)) setActiveMenu(""); };
@@ -104,11 +83,8 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
 
   const files = Array.isArray(libraryFiles) ? libraryFiles : [];
   const readyAttachments = files.filter((file) => file.status !== "uploading" && file.status !== "error");
-  const uploadingCount = files.filter((file) => file.status === "uploading").length;
-  const failedCount = files.filter((file) => file.status === "error").length;
-  const hasUploadingFiles = uploadingCount > 0;
+  const hasUploadingFiles = files.some((file) => file.status === "uploading");
   const isDisabled = isStreaming || hasUploadingFiles;
-
   const placeholder = selectedTool?.id === "url" ? "Paste a link..." : selectedTool?.id === "create_image" ? "Describe the image..." : selectedTool?.id === "web_search" ? "Search the web..." : "Ask anything";
 
   function clearInput() {
@@ -125,13 +101,11 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
   function submit() {
     if (isDisabled || submitLockRef.current) return;
     const value = message.trim();
-    const hasAttachments = readyAttachments.length > 0;
-    if (!value && !hasAttachments) return;
+    if (!value && !readyAttachments.length) return;
     submitLockRef.current = true;
     let finalMessage = value || ATTACHMENT_ONLY_SENTINEL;
     if (selectedTool?.id === "create_image") finalMessage = `Create an image of ${value || "the attached reference"}`;
     if (selectedTool?.id === "url") finalMessage = `Read the URL: ${value}`;
-    setLiveActivity({ phase: "created", mode: "chat", statusText: "Thinking…", visible: true });
     clearInput();
     setSelectedTool(null);
     setActiveMenu("");
@@ -165,25 +139,19 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
     setActiveMenu("");
   }
 
-  const liveStatus = hasUploadingFiles ? `Uploading ${uploadingCount} file${uploadingCount === 1 ? "" : "s"}…` : failedCount > 0 ? `${failedCount} upload${failedCount === 1 ? "" : "s"} failed` : liveActivity?.statusText || (isStreaming ? "Thinking…" : "");
-  const liveStatusError = (failedCount > 0 && !hasUploadingFiles) || ["error", "failed"].includes(String(liveActivity?.phase || "").toLowerCase());
-
   return (
     <>
       <MessageActionBridge />
-      <section ref={composerRef} className="calmStreamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={hasUploadingFiles || isStreaming ? "true" : "false"}>
-        {liveStatus ? <div className={`calmStatus${liveStatusError ? " error" : ""}`} role="status" aria-live="polite"><i />{liveStatus}</div> : null}
+      <section ref={composerRef} className="calmStreamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={isStreaming ? "true" : "false"}>
         {files.length ? <div className="calmAttachments">{files.map((file) => {
           const isImage = file.kind === "image" || String(file.mimeType || "").startsWith("image/");
           const previewUrl = file.url || file.storageUrl || file.publicUrl || file.previewUrl;
-          const label = file.status === "uploading" ? "Uploading…" : file.status === "error" ? "Upload failed" : "Ready";
-          return <div key={file.id} className={`calmAttachment${file.status === "error" ? " error" : ""}`}>{isImage && previewUrl ? <img src={previewUrl} alt={file.name || "Image"} /> : <span>📄</span>}<div><strong>{file.name || "File"}</strong><small>{label}</small></div><button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button></div>;
+          return <div key={file.id} className="calmAttachment">{isImage && previewUrl ? <img src={previewUrl} alt={file.name || "Image"} /> : <span>📄</span>}<strong>{file.name || "File"}</strong><button type="button" aria-label={`Remove ${file.name || "attachment"}`} onClick={() => onRemoveFile?.(file.id)}>×</button></div>;
         })}</div> : null}
 
-        <div className="calmTextRegion">
-          {selectedTool ? <div className="calmToolPill"><span>{selectedTool.icon}</span><strong>{selectedTool.label}</strong><button type="button" onClick={() => setSelectedTool(null)}>×</button></div> : null}
-          <textarea ref={inputRef} className="calmComposerInput" value={message} placeholder={placeholder} rows={2} aria-label="Message Streams AI" spellCheck="true" onChange={(event) => { setMessage(event.target.value); autosizeComposerTextarea(event.target); }} onInput={(event) => autosizeComposerTextarea(event.currentTarget)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} />
-        </div>
+        {selectedTool ? <div className="calmToolPill"><span>{selectedTool.icon}</span><strong>{selectedTool.label}</strong><button type="button" onClick={() => setSelectedTool(null)}>×</button></div> : null}
+
+        <textarea ref={inputRef} className="calmComposerInput" value={message} placeholder={placeholder} rows={1} aria-label="Message Streams AI" spellCheck="true" onChange={(event) => { setMessage(event.target.value); autosizeComposerTextarea(event.target); }} onInput={(event) => autosizeComposerTextarea(event.currentTarget)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} />
 
         <div className="calmActionRow">
           <button type="button" className="calmAdd" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
@@ -199,17 +167,17 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
         {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
 
         <style jsx>{`
-          .calmStreamsComposer{position:relative;width:100%;display:grid;grid-template-rows:auto auto minmax(${MIN_HEIGHT}px,auto) 52px;gap:8px;padding:10px 12px;border:1px solid rgba(139,92,246,.46);border-radius:24px;background:linear-gradient(135deg,rgba(15,23,42,.96),rgba(24,16,54,.92));box-shadow:0 14px 42px rgba(0,0,0,.34),0 0 22px rgba(124,58,237,.2);box-sizing:border-box;overflow:visible;color:#fff;cursor:auto}
-          .calmTextRegion{min-width:0;display:grid;gap:7px;padding:2px 4px 0;overflow:hidden}
-          .calmComposerInput{display:block;width:100%;min-height:${MIN_HEIGHT}px;max-height:${MAX_HEIGHT_DESKTOP}px;height:${MIN_HEIGHT}px;resize:none;overflow-x:hidden;overflow-y:hidden;border:0;outline:0;background:transparent;color:#fff;padding:4px 2px;margin:0;font:500 16px/1.5 Inter,system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;cursor:text;scrollbar-width:thin}
-          .calmComposerInput::placeholder{color:rgba(255,255,255,.62)}
-          .calmActionRow{min-width:0;min-height:52px;display:grid;grid-template-columns:44px minmax(0,1fr) auto auto 52px;align-items:center;gap:8px;border-top:1px solid rgba(148,163,184,.12);padding-top:7px}
+          .calmStreamsComposer{position:relative;width:100%;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid rgba(139,92,246,.4);border-radius:20px;background:rgba(12,18,38,.96);box-shadow:0 10px 30px rgba(0,0,0,.28);box-sizing:border-box;color:#fff;overflow:visible;cursor:auto}
+          .calmComposerInput{display:block;width:100%;min-height:${MIN_HEIGHT}px;max-height:${MAX_HEIGHT_DESKTOP}px;height:${MIN_HEIGHT}px;resize:none;overflow-x:hidden;overflow-y:hidden;border:0;outline:0;background:transparent;color:#fff;padding:5px 4px;margin:0;font:500 15px/1.48 Inter,system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;cursor:text;scrollbar-width:thin}
+          .calmComposerInput::placeholder{color:rgba(255,255,255,.58)}
+          .calmActionRow{height:42px;display:grid;grid-template-columns:38px minmax(0,1fr) auto auto 42px;align-items:center;gap:6px;border-top:1px solid rgba(148,163,184,.11);padding-top:5px}
           .calmActionRow button,.calmMenu button,.calmToolPill button,.calmAttachment button{cursor:pointer}
-          .calmAdd,.calmSend{display:grid;place-items:center;border:0;color:#fff}.calmAdd{width:42px;height:42px;border-radius:14px;background:rgba(124,58,237,.18);border:1px solid rgba(192,132,252,.28);font-size:22px}.calmSend{width:50px;height:50px;border-radius:17px;background:linear-gradient(135deg,#d946ef,#7c3aed 62%,#06d9ff);font-size:22px;font-weight:900;box-shadow:0 0 18px rgba(124,58,237,.44)}.calmSend:disabled{opacity:.45;cursor:not-allowed}
-          .calmMode,.calmMic{height:34px;border:0;background:transparent;color:rgba(255,255,255,.82);font-size:13px;font-weight:750;white-space:nowrap}.calmMode span{margin-left:3px}.calmMic{width:34px}.calmStatus{display:flex;align-items:center;gap:8px;color:#cbd5e1;font-size:12px;padding:0 4px}.calmStatus i{width:7px;height:7px;border-radius:999px;background:#22d3ee}.calmStatus.error i{background:#ef4444}
-          .calmAttachments{display:flex;gap:8px;overflow-x:auto;padding:2px 3px 7px}.calmAttachment{position:relative;display:flex;align-items:center;gap:8px;min-width:150px;max-width:230px;padding:7px 30px 7px 8px;border-radius:12px;background:rgba(255,255,255,.07)}.calmAttachment img{width:42px;height:42px;object-fit:cover;border-radius:9px}.calmAttachment div{min-width:0;display:grid}.calmAttachment strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.calmAttachment small{color:#94a3b8;font-size:10px}.calmAttachment>button{position:absolute;right:7px;top:7px;border:0;background:transparent;color:#fff}
-          .calmToolPill{justify-self:start;display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:rgba(124,58,237,.18);font-size:12px}.calmToolPill button{border:0;background:transparent;color:#fff}.calmMenu{position:absolute;z-index:500;bottom:calc(100% + 10px);width:min(360px,calc(100vw - 28px));padding:9px;border:1px solid rgba(192,132,252,.26);border-radius:18px;background:rgba(7,10,22,.98);box-shadow:0 24px 70px rgba(0,0,0,.42)}.calmMenu.tools{left:0}.calmMenu.model{right:0}.calmMenu button{width:100%;min-height:44px;display:grid;grid-template-columns:28px 1fr 60px;align-items:center;gap:8px;border:0;border-radius:11px;background:transparent;color:#fff;text-align:left;padding:7px 9px}.calmMenu button:hover{background:rgba(124,58,237,.18)}.calmMenu em{font-style:normal;color:#94a3b8;text-align:right;font-size:11px}
-          @media(max-width:760px){.calmStreamsComposer{grid-template-rows:auto auto minmax(${MIN_HEIGHT}px,auto) 48px;padding:9px 10px}.calmComposerInput{max-height:${MAX_HEIGHT_MOBILE}px;font-size:16px}.calmActionRow{grid-template-columns:42px minmax(0,1fr) 48px}.calmMode,.calmMic{display:none}.calmAdd{width:40px;height:40px}.calmSend{width:46px;height:46px}}
+          .calmAdd,.calmSend{display:grid;place-items:center;border:0;color:#fff}.calmAdd{width:36px;height:36px;border-radius:12px;background:rgba(124,58,237,.14);border:1px solid rgba(192,132,252,.24);font-size:20px}.calmSend{width:40px;height:40px;border-radius:14px;background:linear-gradient(135deg,#d946ef,#7c3aed 62%,#06d9ff);font-size:19px;font-weight:900;box-shadow:0 0 13px rgba(124,58,237,.35)}.calmSend:disabled{opacity:.42;cursor:not-allowed}
+          .calmMode,.calmMic{height:30px;border:0;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:700;white-space:nowrap}.calmMode span{margin-left:3px}.calmMic{width:30px}
+          .calmAttachments{display:flex;gap:6px;overflow-x:auto;padding:1px 2px 5px}.calmAttachment{display:flex;align-items:center;gap:6px;min-width:130px;max-width:210px;padding:5px 25px 5px 6px;border-radius:10px;background:rgba(255,255,255,.06);position:relative}.calmAttachment img{width:34px;height:34px;object-fit:cover;border-radius:7px}.calmAttachment strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.calmAttachment>button{position:absolute;right:5px;top:5px;border:0;background:transparent;color:#fff}
+          .calmToolPill{align-self:flex-start;display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;background:rgba(124,58,237,.16);font-size:11px}.calmToolPill button{border:0;background:transparent;color:#fff}
+          .calmMenu{position:absolute;z-index:500;bottom:calc(100% + 8px);width:min(340px,calc(100vw - 24px));padding:8px;border:1px solid rgba(192,132,252,.24);border-radius:16px;background:rgba(7,10,22,.98);box-shadow:0 20px 60px rgba(0,0,0,.4)}.calmMenu.tools{left:0}.calmMenu.model{right:0}.calmMenu button{width:100%;min-height:40px;display:grid;grid-template-columns:26px 1fr 56px;align-items:center;gap:7px;border:0;border-radius:10px;background:transparent;color:#fff;text-align:left;padding:6px 8px}.calmMenu button:hover{background:rgba(124,58,237,.16)}.calmMenu em{font-style:normal;color:#94a3b8;text-align:right;font-size:10px}
+          @media(max-width:760px){.calmStreamsComposer{padding:7px 8px;border-radius:18px}.calmComposerInput{max-height:${MAX_HEIGHT_MOBILE}px;font-size:15px}.calmActionRow{grid-template-columns:38px minmax(0,1fr) 42px}.calmMode,.calmMic{display:none}}
         `}</style>
       </section>
     </>
