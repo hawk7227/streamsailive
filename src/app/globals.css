@@ -23,70 +23,35 @@
   --color-accent-red: #ef4444;
   --color-accent-orange: #f97316;
 
-  /* Indeterminate shimmer — transform-only, motion compliant (150–220ms band) */
   @keyframes shimmer {
-    0%   { transform: translateX(-100%); }
+    0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
   }
 
-    @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   @keyframes float {
-
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-
-    50% {
-      transform: translateY(-10px);
-    }
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
   }
 
   @keyframes pulse {
-
-    0%,
-    100% {
-      opacity: 1;
-    }
-
-    50% {
-      opacity: 0.5;
-    }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   @keyframes gradientShift {
-    0% {
-      background-position: 0% 50%;
-    }
-
-    50% {
-      background-position: 100% 50%;
-    }
-
-    100% {
-      background-position: 0% 50%;
-    }
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   --animate-fade-in: fadeIn 0.6s ease-out forwards;
@@ -101,189 +66,73 @@
   --gradient-hero: linear-gradient(180deg, rgba(99, 102, 241, 0.15) 0%, transparent 50%);
 }
 
-html,
-body {
+html {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-  min-height: 100dvh;
-  overflow: hidden;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
 }
 
-#__next,
-main {
-  width: 100%;
-  height: 100%;
-  min-height: 100dvh;
-}
-
 body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: visible;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-inter);
 }
 
-@keyframes growUp {
-  from {
-    height: 0;
-    opacity: 0;
-  }
+#__next,
+main {
+  width: 100%;
+  min-height: 100dvh;
+}
 
-  to {
-    opacity: 1;
-  }
+/* Public landing page: normal document flow with hidden scrollbar chrome. */
+#home-fit-page {
+  width: 100%;
+  min-height: 100dvh;
+  overflow: visible;
+  padding-top: 68px;
+  background: #020713;
+}
+
+html:has(#home-fit-page) {
+  scrollbar-width: none;
+}
+
+html:has(#home-fit-page)::-webkit-scrollbar,
+body:has(#home-fit-page)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+#home-fit-page section[id] {
+  scroll-margin-top: 76px;
+}
+
+@keyframes growUp {
+  from { height: 0; opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideIn {
-  from {
-    width: 0;
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+  from { width: 0; opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* STREAMS AI landing: desktop should use the available viewport width, not a narrow centered strip. */
-@media (min-width: 1280px) {
-  #features > div.relative.mx-auto {
-    max-width: none !important;
-    width: 100% !important;
-    padding-left: clamp(24px, 2.25vw, 56px) !important;
-    padding-right: clamp(24px, 2.25vw, 56px) !important;
-  }
-
-  #features > div.relative.mx-auto > div.grid {
-    width: 100% !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  }
-}
-
-/* Home fit mode: keep the front page visible in one browser viewport. */
-#home-fit-page {
-  height: 100dvh;
-  min-height: 100dvh;
-  overflow: hidden;
-  padding-top: 68px;
-  background: #050711;
-}
-
-#home-fit-page > section:first-child {
-  min-height: 0 !important;
-  padding-top: 28px !important;
-  padding-bottom: 20px !important;
-}
-
-#home-fit-page > section:first-child h1 {
-  font-size: clamp(34px, 4.4vw, 58px) !important;
-  line-height: 0.98 !important;
-  margin-bottom: 14px !important;
-}
-
-#home-fit-page > section:first-child p {
-  margin-bottom: 18px !important;
-  font-size: clamp(13px, 1vw, 16px) !important;
-  line-height: 1.45 !important;
-}
-
-#home-fit-page > section:first-child .mb-16 {
-  margin-bottom: 16px !important;
-}
-
-#home-fit-page > section:first-child .text-3xl {
-  font-size: 1.25rem !important;
-}
-
-#home-fit-page #features {
-  height: calc(100dvh - 350px);
-  min-height: 430px;
-  overflow: hidden !important;
-  padding-top: 18px !important;
-  padding-bottom: 16px !important;
-}
-
-#home-fit-page #features > div.relative.mx-auto {
-  height: 100%;
-  max-width: none !important;
-  width: 100% !important;
-  padding-left: clamp(16px, 1.4vw, 28px) !important;
-  padding-right: clamp(16px, 1.4vw, 28px) !important;
-}
-
-#home-fit-page #features > div.relative.mx-auto > div.mb-10 {
-  margin-bottom: 14px !important;
-}
-
-#home-fit-page #features h2 {
-  font-size: clamp(24px, 2.7vw, 42px) !important;
-  line-height: 0.98 !important;
-}
-
-#home-fit-page #features h2 + p {
-  margin-top: 10px !important;
-  font-size: clamp(12px, 0.95vw, 15px) !important;
-  line-height: 1.45 !important;
-}
-
-#home-fit-page #features > div.relative.mx-auto > div.grid {
-  display: grid !important;
-  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-  gap: clamp(8px, 0.8vw, 14px) !important;
-  height: calc(100% - 112px);
-}
-
-#home-fit-page #features article > div:first-child {
-  display: none !important;
-}
-
-#home-fit-page #features article > div:nth-child(2) {
-  min-height: 0 !important;
-  height: 100% !important;
-  border-radius: 18px !important;
-}
-
-#home-fit-page #features article > div:nth-child(2) > div.relative {
-  min-height: 0 !important;
-  height: 100% !important;
-  padding: 24px 8px 8px !important;
-}
-
-#home-fit-page #features article p.line-clamp-2 {
-  font-size: 10px !important;
-  line-height: 1.25 !important;
-  margin-bottom: 6px !important;
-}
-
-#home-fit-page #features article .grid.h-\[250px\] {
-  height: clamp(150px, 18vh, 220px) !important;
-}
-
-#home-fit-page #features article img.h-\[206px\] {
-  height: clamp(112px, 14vh, 172px) !important;
-}
-
-#home-fit-page #features article .mb-2\.5.flex-1 {
-  margin-bottom: 8px !important;
-  padding: 6px !important;
-}
-
-#home-fit-page #features article .mt-auto.grid {
-  gap: 6px !important;
-}
-
-#home-fit-page #features article .mt-auto.grid a,
-#home-fit-page #features article .mt-auto.grid button {
-  padding: 8px 6px !important;
-  border-radius: 10px !important;
-  font-size: 10px !important;
-}
-
-/* ACC.11 — respect prefers-reduced-motion across all streams components */
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
