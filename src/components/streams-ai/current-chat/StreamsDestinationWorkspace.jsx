@@ -3,191 +3,217 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
-  BarChart3,
-  CalendarDays,
-  Check,
-  ChevronRight,
-  CirclePlay,
-  Download,
-  FileText,
-  Image as ImageIcon,
-  Layers3,
-  Mic2,
-  Plus,
-  Search,
-  Send,
-  Sparkles,
-  Upload,
-  Video,
-  WandSparkles,
-  Workflow,
-  Wrench,
+  BarChart3, BookOpen, Bot, Boxes, CalendarDays, Check, ChevronRight,
+  Code2, FileCode2, FileText, FolderOpen, Image as ImageIcon, Layers3,
+  Layout, Megaphone, MessageSquareText, MonitorSmartphone, Palette,
+  Play, Plus, Rocket, Search, Send, Settings2, Share2, Sparkles,
+  Upload, Video, WandSparkles, Workflow,
 } from "lucide-react";
 
-const PEOPLE = [
-  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=82",
-];
-
-const WORK = [
-  "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1400&q=82",
-];
-
-const VISUALS = [
-  "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1400&q=82",
-  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1400&q=82",
-];
-
-const PAGE = {
-  portfolio: { title: "Portfolio", eyebrow: "Present completed work", pitch: "Turn finished projects into a polished body of work that wins trust, clients, and opportunities.", variant: "showcase", action: "Create portfolio", images: [PEOPLE[0], VISUALS[3], WORK[0]], tools: ["Publish collection", "Share private link", "Export case study"] },
-  projects: { title: "Projects", eyebrow: "One goal. Every connected asset.", pitch: "Keep conversations, files, tasks, generations, builds, and approvals together from first idea to finished result.", variant: "manage", action: "New project", images: [WORK[1], PEOPLE[1], VISUALS[0]], tools: ["Project brief", "Milestones", "Connected files"] },
-  files: { title: "Files", eyebrow: "Your source material, ready for work", pitch: "Upload documents, images, video, audio, and code so A.S.K. AI can understand and use the right context.", variant: "manage", action: "Upload files", images: [WORK[2], PEOPLE[2], VISUALS[1]], tools: ["Upload", "Extract", "Organize"] },
-  "creator-studio": { title: "Creator Studio", eyebrow: "Create across every medium", pitch: "Start with the outcome. Streams coordinates imagery, motion, voice, captions, and content into one connected production flow.", variant: "studio", action: "Start creating", images: [PEOPLE[3], VISUALS[4], VISUALS[2]], tools: ["Creative brief", "Media plan", "Production queue"] },
-  "image-studio": { title: "Image Studio", eyebrow: "From prompt to campaign-ready visual", pitch: "Generate, refine, and organize original imagery for products, brands, campaigns, and stories.", variant: "studio", action: "Create image", images: [VISUALS[0], PEOPLE[0], VISUALS[3]], tools: ["Prompt", "Reference image", "Style controls"] },
-  "video-studio": { title: "Video Studio", eyebrow: "Ideas in motion", pitch: "Plan scenes, generate clips, add voice and captions, then export platform-ready video from one workspace.", variant: "studio", action: "Create video", images: [VISUALS[1], PEOPLE[4], VISUALS[2]], tools: ["Scene plan", "Generate", "Edit"] },
-  "voice-studio": { title: "Voice Studio", eyebrow: "Clear voices for every story", pitch: "Create narration, dubbing, spoken content, and campaign audio while keeping scripts and versions organized.", variant: "studio", action: "Create voice", images: [PEOPLE[5], WORK[3], PEOPLE[1]], tools: ["Script", "Voice direction", "Audio versions"] },
-  "business-builder": { title: "Business Builder", eyebrow: "Build the business, not just the idea", pitch: "Shape your offer, audience, revenue model, launch plan, and connected assets in one execution workspace.", variant: "launch", action: "Build my business", images: [WORK[0], PEOPLE[1], WORK[4]], tools: ["Offer", "Market", "Launch"] },
-  "website-builder": { title: "Website Builder", eyebrow: "A website designed around results", pitch: "Move from business goal to responsive pages, working forms, verified behavior, and launch-ready code.", variant: "launch", action: "Build website", images: [WORK[2], PEOPLE[0], VISUALS[4]], tools: ["Brief", "Design", "Build"] },
-  "app-builder": { title: "App Builder", eyebrow: "Build software people can actually use", pitch: "Plan flows, create interfaces, connect data, test behavior, and prepare a working application for release.", variant: "launch", action: "Build application", images: [WORK[4], PEOPLE[4], WORK[1]], tools: ["Product map", "Implementation", "Verification"] },
-  "visual-concepts": { title: "Visual Concepts", eyebrow: "Find the direction before production", pitch: "Explore mood, color, layout, photography, and brand systems before committing time and credits.", variant: "showcase", action: "Create concept", images: [VISUALS[4], PEOPLE[2], VISUALS[0]], tools: ["Moodboard", "Direction", "Approval"] },
-  revenue: { title: "Revenue", eyebrow: "Design the path to profitable growth", pitch: "Model offers, packages, pricing, funnels, and margins while connecting strategy to launch execution.", variant: "insight", action: "Build revenue plan", images: [PEOPLE[1], WORK[3], PEOPLE[3]], tools: ["Offer model", "Margin view", "Sales path"] },
-  "preview-launch": { title: "Preview + Launch", eyebrow: "Release only when the work is ready", pitch: "Review live previews, approvals, verification evidence, and launch requirements before publishing.", variant: "launch", action: "Open launch review", images: [WORK[4], VISUALS[2], PEOPLE[5]], tools: ["Preview", "Verify", "Publish"] },
-  content: { title: "Content", eyebrow: "Write once. Adapt everywhere.", pitch: "Create useful articles, emails, scripts, product copy, and campaigns with an organized editorial workflow.", variant: "editorial", action: "Create content", images: [PEOPLE[0], WORK[2], PEOPLE[4]], tools: ["Brief", "Draft", "Distribute"] },
-  captions: { title: "Captions", eyebrow: "Make every post earn attention", pitch: "Turn media and campaign goals into platform-ready hooks, captions, calls to action, and variants.", variant: "editorial", action: "Write captions", images: [PEOPLE[3], VISUALS[3], PEOPLE[5]], tools: ["Hook", "Caption", "Platform variants"] },
-  ideas: { title: "Ideas", eyebrow: "Capture possibility. Choose what matters.", pitch: "Explore, score, and develop product, content, campaign, and business ideas before turning them into projects.", variant: "insight", action: "Start an idea", images: [PEOPLE[2], WORK[1], VISUALS[1]], tools: ["Explore", "Evaluate", "Promote to project"] },
-  "turn-this-into-you": { title: "Turn This Into You", eyebrow: "Adapt inspiration to your identity", pitch: "Transform a reference into an original direction shaped around your brand, voice, audience, and goals.", variant: "showcase", action: "Personalize concept", images: [PEOPLE[5], VISUALS[4], PEOPLE[0]], tools: ["Reference", "Identity", "Original result"] },
-  "social-research": { title: "Social Research", eyebrow: "Understand what audiences respond to", pitch: "Collect public signals, compare formats, study competitors, and turn findings into an actionable content plan.", variant: "insight", action: "Start research", images: [PEOPLE[4], WORK[0], VISUALS[2]], tools: ["Research set", "Patterns", "Content brief"] },
-  calendar: { title: "Calendar", eyebrow: "See the work before it becomes urgent", pitch: "Coordinate launches, content, milestones, reviews, and deadlines across every active project.", variant: "manage", action: "Schedule work", images: [WORK[3], PEOPLE[2], WORK[1]], tools: ["Schedule", "Campaigns", "Milestones"] },
-  assets: { title: "Assets", eyebrow: "Every reusable output in one place", pitch: "Find generated media, approved deliverables, source files, and exports by project, type, and status.", variant: "showcase", action: "Add asset", images: [VISUALS[3], VISUALS[1], PEOPLE[3]], tools: ["Library", "Collections", "Versions"] },
-  tasks: { title: "Tasks", eyebrow: "Keep execution moving", pitch: "Turn plans into owned, prioritized work connected to the exact project, file, or deliverable it advances.", variant: "manage", action: "Add task", images: [WORK[4], PEOPLE[1], WORK[2]], tools: ["My work", "Priorities", "Approvals"] },
-  history: { title: "History", eyebrow: "Know what changed and why", pitch: "Review conversations, generations, builds, launches, failures, and decisions across your workspace.", variant: "manage", action: "Search history", images: [WORK[1], PEOPLE[4], WORK[0]], tools: ["Timeline", "Activity", "Restore"] },
-  automation: { title: "Automation", eyebrow: "Make repeatable work run itself", pitch: "Connect triggers, actions, approvals, and notifications into reliable workflows with visible run history.", variant: "launch", action: "Create automation", images: [WORK[2], PEOPLE[5], WORK[4]], tools: ["Trigger", "Workflow", "Run history"] },
-  templates: { title: "Templates", eyebrow: "Start with a proven structure", pitch: "Launch projects, campaigns, builds, and creative workflows from reusable systems you can customize.", variant: "showcase", action: "Use template", images: [VISUALS[2], WORK[3], PEOPLE[0]], tools: ["Browse", "Customize", "Save"] },
-  integrations: { title: "Integrations", eyebrow: "Connect the tools your work depends on", pitch: "Manage secure connections, permissions, and workspace access without exposing Streams infrastructure.", variant: "manage", action: "Connect app", images: [WORK[0], PEOPLE[3], WORK[2]], tools: ["Connections", "Permissions", "Health"] },
-  search: { title: "Workspace Search", eyebrow: "Find anything across your work", pitch: "Search conversations, projects, files, assets, tasks, and history from one intelligent index.", variant: "insight", action: "Search workspace", images: [PEOPLE[2], WORK[1], VISUALS[0]], tools: ["All results", "Filters", "Recent"] },
+const IMG = {
+  mountain: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1500&q=84",
+  research: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1500&q=84",
+  city: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1500&q=84",
+  brand: "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1500&q=84",
+  app: "https://images.unsplash.com/photo-1551650975-87deedd944c3?auto=format&fit=crop&w=1500&q=84",
+  document: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?auto=format&fit=crop&w=1500&q=84",
+  campaign: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1500&q=84",
+  website: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1500&q=84",
+  person: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=82",
 };
 
-const DEFAULT_PAGE = PAGE.projects;
+const TYPES = {
+  default: {
+    title: "Acme Growth Project", kind: "Strategic Plan", image: IMG.mountain,
+    left: ["Overview", "Pages", "Files", "Memory", "Structure"],
+    tools: ["Project brief", "Market opportunity", "Product advantage", "Growth engine"],
+    inspector: ["Properties", "Generate", "A.S.K. AI"],
+    bottom: ["Assets", "Outputs", "Tasks", "Versions", "Activity"],
+  },
+  research: {
+    title: "Market Research Report", kind: "Research", image: IMG.research,
+    left: ["Questions", "Sources", "Files", "Notes", "Findings", "Decisions"],
+    tools: ["Executive summary", "Competitor A", "Competitor B", "Our position"],
+    inspector: ["Source Details", "Evidence", "A.S.K. AI"],
+    bottom: ["Sources", "Extracted Facts", "Charts", "Drafts"],
+  },
+  video: {
+    title: "Launch Promo Video", kind: "Video", image: IMG.city,
+    left: ["Script", "Scenes", "Characters", "Uploaded Media", "Audio", "References"],
+    tools: ["Scene 03", "Timeline", "Overlay", "Audio", "Subtitles"],
+    inspector: ["Scene Properties", "Motion", "Voice"],
+    bottom: ["Clips", "Audio", "Generated Scenes", "Versions", "Exports"],
+  },
+  brand: {
+    title: "Lumèa Brand Identity", kind: "Brand", image: IMG.brand,
+    left: ["Brand Direction", "References", "Uploaded Images", "Generated Assets", "Style Decisions"],
+    tools: ["Logo direction", "Color palette", "Typography", "Variations"],
+    inspector: ["Prompt Controls", "Edit Tools", "A.S.K. AI"],
+    bottom: ["Generated Images", "Logos", "Palettes", "References", "Exports"],
+  },
+  app: {
+    title: "Mobile App Builder", kind: "App", image: IMG.app,
+    left: ["Files", "Routes", "Components", "Data", "APIs", "Requirements"],
+    tools: ["Preview", "Code", "Structure", "Versions"],
+    inspector: ["Component Properties", "State", "A.S.K. AI"],
+    bottom: ["Console", "Logs", "Versions", "Assets", "Tasks"],
+  },
+  document: {
+    title: "Quarterly Strategy Report", kind: "Document", image: IMG.document,
+    left: ["Outline", "Sources", "Uploads", "Research", "Sections"],
+    tools: ["Executive summary", "Revenue growth", "Key highlights", "Recommendations"],
+    inspector: ["Formatting", "Citations", "A.S.K. AI"],
+    bottom: ["Source Excerpts", "Photo Drafts", "Charts", "Attachments", "Comments"],
+  },
+  campaign: {
+    title: "Spring Product Campaign", kind: "Campaign", image: IMG.campaign,
+    left: ["Product", "Audience", "Messaging", "Channels", "Campaign Assets", "Schedule"],
+    tools: ["Overview", "Calendar", "Flow", "Performance"],
+    inspector: ["Creative Properties", "Copy Variations", "A.S.K. AI"],
+    bottom: ["Ads", "Emails", "Social Graphics", "Landing Pages", "Campaign Tasks"],
+  },
+  website: {
+    title: "Elevate Website Redesign", kind: "Website", image: IMG.website,
+    left: ["Pages", "Sections", "Files", "Brand", "Content", "SEO"],
+    tools: ["Desktop", "Tablet", "Mobile", "Responsive"],
+    inspector: ["Element Properties", "Content Editing", "A.S.K. AI"],
+    bottom: ["Images", "Components", "Page Variations", "Code", "Tasks"],
+  },
+};
 
-function Hero({ page, onPrimary }) {
-  return (
-    <header className="destinationHero">
-      <div className="destinationHeroCopy">
-        <span className="destinationEyebrow">{page.eyebrow}</span>
-        <h1>{page.title}</h1>
-        <p>{page.pitch}</p>
-        <div className="destinationActions">
-          <button type="button" className="destinationPrimary" onClick={onPrimary}>{page.action}<ArrowRight size={16} /></button>
-          <button type="button" className="destinationSecondary" onClick={() => document.getElementById("destination-workspace")?.scrollIntoView({ behavior: "smooth" })}>Explore workspace</button>
-        </div>
-      </div>
-      <div className="destinationHeroVisual" aria-label={`${page.title} example`}>
-        <img src={page.images[0]} alt="Professional using Streams Workspace" />
-        <span>{page.tools[0]}</span>
-      </div>
-    </header>
-  );
+const DESTINATION_TYPE = {
+  projects: "default", portfolio: "default", files: "default", calendar: "default", assets: "default", tasks: "default", history: "default", templates: "default", integrations: "default", search: "default",
+  "social-research": "research", revenue: "research", ideas: "research",
+  "video-studio": "video", "creator-studio": "video", "voice-studio": "video",
+  "image-studio": "brand", "visual-concepts": "brand", "turn-this-into-you": "brand",
+  "app-builder": "app", automation: "app",
+  content: "document", captions: "document",
+  "business-builder": "campaign",
+  "website-builder": "website", "preview-launch": "website",
+};
+
+function IconFor({ label }) {
+  const p = { size: 15, strokeWidth: 1.8 };
+  if (/video|scene|clip/i.test(label)) return <Video {...p} />;
+  if (/image|brand|palette|logo|visual/i.test(label)) return <Palette {...p} />;
+  if (/code|component|route|api/i.test(label)) return <Code2 {...p} />;
+  if (/file|source|document|outline|section/i.test(label)) return <FileText {...p} />;
+  if (/campaign|audience|channel|message/i.test(label)) return <Megaphone {...p} />;
+  if (/calendar|schedule/i.test(label)) return <CalendarDays {...p} />;
+  if (/task|decision|finding/i.test(label)) return <Check {...p} />;
+  return <Layers3 {...p} />;
 }
 
-function StudioWorkspace({ page, onPrimary }) {
-  const [prompt, setPrompt] = useState("Create a polished campaign concept with cinematic lighting, modern styling, and a clear focal point.");
-  const [active, setActive] = useState(0);
-  return <div className="studioWorkspace workspaceVariant">
-    <div className="workspaceControls">
-      <div className="workspaceHeading"><span>Creative direction</span><strong>Describe the result</strong></div>
-      <label className="lineField"><span>Prompt</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label>
-      <div className="controlRow"><label><span>Format</span><select defaultValue="Campaign"><option>Campaign</option><option>Editorial</option><option>Product</option></select></label><label><span>Style</span><select defaultValue="Cinematic"><option>Cinematic</option><option>Natural</option><option>Graphic</option></select></label></div>
-      <button type="button" className="destinationPrimary fullAction" onClick={onPrimary}><WandSparkles size={16} />{page.action}</button>
+function WorkspaceTopbar({ page, onAction }) {
+  return <header className="uwTopbar">
+    <div className="uwBrand"><span className="uwLogo">S</span><strong>StreamsAI</strong></div>
+    <button className="uwProjectName">{page.title}<ChevronRight size={13} /></button>
+    <span className="uwKind">{page.kind}</span><span className="uwSaved">● Saved</span>
+    <div className="uwTopActions">
+      <button>Preview</button><button><Share2 size={13} /> Share</button><button>Export</button>
+      <button className="uwPrimary" onClick={onAction}>{page.kind === "Website" || page.kind === "App" || page.kind === "Campaign" || page.kind === "Video" ? "Publish" : "Complete"}</button>
     </div>
-    <div className="workspacePreview">
-      <img src={page.images[active]} alt={`${page.title} preview`} />
-      <div className="previewRail">{page.images.map((image, index) => <button type="button" className={active === index ? "active" : ""} key={image} onClick={() => setActive(index)}><img src={image} alt={`Preview ${index + 1}`} /></button>)}</div>
+  </header>;
+}
+
+function LeftRail({ page, active, setActive }) {
+  return <aside className="uwLeftRail">
+    {page.left.map((item, index) => <button key={item} className={active === index ? "active" : ""} onClick={() => setActive(index)}><IconFor label={item} /><span>{item}</span><small>{index ? `${index * 4 + 2} items` : "Open"}</small></button>)}
+  </aside>;
+}
+
+function Inspector({ page, active, setActive }) {
+  return <aside className="uwInspector">
+    <nav>{page.inspector.map((tab, index) => <button key={tab} className={active === index ? "active" : ""} onClick={() => setActive(index)}>{tab}</button>)}</nav>
+    <div className="uwInspectorBody">
+      <label><span>Project title</span><input defaultValue={page.title} /></label>
+      <label><span>Type</span><select defaultValue={page.kind}><option>{page.kind}</option><option>Custom</option></select></label>
+      <label><span>Status</span><select defaultValue="In progress"><option>In progress</option><option>Ready for review</option><option>Complete</option></select></label>
+      <label><span>Owner</span><select defaultValue="Alex Morgan"><option>Alex Morgan</option><option>Workspace team</option></select></label>
+      <label><span>Summary</span><textarea defaultValue={`A production workspace for ${page.title.toLowerCase()}, with connected assets, decisions, and execution history.`} /></label>
+      <button className="uwAiButton"><Bot size={15} /> Improve with A.S.K. AI</button>
     </div>
+  </aside>;
+}
+
+function DefaultCanvas({ page }) {
+  return <div className="uwDefaultCanvas">
+    <img src={page.image} alt="Project cover" />
+    <div className="uwCoverText"><span>{page.kind}</span><h1>{page.title}</h1><p>Transform insight into sustainable growth with one connected Streams workspace.</p></div>
+    <div className="uwMetricGrid">{page.tools.slice(1).map((item, index) => <article key={item}><IconFor label={item} /><strong>{item}</strong><span>{index === 0 ? "+24%" : index === 1 ? "18.4K" : "3.6%"}</span></article>)}</div>
   </div>;
 }
 
-function LaunchWorkspace({ page, onPrimary }) {
-  const [step, setStep] = useState(1);
-  return <div className="launchWorkspace workspaceVariant">
-    <div className="launchFlow">
-      {page.tools.map((tool, index) => <button type="button" key={tool} className={step === index + 1 ? "active" : step > index + 1 ? "complete" : ""} onClick={() => setStep(index + 1)}><span>{step > index + 1 ? <Check size={14} /> : index + 1}</span><strong>{tool}</strong></button>)}
-    </div>
-    <div className="launchPreview"><img src={page.images[Math.min(step - 1, page.images.length - 1)]} alt={`${page.title} working preview`} /><div className="launchStatus"><span>Stage {step} of {page.tools.length}</span><strong>{page.tools[step - 1]}</strong><p>Review the current direction, continue execution, or return to an earlier stage without losing project context.</p><button type="button" className="destinationPrimary" onClick={step < page.tools.length ? () => setStep(step + 1) : onPrimary}>{step < page.tools.length ? "Continue" : page.action}<ChevronRight size={16} /></button></div></div>
-  </div>;
+function ResearchCanvas() {
+  return <div className="uwResearchCanvas"><h2>Executive Summary</h2><div className="uwResearchCards">{["Competitor A", "Competitor B", "Our position"].map((x, i) => <article key={x}><strong>{x}</strong><BarChart3 /><span>{i === 2 ? "Differentiated pricing" : "Strong but narrow"}</span></article>)}</div><section><h3>Top Findings</h3><ul><li>Price sensitivity remains high among SMB buyers.</li><li>Localized onboarding improves conversion.</li><li>Current gap: clearer differentiation.</li></ul></section><section className="uwRecommendation"><h3>Recommendation</h3><p>Lead with streamlined onboarding and transparent pricing. Target the most underserved segment first.</p></section></div>;
 }
 
-function EditorialWorkspace({ page, onPrimary }) {
-  const [channel, setChannel] = useState("Campaign");
-  return <div className="editorialWorkspace workspaceVariant">
-    <div className="editorialBrief"><span>Content brief</span><h2>A practical story built around one clear audience outcome.</h2><p>Use this workspace to move from brief to draft, review, and channel-specific output without duplicating the work.</p><div className="tagLine">{["Campaign", "Email", "Social", "Article"].map((item) => <button type="button" className={channel === item ? "active" : ""} onClick={() => setChannel(item)} key={item}>{item}</button>)}</div><button type="button" className="destinationPrimary" onClick={onPrimary}><Sparkles size={16} />{page.action}</button></div>
-    <div className="editorialCanvas"><img src={page.images[0]} alt="Content creator" /><div><span>{channel} draft</span><h3>Make the next step feel obvious.</h3><p>Lead with the audience’s real problem, show the useful change, and close with a specific action they can take now.</p></div></div>
-  </div>;
+function VideoCanvas({ page }) {
+  const [scene, setScene] = useState(2);
+  return <div className="uwVideoCanvas"><div className="uwVideoStage"><img src={page.image} alt="Video scene" /><button><Play fill="currentColor" /></button><span>00:11 / 00:15</span></div><div className="uwTimeline">{[0,1,2,3,4].map((n) => <button key={n} className={scene === n ? "active" : ""} onClick={() => setScene(n)}><img src={page.image} alt={`Scene ${n + 1}`} /><span>Scene {n + 1}</span></button>)}</div><div className="uwTracks"><span>Video</span><i /><span>Text</span><i /><span>Audio</span><i /></div></div>;
 }
 
-function InsightWorkspace({ page, onPrimary }) {
-  const [query, setQuery] = useState("");
-  return <div className="insightWorkspace workspaceVariant">
-    <div className="insightSearch"><span>Ask the workspace</span><div><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${page.title.toLowerCase()}…`} /><button type="button" onClick={onPrimary}><Send size={16} /></button></div><div className="insightSignals">{page.tools.map((tool, index) => <button type="button" key={tool}><span>{index + 1}</span><strong>{tool}</strong><small>{index === 0 ? "12 active signals" : index === 1 ? "Updated today" : "Ready to use"}</small></button>)}</div></div>
-    <div className="insightStory"><img src={page.images[0]} alt="Professional reviewing insights" /><div><span>Recommended next move</span><h2>Focus the work where evidence and opportunity overlap.</h2><p>Streams keeps the findings connected to the project so research becomes an executable decision instead of another document.</p><button type="button" className="destinationPrimary" onClick={onPrimary}>{page.action}<ArrowRight size={16} /></button></div></div>
-  </div>;
+function BrandCanvas() {
+  return <div className="uwBrandCanvas"><div className="uwLogoPreview"><Sparkles /><h1>Lumèa</h1><span>LIGHTING THE FUTURE</span></div><section><h3>Color Palette</h3><div className="uwSwatches"><i /><i /><i /><i /><i /></div></section><section><h3>Typography</h3><strong className="uwTypeSample">Aa</strong><span>Poppins — ABCDEFGHIJKLMNOPQRSTUVWXYZ</span></section></div>;
 }
 
-function ManageWorkspace({ page, onPrimary }) {
-  const rows = page.tools.map((tool, index) => ({ tool, owner: ["You", "A.S.K. AI", "Team"][index % 3], state: ["In progress", "Ready", "Review"][index % 3] }));
-  return <div className="manageWorkspace workspaceVariant"><div className="manageToolbar"><div><span>Workspace view</span><h2>{page.title}</h2></div><button type="button" className="destinationPrimary" onClick={onPrimary}><Plus size={16} />{page.action}</button></div><div className="manageTable"><div className="manageHead"><span>Item</span><span>Owner</span><span>Status</span><span /></div>{rows.map((row, index) => <button type="button" className="manageRow" key={row.tool}><span><i>{index + 1}</i><strong>{row.tool}</strong></span><span>{row.owner}</span><span>{row.state}</span><ChevronRight size={16} /></button>)}</div><div className="manageMedia">{page.images.slice(0, 3).map((image, index) => <img key={image} src={image} alt={`${page.title} reference ${index + 1}`} />)}</div></div>;
+function AppCanvas({ page }) {
+  return <div className="uwAppCanvas"><div className="uwPhone"><div className="uwPhoneTop">9:36</div><h4>Good morning, Alex</h4><div className="uwBalance"><span>Your balance</span><strong>$4,280.50</strong></div><div className="uwAppActions"><button>Send</button><button>Request</button><button>Top up</button></div><ul><li>Shopify <span>-$4.30</span></li><li>Uber <span>-$18.40</span></li><li>Amazon <span>-$69.99</span></li></ul></div><pre>{`export function Button({ label }) {\n  return (\n    <button className="primary">\n      {label}\n    </button>\n  );\n}`}</pre></div>;
 }
 
-function ShowcaseWorkspace({ page, onPrimary }) {
-  const [selected, setSelected] = useState(0);
-  return <div className="showcaseWorkspace workspaceVariant"><div className="showcaseMain"><img src={page.images[selected]} alt={`${page.title} featured work`} /><div><span>Featured direction</span><h2>{page.tools[selected] || page.tools[0]}</h2><p>Select work, compare directions, and move the strongest result into production or presentation.</p><button type="button" className="destinationPrimary" onClick={onPrimary}>{page.action}<ArrowRight size={16} /></button></div></div><div className="showcaseStrip">{page.images.map((image, index) => <button type="button" key={image} className={selected === index ? "active" : ""} onClick={() => setSelected(index)}><img src={image} alt={`${page.title} option ${index + 1}`} /><span>{page.tools[index] || `Option ${index + 1}`}</span></button>)}</div></div>;
+function DocumentCanvas() {
+  return <article className="uwDocumentCanvas"><div className="uwDocTools">B &nbsp; I &nbsp; U &nbsp; • &nbsp; H1 &nbsp; H2</div><h1>Q2 2024 Strategy Report</h1><h2>1. Executive Summary</h2><p>Strong performance across key markets shows our growth strategy is working. Our focus on product innovation and customer experience is paying off.</p><div className="uwChart"><BarChart3 /><span>Revenue Growth (YoY)</span><b>+24%</b></div><h2>2. Key Highlights</h2><ul><li>Revenue up 24% year over year</li><li>Customer acquisition up 18%</li><li>Retention reached 94%</li></ul></article>;
 }
 
-function Workspace({ page, onPrimary }) {
-  if (page.variant === "studio") return <StudioWorkspace page={page} onPrimary={onPrimary} />;
-  if (page.variant === "launch") return <LaunchWorkspace page={page} onPrimary={onPrimary} />;
-  if (page.variant === "editorial") return <EditorialWorkspace page={page} onPrimary={onPrimary} />;
-  if (page.variant === "insight") return <InsightWorkspace page={page} onPrimary={onPrimary} />;
-  if (page.variant === "showcase") return <ShowcaseWorkspace page={page} onPrimary={onPrimary} />;
-  return <ManageWorkspace page={page} onPrimary={onPrimary} />;
+function CampaignCanvas({ page }) {
+  return <div className="uwCampaignCanvas"><div className="uwCampaignHero"><img src={page.image} alt="Campaign product" /><div><span>New launch</span><h1>Spring Refresh</h1><p>New look. More power.</p><button>Shop now</button></div></div><div className="uwCampaignGrid">{["Email Promo", "Social Ad", "Landing Page"].map((x) => <article key={x}><img src={page.image} alt={x} /><strong>{x}</strong></article>)}</div><section><h3>Content Calendar</h3><div className="uwCalendarRow"><span>May 12<br/><b>Post</b></span><span>May 13<br/><b>Instagram</b></span><span>May 14<br/><b>Blog Post</b></span><span>May 15<br/><b>Facebook Ad</b></span></div></section></div>;
+}
+
+function WebsiteCanvas({ page }) {
+  return <div className="uwWebsiteCanvas"><div className="uwDeviceTabs"><MonitorSmartphone /><span>Desktop</span><span>Tablet</span><span>Mobile</span></div><div className="uwWebsitePreview"><img src={page.image} alt="Website preview" /><div><span>Elevate</span><h1>Elevate<br/>Your Business</h1><p>Smart solutions that drive growth, efficiency, and impact.</p><button>Get Started</button></div><footer><strong>2.5K+</strong><span>Customers</span><strong>98%</strong><span>Satisfaction</span><strong>24/7</strong><span>Support</span></footer></div></div>;
+}
+
+function MainCanvas({ type, page }) {
+  if (type === "research") return <ResearchCanvas />;
+  if (type === "video") return <VideoCanvas page={page} />;
+  if (type === "brand") return <BrandCanvas />;
+  if (type === "app") return <AppCanvas page={page} />;
+  if (type === "document") return <DocumentCanvas />;
+  if (type === "campaign") return <CampaignCanvas page={page} />;
+  if (type === "website") return <WebsiteCanvas page={page} />;
+  return <DefaultCanvas page={page} />;
+}
+
+function BottomDock({ page, active, setActive }) {
+  return <footer className="uwBottomDock"><nav>{page.bottom.map((tab, i) => <button key={tab} className={active === i ? "active" : ""} onClick={() => setActive(i)}>{tab}</button>)}</nav><div className="uwAssetStrip">{page.bottom.slice(0,4).map((item, i) => <article key={item}><span>{i % 2 ? <ImageIcon /> : <FolderOpen />}</span><strong>{item}</strong><small>{i * 5 + 3} items</small></article>)}</div></footer>;
 }
 
 export default function StreamsDestinationWorkspace({ destination, onNewProject }) {
   const router = useRouter();
-  const page = useMemo(() => PAGE[destination] || DEFAULT_PAGE, [destination]);
+  const type = DESTINATION_TYPE[destination] || "default";
+  const page = TYPES[type];
+  const [leftActive, setLeftActive] = useState(0);
+  const [inspectorActive, setInspectorActive] = useState(0);
+  const [bottomActive, setBottomActive] = useState(0);
 
-  function primaryAction() {
-    if (destination === "image-studio") router.push("/streams-ai?destination=image-studio&mode=create");
-    else if (destination === "video-studio") router.push("/streams-ai/streams-builder/gen-video");
-    else if (["business-builder", "website-builder", "app-builder", "preview-launch", "automation"].includes(destination)) router.push("/streams-ai/streams-builder/workspace");
-    else if (["projects", "ideas"].includes(destination)) onNewProject?.();
-    else if (destination === "files") router.push("/dashboard/files");
-    else if (destination === "tasks") router.push("/dashboard/tasks");
-    else if (destination === "history") router.push("/dashboard/history");
-    else window.dispatchEvent(new CustomEvent("streams-ai:destination-action", { detail: { destination } }));
-  }
+  const action = () => {
+    if (type === "video") return router.push("/streams-ai/streams-builder/gen-video");
+    if (type === "app" || type === "website" || type === "campaign") return router.push("/streams-ai/streams-builder/workspace");
+    onNewProject?.();
+  };
 
-  return <main className="destinationPage" aria-label={`${page.title} workspace`}>
-    <Hero page={page} onPrimary={primaryAction} />
-    <section id="destination-workspace" className="destinationWorkspaceSection">
-      <div className="destinationSectionHeading"><span>Streams Workspace</span><h2>Work directly inside {page.title}</h2><p>The marketing promise and the working environment live together, so users can understand the value and start immediately.</p></div>
-      <Workspace page={page} onPrimary={primaryAction} />
-    </section>
+  return <main className={`universalWorkspace type-${type}`}>
+    <WorkspaceTopbar page={page} onAction={action} />
+    <div className="uwBody">
+      <LeftRail page={page} active={leftActive} setActive={setLeftActive} />
+      <section className="uwCanvas"><div className="uwCanvasTabs">{page.tools.map((tab, i) => <button key={tab} className={i === 0 ? "active" : ""}>{tab}</button>)}</div><MainCanvas type={type} page={page} /></section>
+      <Inspector page={page} active={inspectorActive} setActive={setInspectorActive} />
+    </div>
+    <BottomDock page={page} active={bottomActive} setActive={setBottomActive} />
     <style jsx global>{`
-      .destinationPage{height:100dvh;overflow-y:auto;overflow-x:hidden;background:#020713;color:#eef6ff;scrollbar-width:none}.destinationPage::-webkit-scrollbar{display:none}.destinationHero{min-height:64vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.9fr);align-items:center;gap:clamp(36px,6vw,96px);padding:clamp(70px,9vh,118px) clamp(28px,5vw,88px) clamp(54px,8vh,90px);max-width:1600px;margin:auto}.destinationHeroCopy{max-width:700px}.destinationEyebrow,.destinationSectionHeading>span,.workspaceHeading span,.editorialBrief>span,.insightSearch>span,.launchStatus>span,.editorialCanvas span,.insightStory span,.showcaseMain span,.manageToolbar span{display:block;color:#63d8ff;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.destinationHero h1{margin:14px 0 18px;font-size:clamp(46px,6vw,92px);line-height:.95;letter-spacing:-.055em}.destinationHero p{max-width:660px;margin:0;color:#aebbd0;font-size:clamp(16px,1.4vw,22px);line-height:1.55}.destinationActions{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}.destinationPrimary,.destinationSecondary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:10px;padding:0 18px;font-weight:800;cursor:pointer}.destinationPrimary{border:0;background:linear-gradient(90deg,#16b9f5,#6b5cff,#ad36df);color:#fff;box-shadow:0 12px 30px rgba(82,82,255,.22)}.destinationSecondary{border:1px solid rgba(148,163,184,.28);background:transparent;color:#e2e8f0}.destinationHeroVisual{position:relative;min-height:clamp(360px,50vw,660px)}.destinationHeroVisual img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover;object-position:center;border-radius:0;filter:saturate(.92) contrast(1.04)}.destinationHeroVisual:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(2,7,19,.88))}.destinationHeroVisual span{position:absolute;left:24px;bottom:22px;z-index:1;font-size:13px;font-weight:800;letter-spacing:.08em}.destinationWorkspaceSection{padding:clamp(60px,8vw,110px) clamp(24px,5vw,84px) 110px;background:linear-gradient(180deg,#050b19,#020713)}.destinationSectionHeading{max-width:760px;margin:0 auto 42px;text-align:center}.destinationSectionHeading h2{margin:10px 0 10px;font-size:clamp(30px,4vw,54px);letter-spacing:-.04em}.destinationSectionHeading p{margin:0;color:#91a0b7;line-height:1.6}.workspaceVariant{width:min(1320px,100%);margin:auto}.studioWorkspace{display:grid;grid-template-columns:minmax(300px,.7fr) minmax(0,1.3fr);gap:36px;align-items:start}.workspaceControls{display:grid;gap:22px}.workspaceHeading{display:grid;gap:7px}.workspaceHeading strong{font-size:27px}.lineField{display:grid;gap:8px}.lineField span,.controlRow span{font-size:11px;color:#8da0bc}.lineField textarea{min-height:150px;resize:vertical;padding:15px 0;border:0;border-bottom:1px solid rgba(148,163,184,.28);background:transparent;color:#fff;font:inherit;line-height:1.5;outline:none}.controlRow{display:grid;grid-template-columns:1fr 1fr;gap:16px}.controlRow label{display:grid;gap:8px}.controlRow select{height:43px;border:0;border-bottom:1px solid rgba(148,163,184,.28);background:#050b19;color:#fff}.fullAction{width:100%}.workspacePreview>img{width:100%;height:clamp(360px,52vw,700px);object-fit:cover}.previewRail{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}.previewRail button,.showcaseStrip button{border:0;background:transparent;padding:0;cursor:pointer;opacity:.62}.previewRail button.active,.showcaseStrip button.active{opacity:1}.previewRail img{width:100%;height:96px;object-fit:cover}.launchFlow{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid rgba(148,163,184,.18)}.launchFlow button{display:flex;align-items:center;gap:10px;padding:14px 0;border:0;background:transparent;color:#8290a6;text-align:left}.launchFlow button>span{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;border:1px solid currentColor}.launchFlow button.active,.launchFlow button.complete{color:#67dcff}.launchPreview{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:32px;padding-top:24px}.launchPreview>img{width:100%;height:clamp(360px,48vw,650px);object-fit:cover}.launchStatus{align-self:center}.launchStatus strong{display:block;margin:10px 0;font-size:32px}.launchStatus p{color:#94a3b8;line-height:1.65;margin-bottom:22px}.editorialWorkspace{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(0,1.25fr);gap:48px;align-items:center}.editorialBrief h2,.insightStory h2,.showcaseMain h2{font-size:clamp(30px,4vw,52px);line-height:1.05;letter-spacing:-.04em}.editorialBrief p,.insightStory p,.showcaseMain p{color:#94a3b8;line-height:1.65}.tagLine{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0}.tagLine button{border:0;border-bottom:1px solid rgba(148,163,184,.28);background:transparent;color:#94a3b8;padding:8px 2px}.tagLine button.active{color:#6ee7ff;border-color:#6ee7ff}.editorialCanvas>img{width:100%;height:440px;object-fit:cover}.editorialCanvas>div{padding:20px 0}.editorialCanvas h3{font-size:28px;margin:8px 0}.editorialCanvas p{color:#9aa8bb;line-height:1.6}.insightWorkspace{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(0,1.1fr);gap:42px}.insightSearch>div:first-of-type{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;border-bottom:1px solid rgba(148,163,184,.32);padding:13px 0}.insightSearch input{border:0;background:transparent;color:#fff;font-size:20px;outline:0}.insightSearch>div button{width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;background:#6d3df3;color:#fff}.insightSignals{display:grid!important;gap:0!important;margin-top:24px}.insightSignals>button{display:grid!important;grid-template-columns:32px 1fr!important;gap:2px 12px!important;padding:15px 0!important;border:0!important;border-bottom:1px solid rgba(148,163,184,.14)!important;border-radius:0!important;background:transparent!important;text-align:left!important;color:#fff!important;width:100%!important;height:auto!important}.insightSignals>button>span{grid-row:1/3;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#10203b;color:#67dcff}.insightSignals small{color:#7f8ca3}.insightStory img{width:100%;height:380px;object-fit:cover}.insightStory>div{padding-top:20px}.manageToolbar{display:flex;justify-content:space-between;align-items:end;gap:18px;padding-bottom:18px;border-bottom:1px solid rgba(148,163,184,.2)}.manageToolbar h2{font-size:32px;margin:5px 0 0}.manageTable{display:grid}.manageHead,.manageRow{display:grid;grid-template-columns:minmax(220px,1.5fr) .7fr .7fr 24px;gap:16px;align-items:center}.manageHead{padding:14px 0;color:#75849a;font-size:10px;text-transform:uppercase;letter-spacing:.12em}.manageRow{width:100%;padding:17px 0;border:0;border-top:1px solid rgba(148,163,184,.12);background:transparent;color:#dbe6f5;text-align:left}.manageRow>span:first-child{display:flex;align-items:center;gap:10px}.manageRow i{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#0d1b31;color:#5fdcff;font-style:normal;font-size:10px}.manageMedia{display:grid;grid-template-columns:1.3fr .85fr .85fr;gap:10px;margin-top:30px}.manageMedia img{width:100%;height:220px;object-fit:cover}.showcaseMain{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:38px;align-items:center}.showcaseMain>img{width:100%;height:560px;object-fit:cover}.showcaseStrip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.showcaseStrip button{text-align:left;color:#dbeafe}.showcaseStrip img{width:100%;height:150px;object-fit:cover}.showcaseStrip span{display:block;padding-top:8px;font-size:12px;font-weight:700}.showcaseStrip button.active span{color:#64dcff}
-      @media(max-width:900px){.destinationPage{height:auto;min-height:100dvh}.destinationHero{grid-template-columns:1fr;min-height:auto;padding:76px 20px 48px;gap:34px}.destinationHero h1{font-size:clamp(44px,14vw,68px)}.destinationHeroVisual{min-height:430px}.destinationWorkspaceSection{padding:58px 18px 80px}.studioWorkspace,.launchPreview,.editorialWorkspace,.insightWorkspace,.showcaseMain{grid-template-columns:1fr}.workspaceControls{order:2}.workspacePreview{order:1}.launchFlow{grid-template-columns:1fr}.launchFlow button{border-bottom:1px solid rgba(148,163,184,.12)}.manageHead{display:none}.manageRow{grid-template-columns:minmax(0,1fr) auto}.manageRow>span:nth-child(2),.manageRow>span:nth-child(3){display:none}.manageMedia{grid-template-columns:1fr 1fr}.manageMedia img{height:180px}.manageMedia img:first-child{grid-column:1/-1;height:260px}.showcaseMain>img{height:430px}.showcaseStrip{grid-template-columns:repeat(3,minmax(120px,1fr));overflow-x:auto}.showcaseStrip img{height:120px}.destinationActions{display:grid}.destinationPrimary,.destinationSecondary{width:100%}.controlRow{grid-template-columns:1fr}.editorialCanvas>img,.insightStory img{height:360px}}
-      @media(max-width:520px){.destinationHeroVisual{min-height:340px}.destinationHero p{font-size:16px}.destinationSectionHeading{text-align:left}.workspacePreview>img{height:420px}.previewRail img{height:72px}.manageToolbar{align-items:start;flex-direction:column}.manageToolbar .destinationPrimary{width:100%}.manageMedia{grid-template-columns:1fr}.manageMedia img,.manageMedia img:first-child{grid-column:auto;height:230px}.showcaseMain>img{height:380px}.showcaseStrip{grid-template-columns:repeat(3,132px)}.launchPreview>img{height:390px}.editorialCanvas>img,.insightStory img{height:320px}}
+      .universalWorkspace{height:100dvh;display:grid;grid-template-rows:52px minmax(0,1fr) 132px;background:#f7f9fc;color:#12203a;font-family:Inter,ui-sans-serif,system-ui;overflow:hidden}.uwTopbar{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #dbe2ec;background:#fff}.uwBrand{display:flex;align-items:center;gap:7px}.uwLogo{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:linear-gradient(135deg,#24b7ff,#3448ff);color:#fff;font-weight:900}.uwBrand strong{font-size:12px}.uwProjectName,.uwTopActions button,.uwCanvasTabs button,.uwInspector nav button,.uwBottomDock nav button{border:0;background:transparent;color:#45546c;cursor:pointer}.uwProjectName{display:flex;align-items:center;font-weight:800}.uwKind{font-size:10px;color:#3265d8}.uwSaved{font-size:9px;color:#21a66c}.uwTopActions{margin-left:auto;display:flex;gap:5px}.uwTopActions button{min-height:28px;padding:0 9px;border:1px solid #dbe2ec;border-radius:5px;font-size:9px;font-weight:700;display:flex;align-items:center;gap:4px}.uwTopActions .uwPrimary{background:#2463eb;border-color:#2463eb;color:#fff}.uwBody{min-height:0;display:grid;grid-template-columns:150px minmax(0,1fr) 236px}.uwLeftRail{min-height:0;overflow:auto;border-right:1px solid #dbe2ec;background:#fff;padding:8px 6px}.uwLeftRail button{width:100%;display:grid;grid-template-columns:18px 1fr;gap:2px 6px;align-items:center;padding:8px;border:0;border-radius:6px;background:transparent;color:#526078;text-align:left;cursor:pointer}.uwLeftRail button.active{background:#eaf1ff;color:#1755d6}.uwLeftRail button span{font-size:10px;font-weight:750}.uwLeftRail button small{grid-column:2;font-size:7px;color:#98a3b4}.uwCanvas{min-width:0;min-height:0;overflow:auto;padding:10px;background:#f8fafc}.uwCanvasTabs{height:30px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #dfe5ee}.uwCanvasTabs button{font-size:9px}.uwCanvasTabs button.active{color:#1755d6;font-weight:800;border-bottom:2px solid #1755d6;height:30px}.uwInspector{min-height:0;overflow:auto;border-left:1px solid #dbe2ec;background:#fff}.uwInspector nav{display:flex;border-bottom:1px solid #dbe2ec;padding:0 8px}.uwInspector nav button{height:36px;font-size:8px}.uwInspector nav button.active{color:#1755d6;border-bottom:2px solid #1755d6}.uwInspectorBody{padding:10px;display:grid;gap:9px}.uwInspectorBody label{display:grid;gap:4px}.uwInspectorBody label span{font-size:8px;font-weight:750}.uwInspectorBody input,.uwInspectorBody select,.uwInspectorBody textarea{width:100%;box-sizing:border-box;border:1px solid #dbe2ec;border-radius:5px;background:#fff;padding:7px;font-size:9px}.uwInspectorBody textarea{min-height:72px;resize:vertical}.uwAiButton{border:0;border-radius:5px;background:#2463eb;color:#fff;padding:9px;font-size:9px;font-weight:800;display:flex;justify-content:center;gap:5px}.uwBottomDock{border-top:1px solid #dbe2ec;background:#fff;overflow:hidden}.uwBottomDock nav{height:34px;display:flex;gap:12px;padding:0 12px;border-bottom:1px solid #e5e9f0}.uwBottomDock nav button{font-size:8px}.uwBottomDock nav button.active{color:#1755d6;border-bottom:2px solid #1755d6}.uwAssetStrip{height:98px;display:flex;gap:10px;padding:10px;overflow:auto}.uwAssetStrip article{min-width:150px;display:grid;grid-template-columns:32px 1fr;gap:2px 7px;align-items:center}.uwAssetStrip article span{grid-row:1/3;width:30px;height:30px;border-radius:6px;background:#edf3ff;color:#2463eb;display:grid;place-items:center}.uwAssetStrip svg{width:16px}.uwAssetStrip strong{font-size:9px}.uwAssetStrip small{font-size:7px;color:#8b97aa}.uwDefaultCanvas,.uwResearchCanvas,.uwVideoCanvas,.uwBrandCanvas,.uwAppCanvas,.uwDocumentCanvas,.uwCampaignCanvas,.uwWebsiteCanvas{min-height:calc(100% - 40px);margin-top:10px;background:#fff;border:1px solid #e0e6ef;border-radius:8px;overflow:hidden}.uwDefaultCanvas{display:grid;grid-template-columns:1.2fr .8fr;position:relative}.uwDefaultCanvas>img{width:100%;height:250px;object-fit:cover}.uwCoverText{padding:25px}.uwCoverText h1{font-size:27px;margin:8px 0}.uwCoverText p{font-size:12px;line-height:1.5;color:#66748a}.uwMetricGrid{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px}.uwMetricGrid article{padding:14px;border-top:1px solid #e4e9f1;display:grid;gap:6px}.uwMetricGrid strong{font-size:11px}.uwMetricGrid span{color:#20a66a;font-weight:800}.uwResearchCanvas{padding:18px}.uwResearchCards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.uwResearchCards article{padding:12px;background:#f7f9fc;border-radius:7px;display:grid;gap:8px}.uwResearchCards svg{color:#6c63ff}.uwResearchCanvas section{margin-top:14px}.uwRecommendation{background:#e9f9ef;padding:12px;border-radius:7px}.uwVideoCanvas{padding:10px}.uwVideoStage{height:270px;position:relative;background:#080f1f}.uwVideoStage img{width:100%;height:100%;object-fit:cover}.uwVideoStage button{position:absolute;left:12px;bottom:12px;border:0;border-radius:50%;width:34px;height:34px}.uwVideoStage span{position:absolute;left:55px;bottom:20px;color:#fff;font-size:9px}.uwTimeline{display:flex;gap:6px;padding:10px;overflow:auto}.uwTimeline button{min-width:112px;border:2px solid transparent;border-radius:5px;background:#fff;padding:3px}.uwTimeline button.active{border-color:#7654ff}.uwTimeline img{width:100%;height:54px;object-fit:cover}.uwTimeline span{font-size:8px}.uwTracks{display:grid;grid-template-columns:45px 1fr;gap:4px;padding:8px}.uwTracks span{font-size:8px}.uwTracks i{height:12px;background:linear-gradient(90deg,#6d5dfc,#e86bcf);border-radius:3px}.uwBrandCanvas{padding:18px}.uwLogoPreview{height:230px;display:grid;place-items:center;align-content:center}.uwLogoPreview svg{color:#f0ad2c}.uwLogoPreview h1{font-size:42px;margin:8px 0 0}.uwLogoPreview span{font-size:8px;letter-spacing:.25em}.uwBrandCanvas section{border-top:1px solid #e5e9f0;padding:12px}.uwSwatches{display:flex;gap:10px}.uwSwatches i{width:38px;height:38px;border-radius:6px;background:#071a46}.uwSwatches i:nth-child(2){background:#2563eb}.uwSwatches i:nth-child(3){background:#20c4a8}.uwSwatches i:nth-child(4){background:#f3b51b}.uwSwatches i:nth-child(5){background:#f1f5f9}.uwTypeSample{font-size:44px;margin-right:14px}.uwAppCanvas{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:18px}.uwPhone{width:210px;margin:auto;border:7px solid #111827;border-radius:28px;padding:15px;background:#fff;box-shadow:0 16px 40px #cbd5e1}.uwPhoneTop{text-align:center;font-size:8px}.uwBalance{background:linear-gradient(135deg,#1265ee,#12c8d7);color:#fff;border-radius:10px;padding:12px;display:grid}.uwBalance strong{font-size:19px}.uwAppActions{display:flex;gap:5px;margin:10px 0}.uwAppActions button{border:0;background:#edf4ff;color:#2563eb;font-size:8px;padding:7px}.uwPhone ul{padding:0;list-style:none}.uwPhone li{display:flex;justify-content:space-between;border-top:1px solid #eef1f5;padding:8px 0;font-size:9px}.uwAppCanvas pre{background:#f8fafc;border-left:1px solid #e3e8ef;padding:20px;color:#334155;font-size:11px;overflow:auto}.uwDocumentCanvas{padding:22px 40px;font-family:Georgia,serif}.uwDocTools{font-family:Inter,sans-serif;color:#64748b;border-bottom:1px solid #e5e9f0;padding-bottom:10px}.uwDocumentCanvas h1{font-size:26px}.uwDocumentCanvas h2{font-size:15px;margin-top:22px}.uwDocumentCanvas p,.uwDocumentCanvas li{font-size:11px;line-height:1.6}.uwChart{height:100px;display:flex;align-items:center;gap:15px;background:#f7f9fc;padding:12px}.uwChart svg{width:50px;height:50px;color:#2463eb}.uwChart b{margin-left:auto;color:#20a66a}.uwCampaignCanvas{padding:16px}.uwCampaignHero{height:180px;position:relative;overflow:hidden;border-radius:8px;background:#fff3e8}.uwCampaignHero img{width:100%;height:100%;object-fit:cover;opacity:.55}.uwCampaignHero div{position:absolute;inset:0;display:grid;align-content:center;padding:25px;width:45%}.uwCampaignHero h1{margin:5px 0}.uwCampaignHero button,.uwWebsitePreview button{width:max-content;border:0;border-radius:4px;background:#2463eb;color:#fff;padding:8px 12px}.uwCampaignGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.uwCampaignGrid img{width:100%;height:72px;object-fit:cover}.uwCampaignGrid strong{font-size:9px}.uwCalendarRow{display:flex;gap:8px}.uwCalendarRow span{background:#f7f9fc;padding:8px;font-size:8px}.uwWebsiteCanvas{padding:10px}.uwDeviceTabs{height:28px;display:flex;gap:12px;align-items:center;font-size:8px}.uwWebsitePreview{height:360px;position:relative;overflow:hidden}.uwWebsitePreview>img{width:100%;height:100%;object-fit:cover}.uwWebsitePreview>div{position:absolute;inset:0 auto 0 0;width:45%;padding:45px 28px;background:linear-gradient(90deg,rgba(255,255,255,.98),rgba(255,255,255,.72),transparent)}.uwWebsitePreview h1{font-size:34px;margin:12px 0}.uwWebsitePreview p{font-size:10px;line-height:1.5}.uwWebsitePreview footer{position:absolute;inset:auto 0 0;display:flex;justify-content:center;gap:10px;background:#06122e;color:#fff;padding:15px}.uwWebsitePreview footer span{font-size:8px;color:#cbd5e1}.uwWebsitePreview footer strong{font-size:16px}
+      @media(max-width:1050px){.uwBody{grid-template-columns:126px minmax(0,1fr) 205px}.uwTopActions button:nth-child(-n+3){display:none}}
+      @media(max-width:760px){.universalWorkspace{height:auto;min-height:100dvh;grid-template-rows:auto auto auto;overflow:visible}.uwTopbar{position:sticky;top:0;z-index:20;min-height:52px}.uwBrand strong,.uwKind,.uwSaved,.uwProjectName{display:none}.uwTopActions{width:100%;justify-content:flex-end}.uwBody{display:block}.uwLeftRail{display:flex;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid #dbe2ec;padding:7px}.uwLeftRail button{min-width:max-content;grid-template-columns:16px 1fr;padding:7px}.uwLeftRail button small{display:none}.uwCanvas{min-height:620px;padding:8px}.uwCanvasTabs{overflow-x:auto}.uwInspector{border-left:0;border-top:1px solid #dbe2ec}.uwInspectorBody{grid-template-columns:1fr 1fr}.uwInspectorBody label:last-of-type{grid-column:1/-1}.uwBottomDock{height:auto}.uwAssetStrip{height:auto}.uwDefaultCanvas,.uwAppCanvas{display:block}.uwDefaultCanvas>img{height:180px}.uwMetricGrid{grid-template-columns:1fr}.uwResearchCards,.uwCampaignGrid{grid-template-columns:1fr}.uwVideoStage{height:220px}.uwAppCanvas pre{margin-top:15px;min-height:180px}.uwDocumentCanvas{padding:18px}.uwWebsitePreview{height:420px}.uwWebsitePreview>div{width:70%;padding:30px 20px}.uwWebsitePreview h1{font-size:28px}.uwWebsitePreview footer{flex-wrap:wrap}.uwInspector{display:none}}
     `}</style>
   </main>;
 }
