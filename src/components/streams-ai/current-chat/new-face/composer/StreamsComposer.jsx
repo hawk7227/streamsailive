@@ -29,6 +29,21 @@ export function autosizeComposerTextarea(node) {
   node.style.overflowY = node.scrollHeight > max ? "auto" : "hidden";
 }
 
+function looksLikeCursorArtifact(node) {
+  if (!(node instanceof HTMLElement)) return false;
+  const name = `${node.id || ""} ${String(node.className || "")}`.toLowerCase();
+  if (/custom.?cursor|cursor.?dot|cursor.?follow|mouse.?follow|pointer.?dot/.test(name)) return true;
+  const style = window.getComputedStyle(node);
+  const rect = node.getBoundingClientRect();
+  return style.position === "fixed"
+    && style.pointerEvents === "none"
+    && rect.width > 0
+    && rect.height > 0
+    && rect.width <= 48
+    && rect.height <= 48
+    && Number.parseInt(style.zIndex || "0", 10) >= 900;
+}
+
 function removeCursorArtifacts(root = document) {
   const selectors = [
     ".custom-cursor", ".customCursor", ".cursor-dot", ".cursorDot",
@@ -39,8 +54,12 @@ function removeCursorArtifacts(root = document) {
     "[class*='mouse-follow']", "[class*='pointer-dot']",
   ];
   selectors.forEach((selector) => root.querySelectorAll?.(selector).forEach((node) => node.remove()));
-  document.documentElement.style.cursor = "auto";
-  if (document.body) document.body.style.cursor = "auto";
+  root.querySelectorAll?.("[style*='cursor: none'],[style*='cursor:none']").forEach((node) => node.style.removeProperty("cursor"));
+  root.querySelectorAll?.("div,span,canvas").forEach((node) => {
+    if (looksLikeCursorArtifact(node)) node.remove();
+  });
+  document.documentElement.style.setProperty("cursor", "auto", "important");
+  if (document.body) document.body.style.setProperty("cursor", "auto", "important");
 }
 
 export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelect, onModeChange, libraryFiles = [], onRemoveFile, isStreaming = false }) {
@@ -65,8 +84,9 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
           if (node instanceof HTMLElement) removeCursorArtifacts(node);
         }
       }
+      removeCursorArtifacts();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
     return () => observer.disconnect();
   }, []);
 
@@ -214,7 +234,7 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
         {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
 
         <style jsx>{`
-          .calmActionRow button,.calmMenu button,.calmToolPill button,.calmAttachment button{cursor:pointer!important}
+          .calmStreamsComposer,.calmStreamsComposer *{cursor:auto!important}.calmComposerInput{cursor:text!important}.calmActionRow button,.calmMenu button,.calmToolPill button,.calmAttachment button{cursor:pointer!important}
           .calmAdd,.calmSend{display:grid;place-items:center;border:0;color:#fff}.calmAdd{width:38px;height:38px;border-radius:12px;background:rgba(124,58,237,.14);border:1px solid rgba(192,132,252,.24);font-size:20px}.calmSend{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#d946ef,#7c3aed 62%,#06d9ff);font-size:19px;font-weight:900;box-shadow:0 0 13px rgba(124,58,237,.35)}.calmSend:disabled{opacity:.42;cursor:not-allowed!important}
           .calmMode,.calmMic{height:30px;border:0;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:700;white-space:nowrap}.calmMode span{margin-left:3px}.calmMic{width:30px}
           .calmAttachments{display:flex;gap:6px;overflow-x:auto;padding:1px 2px 5px}.calmAttachment{display:flex;align-items:center;gap:6px;min-width:130px;max-width:210px;padding:5px 25px 5px 6px;border-radius:10px;background:rgba(255,255,255,.06);position:relative}.calmAttachment img{width:34px;height:34px;object-fit:cover;border-radius:7px}.calmAttachment strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.calmAttachment>button{position:absolute;right:5px;top:5px;border:0;background:transparent;color:#fff}
