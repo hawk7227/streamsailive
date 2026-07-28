@@ -3,6 +3,7 @@ import "./globals.css";
 import "./streams-ai/mobile-buildercenterchat-exact.css";
 import "./streams-ai/website-project-parity.css";
 import "./streams-ai/website-quickstart-images.css";
+import "./streams-ai/builder-layout-restoration.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
 import StreamsGlobalAccountNavLinks from "@/components/account/StreamsGlobalAccountNavLinks";
