@@ -29,10 +29,21 @@ function parseSseBlock(block: string) {
   catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
-function cleanInternalContent(value: string) {
+function containsPreview(value: string) {
   PREVIEW_PATH.lastIndex = 0;
   GENERATED_PATH.lastIndex = 0;
-  return value
+  const found = PREVIEW_PATH.test(value) || GENERATED_PATH.test(value);
+  PREVIEW_PATH.lastIndex = 0;
+  GENERATED_PATH.lastIndex = 0;
+  return found;
+}
+
+function displayContent(message: Message) {
+  const content = String(message.content || "");
+  const hadPreview = containsPreview(content);
+  PREVIEW_PATH.lastIndex = 0;
+  GENERATED_PATH.lastIndex = 0;
+  const cleaned = content
     .replace(PREVIEW_PATH, "")
     .replace(GENERATED_PATH, "")
     .replace(/Your frontend preview is ready:?/gi, "")
@@ -40,15 +51,7 @@ function cleanInternalContent(value: string) {
     .replace(/Pulled generated\/?/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-function displayContent(message: Message) {
-  const content = String(message.content || "");
-  const cleaned = cleanInternalContent(content);
-  const containedPreview = PREVIEW_PATH.test(content) || GENERATED_PATH.test(content);
-  PREVIEW_PATH.lastIndex = 0;
-  GENERATED_PATH.lastIndex = 0;
-  return cleaned || (containedPreview ? "The preview is open and updated in the Builder workspace." : content);
+  return cleaned || (hadPreview ? "The preview is open and updated in the Builder workspace." : content);
 }
 
 function messageNeedsCollapse(message: Message) {
@@ -61,8 +64,8 @@ function messageNeedsCollapse(message: Message) {
 }
 
 function mergeMessages(current: Message[], incoming: Message[]) {
-  const localStreaming = current.filter((item) => String(item.id || "").startsWith("local-") && item.status === "streaming");
-  if (localStreaming.length) return current;
+  const localStreaming = current.some((item) => String(item.id || "").startsWith("local-") && item.status === "streaming");
+  if (localStreaming) return current;
   const seen = new Set<string>();
   return incoming.filter((item, index) => {
     const key = item.id || `${item.role}:${item.content}:${index}`;
@@ -72,7 +75,7 @@ function mergeMessages(current: Message[], incoming: Message[]) {
   });
 }
 
-function publishBuilderStatus(statusText: string, detail: Record<string, unknown> = {}) {
+function publishWorkspaceStatus(statusText: string, detail: Record<string, unknown> = {}) {
   window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message: statusText, ...detail } }));
   window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "agent-status", statusText, ...detail } }));
 }
@@ -113,17 +116,16 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     const payload = await response.json().catch(() => null) as { ok?: boolean; messages?: Message[]; error?: string } | null;
     if (!response.ok || !payload?.ok) { setStatus(payload?.error || "Could not load the conversation."); return; }
     setMessages((current) => mergeMessages(current, Array.isArray(payload.messages) ? payload.messages : []));
-    setStatus("Builder connected");
-    publishBuilderStatus("Builder agent connected to this conversation.", { sessionId });
+    setStatus("Workspace connected");
+    publishWorkspaceStatus("Workspace connected.", { sessionId });
     onConnectionChange({ connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId });
   }
 
-  function paintAnswer(assistantId: string, statusValue: string = "streaming") {
+  function paintAnswer(assistantId: string, statusValue = "streaming") {
     if (paintFrameRef.current !== null) return;
     paintFrameRef.current = window.requestAnimationFrame(() => {
       paintFrameRef.current = null;
-      const content = answerRef.current;
-      setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content, status: statusValue } : item));
+      setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answerRef.current, status: statusValue } : item));
     });
   }
 
@@ -139,13 +141,14 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     setPrompt("");
     window.requestAnimationFrame(resetComposer);
     setRunning(true);
-    setStatus("Builder active — starting");
-    publishBuilderStatus("Builder active: starting request.", { sessionId });
+    setStatus("Preparing workspace");
+    publishWorkspaceStatus("Preparing workspace.", { sessionId });
     const stamp = Date.now();
     const userId = `local-user-${stamp}`;
     const assistantId = `local-assistant-${stamp}`;
     answerRef.current = "";
     setMessages((items) => [...items, { id: userId, role: "user", content: clean, status: "complete" }, { id: assistantId, role: "assistant", content: "", status: "streaming" }]);
+
     try {
       const response = await fetch("/api/streams-ai/messages", {
         method: "POST",
@@ -172,27 +175,24 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
             paintAnswer(assistantId);
           }
           if (parsed.event === "activity") {
-            const activity = String(parsed.payload.statusText || "Builder active");
+            const activity = String(parsed.payload.statusText || "Working");
             setStatus(activity);
-            publishBuilderStatus(activity, { sessionId, payload: parsed.payload });
+            publishWorkspaceStatus(activity, { sessionId, payload: parsed.payload });
           }
           if (parsed.event === "error") throw new Error(String(parsed.payload.message || "StreamsAI could not complete the response."));
         }
       }
       if (paintFrameRef.current !== null) { window.cancelAnimationFrame(paintFrameRef.current); paintFrameRef.current = null; }
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answerRef.current || "Completed.", status: "complete" } : item));
-      const previewReady = PREVIEW_PATH.test(answerRef.current) || GENERATED_PATH.test(answerRef.current);
-      PREVIEW_PATH.lastIndex = 0;
-      GENERATED_PATH.lastIndex = 0;
-      const completedStatus = previewReady ? "Preview updated" : "Ready";
-      setStatus(completedStatus);
-      publishBuilderStatus(previewReady ? "Preview updated in the Builder workspace." : "Builder request completed.", { sessionId, previewReady });
+      const previewReady = containsPreview(answerRef.current);
+      setStatus(previewReady ? "Preview updated" : "Ready");
+      publishWorkspaceStatus(previewReady ? "Preview updated in the Builder workspace." : "Workspace updated.", { sessionId, previewReady });
       window.setTimeout(() => void hydrate(), 900);
     } catch (error) {
       const message = error instanceof Error ? error.message : "StreamsAI chat failed.";
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: message, status: "failed" } : item));
       setStatus(message);
-      publishBuilderStatus(`Builder failed: ${message}`, { sessionId, failed: true });
+      publishWorkspaceStatus(`Workspace update failed: ${message}`, { sessionId, failed: true });
     } finally {
       setRunning(false);
     }
