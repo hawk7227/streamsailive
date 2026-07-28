@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { BuilderChatConnection } from "./builderSystemContract";
 
 type Message = { id?: string; role?: string; content?: string; status?: string };
@@ -10,6 +10,7 @@ const COMPOSER_MIN_HEIGHT = 52;
 const COMPOSER_MAX_HEIGHT = 224;
 const USER_COLLAPSE_LINES = 7;
 const ASSISTANT_COLLAPSE_LINES = 14;
+const PREVIEW_PATH = /(?:https?:\/\/[^\s]+)?\/streams-builder\/preview\/[0-9a-f-]{20,}/gi;
 
 function querySessionId() {
   try { return new URLSearchParams(window.location.search).get("sessionId") || ""; } catch { return ""; }
@@ -27,8 +28,16 @@ function parseSseBlock(block: string) {
   catch { return { event, payload: { token: data.join("\n") } }; }
 }
 
+function displayContent(message: Message) {
+  const content = String(message.content || "");
+  if (!PREVIEW_PATH.test(content)) return content;
+  PREVIEW_PATH.lastIndex = 0;
+  const cleaned = content.replace(PREVIEW_PATH, "").replace(/Your frontend preview is ready:?/gi, "").trim();
+  return cleaned || "Your preview is ready in the Builder workspace.";
+}
+
 function messageNeedsCollapse(message: Message) {
-  const content = message.content || "";
+  const content = displayContent(message);
   if (!content) return false;
   const explicitLines = content.split("\n").length;
   const estimatedWrappedLines = Math.ceil(content.length / 72);
@@ -36,16 +45,31 @@ function messageNeedsCollapse(message: Message) {
   return Math.max(explicitLines, estimatedWrappedLines) > threshold;
 }
 
+function mergeMessages(current: Message[], incoming: Message[]) {
+  const localStreaming = current.filter((item) => String(item.id || "").startsWith("local-") && item.status === "streaming");
+  if (localStreaming.length) return current;
+  const seen = new Set<string>();
+  return incoming.filter((item, index) => {
+    const key = item.id || `${item.role}:${item.content}:${index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function ActualBuilderSessionChat({ connection, onConnectionChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [status, setStatus] = useState("Loading originating StreamsAI conversation…");
+  const [status, setStatus] = useState("Loading conversation…");
   const [running, setRunning] = useState(false);
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const answerRef = useRef("");
+  const paintFrameRef = useRef<number | null>(null);
 
   const sessionId = connection.sessionId && connection.sessionId !== "agent-1" ? connection.sessionId : querySessionId();
+  const visibleMessages = useMemo(() => messages.filter((message) => message.role === "user" || message.role === "assistant"), [messages]);
 
   function resizeComposer() {
     const composer = composerRef.current;
@@ -64,18 +88,28 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
   }
 
   async function hydrate() {
-    if (!sessionId) { setStatus("No originating StreamsAI session was supplied."); return; }
+    if (!sessionId) { setStatus("No conversation session supplied."); return; }
     const response = await fetch(`/api/streams-ai/messages?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store", credentials: "same-origin" });
     const payload = await response.json().catch(() => null) as { ok?: boolean; messages?: Message[]; error?: string } | null;
-    if (!response.ok || !payload?.ok) { setStatus(payload?.error || "Could not load the originating conversation."); return; }
-    setMessages(Array.isArray(payload.messages) ? payload.messages : []);
-    setStatus("StreamsAI conversation connected.");
+    if (!response.ok || !payload?.ok) { setStatus(payload?.error || "Could not load the conversation."); return; }
+    setMessages((current) => mergeMessages(current, Array.isArray(payload.messages) ? payload.messages : []));
+    setStatus("Conversation connected.");
     onConnectionChange({ connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId });
   }
 
+  function paintAnswer(assistantId: string, statusValue: string = "streaming") {
+    if (paintFrameRef.current !== null) return;
+    paintFrameRef.current = window.requestAnimationFrame(() => {
+      paintFrameRef.current = null;
+      const content = answerRef.current;
+      setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content, status: statusValue } : item));
+    });
+  }
+
   useEffect(() => { void hydrate(); }, [sessionId]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end", behavior: running ? "smooth" : "auto" }); }, [visibleMessages.length, running]);
   useEffect(() => { resizeComposer(); }, [prompt]);
+  useEffect(() => () => { if (paintFrameRef.current !== null) window.cancelAnimationFrame(paintFrameRef.current); }, []);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -84,22 +118,23 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     setPrompt("");
     window.requestAnimationFrame(resetComposer);
     setRunning(true);
-    setStatus("StreamsAI is responding…");
-    const userId = `local-user-${Date.now()}`;
-    const assistantId = `local-assistant-${Date.now()}`;
+    setStatus("Thinking…");
+    const stamp = Date.now();
+    const userId = `local-user-${stamp}`;
+    const assistantId = `local-assistant-${stamp}`;
+    answerRef.current = "";
     setMessages((items) => [...items, { id: userId, role: "user", content: clean, status: "complete" }, { id: assistantId, role: "assistant", content: "", status: "streaming" }]);
     try {
       const response = await fetch("/api/streams-ai/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ sessionId, message: clean, runAssistant: true, idempotencyKey: `builder-session-${Date.now()}`, metadata: { source: "canonical-builder-session-chat", connectedWorkstation: "Primary Builder" } }),
+        body: JSON.stringify({ sessionId, message: clean, runAssistant: true, idempotencyKey: `builder-session-${stamp}`, metadata: { source: "canonical-builder-session-chat", connectedWorkstation: "Primary Builder" } }),
       });
       if (!response.ok || !response.body) throw new Error((await response.text().catch(() => "")) || `Chat request failed: ${response.status}`);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let answer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -111,14 +146,18 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
           boundary = buffer.indexOf("\n\n");
           if (!parsed) continue;
           if (parsed.event === "response" && typeof parsed.payload.token === "string") {
-            answer += parsed.payload.token;
-            setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answer, status: "streaming" } : item));
+            answerRef.current += parsed.payload.token;
+            paintAnswer(assistantId);
           }
-          if (parsed.event === "activity") setStatus(String(parsed.payload.statusText || "StreamsAI is working…"));
+          if (parsed.event === "activity") setStatus(String(parsed.payload.statusText || "Working…"));
           if (parsed.event === "error") throw new Error(String(parsed.payload.message || "StreamsAI could not complete the response."));
         }
       }
-      await hydrate();
+      if (paintFrameRef.current !== null) { window.cancelAnimationFrame(paintFrameRef.current); paintFrameRef.current = null; }
+      setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answerRef.current || "Completed.", status: "complete" } : item));
+      setStatus(PREVIEW_PATH.test(answerRef.current) ? "Preview ready in Builder." : "Ready");
+      PREVIEW_PATH.lastIndex = 0;
+      window.setTimeout(() => void hydrate(), 900);
     } catch (error) {
       const message = error instanceof Error ? error.message : "StreamsAI chat failed.";
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: message, status: "failed" } : item));
@@ -130,15 +169,15 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
 
   return (
     <section className="actualBuilderChat" aria-label="Originating StreamsAI conversation">
-      <header><b>StreamsAI</b><span>{sessionId || "not connected"}</span></header>
       <div className="messageList">
-        {messages.map((message, index) => {
+        {visibleMessages.map((message, index) => {
           const key = message.id || `${message.role}-${index}`;
           const collapsible = message.status !== "streaming" && messageNeedsCollapse(message);
           const expanded = Boolean(expandedMessages[key]);
+          const content = displayContent(message);
           return <article key={key} className={message.role === "user" ? "user" : message.status === "failed" ? "assistant failed" : "assistant"}>
             <b>{message.role === "user" ? "You" : "StreamsAI"}</b>
-            <p className={collapsible && !expanded ? (message.role === "user" ? "collapsed userCollapsed" : "collapsed assistantCollapsed") : ""}>{message.content || (message.status === "streaming" ? "Thinking…" : "")}</p>
+            <p className={collapsible && !expanded ? (message.role === "user" ? "collapsed userCollapsed" : "collapsed assistantCollapsed") : ""}>{content || (message.status === "streaming" ? "Thinking…" : "")}</p>
             {collapsible ? <button type="button" className="messageToggle" aria-expanded={expanded} onClick={() => setExpandedMessages((items) => ({ ...items, [key]: !expanded }))}>{expanded ? "Show less" : "Show more"}</button> : null}
           </article>;
         })}
@@ -146,16 +185,13 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
       </div>
       <form onSubmit={send}>
         <textarea ref={composerRef} rows={2} value={prompt} onChange={(event) => setPrompt(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Ask anything" disabled={running || !sessionId} />
-        <button className="sendButton" type="submit" disabled={running || !prompt.trim()}>↑</button>
+        <div className="composerActions"><span>{status}</span><button className="sendButton" type="submit" disabled={running || !prompt.trim()}>↑</button></div>
       </form>
-      <footer>{status}</footer>
       <style jsx>{`
-        .actualBuilderChat{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:#030817;color:#e8eefc;border-right:1px solid rgba(56,189,248,.18);overflow:hidden}
-        header{height:48px;display:flex;flex-direction:column;justify-content:center;padding:0 14px;border-bottom:1px solid rgba(148,163,184,.16);background:#071124} header b{font-size:13px} header span{font:10px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;color:#7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .messageList{min-height:0;overflow:auto;padding:14px 12px 24px;display:flex;flex-direction:column;gap:12px}.messageList article{max-width:92%;min-width:0;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:10px 12px;background:#0b152a;overflow:hidden}.messageList article.user{align-self:flex-end;background:#2b1450;border-color:rgba(168,85,247,.42)}.messageList article.assistant{align-self:flex-start}.messageList article.failed{border-color:#ef4444}.messageList b{font-size:10px;color:#7dd3fc}.messageList p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45;color:#edf4ff}.messageList p.collapsed{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;position:relative}.messageList p.userCollapsed{-webkit-line-clamp:${USER_COLLAPSE_LINES}}.messageList p.assistantCollapsed{-webkit-line-clamp:${ASSISTANT_COLLAPSE_LINES}}.messageToggle{display:inline-flex;width:auto;height:auto;margin-top:8px;padding:0;border:0;border-radius:0;background:transparent;color:#7dd3fc;font-size:11px;font-weight:800;cursor:pointer}.messageToggle:hover{text-decoration:underline}
-        form{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:end;gap:8px;margin:0 10px 8px;padding:8px;border:1px solid rgba(168,85,247,.44);border-radius:18px;background:#241044;overflow:hidden}textarea{box-sizing:border-box;width:100%;min-height:${COMPOSER_MIN_HEIGHT}px;max-height:${COMPOSER_MAX_HEIGHT}px;resize:none;overflow-y:hidden;border:0;outline:0;background:transparent;color:#fff;font:13px/1.45 Inter,system-ui,sans-serif;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin}textarea:disabled{opacity:.65}.sendButton{width:44px;height:44px;flex:0 0 44px;border:0;border-radius:14px;background:linear-gradient(135deg,#9333ea,#22d3ee);color:white;font-size:22px;font-weight:900;cursor:pointer}.sendButton:disabled{opacity:.45;cursor:not-allowed}
-        footer{padding:0 14px 10px;color:#94a3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        @media(max-width:760px){.messageList article{max-width:96%}form{grid-template-columns:minmax(0,1fr) 42px;margin:0 7px 7px}.sendButton{width:42px;height:42px}.messageList p.userCollapsed{-webkit-line-clamp:6}.messageList p.assistantCollapsed{-webkit-line-clamp:12}}
+        .actualBuilderChat{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:#030817;color:#e8eefc;border-right:1px solid rgba(56,189,248,.18);overflow:hidden}
+        .messageList{min-height:0;overflow:auto;padding:20px 18px 30px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}.messageList article{max-width:92%;min-width:0;padding:2px 0;background:transparent;overflow:hidden}.messageList article.user{align-self:flex-end;border:1px solid rgba(148,163,184,.26);border-radius:18px;padding:12px 15px;background:#101a2f}.messageList article.assistant{align-self:flex-start}.messageList article.failed{color:#fecaca}.messageList b{font-size:10px;color:#7dd3fc}.messageList p{margin:5px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.58;color:#edf4ff}.messageList p.collapsed{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}.messageList p.userCollapsed{-webkit-line-clamp:${USER_COLLAPSE_LINES}}.messageList p.assistantCollapsed{-webkit-line-clamp:${ASSISTANT_COLLAPSE_LINES}}.messageToggle{margin-top:8px;padding:0;border:0;background:transparent;color:#7dd3fc;font-size:11px;font-weight:800;cursor:pointer}
+        form{display:grid;grid-template-rows:auto 44px;gap:8px;margin:0 14px 12px;padding:12px 14px 10px;border:1px solid rgba(168,85,247,.44);border-radius:22px;background:#11152d;overflow:hidden}textarea{box-sizing:border-box;width:100%;min-height:${COMPOSER_MIN_HEIGHT}px;max-height:${COMPOSER_MAX_HEIGHT}px;resize:none;overflow-y:hidden;border:0;outline:0;background:transparent;color:#fff;font:14px/1.5 Inter,system-ui,sans-serif;padding:4px 2px;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin}.composerActions{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid rgba(148,163,184,.14);padding-top:8px}.composerActions span{min-width:0;color:#94a3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sendButton{width:42px;height:42px;border:0;border-radius:14px;background:linear-gradient(135deg,#9333ea,#22d3ee);color:#fff;font-size:21px;font-weight:900;cursor:pointer}.sendButton:disabled{opacity:.45;cursor:not-allowed}
+        @media(max-width:760px){.messageList{padding:14px 10px 22px}.messageList article{max-width:96%}form{margin:0 7px 7px}.messageList p.userCollapsed{-webkit-line-clamp:6}.messageList p.assistantCollapsed{-webkit-line-clamp:12}}
       `}</style>
     </section>
   );
