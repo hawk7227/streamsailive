@@ -2,16 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import BuilderCenterChat from "./BuilderCenterChat";
-import BuilderControlLayers from "./BuilderControlLayers";
-import CodexCursorHybridBuilder from "./CodexCursorHybridBuilder";
 import GitHubRepositoryPicker from "./GitHubRepositoryPicker";
 import LiveFrontendWorkstation from "./LiveFrontendWorkstation";
-import TopRowWorkstationControls from "./TopRowWorkstationControls";
 import VisualEditingWorkstation from "./VisualEditingWorkstation";
 import VisualEditorScrollBehavior from "./VisualEditorScrollBehavior";
-import VisualOperationDock from "./VisualOperationDock";
 import WorkstationChromeEnhancer from "./WorkstationChromeEnhancer";
-import WorkspaceModulePanel from "./workspace-modules/WorkspaceModulePanel";
 import type { BuilderChatConnection, PulledFileDetail } from "./builderSystemContract";
 
 const MODULES = ["Primary Builder", "Visual Editing", "Component Mapping", "Approval Center", "Browser Verification", "Repository Truth", "Projects Dashboard", "Truth Panel"] as const;
@@ -32,7 +27,6 @@ function queryValue(name: string) { try { return new URLSearchParams(window.loca
 export default function WorkspaceGrid() {
   const [activeModule, setActiveModule] = useState<ModuleName>("Primary Builder");
   const [viewMode, setViewMode] = useState<ViewMode>("Single");
-  const [statusOpen, setStatusOpen] = useState(false);
   const [activeFile, setActiveFile] = useState<PulledFileDetail>(EMPTY_FILE);
   const [visualEditorLog, setVisualEditorLog] = useState<string[]>([]);
   const [chatConnection, setChatConnection] = useState<BuilderChatConnection>(EMPTY_CONNECTION);
@@ -53,7 +47,10 @@ export default function WorkspaceGrid() {
     window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail }));
   }
 
-  function handleContentChange(next: string) { setActiveFile((current) => ({ ...current, content: next })); emit("workspace-content-change", `Active file draft changed manually in ${activeFile.path || "the open file"}.`, { draftDirty: true, saved: false, patchState: "not_generated" }); }
+  function handleContentChange(next: string) {
+    setActiveFile((current) => ({ ...current, content: next }));
+    emit("workspace-content-change", `Active file draft changed manually in ${activeFile.path || "the open file"}.`, { draftDirty: true, saved: false, patchState: "not_generated" });
+  }
 
   async function hydratePreview(previewId: string, previewUrl: string, operationId = previewId) {
     if (!previewId || !previewUrl) return;
@@ -63,15 +60,7 @@ export default function WorkspaceGrid() {
       const payload = await response.json().catch(() => null) as { preview?: { source_code?: string; preview_html?: string } } | null;
       source = String(payload?.preview?.source_code || payload?.preview?.preview_html || "");
     } catch {}
-    const mounted: PulledFileDetail = {
-      repo: "hawk7227/streamsailive",
-      branch: "runtime-preview",
-      path: `generated/previews/${previewId}.html`,
-      folder: "generated/previews",
-      sha: operationId,
-      content: source,
-      route: previewUrl,
-    };
+    const mounted: PulledFileDetail = { repo: "hawk7227/streamsailive", branch: "runtime-preview", path: `generated/previews/${previewId}.html`, folder: "generated/previews", sha: operationId, content: source, route: previewUrl };
     lastMountedPreviewRef.current = previewUrl;
     window.localStorage.setItem("streams-builder:active-file", JSON.stringify(mounted));
     setActiveFile(mounted);
@@ -79,7 +68,7 @@ export default function WorkspaceGrid() {
     setViewMode("Single");
     setVisualEditorLog((items) => [...items.slice(-40), `preview-mounted: ${previewUrl}`]);
     window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
-    window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", { detail: { previewId, previewUrl, operationId, targetPane: "builder-dual-canvas" } }));
+    window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", { detail: { previewId, previewUrl, operationId, targetPane: "builder-three-column-canvas" } }));
   }
 
   async function mountLatestGeneratedPreview() {
@@ -100,9 +89,7 @@ export default function WorkspaceGrid() {
       const previewId = String(completed?.metadata?.previewId || completed?.metadata?.preview_id || previewIdFromUrl(previewUrl));
       const operationId = String(completed?.metadata?.operationId || completed?.metadata?.operation_id || previewId || "generated-preview");
       await hydratePreview(previewId, previewUrl, operationId);
-    } finally {
-      previewLookupRunningRef.current = false;
-    }
+    } finally { previewLookupRunningRef.current = false; }
   }
 
   useEffect(() => { chatConnectionRef.current = chatConnection; }, [chatConnection]);
@@ -115,43 +102,99 @@ export default function WorkspaceGrid() {
     if (sessionId) setChatConnection({ connected: true, activeWorkstationId: "primary-builder", activeWorkstationName: "Primary Builder", sessionId });
     setHydrated(true);
     if (previewId) void hydratePreview(previewId, `/streams-builder/preview/${previewId}`, initial.sha || previewId);
-    emit("workspace-audit-ready", "Original researched builder canvas restored with the Codex/Cursor autonomous repair runtime.");
-    function onPulledFile(event: Event) { const detail = (event as CustomEvent<PulledFileDetail>).detail; if (!detail?.path) return; setActiveFile(detail); const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`; setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]); window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } })); }
-    function onSummaryEvent(event: Event) { const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail; if (!detail?.message) return; setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]); if (detail.phase === "chat.response.complete") window.setTimeout(() => void mountLatestGeneratedPreview(), 100); }
-    function onManualClick(event: MouseEvent) { const target = event.target as HTMLElement | null; if (!target || target.closest("iframe")) return; const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']"); if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return; emit("manual-workspace-click", `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.`); }
-    function onManualChange(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return; if (target.closest(".controls")) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; emit("manual-workspace-change", `User changed ${fieldName(target)} to ${safeFieldValue(target)}.`); }
-    function onManualInput(event: Event) { const target = event.target as HTMLElement | null; if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return; if (target.closest(".controls")) return; if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return; if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current); inputTimerRef.current = window.setTimeout(() => emit("manual-workspace-input", `User typed in ${fieldName(target)} (${safeFieldValue(target)}).`), 900); }
-    window.addEventListener("streams-builder:pulled-file", onPulledFile); window.addEventListener("streams-builder-summary-event", onSummaryEvent); document.addEventListener("click", onManualClick); document.addEventListener("change", onManualChange); document.addEventListener("input", onManualInput);
-    return () => { window.removeEventListener("streams-builder:pulled-file", onPulledFile); window.removeEventListener("streams-builder-summary-event", onSummaryEvent); document.removeEventListener("click", onManualClick); document.removeEventListener("change", onManualChange); document.removeEventListener("input", onManualInput); if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current); };
+    emit("workspace-audit-ready", "Permanent three-column Builder canvas mounted.");
+
+    function onPulledFile(event: Event) {
+      const detail = (event as CustomEvent<PulledFileDetail>).detail;
+      if (!detail?.path) return;
+      setActiveFile(detail);
+      const message = `Workspace mounted ${detail.repo}@${detail.branch}:${detail.path}`;
+      setVisualEditorLog((items) => [...items.slice(-40), `file-loaded: ${message}`]);
+      window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail: { phase: "file-loaded", source: "workspace-grid", repo: detail.repo, branch: detail.branch, filePath: detail.path, route: detail.route, message } }));
+    }
+    function onSummaryEvent(event: Event) {
+      const detail = (event as CustomEvent<{ phase?: string; message?: string }>).detail;
+      if (!detail?.message) return;
+      setVisualEditorLog((items) => [...items.slice(-40), `${detail.phase || "summary"}: ${detail.message}`]);
+      if (detail.phase === "chat.response.complete") window.setTimeout(() => void mountLatestGeneratedPreview(), 150);
+    }
+    function onManualClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target || target.closest("iframe")) return;
+      const control = target.closest<HTMLElement>("button,a,summary,[role='button'],[data-clickable='true']");
+      if (!control || !document.querySelector(".streamsBuilderShell")?.contains(control)) return;
+      emit("manual-workspace-click", `User clicked ${control.tagName.toLowerCase()}: ${controlName(control)}.`);
+    }
+    function onManualChange(event: Event) {
+      const target = event.target as HTMLElement | null;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
+      emit("manual-workspace-change", `User changed ${fieldName(target)} to ${safeFieldValue(target)}.`);
+    }
+    function onManualInput(event: Event) {
+      const target = event.target as HTMLElement | null;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+      if (!document.querySelector(".streamsBuilderShell")?.contains(target)) return;
+      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
+      inputTimerRef.current = window.setTimeout(() => emit("manual-workspace-input", `User typed in ${fieldName(target)} (${safeFieldValue(target)}).`), 900);
+    }
+
+    window.addEventListener("streams-builder:pulled-file", onPulledFile);
+    window.addEventListener("streams-builder-summary-event", onSummaryEvent);
+    document.addEventListener("click", onManualClick);
+    document.addEventListener("change", onManualChange);
+    document.addEventListener("input", onManualInput);
+    return () => {
+      window.removeEventListener("streams-builder:pulled-file", onPulledFile);
+      window.removeEventListener("streams-builder-summary-event", onSummaryEvent);
+      document.removeEventListener("click", onManualClick);
+      document.removeEventListener("change", onManualChange);
+      document.removeEventListener("input", onManualInput);
+      if (inputTimerRef.current) window.clearTimeout(inputTimerRef.current);
+    };
   }, []);
 
   if (!hydrated) return <main className="streamsBuilderShell" aria-hidden="true" />;
 
-  const connectedHere = chatConnection.connected && chatConnection.activeWorkstationName === activeModule;
-  const primaryCanvas = activeModule === "Primary Builder";
   return (
-    <main className="streamsBuilderShell">
-      <section className="centerWorkspace">
-        <div className="topRow"><GitHubRepositoryPicker /><div className="controls"><label><b>Workstation</b><select value={activeModule} onChange={(event) => { const next = event.currentTarget.value as ModuleName; setActiveModule(next); emit("workspace-selection", `User switched workstation to ${next}.`); }}>{MODULES.map((name) => <option key={name} value={name}>{name}</option>)}</select></label><label><b>View Mode</b><select value={viewMode} onChange={(event) => { const next = event.currentTarget.value as ViewMode; setViewMode(next); emit("workspace-selection", `User changed workspace view mode to ${next}.`); }}><option value="Single">Single</option><option value="Multi">Multi</option><option value="Focus">Focus</option><option value="Stack">Stack</option></select></label></div></div>
-        <section className="workArea">
-          <section className="operatorColumn"><BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} /><BuilderControlLayers activeModule={activeModule} viewMode={viewMode} latestProof={visualEditorLog.slice(-1)[0] || ""} activeFile={activeFile} connection={chatConnection} summaryItems={visualEditorLog} /></section>
-          <section className={connectedHere ? "workstationShell connected" : "workstationShell"}>
-            <div className="connectionRibbon">{chatConnection.connected ? `Session ${chatConnection.sessionId} connected to the researched Codex/Cursor Builder canvas.` : "Connect a StreamsAI session to the researched Builder canvas."}</div>
-            {primaryCanvas ? (
-              <div className="stationViewport" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 1, background: "#172033" }}>
-                <section style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }} aria-label="Code and frontend source workstation"><LiveFrontendWorkstation activeFile={activeFile} /></section>
-                <section style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }} aria-label="Original visual editing workstation"><VisualEditingWorkstation stationLabel="Visual Editor" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /></section>
-              </div>
-            ) : (
-              <div className="stationViewport">{activeModule === "Visual Editing" ? <VisualEditingWorkstation stationLabel="Agent 1" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <LiveFrontendWorkstation activeFile={activeFile} />}</div>
-            )}
-            <div className="stationContext">{primaryCanvas ? <CodexCursorHybridBuilder activeFile={activeFile} connection={chatConnection} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : activeModule === "Visual Editing" ? <VisualOperationDock activeFile={activeFile} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} /> : <WorkspaceModulePanel moduleName={activeModule} />}</div>
-            <button className="statusToggle" type="button" onClick={() => { const next = !statusOpen; setStatusOpen(next); emit("workspace-toggle", `${next ? "Opened" : "Closed"} Status / Readiness / Files / Context panel.`); }}>{statusOpen ? "Hide" : "Show"} Status / Readiness / Files / Context</button>
-            {statusOpen ? <div className="statusDrop"><p><b>Status</b><span>Researched Codex/Cursor Best Builder / {activeModule}</span></p><p><b>Readiness</b><span>{visualEditorLog.slice(-1)[0] || "Preview source mounted for code, autonomous repair, and visual editing."}</span></p><p><b>Files</b><span>{activeFile.path || "No active file."}</span></p><p><b>Chat Link</b><span>{chatConnection.connected ? chatConnection.sessionId : "Disconnected"}</span></p></div> : null}
-          </section>
+    <main className="streamsBuilderShell" data-layout="permanent-three-column">
+      <section className="workArea">
+        <section className="operatorColumn" aria-label="Authoritative conversation">
+          <BuilderCenterChat activeModule={activeModule} connection={chatConnection} onConnectionChange={setChatConnection} />
+        </section>
+
+        <section className="centerColumn" aria-label="Code editor and frontend builder">
+          <LiveFrontendWorkstation activeFile={activeFile} onContentChange={handleContentChange} />
+          <div className="builderBottomControls">
+            <GitHubRepositoryPicker />
+            <div className="controls">
+              <label><b>Workspace</b><select value={activeModule} onChange={(event) => { const next = event.currentTarget.value as ModuleName; setActiveModule(next); emit("workspace-selection", `User switched workstation to ${next}.`); }}>{MODULES.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+              <label><b>View</b><select value={viewMode} onChange={(event) => { const next = event.currentTarget.value as ViewMode; setViewMode(next); emit("workspace-selection", `User changed workspace view mode to ${next}.`); }}><option value="Single">Single</option><option value="Multi">Multi</option><option value="Focus">Focus</option><option value="Stack">Stack</option></select></label>
+            </div>
+          </div>
+        </section>
+
+        <section className="visualColumn" aria-label="Original visual editor">
+          <VisualEditingWorkstation stationLabel="Visual Editor" route={activeFile.route || "/"} filePath={activeFile.path} repo={activeFile.repo} branch={activeFile.branch} content={activeFile.content} onContentChange={handleContentChange} onProof={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} onChat={(message) => setVisualEditorLog((items) => [...items.slice(-40), message])} />
         </section>
       </section>
-      <TopRowWorkstationControls /><VisualEditorScrollBehavior /><WorkstationChromeEnhancer />
+      <VisualEditorScrollBehavior />
+      <WorkstationChromeEnhancer />
+      <style jsx>{`
+        .streamsBuilderShell{height:100%;min-height:0;overflow:hidden;background:#020713;color:#f8fafc}
+        .workArea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(320px,.72fr) minmax(0,1fr) minmax(0,1fr);gap:1px;background:#172033;overflow:hidden}
+        .operatorColumn,.centerColumn,.visualColumn{min-width:0;min-height:0;overflow:hidden;background:#020713}
+        .centerColumn{display:grid;grid-template-rows:minmax(0,1fr) auto}
+        .builderBottomControls{min-width:0;min-height:48px;display:grid;grid-template-columns:minmax(0,1fr) 260px;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid rgba(45,212,191,.28);background:#020617;overflow:hidden}
+        .controls{min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.controls label{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:5px}.controls b{font-size:9px;color:#94a3b8}.controls select{min-width:0;height:30px;border:1px solid rgba(148,163,184,.24);border-radius:7px;background:#071124;color:#e2e8f0;font-size:11px;padding:0 5px}
+        :global(.centerColumn .liveWorkstation){grid-template-rows:minmax(0,1fr) auto!important}
+        :global(.centerColumn .workstationToolbar){grid-row:2!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important}
+        :global(.centerColumn .workstationBody){grid-row:1!important}
+        :global(.centerColumn .workingTabs){order:2!important}
+        :global(.centerColumn .sourceToolbar){order:1!important}
+        @media(max-width:1180px){.workArea{grid-template-columns:minmax(290px,.7fr) minmax(0,1fr) minmax(0,.9fr)}.builderBottomControls{grid-template-columns:minmax(0,1fr) 230px}}
+        @media(max-width:820px){.workArea{grid-template-columns:minmax(0,1fr)}.operatorColumn{display:none}.visualColumn{display:none}.builderBottomControls{grid-template-columns:minmax(0,1fr);gap:5px}.controls{display:none}}
+      `}</style>
     </main>
   );
 }
