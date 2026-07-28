@@ -2,20 +2,34 @@
 
 import { useRouter } from "next/navigation";
 import {
+  AppWindow,
+  Archive,
   Bot,
+  BriefcaseBusiness,
   CalendarDays,
+  Captions,
   CheckSquare,
+  CircleUserRound,
+  Clapperboard,
   FileText,
   FolderKanban,
+  Globe2,
   Home,
   Image,
+  Images,
+  LayoutDashboard,
   LayoutTemplate,
+  Lightbulb,
+  Megaphone,
   Mic2,
+  Palette,
   Plug,
+  Rocket,
   Search,
   Settings,
   Sparkles,
   Video,
+  WalletCards,
   Workflow,
   Wrench,
 } from "lucide-react";
@@ -26,29 +40,60 @@ const GROUPS = [
     label: "Workspace",
     items: [
       ["Home", Home, "/streams-ai"],
+      ["Portfolio", LayoutDashboard, "/streams-ai?destination=portfolio"],
       ["Projects", FolderKanban, "/dashboard/projects"],
       ["Workspace", Workflow, "/streams-ai?view=workspace"],
       ["Files", FileText, "/dashboard/files"],
-      ["Calendar", CalendarDays, "/streams-ai?destination=calendar"],
-      ["Tasks", CheckSquare, "/dashboard/tasks"],
+    ],
+  },
+  {
+    label: "A.S.K.",
+    items: [
       ["A.S.K. AI", Bot, "/streams-ai"],
+      ["A.S.K. Knock", Wrench, "/streams-ai/streams-builder/workspace"],
     ],
   },
   {
     label: "Create",
     items: [
-      ["A.S.K. Knock", Wrench, "/streams-ai/streams-builder/workspace"],
+      ["Creator Studio", Sparkles, "/streams-ai?destination=creator-studio"],
       ["Image Studio", Image, "/streams-ai?destination=image-studio"],
       ["Video Studio", Video, "/streams-ai/streams-builder/gen-video"],
       ["Voice Studio", Mic2, "/streams-ai?destination=voice-studio"],
-      ["Automation", Sparkles, "/streams-ai?destination=automation"],
+    ],
+  },
+  {
+    label: "Launch",
+    items: [
+      ["Business Builder", BriefcaseBusiness, "/streams-ai?destination=business-builder"],
+      ["Website Builder", Globe2, "/streams-ai?destination=website-builder"],
+      ["App Builder", AppWindow, "/streams-ai?destination=app-builder"],
+      ["Visual Concepts", Palette, "/streams-ai?destination=visual-concepts"],
+      ["Revenue", WalletCards, "/streams-ai?destination=revenue"],
+      ["Preview + Launch", Rocket, "/streams-ai?destination=preview-launch"],
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      ["Content", FileText, "/streams-ai?destination=content"],
+      ["Captions", Captions, "/streams-ai?destination=captions"],
+      ["Ideas", Lightbulb, "/streams-ai?destination=ideas"],
+      ["Turn This Into You", Images, "/streams-ai?destination=turn-this-into-you"],
+      ["Social Research", Megaphone, "/streams-ai?destination=social-research"],
     ],
   },
   {
     label: "Manage",
     items: [
+      ["Calendar", CalendarDays, "/streams-ai?destination=calendar"],
+      ["Assets", Archive, "/dashboard/assets"],
+      ["Tasks", CheckSquare, "/dashboard/tasks"],
+      ["History", Clapperboard, "/dashboard/history"],
+      ["Automation", Sparkles, "/streams-ai?destination=automation"],
       ["Templates", LayoutTemplate, "/streams-ai?destination=templates"],
       ["Integrations", Plug, "/streams-ai?destination=integrations"],
+      ["Profile", CircleUserRound, "/profile"],
       ["Settings", Settings, "/dashboard/settings"],
     ],
   },
@@ -122,52 +167,24 @@ export default function NewChatNavigationVisualSample({ onNewProject }) {
 
       <style jsx>{`
         .newChatNavigationVisualSample{position:fixed;inset:0 auto 0 0;z-index:49000;width:224px;min-width:224px;height:100dvh;display:grid;grid-template-rows:auto auto minmax(0,1fr);background:linear-gradient(180deg,#030712 0%,#040817 100%);border-right:1px solid rgba(148,163,184,.1);overflow:hidden;color:#f8fafc}
-        .sampleMenuBrand{display:flex;align-items:flex-start;gap:10px;padding:18px 16px 13px}.sampleMenuBrand>span:last-child{display:grid;gap:1px;min-width:0}.sampleMenuBrand strong{font-size:12px;letter-spacing:.08em}.sampleMenuBrand small{font-size:8px;line-height:1.35;color:#8190aa}.sampleMenuOrb{width:29px;height:29px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:#071426;border:1px solid #163a6a;box-shadow:0 0 18px rgba(37,99,235,.2)}.sampleMenuOrb i{width:10px;height:10px;border-radius:50%;background:#2dd4ff;box-shadow:0 0 12px #2dd4ff}
-        .sampleTopActions{display:flex;justify-content:flex-end;gap:5px;padding:0 12px 10px}.sampleTopActions button{width:31px;height:31px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#aebbd0;cursor:pointer}.sampleTopActions button:hover,.sampleTopActions button:focus-visible{background:rgba(59,130,246,.12);color:#fff;outline:none}
-        .sampleMenuScroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 9px 16px;scrollbar-width:none}.sampleMenuScroll::-webkit-scrollbar{display:none}.sampleMenuGroup{display:grid;gap:1px;margin-bottom:13px}.sampleMenuGroup h2{margin:5px 8px 4px;color:#65748d;font-size:8px;line-height:1.2;text-transform:uppercase;letter-spacing:.16em}.sampleMenuItem{width:100%;min-height:33px;display:flex;align-items:center;gap:10px;border:0;border-radius:7px;background:transparent;color:#aab5c8;text-align:left;padding:7px 9px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}.sampleMenuItem:hover,.sampleMenuItem:focus-visible{background:rgba(59,130,246,.09);color:#fff;outline:none}.sampleMenuItem.active{background:linear-gradient(90deg,rgba(29,110,224,.95),rgba(89,48,184,.9));color:#fff}.adminMenuGroup{padding-top:4px;border-top:1px solid rgba(148,163,184,.08)}.adminMenuItem{color:#7dd3fc}
-        .sampleAccountSummary{display:flex;align-items:center;gap:9px;margin:12px 4px 0;padding:8px 5px;border:0;background:transparent}.sampleAvatar{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#7c3aed);font-size:10px;font-weight:800;color:#fff}.sampleAccountText{display:grid;gap:1px;min-width:0}.sampleAccountText strong{overflow:hidden;text-overflow:ellipsis;font-size:9px;color:#e5e7eb}.sampleAccountText small{font-size:8px;color:#7f8ca3;text-transform:capitalize}
+        .sampleMenuBrand{display:flex;align-items:flex-start;gap:10px;padding:16px 16px 10px}.sampleMenuBrand>span:last-child{display:grid;gap:1px;min-width:0}.sampleMenuBrand strong{font-size:12px;letter-spacing:.08em}.sampleMenuBrand small{font-size:8px;line-height:1.35;color:#8190aa}.sampleMenuOrb{width:29px;height:29px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:#071426;border:1px solid #163a6a;box-shadow:0 0 18px rgba(37,99,235,.2)}.sampleMenuOrb i{width:10px;height:10px;border-radius:50%;background:#2dd4ff;box-shadow:0 0 12px #2dd4ff}
+        .sampleTopActions{display:flex;justify-content:flex-end;gap:5px;padding:0 12px 7px}.sampleTopActions button{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#aebbd0;cursor:pointer}.sampleTopActions button:hover,.sampleTopActions button:focus-visible{background:rgba(59,130,246,.12);color:#fff;outline:none}
+        .sampleMenuScroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 9px 14px;scrollbar-width:none}.sampleMenuScroll::-webkit-scrollbar{display:none}.sampleMenuGroup{display:grid;gap:0;margin-bottom:9px}.sampleMenuGroup h2{margin:4px 8px 3px;color:#65748d;font-size:7px;line-height:1.2;text-transform:uppercase;letter-spacing:.16em}.sampleMenuItem{width:100%;min-height:29px;display:flex;align-items:center;gap:9px;border:0;border-radius:7px;background:transparent;color:#aab5c8;text-align:left;padding:5px 9px;font-size:10px;font-weight:600;white-space:nowrap;cursor:pointer}.sampleMenuItem:hover,.sampleMenuItem:focus-visible{background:rgba(59,130,246,.09);color:#fff;outline:none}.sampleMenuItem.active{background:linear-gradient(90deg,rgba(29,110,224,.95),rgba(89,48,184,.9));color:#fff}.adminMenuGroup{padding-top:4px;border-top:1px solid rgba(148,163,184,.08)}.adminMenuItem{color:#7dd3fc}
+        .sampleAccountSummary{display:flex;align-items:center;gap:9px;margin:9px 4px 0;padding:7px 5px;border:0;background:transparent}.sampleAvatar{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#7c3aed);font-size:10px;font-weight:800;color:#fff}.sampleAccountText{display:grid;gap:1px;min-width:0}.sampleAccountText strong{overflow:hidden;text-overflow:ellipsis;font-size:9px;color:#e5e7eb}.sampleAccountText small{font-size:8px;color:#7f8ca3;text-transform:capitalize}
         @media(max-width:900px){.newChatNavigationVisualSample{display:none}}
       `}</style>
 
       <style jsx global>{`
         @media(min-width:901px){
           .withNewChatVisualSample{width:100%;min-width:0;overflow:hidden}
-          .withNewChatVisualSample .streamsOperator{
-            display:block!important;
-            width:100vw!important;
-            min-width:0!important;
-            height:100dvh!important;
-            padding-left:224px!important;
-            box-sizing:border-box!important;
-            overflow:hidden!important;
-          }
+          .withNewChatVisualSample .streamsOperator{display:block!important;width:100vw!important;min-width:0!important;height:100dvh!important;padding-left:224px!important;box-sizing:border-box!important;overflow:hidden!important}
           .withNewChatVisualSample .streamsOperator > .operatorSidebar{display:none!important}
-          .withNewChatVisualSample .operatorMain{
-            display:block!important;
-            width:100%!important;
-            min-width:0!important;
-            height:100dvh!important;
-            min-height:0!important;
-            margin:0!important;
-            overflow:hidden!important;
-          }
-          .withNewChatVisualSample .operatorChatPanel{
-            width:100%!important;
-            min-width:0!important;
-            height:100%!important;
-          }
-          .withNewChatVisualSample .operatorEmptyLanding{
-            width:min(1120px,calc(100% - 64px))!important;
-            max-width:none!important;
-            margin-inline:auto!important;
-          }
-          .withNewChatVisualSample .operatorLandingComposer{
-            width:min(960px,100%)!important;
-          }
+          .withNewChatVisualSample .operatorMain{display:block!important;width:100%!important;min-width:0!important;height:100dvh!important;min-height:0!important;margin:0!important;overflow:hidden!important}
+          .withNewChatVisualSample .operatorChatPanel{width:100%!important;min-width:0!important;height:100%!important}
+          .withNewChatVisualSample .operatorEmptyLanding{width:min(1120px,calc(100% - 64px))!important;max-width:none!important;margin-inline:auto!important}
+          .withNewChatVisualSample .operatorLandingComposer{width:min(960px,100%)!important}
         }
-        @media(max-width:900px){
-          .withNewChatVisualSample .streamsOperator{padding-left:0!important}
-        }
+        @media(max-width:900px){.withNewChatVisualSample .streamsOperator{padding-left:0!important}}
       `}</style>
     </aside>
   );
