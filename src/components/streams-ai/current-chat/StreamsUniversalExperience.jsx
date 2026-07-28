@@ -8,6 +8,7 @@ import StreamsClientShell from "./StreamsClientShell";
 import NewChatNavigationVisualSample from "./NewChatNavigationVisualSample";
 import StreamsDestinationWorkspace from "./StreamsDestinationWorkspace";
 import MarketingCampaignWorkspace from "./MarketingCampaignWorkspace";
+import VideoProductionWorkspace from "./VideoProductionWorkspace";
 
 const ACTIVE_PROJECT_KEY = "streams-ai:active-project-id";
 const ACTIVE_PROJECT_NAME_KEY = "streams-ai:active-project-name";
@@ -37,91 +38,39 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
   if (!open) return null;
 
   async function resolveAuthHeaders() {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      console.warn("[streams-ai] Unable to read browser auth session", sessionError);
-      return {};
-    }
+    const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token?.trim();
     return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }
 
   async function createProject(event) {
     event.preventDefault();
-    if (!goal.trim()) {
-      setError("Describe what you want to create or complete.");
-      return;
-    }
-    setSaving(true);
-    setError("");
+    if (!goal.trim()) return setError("Describe what you want to create or complete.");
+    setSaving(true); setError("");
     try {
       const authHeaders = await resolveAuthHeaders();
       const name = goal.trim().slice(0, 90);
-      const instructions = [
-        `Goal: ${goal.trim()}`,
-        references.trim() ? `Files, notes, or references: ${references.trim()}` : "",
-        finishedResult.trim() ? `Finished result: ${finishedResult.trim()}` : "",
-        constraints.trim() ? `Requirements and constraints: ${constraints.trim()}` : "",
-      ].filter(Boolean).join("\n\n");
-      const response = await fetch("/api/v1/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": `project-${Date.now()}`, ...authHeaders },
-        credentials: "include",
-        body: JSON.stringify({
-          name,
-          instructions,
-          metadata: {
-            projectType,
-            goal: goal.trim(),
-            references: references.trim(),
-            finishedResult: finishedResult.trim(),
-            constraints: constraints.trim(),
-            currentStage: "Planning",
-            progress: 5,
-            nextRecommendedAction: "Continue in the StreamsAI workspace",
-            originalPrompt: goal.trim(),
-          },
-        }),
-      });
+      const instructions = [`Goal: ${goal.trim()}`, references.trim() ? `Files, notes, or references: ${references.trim()}` : "", finishedResult.trim() ? `Finished result: ${finishedResult.trim()}` : "", constraints.trim() ? `Requirements and constraints: ${constraints.trim()}` : ""].filter(Boolean).join("\n\n");
+      const response = await fetch("/api/v1/projects", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": `project-${Date.now()}`, ...authHeaders }, credentials: "include", body: JSON.stringify({ name, instructions, metadata: { projectType, goal: goal.trim(), references: references.trim(), finishedResult: finishedResult.trim(), constraints: constraints.trim(), currentStage: "Planning", progress: 5, nextRecommendedAction: "Continue in the StreamsAI workspace", originalPrompt: goal.trim() } }) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data?.ok === false || !data?.project?.id) throw new Error(data?.error || "Project creation failed.");
       window.localStorage.setItem(ACTIVE_PROJECT_KEY, data.project.id);
       window.localStorage.setItem(ACTIVE_PROJECT_NAME_KEY, data.project.name || name);
       window.dispatchEvent(new CustomEvent("streams-ai:active-project-changed", { detail: data.project }));
       onCreated(data.project);
-    } catch (creationError) {
-      setError(creationError instanceof Error ? creationError.message : "Project creation failed.");
-    } finally {
-      setSaving(false);
-    }
+    } catch (creationError) { setError(creationError instanceof Error ? creationError.message : "Project creation failed."); }
+    finally { setSaving(false); }
   }
 
-  return (
-    <div className="projectCreationBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <form className="projectCreationDialog" role="dialog" aria-modal="true" aria-labelledby="project-creation-title" onSubmit={createProject}>
-        <header><div><strong id="project-creation-title">Create a StreamsAI project</strong><span>Streams will select the correct workspace automatically.</span></div><button type="button" onClick={onClose} aria-label="Close project creation">×</button></header>
-        <label><span>1. What do you want to create or complete?</span><textarea value={goal} onChange={(event) => setGoal(event.target.value)} autoFocus required /></label>
-        <label><span>2. Do you have files, images, notes, or references?</span><textarea value={references} onChange={(event) => setReferences(event.target.value)} /></label>
-        <label><span>3. What should the finished result look like?</span><textarea value={finishedResult} onChange={(event) => setFinishedResult(event.target.value)} /></label>
-        <label><span>4. Are there requirements or constraints?</span><textarea value={constraints} onChange={(event) => setConstraints(event.target.value)} /></label>
-        <div className="detectedProjectType"><span>Detected workspace</span><strong>{projectType}</strong></div>
-        {error ? <p role="alert">{error}</p> : null}
-        <footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={saving}>{saving ? "Creating…" : "Create and open project"}</button></footer>
-      </form>
-    </div>
-  );
+  return <div className="projectCreationBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="projectCreationDialog" role="dialog" aria-modal="true" onSubmit={createProject}><header><div><strong>Create a StreamsAI project</strong><span>Streams will select the correct workspace automatically.</span></div><button type="button" onClick={onClose}>×</button></header><label><span>1. What do you want to create or complete?</span><textarea value={goal} onChange={(e) => setGoal(e.target.value)} autoFocus required /></label><label><span>2. Do you have files, images, notes, or references?</span><textarea value={references} onChange={(e) => setReferences(e.target.value)} /></label><label><span>3. What should the finished result look like?</span><textarea value={finishedResult} onChange={(e) => setFinishedResult(e.target.value)} /></label><label><span>4. Are there requirements or constraints?</span><textarea value={constraints} onChange={(e) => setConstraints(e.target.value)} /></label><div className="detectedProjectType"><span>Detected workspace</span><strong>{projectType}</strong></div>{error ? <p role="alert">{error}</p> : null}<footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={saving}>{saving ? "Creating…" : "Create and open project"}</button></footer></form></div>;
 }
 
-function readDestination() {
-  if (typeof window === "undefined") return "";
-  return new URL(window.location.href).searchParams.get("destination") || "";
-}
+function readDestination() { if (typeof window === "undefined") return ""; return new URL(window.location.href).searchParams.get("destination") || ""; }
 
 export default function StreamsUniversalExperience() {
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
   const [ready, setReady] = useState(false);
-  const [activeProjectName, setActiveProjectName] = useState("");
   const [activeView, setActiveView] = useState("chat");
   const [destination, setDestination] = useState("");
 
@@ -139,64 +88,27 @@ export default function StreamsUniversalExperience() {
   useEffect(() => {
     const urlView = new URL(window.location.href).searchParams.get("view");
     const storedView = window.localStorage.getItem(EXPERIENCE_VIEW_KEY);
-    setActiveProjectName(window.localStorage.getItem(ACTIVE_PROJECT_NAME_KEY) || "");
     setDestination(readDestination());
     setActiveView(urlView === "workspace" || storedView === "workspace" ? "workspace" : "chat");
     setReady(true);
   }, []);
 
   useEffect(() => {
-    function syncDestination(event) {
-      const explicit = event?.detail?.destination;
-      setDestination(explicit && explicit !== "home" && explicit !== "workspace" ? explicit : readDestination());
-      if (explicit && explicit !== "workspace") setActiveView("chat");
-    }
+    function syncDestination(event) { const explicit = event?.detail?.destination; setDestination(explicit && explicit !== "home" && explicit !== "workspace" ? explicit : readDestination()); if (explicit && explicit !== "workspace") setActiveView("chat"); }
     function openProjectCreation() { setCreating(true); }
     function setExperienceView(event) { changeView(event?.detail?.view); }
-    function activeProjectChanged(event) { if (event?.detail?.name) setActiveProjectName(event.detail.name); }
     window.addEventListener("popstate", syncDestination);
     window.addEventListener("streams-ai:destination-changed", syncDestination);
     window.addEventListener("streams-ai:open-project-creation", openProjectCreation);
     window.addEventListener("streams-ai:set-experience-view", setExperienceView);
-    window.addEventListener("streams-ai:active-project-changed", activeProjectChanged);
-    return () => {
-      window.removeEventListener("popstate", syncDestination);
-      window.removeEventListener("streams-ai:destination-changed", syncDestination);
-      window.removeEventListener("streams-ai:open-project-creation", openProjectCreation);
-      window.removeEventListener("streams-ai:set-experience-view", setExperienceView);
-      window.removeEventListener("streams-ai:active-project-changed", activeProjectChanged);
-    };
+    return () => { window.removeEventListener("popstate", syncDestination); window.removeEventListener("streams-ai:destination-changed", syncDestination); window.removeEventListener("streams-ai:open-project-creation", openProjectCreation); window.removeEventListener("streams-ai:set-experience-view", setExperienceView); };
   }, []);
 
   if (!ready) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
-
   const showWorkspaceNavigation = pathname === "/streams-ai" && activeView === "chat";
-  const isCampaignDestination = destination === "business-builder";
-  return (
-    <div className={showWorkspaceNavigation ? "streamsUniversalExperience withNewChatVisualSample" : "streamsUniversalExperience"} data-active-view={activeView} data-one-streams-app="true">
-      {activeView === "chat" ? (
-        <>
-          {showWorkspaceNavigation ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}
-          {destination ? (
-            <div className="streamsDestinationFrame">
-              {isCampaignDestination ? <MarketingCampaignWorkspace onNewProject={() => setCreating(true)} /> : <StreamsDestinationWorkspace destination={destination} onNewProject={() => setCreating(true)} />}
-            </div>
-          ) : <StreamsClientShell />}
-        </>
-      ) : <ProjectWorkspaceShell />}
-      <ProjectCreationDialog open={creating} onClose={() => setCreating(false)} onCreated={(project) => { setActiveProjectName(project.name || "Project"); setCreating(false); changeView("workspace"); }} />
-      <style jsx global>{`
-        .streamsUniversalExperience{min-height:100svh;background:#020713}
-        .streamsDestinationFrame{min-width:0;min-height:100dvh;background:#fff}
-        @media(min-width:901px){.withNewChatVisualSample>.streamsDestinationFrame{margin-left:224px;width:calc(100% - 224px)}}
-        @media(max-width:900px){.streamsDestinationFrame{width:100%;margin-left:0}}
-        .projectCreationBackdrop{position:fixed;inset:0;z-index:70000;display:grid;place-items:center;padding:18px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}
-        .projectCreationDialog{width:min(680px,100%);max-height:calc(100svh - 36px);overflow:auto;display:grid;gap:14px;padding:18px;border:1px solid rgba(96,165,250,.35);border-radius:18px;background:#07101f;color:#f8fafc;box-shadow:0 24px 80px rgba(0,0,0,.55)}
-        .projectCreationDialog header,.projectCreationDialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}.projectCreationDialog header div{display:grid;gap:3px}.projectCreationDialog header strong{font-size:17px}.projectCreationDialog header span{font-size:11px;color:#94a3b8}.projectCreationDialog header button{width:34px;height:34px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#fff;font-size:20px}
-        .projectCreationDialog label{display:grid;gap:6px}.projectCreationDialog label span{font-size:11px;font-weight:800;color:#bfdbfe}.projectCreationDialog textarea{min-height:72px;resize:vertical;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:#0b1424;color:#f8fafc;padding:10px;font:inherit;line-height:1.45}.projectCreationDialog textarea:focus{outline:2px solid #3b82f6;outline-offset:1px}
-        .detectedProjectType{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-radius:10px;background:#0f1a2d}.detectedProjectType span{font-size:10px;color:#94a3b8}.detectedProjectType strong{font-size:12px;color:#6ee7b7}.projectCreationDialog p{margin:0;color:#fca5a5;font-size:12px}.projectCreationDialog footer{justify-content:flex-end}.projectCreationDialog footer button{min-height:38px;padding:0 14px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#e2e8f0;font-weight:800}.projectCreationDialog footer button[type=submit]{background:#1d4ed8;border-color:#3b82f6;color:#fff}.projectCreationDialog footer button:disabled{opacity:.6}
-        @media(max-width:560px){.projectCreationBackdrop{padding:10px}.projectCreationDialog{max-height:calc(100svh - 20px);border-radius:14px;padding:14px}}
-      `}</style>
-    </div>
-  );
+  const destinationView = destination === "business-builder" ? <MarketingCampaignWorkspace onNewProject={() => setCreating(true)} /> : destination === "video-studio" ? <VideoProductionWorkspace onNewProject={() => setCreating(true)} /> : <StreamsDestinationWorkspace destination={destination} onNewProject={() => setCreating(true)} />;
+
+  return <div className={showWorkspaceNavigation ? "streamsUniversalExperience withNewChatVisualSample" : "streamsUniversalExperience"} data-active-view={activeView} data-one-streams-app="true">{activeView === "chat" ? <>{showWorkspaceNavigation ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}{destination ? <div className="streamsDestinationFrame">{destinationView}</div> : <StreamsClientShell />}</> : <ProjectWorkspaceShell />}<ProjectCreationDialog open={creating} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); changeView("workspace"); }} /><style jsx global>{`
+    .streamsUniversalExperience{min-height:100svh;background:#020713}.streamsDestinationFrame{min-width:0;min-height:100dvh;background:#fff}@media(min-width:901px){.withNewChatVisualSample>.streamsDestinationFrame{margin-left:224px;width:calc(100% - 224px)}}@media(max-width:900px){.streamsDestinationFrame{width:100%;margin-left:0}}.projectCreationBackdrop{position:fixed;inset:0;z-index:70000;display:grid;place-items:center;padding:18px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}.projectCreationDialog{width:min(680px,100%);max-height:calc(100svh - 36px);overflow:auto;display:grid;gap:14px;padding:18px;border:1px solid rgba(96,165,250,.35);border-radius:18px;background:#07101f;color:#f8fafc}.projectCreationDialog header,.projectCreationDialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}.projectCreationDialog header div{display:grid}.projectCreationDialog label{display:grid;gap:6px}.projectCreationDialog textarea{min-height:72px;resize:vertical;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:#0b1424;color:#f8fafc;padding:10px}.detectedProjectType{display:flex;justify-content:space-between;padding:10px;background:#0f1a2d}.projectCreationDialog p{color:#fca5a5}.projectCreationDialog footer{justify-content:flex-end}.projectCreationDialog footer button{min-height:38px;padding:0 14px;border:1px solid rgba(148,163,184,.3);border-radius:9px;background:#111827;color:#e2e8f0}.projectCreationDialog footer button[type=submit]{background:#1d4ed8;color:#fff}@media(max-width:560px){.projectCreationBackdrop{padding:10px}.projectCreationDialog{max-height:calc(100svh - 20px);padding:14px}}
+  `}</style></div>;
 }
