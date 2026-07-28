@@ -9,7 +9,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import QueryProvider from "@/providers/QueryProvider";
 import StreamsGlobalAccountNavLinks from "@/components/account/StreamsGlobalAccountNavLinks";
 import BuilderChatPreviewContextBridge from "@/components/streams-builder/BuilderChatPreviewContextBridge";
-import CalmChatRuntimeBridge from "@/components/streams-ai/current-chat/new-face/CalmChatRuntimeBridge";
 
 const inter = { variable: "--font-inter", className: "font-inter" };
 
@@ -39,7 +38,6 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            <CalmChatRuntimeBridge />
             <BuilderChatPreviewContextBridge />
             <StreamsGlobalAccountNavLinks />
             {children}
