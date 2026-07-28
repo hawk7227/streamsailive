@@ -1,94 +1,98 @@
 "use client";
 
 import Link from "next/link";
+import { Box, MessageCircle, Search } from "lucide-react";
+
+const pillars = [
+  {
+    title: "Ask",
+    description: "Get intelligent answers and brainstorm ideas with A.S.K. AI.",
+    icon: MessageCircle,
+    accent: "text-cyan-300",
+    glow: "shadow-[0_0_30px_rgba(34,211,238,.24)]",
+  },
+  {
+    title: "Seek",
+    description: "Find insights, research, and the right information instantly.",
+    icon: Search,
+    accent: "text-sky-300",
+    glow: "shadow-[0_0_30px_rgba(56,189,248,.22)]",
+  },
+  {
+    title: "A.S.K. Knock",
+    description: "Execute ideas with powerful building and automation tools.",
+    icon: Box,
+    accent: "text-violet-300",
+    glow: "shadow-[0_0_30px_rgba(139,92,246,.24)]",
+  },
+];
 
 export default function Hero() {
   return (
-    <section className="relative pt-40 pb-24 overflow-hidden">
-      {/* Background & Glow */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#6366f126] to-transparent pointer-events-none" />
-      <div className="absolute w-[600px] h-[600px] bg-[radial-gradient(circle,rgba(99,102,241,0.3)_0%,transparent_70%)] rounded-full blur-[80px] top-0 left-1/2 -translate-x-1/2 animate-pulse-slow pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] pointer-events-none" />
+    <section className="relative isolate overflow-hidden px-5 pb-14 pt-28 sm:px-8 sm:pb-20 sm:pt-32 lg:px-10 lg:pb-24 lg:pt-36">
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-[#020713]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_72%_42%,rgba(37,99,235,.18),transparent_30%),radial-gradient(circle_at_78%_46%,rgba(147,51,234,.14),transparent_24%)]" />
 
-      <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#6366f11a] border border-[#6366f133] rounded-full text-sm text-[#a5b4fc] mb-6 opacity-0 animate-fade-in-up [animation-delay:0.1s]">
-          <span className="w-2 h-2 bg-accent-emerald rounded-full animate-pulse" />
-          Now with Veo 3 Video Generation
-        </div>
-
-        {/* Title */}
-        <h1 className="text-[clamp(40px,6vw,72px)] font-extrabold leading-[1.1] mb-6 opacity-0 animate-fade-in-up [animation-delay:0.2s]">
-          Create Stunning Content
-          <br />
-          <span className="bg-gradient-to-br from-[#818cf8] via-[#c084fc] to-[#f472b6] bg-[length:200%_200%] bg-clip-text text-transparent animate-gradient">
-            with AI Magic
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,.95fr)] lg:gap-8">
+        <div className="max-w-3xl">
+          <span className="inline-flex text-[11px] font-semibold uppercase tracking-[.2em] text-slate-400">
+            Streams Workspace
           </span>
-        </h1>
 
-        {/* Description */}
-        <p className="text-xl text-text-secondary max-w-[600px] mx-auto mb-10 opacity-0 animate-fade-in-up [animation-delay:0.3s]">
-          Transform your ideas into professional videos, images, voiceovers, and
-          scripts. One platform, unlimited creativity.
-        </p>
+          <h1 className="mt-5 text-[clamp(2.65rem,8vw,5.4rem)] font-semibold leading-[.98] tracking-[-.055em] text-white">
+            Your intelligent workspace for{" "}
+            <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">
+              thinking, creating,
+            </span>{" "}
+            and building.
+          </h1>
 
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 opacity-0 animate-fade-in-up [animation-delay:0.4s]">
-          <Link
-            href="/signup"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-br from-accent-indigo to-accent-purple text-white rounded-2xl font-semibold text-base transition-all hover:shadow-[0_8px_30px_rgba(99,102,241,0.4)] hover:-translate-y-0.5"
-          >
-            Start Creating Free
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <p className="mt-7 text-lg font-medium text-white sm:text-xl">
+            Streams Workspace, hosted by <span className="text-cyan-300">A.S.K. AI.</span>
+          </p>
+
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
+            Ask questions, seek answers, organize work, create content, and turn ideas into completed projects from one connected workspace.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/signup"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_50px_rgba(37,99,235,.28)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
             >
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </Link>
-          <button
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-border-color text-white rounded-2xl font-semibold text-base transition-all hover:bg-white/10 hover:border-border-hover"
-            onClick={() => {
-              /* Handle smooth scroll to demo if needed */
-            }}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              Get Started for Free
+            </Link>
+            <Link
+              href="/streams-ai"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
             >
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            Watch Demo
-          </button>
+              See How It Works <span className="ml-3" aria-hidden="true">▶</span>
+            </Link>
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-12 opacity-0 animate-fade-in-up [animation-delay:0.5s]">
-          <div className="text-center">
-            <span className="block text-3xl font-bold text-white">50K+</span>
-            <span className="text-sm text-text-muted">Creators</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-3xl font-bold text-white">2.5M+</span>
-            <span className="text-sm text-text-muted">Generations</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-3xl font-bold text-white">10K+</span>
-            <span className="text-sm text-text-muted">Hours Saved</span>
-          </div>
+        <div className="relative mx-auto flex aspect-square w-full max-w-[31rem] items-center justify-center" aria-hidden="true">
+          <div className="absolute h-[82%] w-[82%] rounded-full bg-[radial-gradient(circle,rgba(30,64,175,.3),rgba(91,33,182,.14)_45%,transparent_70%)] blur-2xl" />
+          <div className="absolute h-[72%] w-[72%] rounded-full border border-blue-500/20 shadow-[0_0_90px_rgba(37,99,235,.25),inset_0_0_70px_rgba(124,58,237,.12)]" />
+          <div className="absolute h-[58%] w-[58%] rotate-12 rounded-full border border-violet-500/30 shadow-[0_0_55px_rgba(124,58,237,.28)]" />
+          <div className="absolute h-[48%] w-[48%] -rotate-12 rounded-full border border-cyan-400/35 shadow-[0_0_45px_rgba(34,211,238,.25)]" />
+          <div className="absolute h-[31%] w-[31%] rounded-full bg-[radial-gradient(circle_at_40%_36%,rgba(103,232,249,.98),rgba(14,165,233,.95)_22%,rgba(37,99,235,.72)_48%,rgba(76,29,149,.36)_68%,transparent_72%)] shadow-[0_0_45px_rgba(34,211,238,.8),0_0_100px_rgba(79,70,229,.65)]" />
+          <div className="absolute h-[8%] w-[8%] rounded-full bg-cyan-200 shadow-[0_0_30px_rgba(103,232,249,1)]" />
         </div>
+      </div>
+
+      <div className="mx-auto mt-12 grid w-full max-w-7xl grid-cols-1 gap-8 border-t border-white/8 pt-9 sm:grid-cols-3 lg:mt-8">
+        {pillars.map(({ title, description, icon: Icon, accent, glow }) => (
+          <div key={title} className="flex items-start gap-4">
+            <span className={`mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[.025] ${accent} ${glow}`}>
+              <Icon size={23} strokeWidth={1.8} />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-white">{title}</h2>
+              <p className="mt-1.5 max-w-xs text-sm leading-6 text-slate-500">{description}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
