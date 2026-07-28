@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import ProjectWorkspaceShell from "@/components/streams-workspace/ProjectWorkspaceShell";
 import StreamsClientShell from "./StreamsClientShell";
 import NewChatNavigationVisualSample from "./NewChatNavigationVisualSample";
+import StreamsDestinationWorkspace from "./StreamsDestinationWorkspace";
 
 const ACTIVE_PROJECT_KEY = "streams-ai:active-project-id";
 const ACTIVE_PROJECT_NAME_KEY = "streams-ai:active-project-name";
@@ -63,11 +64,7 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
       ].filter(Boolean).join("\n\n");
       const response = await fetch("/api/v1/projects", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": `project-${Date.now()}`,
-          ...authHeaders,
-        },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `project-${Date.now()}`, ...authHeaders },
         credentials: "include",
         body: JSON.stringify({
           name,
@@ -114,12 +111,18 @@ function ProjectCreationDialog({ open, onClose, onCreated }) {
   );
 }
 
+function readDestination() {
+  if (typeof window === "undefined") return "";
+  return new URL(window.location.href).searchParams.get("destination") || "";
+}
+
 export default function StreamsUniversalExperience() {
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
   const [ready, setReady] = useState(false);
   const [activeProjectName, setActiveProjectName] = useState("");
   const [activeView, setActiveView] = useState("chat");
+  const [destination, setDestination] = useState("");
 
   function changeView(nextView) {
     const safeView = nextView === "workspace" ? "workspace" : "chat";
@@ -127,6 +130,7 @@ export default function StreamsUniversalExperience() {
     window.localStorage.setItem(EXPERIENCE_VIEW_KEY, safeView);
     const url = new URL(window.location.href);
     url.searchParams.set("view", safeView);
+    if (safeView === "workspace") url.searchParams.delete("destination");
     window.history.replaceState(window.history.state, "", url.toString());
     window.dispatchEvent(new CustomEvent("streams-ai:experience-view-changed", { detail: { view: safeView } }));
   }
@@ -135,18 +139,28 @@ export default function StreamsUniversalExperience() {
     const urlView = new URL(window.location.href).searchParams.get("view");
     const storedView = window.localStorage.getItem(EXPERIENCE_VIEW_KEY);
     setActiveProjectName(window.localStorage.getItem(ACTIVE_PROJECT_NAME_KEY) || "");
+    setDestination(readDestination());
     setActiveView(urlView === "workspace" || storedView === "workspace" ? "workspace" : "chat");
     setReady(true);
   }, []);
 
   useEffect(() => {
+    function syncDestination(event) {
+      const explicit = event?.detail?.destination;
+      setDestination(explicit && explicit !== "home" && explicit !== "workspace" ? explicit : readDestination());
+      if (explicit && explicit !== "workspace") setActiveView("chat");
+    }
     function openProjectCreation() { setCreating(true); }
     function setExperienceView(event) { changeView(event?.detail?.view); }
     function activeProjectChanged(event) { if (event?.detail?.name) setActiveProjectName(event.detail.name); }
+    window.addEventListener("popstate", syncDestination);
+    window.addEventListener("streams-ai:destination-changed", syncDestination);
     window.addEventListener("streams-ai:open-project-creation", openProjectCreation);
     window.addEventListener("streams-ai:set-experience-view", setExperienceView);
     window.addEventListener("streams-ai:active-project-changed", activeProjectChanged);
     return () => {
+      window.removeEventListener("popstate", syncDestination);
+      window.removeEventListener("streams-ai:destination-changed", syncDestination);
       window.removeEventListener("streams-ai:open-project-creation", openProjectCreation);
       window.removeEventListener("streams-ai:set-experience-view", setExperienceView);
       window.removeEventListener("streams-ai:active-project-changed", activeProjectChanged);
@@ -155,26 +169,16 @@ export default function StreamsUniversalExperience() {
 
   if (!ready) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
 
-  const showNewChatSample = pathname === "/streams-ai" && activeView === "chat";
+  const showWorkspaceNavigation = pathname === "/streams-ai" && activeView === "chat";
   return (
-    <div className={showNewChatSample ? "streamsUniversalExperience withNewChatVisualSample" : "streamsUniversalExperience"} data-active-view={activeView} data-one-streams-app="true">
+    <div className={showWorkspaceNavigation ? "streamsUniversalExperience withNewChatVisualSample" : "streamsUniversalExperience"} data-active-view={activeView} data-one-streams-app="true">
       {activeView === "chat" ? (
         <>
-          {showNewChatSample ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}
-          <StreamsClientShell />
+          {showWorkspaceNavigation ? <NewChatNavigationVisualSample onNewProject={() => setCreating(true)} /> : null}
+          {destination ? <StreamsDestinationWorkspace destination={destination} onNewProject={() => setCreating(true)} /> : <StreamsClientShell />}
         </>
-      ) : (
-        <ProjectWorkspaceShell />
-      )}
-      <ProjectCreationDialog
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={(project) => {
-          setActiveProjectName(project.name || "Project");
-          setCreating(false);
-          changeView("workspace");
-        }}
-      />
+      ) : <ProjectWorkspaceShell />}
+      <ProjectCreationDialog open={creating} onClose={() => setCreating(false)} onCreated={(project) => { setActiveProjectName(project.name || "Project"); setCreating(false); changeView("workspace"); }} />
       <style jsx global>{`
         .streamsUniversalExperience{min-height:100svh;background:#020713}
         .projectCreationBackdrop{position:fixed;inset:0;z-index:70000;display:grid;place-items:center;padding:18px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}
