@@ -84,13 +84,16 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       </main>
       <style jsx>{`
         .builderResearchCanvas{position:relative;height:100%;min-height:0;overflow:hidden;background:#020617;color:#e5e7eb}
-        .builderResearchWorkarea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(480px,1fr) minmax(480px,1fr);gap:1px;background:#172033;overflow:hidden}
+        .builderResearchWorkarea{height:100%;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,1fr);gap:1px;background:#172033;overflow:hidden}
         .builderResearchSource,.builderResearchVisual{min-width:0;min-height:0;overflow:hidden;background:#020617}
-        @media(max-width:1100px){.builderResearchWorkarea{grid-template-columns:minmax(0,1fr)}.builderResearchVisual{display:none}}
+        .builderResearchVisual{display:block;border-left:1px solid rgba(148,163,184,.18)}
+        @media(max-width:760px){.builderResearchWorkarea{grid-template-columns:minmax(0,1fr)}.builderResearchVisual{display:none}}
       `}</style>
       <style jsx global>{`
         .builderResearchCanvas .builderResearchVisual .editorHeader,.builderResearchCanvas .builderResearchVisual .editorStatus,.builderResearchCanvas .builderResearchVisual .editorActions{display:none!important}
-        .builderResearchCanvas .builderResearchVisual .visualEditor{grid-template-rows:minmax(0,1fr)!important;min-height:0!important}
+        .builderResearchCanvas .builderResearchVisual .visualEditor{height:100%!important;min-height:0!important;grid-template-rows:minmax(0,1fr)!important}
+        .builderResearchCanvas .builderResearchVisual .editorBody{height:100%!important;min-height:0!important;overflow:hidden!important}
+        .builderResearchCanvas .builderResearchVisual iframe{display:block;width:100%!important;height:100%!important;min-height:0!important;border:0!important}
         .builderResearchCanvas .liveWorkstation{grid-template-rows:minmax(0,1fr) auto!important}
         .builderResearchCanvas .workstationBody{grid-row:1!important}
         .builderResearchCanvas .workstationToolbar{grid-row:2!important;overflow:visible!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;grid-template-columns:1fr!important;align-items:stretch!important;padding:6px 8px 8px!important}
