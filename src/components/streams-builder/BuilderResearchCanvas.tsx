@@ -35,7 +35,8 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       setActiveFile(mounted);
       window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
       window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "preview-mounted", previewId, previewUrl, sourceLength: source.length } }));
-      setProof((items) => [...items.slice(-30), `Preview source mounted: ${previewUrl}`]);
+      window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message: "Preview mounted and connected to the shared Builder state." } }));
+      setProof((items) => [...items.slice(-30), "Preview mounted and connected to the shared Builder state."]);
     }
     void hydrate();
     return () => { cancelled = true; };
@@ -56,11 +57,15 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       try { window.localStorage.setItem("streams-builder:active-file", JSON.stringify(updated)); } catch {}
       window.dispatchEvent(new CustomEvent("streams-builder:shared-source-change", { detail: updated }));
       window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "source", file: updated, content: next } }));
+      window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message: `Shared source updated: ${updated.path || "active preview"}.` } }));
       return updated;
     });
     setProof((items) => [...items.slice(-30), "Shared source updated from the code, worker, or visual editor."]);
   }
-  function addProof(message: string) { setProof((items) => [...items.slice(-30), message]); }
+  function addProof(message: string) {
+    setProof((items) => [...items.slice(-30), message]);
+    window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail: { message } }));
+  }
 
   const toolbar = <><GitHubRepositoryPicker /><LiveBuilderAgentBridge activeFile={activeFile} sessionId={preview?.sessionId} onProof={addProof} /></>;
 
@@ -86,7 +91,13 @@ export default function BuilderResearchCanvas({ preview }: Props) {
       <style jsx global>{`
         .builderResearchCanvas .builderResearchVisual .editorHeader,.builderResearchCanvas .builderResearchVisual .editorStatus,.builderResearchCanvas .builderResearchVisual .editorActions{display:none!important}
         .builderResearchCanvas .builderResearchVisual .visualEditor{grid-template-rows:minmax(0,1fr)!important;min-height:0!important}
-        .builderResearchCanvas .workstationToolbar{overflow:visible!important}.builderResearchCanvas .workstationToolbar .githubSourceControl{min-width:0!important}
+        .builderResearchCanvas .liveWorkstation{grid-template-rows:minmax(0,1fr) auto!important}
+        .builderResearchCanvas .workstationBody{grid-row:1!important}
+        .builderResearchCanvas .workstationToolbar{grid-row:2!important;overflow:visible!important;border-top:1px solid rgba(45,212,191,.28)!important;border-bottom:0!important;grid-template-columns:1fr!important;align-items:stretch!important;padding:6px 8px 8px!important}
+        .builderResearchCanvas .workingTabs{order:1!important;width:100%!important;overflow-x:auto!important;padding-bottom:4px!important}
+        .builderResearchCanvas .sourceToolbar{order:2!important;width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;border-top:1px solid rgba(148,163,184,.14)!important;padding-top:6px!important}
+        .builderResearchCanvas .workstationToolbar .githubSourceControl{min-width:0!important;max-width:100%!important}
+        .builderResearchCanvas .workstationToolbar .routeValue{display:none!important}
       `}</style>
     </section>
   );
