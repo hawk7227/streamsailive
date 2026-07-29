@@ -21,6 +21,8 @@ type StreamsMessageRequestBody = Record<string, any> & {
   message?: string;
   messages?: Array<{ role?: string; content?: unknown }>;
   context?: Record<string, unknown>;
+  conversationId?: string;
+  workspaceId?: string;
   attachments?: any[];
   idempotencyKey?: string;
   turnId?: string;
