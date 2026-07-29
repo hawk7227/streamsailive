@@ -2,7 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/streams-builder/WorkspaceGrid", () => ({
-  default: () => <div data-testid="preserved-workspace-grid">Preserved WorkspaceGrid</div>,
+  default: () => (
+    <main data-testid="preserved-workspace-grid" data-layout="permanent-three-column">
+      <section aria-label="Authoritative conversation" />
+      <section aria-label="Code editor and frontend builder" />
+      <section aria-label="Original visual editor" />
+    </main>
+  ),
 }));
 
 import ProjectWorkspaceShell from "../src/components/streams-workspace/ProjectWorkspaceShell";
@@ -25,9 +31,13 @@ describe("universal project workspace shell", () => {
     expect(html).toContain('data-preserved-builder-surface="true"');
     expect(html).toContain('data-replacement-conversion="true"');
     expect(html).toContain('data-side-panels="removed"');
-    expect(html).toContain('aria-label="StreamsAI global navigation"');
-    expect(html).toContain('aria-label="Main workspace canvas"');
+    expect(html).toContain('data-layout="permanent-three-column"');
+    expect(html).toContain('aria-label="Authoritative conversation"');
+    expect(html).toContain('aria-label="Code editor and frontend builder"');
+    expect(html).toContain('aria-label="Original visual editor"');
     expect(html).toContain('aria-label="Workspace supporting materials"');
+    expect(html).not.toContain('aria-label="StreamsAI global navigation"');
+    expect(html).not.toContain('aria-label="Main workspace canvas"');
     expect(html).not.toContain('aria-label="Project context"');
     expect(html).not.toContain('aria-label="Contextual utility panel"');
   });

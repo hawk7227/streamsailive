@@ -19,6 +19,7 @@
 - Chat preview lifecycle: source-implemented so preview and visual-edit intent opens the existing requested surface before the assistant request begins; browser runtime proof remains outstanding.
 - Original far-right Visual Editor: existing WorkspaceGrid mount is preserved, Visual Edit Mode remains the default for mapped source, and external URLs are isolated as read-only browser content.
 - Bidirectional mapping: existing element-source mapping now exposes exact matched line/column coordinates and the editable preview accepts source-selection focus without guessing when matches are ambiguous.
+- Workspace production contracts: repaired to validate the current authoritative three-column `WorkspaceGrid` instead of requiring superseded global-navigation and `WorkspaceCanvas` markup; all production and architecture tests pass locally, while the final Next build remains environment-blocked without the required OpenAI and Supabase variables.
 - Existing `/streams-ai` chat: protected and passing its response-integrity production contract.
 - Existing `/streams-ai/streams-builder` capability chain: preserved and mounted inside the universal project workspace shell.
 - Universal project workspace shell: implemented, mounted, production-tested, type-checked, built, and deployed.
