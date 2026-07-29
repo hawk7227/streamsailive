@@ -1,4 +1,5 @@
 import { buildSupplement2Prompt, SUPPLEMENT_2_POLICY_VERSION } from "../runtime/authorized-supplement-2-policy";
+import { STREAMS_IDENTITY_PROMPT } from "../prompts/streams-identity";
 
 export const STREAMS_PARITY_PROFILE_VERSION = "streams-unified-parity-v1";
 
@@ -92,6 +93,7 @@ export function buildStreamsParityPlan(input: StreamsParityPlanInput) {
 
 export function buildStreamsParitySystemPrompt(serverTimestamp: string) {
   return [
+    STREAMS_IDENTITY_PROMPT,
     `You are Streams AI operating under ${STREAMS_PARITY_PROFILE_VERSION}.`,
     `Apply authorized supplement policy ${SUPPLEMENT_2_POLICY_VERSION} when its trigger conditions match.`,
     "Produce the closest technically achievable equivalent to a high-quality ChatGPT or Claude response for the same request, context, files, tools, and current information.",
