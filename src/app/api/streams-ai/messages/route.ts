@@ -70,7 +70,7 @@ function shouldUseDirectProvider(body: StreamsMessageRequestBody, userContent: s
   if (body.webSearchEnabled === true || body.metadata?.webSearchEnabled === true) return false;
   if (userContent.length > 2500) return false;
 
-  const complexIntent = /\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\/\/|build|deploy|git(?:hub|\s*gib)?|repositor(?:y|ies)|repo|branch|commit|pull request|issue|workflow|calendar|email|send|create an image)\b/i;
+  const complexIntent = /\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\/\/|build|deploy|git(?:\s*hub|\s*gib)?|repositor(?:y|ies)|repo|branch|commit|pull request|issue|workflow|calendar|email|send|create an image)\b/i;
   return !complexIntent.test(userContent);
 }
 
