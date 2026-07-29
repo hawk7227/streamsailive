@@ -392,7 +392,7 @@ export async function POST(request: NextRequest) {
           ...(authoritativeBody.metadata || {}),
           sessionId: authoritativeBody.sessionId || undefined,
           conversationId: authoritativeBody.sessionId || authoritativeBody.conversationId || undefined,
-          workspaceId: authoritativeBody.workspaceId || authoritativeBody.metadata?.workspaceId || undefined,
+          workspaceId: authoritativeBody.workspaceId || body.metadata?.workspaceId || undefined,
           turnId: authoritativeBody.turnId,
           attachments: authoritativeBody.attachments || [],
         },
