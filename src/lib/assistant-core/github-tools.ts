@@ -89,6 +89,7 @@ const DESTRUCTIVE_TOOLS = new Set(TOOL_SPECS.filter((tool) => tool.destructive).
 function stringArg(value: unknown, fallback = ""): string { return typeof value === "string" && value.trim() ? value.trim() : fallback; }
 function numberArg(value: unknown, fallback = 0, max = 100): number { const n = Number(value); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : fallback; }
 function boolArg(value: unknown, fallback = false): boolean { return typeof value === "boolean" ? value : fallback; }
+function stringArrayArg(value: unknown): string[] | undefined { if (!Array.isArray(value)) return undefined; const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()); return items.length ? items : undefined; }
 function splitRepository(fullName: string) { const [owner, repo, ...extra] = fullName.split("/").map((v) => v.trim()); return owner && repo && !extra.length ? { owner, repo } : null; }
 function cleanObject(input: Record<string, unknown>) { return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== "")); }
 
@@ -166,7 +167,7 @@ export async function executeAssistantGitHubTool(input: ExecuteGitHubToolInput, 
       case "github_search_repositories": return githubApi.searchGitHubRepositories(github.token, stringArg(a.query), limit);
       case "github_search_users": return githubApi.searchGitHubUsers(github.token, stringArg(a.query), limit);
       case "github_list_issues": return githubApi.listGitHubIssues(github.token, owner, repo, (stringArg(a.state, "open") as "open" | "closed" | "all"));
-      case "github_create_issue": return githubApi.createGitHubIssue(github.token, owner, repo, cleanObject({ title: stringArg(a.title), body: stringArg(a.body), labels: a.labels, assignees: a.assignees }));
+      case "github_create_issue": return githubApi.createGitHubIssue(github.token, owner, repo, { title: stringArg(a.title), body: stringArg(a.body) || undefined, labels: stringArrayArg(a.labels), assignees: stringArrayArg(a.assignees), milestone: numberArg(a.milestone) || undefined });
       case "github_update_issue": { const { issueNumber, ...rest } = a; return githubApi.updateGitHubIssue(github.token, owner, repo, numberArg(issueNumber), cleanObject(rest)); }
       case "github_add_issue_comment": return githubApi.addGitHubIssueComment(github.token, owner, repo, numberArg(a.issueNumber), stringArg(a.body));
       case "github_list_issue_comments": return githubApi.listGitHubIssueComments(github.token, owner, repo, numberArg(a.issueNumber));
@@ -181,7 +182,7 @@ export async function executeAssistantGitHubTool(input: ExecuteGitHubToolInput, 
       case "github_list_pull_request_files": return githubApi.listGitHubPullRequestFiles(github.token, owner, repo, numberArg(a.pullNumber));
       case "github_list_pull_request_reviews": return githubApi.listGitHubPullRequestReviews(github.token, owner, repo, numberArg(a.pullNumber));
       case "github_create_pull_request_review": return githubApi.createGitHubPullRequestReview(github.token, owner, repo, numberArg(a.pullNumber), { body: stringArg(a.body) || undefined, event: stringArg(a.event, "COMMENT") as "APPROVE" | "REQUEST_CHANGES" | "COMMENT" });
-      case "github_merge_pull_request": return githubApi.mergeGitHubPullRequest(github.token, owner, repo, numberArg(a.pullNumber), cleanObject({ merge_method: stringArg(a.mergeMethod, "squash"), commit_title: stringArg(a.commitTitle), commit_message: stringArg(a.commitMessage), sha: stringArg(a.sha) }));
+      case "github_merge_pull_request": return githubApi.mergeGitHubPullRequest(github.token, owner, repo, numberArg(a.pullNumber), { merge_method: stringArg(a.mergeMethod, "squash") as "merge" | "squash" | "rebase", commit_title: stringArg(a.commitTitle) || undefined, commit_message: stringArg(a.commitMessage) || undefined, sha: stringArg(a.sha) || undefined });
       case "github_list_releases": return githubApi.listGitHubReleases(github.token, owner, repo);
       case "github_create_release": return githubApi.createGitHubRelease(github.token, owner, repo, cleanObject({ tag_name: stringArg(a.tagName), target_commitish: stringArg(a.targetCommitish), name: stringArg(a.name), body: stringArg(a.body), draft: boolArg(a.draft), prerelease: boolArg(a.prerelease), generate_release_notes: boolArg(a.generateReleaseNotes) }));
       case "github_update_release": { const { releaseId, ...rest } = a; return githubApi.updateGitHubRelease(github.token, owner, repo, numberArg(releaseId), cleanObject(rest)); }
