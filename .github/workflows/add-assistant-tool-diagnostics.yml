@@ -1,0 +1,119 @@
+name: Add assistant tool diagnostics
+
+on:
+  push:
+    paths:
+      - ".github/workflows/add-assistant-tool-diagnostics.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  instrument:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Instrument assistant tool path
+        shell: python
+        run: |
+          from pathlib import Path
+
+          orchestrator_path = Path("src/lib/assistant-core/orchestrator.ts")
+          source = orchestrator_path.read_text()
+
+          replacements = [
+              (
+                  '          const tools = buildUnifiedAssistantTools({ route, context: assembledContext });\n',
+                  '''          const tools = buildUnifiedAssistantTools({ route, context: assembledContext });
+          const toolNames = tools.map((tool) => tool.name);
+          const githubToolNames = toolNames.filter((name) => name.startsWith("github_"));
+          const toolInventoryDiagnostic = {
+            stage: "tool_inventory",
+            turnId,
+            route,
+            toolCount: toolNames.length,
+            githubToolCount: githubToolNames.length,
+            githubToolNames,
+          };
+          console.info("STREAMS_ASSISTANT_DIAGNOSTIC", toolInventoryDiagnostic);
+          send("diagnostic", toolInventoryDiagnostic);
+'''
+              ),
+              (
+                  '          const firstCallHadTools = getFunctionCalls(response).length > 0;\n',
+                  '''          const firstFunctionCalls = getFunctionCalls(response);
+          const firstCallDiagnostic = {
+            stage: "model_function_calls",
+            turnId,
+            responseId: response.id,
+            functionCallCount: firstFunctionCalls.length,
+            functionCallNames: firstFunctionCalls.map((call) => call.name),
+            outputTypes: response.output.map((item) => item.type),
+          };
+          console.info("STREAMS_ASSISTANT_DIAGNOSTIC", firstCallDiagnostic);
+          send("diagnostic", firstCallDiagnostic);
+          const firstCallHadTools = firstFunctionCalls.length > 0;
+'''
+              ),
+              (
+                  '                send("tool_result", { name: call.name, result });\n',
+                  '''                const resultRecord = asRecord(result);
+                const executionDiagnostic = {
+                  stage: "tool_execution",
+                  turnId,
+                  toolName: call.name,
+                  ok: resultRecord?.ok !== false,
+                };
+                console.info("STREAMS_ASSISTANT_DIAGNOSTIC", executionDiagnostic);
+                send("diagnostic", executionDiagnostic);
+                send("tool_result", { name: call.name, result });
+'''
+              ),
+              (
+                  '                const message = error instanceof Error ? error.message : "tool execution failed";\n                send("tool_error", { name: call.name, error: message });\n',
+                  '''                const message = error instanceof Error ? error.message : "tool execution failed";
+                const executionErrorDiagnostic = {
+                  stage: "tool_execution_error",
+                  turnId,
+                  toolName: call.name,
+                  errorName: error instanceof Error ? error.name : "UnknownError",
+                };
+                console.error("STREAMS_ASSISTANT_DIAGNOSTIC", executionErrorDiagnostic);
+                send("diagnostic", executionErrorDiagnostic);
+                send("tool_error", { name: call.name, error: message });
+'''
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in source:
+                  raise SystemExit(f"Expected orchestrator text not found: {old}")
+              source = source.replace(old, new, 1)
+
+          orchestrator_path.write_text(source)
+
+          client_path = Path("src/components/streams-ai/current-chat/new-face/hooks/useStreamsChatRuntime.js")
+          client = client_path.read_text()
+          old = '          if (!isActiveChatTurn(activeTurnRef.current, turnId, idempotencyKey) || requestController.signal.aborted) continue;\n'
+          new = '''          if (!isActiveChatTurn(activeTurnRef.current, turnId, idempotencyKey) || requestController.signal.aborted) continue;
+          if (eventName === "diagnostic") {
+            console.info("[Streams assistant diagnostic]", payload);
+          }
+'''
+          if old not in client:
+              raise SystemExit("Expected client event guard not found")
+          client = client.replace(old, new, 1)
+          client_path.write_text(client)
+
+      - name: Commit diagnostics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/assistant-core/orchestrator.ts src/components/streams-ai/current-chat/new-face/hooks/useStreamsChatRuntime.js
+          git diff --cached --check
+          git commit -m "Instrument assistant tool discovery and execution"
+          git push
