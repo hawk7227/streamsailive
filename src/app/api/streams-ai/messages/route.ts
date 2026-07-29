@@ -10,6 +10,7 @@ import { StreamsOperationRepository } from "@/lib/streams-ai/runtime/architectur
 import { executeWebsiteBuild } from "@/lib/streams-builder/chat-builder-executor";
 import { runtimeCompletionMessage } from "@/lib/streams-ai/runtime/architecture/execution-truth-validator";
 import { STREAMS_IDENTITY_PROMPT } from "@/lib/streams-ai/prompts/streams-identity";
+import { runOrchestrator } from "@/lib/assistant-core/orchestrator";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -65,7 +66,7 @@ function shouldUseDirectProvider(body: StreamsMessageRequestBody, userContent: s
   if (body.webSearchEnabled === true || body.metadata?.webSearchEnabled === true) return false;
   if (userContent.length > 2500) return false;
 
-  const complexIntent = /\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\/\/|build|deploy|github|calendar|email|send|create an image)\b/i;
+  const complexIntent = /\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\/\/|build|deploy|git(?:hub|\s*gib)?|repositor(?:y|ies)|repo|branch|commit|pull request|issue|workflow|calendar|email|send|create an image)\b/i;
   return !complexIntent.test(userContent);
 }
 
@@ -376,10 +377,22 @@ export async function POST(request: NextRequest) {
 
     const headers = new Headers(request.headers);
     headers.set("Content-Type", "application/json");
-    return memoryMessagesPOST(new NextRequest(request.url, {
+    return runOrchestrator(new NextRequest(request.url, {
       method: "POST",
       headers,
-      body: JSON.stringify(authoritativeBody),
+      body: JSON.stringify({
+        message: userContent,
+        messages: Array.isArray(authoritativeBody.messages) ? authoritativeBody.messages : undefined,
+        context: {
+          ...(authoritativeBody.context || {}),
+          ...(authoritativeBody.metadata || {}),
+          sessionId: authoritativeBody.sessionId || undefined,
+          conversationId: authoritativeBody.sessionId || authoritativeBody.conversationId || undefined,
+          workspaceId: authoritativeBody.workspaceId || authoritativeBody.metadata?.workspaceId || undefined,
+          turnId: authoritativeBody.turnId,
+          attachments: authoritativeBody.attachments || [],
+        },
+      }),
       signal: request.signal,
     }));
   } catch {

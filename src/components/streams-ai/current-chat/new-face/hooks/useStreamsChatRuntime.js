@@ -554,18 +554,18 @@ export function useStreamsChatRuntime() {
         buffer = parsed.rest;
         for (const { eventName, payload } of parsed.events) {
           if (!isActiveChatTurn(activeTurnRef.current, turnId, idempotencyKey) || requestController.signal.aborted) continue;
-          if (eventName === "activity") {
+          if (eventName === "activity" || eventName === "phase" || eventName === "tool_progress") {
             const nextSessionId = payload?.sessionId;
             if (nextSessionId) {
               activeTurnRef.current = { ...activeTurnRef.current, sessionId: nextSessionId };
               window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
               setSessionId(nextSessionId);
             }
-            const statusText = payload?.statusText || payload?.text || "Working…";
+            const statusText = payload?.statusText || payload?.text || payload?.phase || "Working…";
             setActivity(createActivity("thinking", "chat", statusText));
             setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, statusText } : item));
           }
-          if (eventName === "response" || eventName === "reasoning") {
+          if (eventName === "response" || eventName === "reasoning" || eventName === "text_delta") {
             const token = payload?.token || payload?.delta || payload?.text;
             if (token) {
               receivedText = true;
@@ -589,7 +589,7 @@ export function useStreamsChatRuntime() {
               setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: `Image generation requested: ${args?.prompt || trimmed}`, isStreaming: false, status: "complete" } : item));
             }
           }
-          if (eventName === "complete") {
+          if (eventName === "complete" || eventName === "done") {
             const completion = acceptChatCompletion(activeTurnRef.current, payload);
             if (!completion.accepted) continue;
             activeTurnRef.current = completion.turn;
