@@ -2,6 +2,9 @@
 
 ## Current authorized replacement slice
 
+- Streams Chat Duplicate Response / Double-Completion Repair
+- Scope is limited to the active chat response lifecycle and directly related tests.
+- Workspace, Builder, Visual Editor, preview, repository, GitHub, execution, and pull-request systems remain protected and out of scope.
 - Universal Project Workspace Replacement Conversion
 - Streams Builder Preservation and Combination
 - Documents 1 and 2 remain the governing requirements.
@@ -11,6 +14,8 @@
 
 ## Verified current classification
 
+- Streams Chat response lifecycle: duplicate completion and obsolete-stream guards are implemented and source-tested; browser/runtime reproduction proof remains outstanding.
+- Chat turn identity: optimistic user and assistant messages now share stable turn and request identities, while persisted assistant identity reconciles without text-based deduplication.
 - Existing `/streams-ai` chat: protected and passing its response-integrity production contract.
 - Existing `/streams-ai/streams-builder` capability chain: preserved and mounted inside the universal project workspace shell.
 - Universal project workspace shell: implemented, mounted, production-tested, type-checked, built, and deployed.

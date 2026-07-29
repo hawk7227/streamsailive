@@ -27,6 +27,13 @@ import {
   updateGeneratedImage,
   deleteLibraryFile,
 } from "../../runtime/streamsAssetStore";
+import {
+  acceptChatCompletion,
+  beginChatTurn,
+  createChatTurnIdentity,
+  isActiveChatTurn,
+  reconcileChatMessages,
+} from "../../runtime/chatResponseLifecycle";
 
 const ATTACHMENT_ONLY_SENTINEL = "\u200B";
 
@@ -163,6 +170,7 @@ function parseSSEChunk(chunkBuffer) {
 
 export function useStreamsChatRuntime() {
   const abortRef = useRef(null);
+  const activeTurnRef = useRef(null);
   const sentinelRef = useRef(null);
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -211,7 +219,10 @@ export function useStreamsChatRuntime() {
         return res.json();
       })
       .then((data) => {
-        setMessages(mapStoredMessages(data));
+        const storedMessages = mapStoredMessages(data);
+        setMessages((current) => activeTurnRef.current?.turnId && activeTurnRef.current?.sessionId === id
+          ? reconcileChatMessages(current, storedMessages)
+          : storedMessages);
         setActivity(defaultActivity());
         setIsLoadingMessages(false);
       })
@@ -266,6 +277,7 @@ export function useStreamsChatRuntime() {
 
   const newChat = useCallback(() => {
     abortRef.current?.abort?.();
+    activeTurnRef.current = null;
     window.history.pushState(null, "", "/streams-ai");
     setSessionId("");
     setMessages([]);
@@ -394,12 +406,20 @@ export function useStreamsChatRuntime() {
     if (!trimmed) return;
 
     abortRef.current?.abort?.();
-    abortRef.current = new AbortController();
+    const requestController = new AbortController();
+    abortRef.current = requestController;
 
     const userId = createId("user");
     const assistantId = createId("assistant");
     const turnId = crypto.randomUUID?.() || createId("turn");
     const idempotencyKey = crypto.randomUUID?.() || createId("request");
+    const activeSessionId = sessionId || "";
+    activeTurnRef.current = beginChatTurn(createChatTurnIdentity({
+      turnId,
+      clientRequestId: idempotencyKey,
+      assistantMessageId: assistantId,
+      sessionId: activeSessionId,
+    }));
     const route = detectPreCallRoute(trimmed);
     const userAttachments = composerAttachments.map((file) => ({
       id: file.id,
@@ -415,11 +435,10 @@ export function useStreamsChatRuntime() {
     const attachmentOnly = trimmed === ATTACHMENT_ONLY_SENTINEL;
     const visibleUserContent = attachmentOnly ? "Review the attached file." : trimmed;
 
-    const activeSessionId = sessionId || "";
     setMessages((current) => [
       ...current,
-      { id: userId, role: "user", content: visibleUserContent, submittedContent: trimmed, attachments: userAttachments, createdAt: new Date().toISOString(), status: "complete" },
-      { id: assistantId, role: "assistant", content: "", isStreaming: true, status: "streaming", statusText: userAttachments.length ? "Checking the reference image…" : "Thinking…", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() },
+      { id: userId, role: "user", turnId, clientRequestId: idempotencyKey, content: visibleUserContent, submittedContent: trimmed, attachments: userAttachments, createdAt: new Date().toISOString(), status: "complete" },
+      { id: assistantId, role: "assistant", turnId, clientRequestId: idempotencyKey, content: "", isStreaming: true, status: "streaming", statusText: userAttachments.length ? "Checking the reference image…" : "Thinking…", chunks: [], toolCalls: [], artifacts: [], createdAt: new Date().toISOString() },
     ]);
     setComposerAttachments([]);
     setIsStreaming(true);
@@ -515,7 +534,7 @@ export function useStreamsChatRuntime() {
     try {
       const requestPayload = { message: trimmed, userId, mode, provider, attachments: userAttachments, turnId, idempotencyKey };
       if (activeSessionId && !String(activeSessionId).startsWith("pending_chat_")) requestPayload.sessionId = activeSessionId;
-      const response = await fetch("/api/streams-ai/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestPayload), signal: abortRef.current.signal });
+      const response = await fetch("/api/streams-ai/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestPayload), signal: requestController.signal });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData?.error || `Chat API error: ${response.statusText}`);
@@ -534,9 +553,11 @@ export function useStreamsChatRuntime() {
         const parsed = parseSSEChunk(buffer);
         buffer = parsed.rest;
         for (const { eventName, payload } of parsed.events) {
+          if (!isActiveChatTurn(activeTurnRef.current, turnId, idempotencyKey) || requestController.signal.aborted) continue;
           if (eventName === "activity") {
             const nextSessionId = payload?.sessionId;
             if (nextSessionId) {
+              activeTurnRef.current = { ...activeTurnRef.current, sessionId: nextSessionId };
               window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
               setSessionId(nextSessionId);
             }
@@ -569,13 +590,25 @@ export function useStreamsChatRuntime() {
             }
           }
           if (eventName === "complete") {
+            const completion = acceptChatCompletion(activeTurnRef.current, payload);
+            if (!completion.accepted) continue;
+            activeTurnRef.current = completion.turn;
             completed = true;
             const nextSessionId = payload?.sessionId;
             if (nextSessionId) {
+              activeTurnRef.current = { ...completion.turn, sessionId: nextSessionId };
               window.history.pushState(null, "", `/streams-ai/${nextSessionId}`);
               setSessionId(nextSessionId);
             }
-            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, status: "complete", statusText: "" } : item));
+            setMessages((current) => current.map((item) => item.id === assistantId ? {
+              ...item,
+              turnId,
+              clientRequestId: idempotencyKey,
+              serverMessageId: completion.turn.serverMessageId || item.serverMessageId || "",
+              isStreaming: false,
+              status: "complete",
+              statusText: "",
+            } : item));
             setActivity(createActivity("complete", "chat", "Ready"));
             setIsStreaming(false);
             scrollActiveChatToBottom();
@@ -584,10 +617,13 @@ export function useStreamsChatRuntime() {
         }
       }
 
+      if (activeTurnRef.current?.turnId !== turnId || activeTurnRef.current?.clientRequestId !== idempotencyKey) return;
       if (!completed || !receivedText) throw new Error("The response stream ended before a complete answer was received");
       setActivity(createActivity("complete", "chat", "Ready"));
       setIsStreaming(false);
     } catch (error) {
+      if (!isActiveChatTurn(activeTurnRef.current, turnId, idempotencyKey) || requestController.signal.aborted) return;
+      activeTurnRef.current = { ...activeTurnRef.current, state: "failed", completed: true };
       const normalized = normalizeStreamsError(error);
       setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, isStreaming: false, content: formatErrorForChat(normalized), status: "error", statusText: "" } : item));
       setActivity(createActivity("error", "chat", "Request failed"));
@@ -639,7 +675,7 @@ export function useStreamsChatRuntime() {
       if (sessionId === id) newChat();
     },
     addMediaItem,
-  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, removeComposerAttachment, forceTerminalChatFallback, refreshSidebarData, selectedMode, selectedProvider, isLoadingMessages, loadSessionMessages]);
+  }), [messages, activeArtifact, activity, isStreaming, sendMessage, newChat, sessionId, sessions, imageGallery, videoGallery, libraryFiles, shareCurrentChat, openImageViewer, closeImageViewer, viewerImage, viewerOpen, saveEditedImage, handleImageLoaded, copyAsset, saveAsset, shareAsset, uploadFiles, removeComposerAttachment, forceTerminalChatFallback, refreshSidebarData, composerAttachments, selectedMode, selectedProvider, isLoadingMessages, loadSessionMessages]);
 
   return api;
 }
