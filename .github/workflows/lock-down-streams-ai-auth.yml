@@ -1,0 +1,76 @@
+name: Lock down Streams AI authentication
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lock-down-streams-ai-auth.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  lock-down-auth:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require real authentication in production
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/lib/streams-ai/auth.ts")
+          source = path.read_text()
+
+          old_query_token = '''  const tokenParam = request.nextUrl.searchParams.get("token");
+  if (tokenParam) return tokenParam.trim();
+
+'''
+          if old_query_token not in source:
+              raise SystemExit("Expected query-token authentication block not found")
+          source = source.replace(old_query_token, "", 1)
+
+          old_guest_mode = '''function publicGuestModeEnabled(request: NextRequest) {
+  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE === "false") return false;
+  const pathname = request.nextUrl.pathname || "";
+  return pathname.startsWith("/api/streams-ai/");
+}
+'''
+          new_guest_mode = '''function publicGuestModeEnabled(request: NextRequest) {
+  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE !== "true") return false;
+  if (isProductionRuntime()) return false;
+  const pathname = request.nextUrl.pathname || "";
+  return pathname.startsWith("/api/streams-ai/");
+}
+'''
+          if old_guest_mode not in source:
+              raise SystemExit("Expected public guest mode block not found")
+          source = source.replace(old_guest_mode, new_guest_mode, 1)
+
+          old_invalid_fallback = '''  if (userError || !userData?.user?.id) {
+    if (publicGuestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
+    }
+
+    if (isTestModeEnabled(request)) {
+'''
+          new_invalid_fallback = '''  if (userError || !userData?.user?.id) {
+    if (isTestModeEnabled(request)) {
+'''
+          if old_invalid_fallback not in source:
+              raise SystemExit("Expected invalid-token guest fallback not found")
+          source = source.replace(old_invalid_fallback, new_invalid_fallback, 1)
+
+          path.write_text(source)
+
+      - name: Commit auth lock-down
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/streams-ai/auth.ts
+          git diff --cached --check
+          git commit -m "Require authenticated Streams AI sessions"
+          git push
