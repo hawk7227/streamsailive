@@ -1,0 +1,280 @@
+name: Add global session revocation
+
+on:
+  push:
+    paths:
+      - ".github/workflows/add-global-session-revocation.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add session revocation controls
+        shell: python
+        run: |
+          from pathlib import Path
+
+          migration = Path("supabase/migrations/20260729120000_admin_session_revocations.sql")
+          migration.parent.mkdir(parents=True, exist_ok=True)
+          migration.write_text('''create table if not exists public.admin_session_revocations (
+            id uuid primary key default gen_random_uuid(),
+            scope text not null check (scope in ('user', 'all')),
+            target_user_id uuid null,
+            issued_before timestamptz not null default now(),
+            created_by uuid not null,
+            created_at timestamptz not null default now(),
+            reason text null
+          );
+
+          create index if not exists admin_session_revocations_scope_created_idx
+            on public.admin_session_revocations (scope, created_at desc);
+          create index if not exists admin_session_revocations_target_created_idx
+            on public.admin_session_revocations (target_user_id, created_at desc);
+
+          alter table public.admin_session_revocations enable row level security;
+          revoke all on public.admin_session_revocations from anon, authenticated;
+''')
+
+          admin_route = Path("src/app/api/admin/session-revocations/route.ts")
+          admin_route.parent.mkdir(parents=True, exist_ok=True)
+          admin_route.write_text('''import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdminAuthorizationError, requireAdminSession } from "@/lib/admin/require-admin-session";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Body = { action?: "user" | "all"; userId?: string; email?: string; reason?: string };
+
+export async function POST(request: NextRequest) {
+  try {
+    const administrator = await requireAdminSession();
+    const body = (await request.json().catch(() => ({}))) as Body;
+    const action = body.action;
+    if (action !== "user" && action !== "all") {
+      return NextResponse.json({ ok: false, error: "action must be user or all" }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    let targetUserId: string | null = null;
+    if (action === "user") {
+      targetUserId = String(body.userId || "").trim() || null;
+      if (!targetUserId && body.email) {
+        const { data, error } = await admin.from("profiles").select("id").ilike("email", String(body.email).trim()).limit(1).maybeSingle();
+        if (error) throw error;
+        targetUserId = data?.id || null;
+      }
+      if (!targetUserId) return NextResponse.json({ ok: false, error: "A valid userId or email is required" }, { status: 400 });
+    }
+
+    const issuedBefore = new Date().toISOString();
+    const { data, error } = await admin.from("admin_session_revocations").insert({
+      scope: action,
+      target_user_id: targetUserId,
+      issued_before: issuedBefore,
+      created_by: administrator.userId,
+      reason: String(body.reason || "Administrator forced sign out").slice(0, 500),
+    }).select("id, scope, target_user_id, issued_before, created_at").single();
+    if (error) throw error;
+
+    console.warn("ADMIN_SESSION_REVOCATION", {
+      administratorId: administrator.userId,
+      administratorEmail: administrator.email,
+      workspaceId: administrator.workspaceId,
+      action,
+      targetUserId,
+      issuedBefore,
+    });
+
+    return NextResponse.json({ ok: true, revocation: data });
+  } catch (error) {
+    if (isAdminAuthorizationError(error)) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unable to revoke sessions" }, { status: 500 });
+  }
+}
+''')
+
+          status_route = Path("src/app/api/auth/session-status/route.ts")
+          status_route.parent.mkdir(parents=True, exist_ok=True)
+          status_route.write_text('''import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function jwtIssuedAt(accessToken: string | undefined) {
+  try {
+    if (!accessToken) return 0;
+    const payload = JSON.parse(Buffer.from(accessToken.split(".")[1] || "", "base64url").toString("utf8"));
+    return Number(payload?.iat || 0) * 1000;
+  } catch { return 0; }
+}
+
+function isAnonymous(user: any) {
+  const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+  const providers = Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers.map((value: unknown) => String(value).toLowerCase()) : [];
+  return user?.is_anonymous === true || provider === "anonymous" || providers.includes("anonymous");
+}
+
+export async function GET() {
+  const supabase = await createClient();
+  const [{ data: userData, error: userError }, { data: sessionData }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.auth.getSession(),
+  ]);
+  const user = userData.user;
+  if (userError || !user || isAnonymous(user)) {
+    return NextResponse.json({ ok: false, authenticated: false, reason: "sign_in_required" }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("admin_session_revocations")
+    .select("scope, target_user_id, issued_before")
+    .or(`scope.eq.all,target_user_id.eq.${user.id}`)
+    .order("issued_before", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+
+  const issuedAt = jwtIssuedAt(sessionData.session?.access_token);
+  const cutoff = Array.isArray(data) && data[0]?.issued_before ? new Date(data[0].issued_before).getTime() : 0;
+  if (!issuedAt || (cutoff && issuedAt <= cutoff)) {
+    return NextResponse.json({ ok: false, authenticated: false, reason: "session_revoked" }, { status: 401 });
+  }
+
+  return NextResponse.json({ ok: true, authenticated: true, userId: user.id });
+}
+''')
+
+          sidebar = Path("src/components/streams-ai/current-chat/NewChatNavigationVisualSample.jsx")
+          source = sidebar.read_text()
+          source = source.replace('import { Bot, BriefcaseBusiness, CircleUserRound, FileText, FlaskConical, Globe2, Home, Image, MonitorSmartphone, Search, Settings, Video, Workflow, Wrench } from "lucide-react";', 'import { Bot, BriefcaseBusiness, CircleUserRound, FileText, FlaskConical, Globe2, Home, Image, LogOut, MonitorSmartphone, Search, Settings, Video, Workflow, Wrench } from "lucide-react";', 1)
+          source = source.replace('  const { user, profile, membershipRole, workspaceLoading } = useAuth();', '  const { user, profile, membershipRole, workspaceLoading, signOut } = useAuth();', 1)
+          old = '      {canOperate ? <section className="sampleMenuGroup adminMenuGroup"><h2>Administration</h2><button className="sampleMenuItem adminMenuItem" onClick={() => router.push("/admin/operations")}><Wrench size={16}/><span>Operations</span></button></section> : null}\n      {user ? <footer className="sampleAccountSummary"><span className="sampleAvatar">'
+          new = '      <section className="sampleMenuGroup"><h2>Account</h2><button className="sampleMenuItem" onClick={async () => { await signOut?.(); router.replace("/login"); router.refresh(); }}><LogOut size={16}/><span>Sign out</span></button></section>\n      {canOperate ? <section className="sampleMenuGroup adminMenuGroup"><h2>Administration</h2><button className="sampleMenuItem adminMenuItem" onClick={() => router.push("/admin/operations")}><Wrench size={16}/><span>Operations</span></button></section> : null}\n      {user ? <footer className="sampleAccountSummary"><span className="sampleAvatar">'
+          if old not in source: raise SystemExit("sidebar insertion point not found")
+          sidebar.write_text(source.replace(old, new, 1))
+
+          auth = Path("src/contexts/AuthContext.tsx")
+          source = auth.read_text()
+          insert_after = 'const ACCOUNT_SCOPED_BROWSER_KEYS = [\n'
+          helper = '''function isAnonymousAuthUser(user: User | null | undefined) {
+  const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+  const providers = Array.isArray(user?.app_metadata?.providers)
+    ? user.app_metadata.providers.map((value: unknown) => String(value).toLowerCase())
+    : [];
+  return user?.is_anonymous === true || provider === "anonymous" || providers.includes("anonymous");
+}
+
+'''
+          if helper not in source:
+            source = source.replace(insert_after, helper + insert_after, 1)
+          source = source.replace('      const nextUser = session?.user ?? null;\n', '      const candidateUser = session?.user ?? null;\n      const nextUser = isAnonymousAuthUser(candidateUser) ? null : candidateUser;\n      if (candidateUser && !nextUser) void supabase.auth.signOut();\n', 1)
+          marker = '    } = supabase.auth.onAuthStateChange((_event, session) => {\n      const nextUser = session?.user ?? null;\n'
+          replacement = '    } = supabase.auth.onAuthStateChange((_event, session) => {\n      const candidateUser = session?.user ?? null;\n      const nextUser = isAnonymousAuthUser(candidateUser) ? null : candidateUser;\n      if (candidateUser && !nextUser) void supabase.auth.signOut();\n'
+          if marker not in source: raise SystemExit("auth state marker not found")
+          source = source.replace(marker, replacement, 1)
+          polling_marker = '  const signOut = async () => {\n'
+          polling = '''  useEffect(() => {
+    if (!session || !user || isAnonymousAuthUser(user)) return;
+    let cancelled = false;
+    const verify = async () => {
+      try {
+        const response = await fetch("/api/auth/session-status", { credentials: "include", cache: "no-store" });
+        if (!cancelled && response.status === 401) {
+          clearAccountScopedBrowserState();
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          resetSignedOutState();
+          router.replace("/login?reason=session-ended");
+          router.refresh();
+        }
+      } catch {}
+    };
+    void verify();
+    const timer = window.setInterval(verify, 30000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [session, user, supabase.auth, resetSignedOutState, router]);
+
+'''
+          if polling not in source:
+            source = source.replace(polling_marker, polling + polling_marker, 1)
+          auth.write_text(source)
+
+          streams_auth = Path("src/lib/streams-ai/auth.ts")
+          source = streams_auth.read_text()
+          marker = '  const user = userData.user as typeof userData.user & { is_anonymous?: boolean };\n'
+          if marker not in source:
+            marker = '  return ensureStreamsAIAccountScope(userData.user.id, {\n'
+            block = '''  const user = userData.user as typeof userData.user & { is_anonymous?: boolean };
+  const provider = String(user.app_metadata?.provider || "").toLowerCase();
+  const providers = Array.isArray(user.app_metadata?.providers) ? user.app_metadata.providers.map((value: unknown) => String(value).toLowerCase()) : [];
+  if (user.is_anonymous === true || provider === "anonymous" || providers.includes("anonymous")) {
+    throw new StreamsAIAuthError("Sign in is required to use STREAMS AI.");
+  }
+
+  return ensureStreamsAIAccountScope(user.id, {
+'''
+            if marker not in source: raise SystemExit("Streams auth user marker not found")
+            source = source.replace(marker, block, 1)
+            source = source.replace('    userMetadata: userData.user.user_metadata,\n    userEmail: userData.user.email,', '    userMetadata: user.user_metadata,\n    userEmail: user.email,', 1)
+          streams_auth.write_text(source)
+
+          ops = Path("src/app/admin/operations/OperationsDashboardClient.tsx")
+          source = ops.read_text()
+          source = source.replace('  const [error, setError] = useState("");', '  const [error, setError] = useState("");\n  const [targetUser, setTargetUser] = useState("");\n  const [revocationMessage, setRevocationMessage] = useState("");', 1)
+          insertion = '''
+  async function revokeSessions(action: "user" | "all") {
+    if (action === "all" && !window.confirm("Sign out every user from every active browser session?")) return;
+    if (action === "user" && !targetUser.trim()) { setError("Enter a user email or user ID"); return; }
+    setLoading(true); setError(""); setRevocationMessage("");
+    try {
+      const target = targetUser.trim();
+      const response = await fetch("/api/admin/session-revocations", {
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, ...(action === "user" ? (target.includes("@") ? { email: target } : { userId: target }) : {}), reason: "Administrator operation" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Session revocation failed");
+      setRevocationMessage(action === "all" ? "Every active user session has been revoked." : "The selected user session has been revoked.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Session revocation failed"); }
+    finally { setLoading(false); }
+  }
+'''
+          source = source.replace('\n  return (\n', insertion + '\n  return (\n', 1)
+          ui_marker = '        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>\n'
+          controls = '''        <section style={{ ...panelStyle, marginBottom: 24 }}>
+          <h2 style={{ marginTop: 0 }}>Session control</h2>
+          <p style={{ color: "#b8b8c7" }}>Force one user or every user to sign in again. Revocation is enforced by the server and checked by active browsers.</p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <input value={targetUser} onChange={(event) => setTargetUser(event.target.value)} placeholder="User email or UUID" style={{ flex: "1 1 280px", minHeight: 42, borderRadius: 9, border: "1px solid #48485b", background: "#101018", color: "#fff", padding: "0 12px" }} />
+            <button disabled={loading} onClick={() => revokeSessions("user")} style={buttonStyle}>Sign out user</button>
+            <button disabled={loading} onClick={() => revokeSessions("all")} style={{ ...buttonStyle, background: "#5f1d27", borderColor: "#8f3442" }}>Sign out everyone</button>
+          </div>
+          {revocationMessage ? <p style={{ color: "#67d99b", marginBottom: 0 }}>{revocationMessage}</p> : null}
+        </section>
+
+'''
+          if ui_marker not in source: raise SystemExit("operations UI marker not found")
+          source = source.replace(ui_marker, controls + ui_marker, 1)
+          ops.write_text(source)
+
+      - name: Commit global session controls
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/20260729120000_admin_session_revocations.sql src/app/api/admin/session-revocations/route.ts src/app/api/auth/session-status/route.ts src/components/streams-ai/current-chat/NewChatNavigationVisualSample.jsx src/contexts/AuthContext.tsx src/lib/streams-ai/auth.ts src/app/admin/operations/OperationsDashboardClient.tsx
+          git diff --cached --check
+          git commit -m "Add enforced user and global session sign out"
+          git push
