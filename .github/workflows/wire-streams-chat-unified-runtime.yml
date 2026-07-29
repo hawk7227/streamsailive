@@ -1,0 +1,72 @@
+name: Wire Streams chat unified runtime
+
+on:
+  push:
+    paths:
+      - ".github/workflows/wire-streams-chat-unified-runtime.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  wire-runtime:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Route tool-capable chat through assistant-core
+        shell: python
+        run: |
+          from pathlib import Path
+
+          route_path = Path("src/app/api/streams-ai/messages/route.ts")
+          route = route_path.read_text()
+
+          replacements = {
+              'import { STREAMS_IDENTITY_PROMPT } from "@/lib/streams-ai/prompts/streams-identity";':
+                  'import { STREAMS_IDENTITY_PROMPT } from "@/lib/streams-ai/prompts/streams-identity";\nimport { runOrchestrator } from "@/lib/assistant-core/orchestrator";',
+              'const complexIntent = /\\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\\/\\/|build|deploy|github|calendar|email|send|create an image)\\b/i;':
+                  'const complexIntent = /\\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\\/\\/|build|deploy|git(?:hub|\\s*gib)?|repositor(?:y|ies)|repo|branch|commit|pull request|issue|workflow|calendar|email|send|create an image)\\b/i;',
+              '    const headers = new Headers(request.headers);\n    headers.set("Content-Type", "application/json");\n    return memoryMessagesPOST(new NextRequest(request.url, {\n      method: "POST",\n      headers,\n      body: JSON.stringify(authoritativeBody),\n      signal: request.signal,\n    }));':
+                  '    const headers = new Headers(request.headers);\n    headers.set("Content-Type", "application/json");\n    return runOrchestrator(new NextRequest(request.url, {\n      method: "POST",\n      headers,\n      body: JSON.stringify({\n        message: userContent,\n        messages: Array.isArray(authoritativeBody.messages) ? authoritativeBody.messages : undefined,\n        context: {\n          ...(authoritativeBody.context || {}),\n          ...(authoritativeBody.metadata || {}),\n          sessionId: authoritativeBody.sessionId || undefined,\n          conversationId: authoritativeBody.sessionId || authoritativeBody.conversationId || undefined,\n          workspaceId: authoritativeBody.workspaceId || authoritativeBody.metadata?.workspaceId || undefined,\n          turnId: authoritativeBody.turnId,\n          attachments: authoritativeBody.attachments || [],\n        },\n      }),\n      signal: request.signal,\n    }));',
+          }
+
+          for old, new in replacements.items():
+              if old not in route:
+                  raise SystemExit(f"Expected route text not found: {old}")
+              route = route.replace(old, new, 1)
+
+          route_path.write_text(route)
+
+          client_path = Path("src/components/streams-ai/current-chat/new-face/hooks/useStreamsChatRuntime.js")
+          client = client_path.read_text()
+
+          client_replacements = {
+              '          if (eventName === "activity") {':
+                  '          if (eventName === "activity" || eventName === "phase" || eventName === "tool_progress") {',
+              '            const statusText = payload?.statusText || payload?.text || "Working…";':
+                  '            const statusText = payload?.statusText || payload?.text || payload?.phase || "Working…";',
+              '          if (eventName === "response" || eventName === "reasoning") {':
+                  '          if (eventName === "response" || eventName === "reasoning" || eventName === "text_delta") {',
+              '          if (eventName === "complete") {':
+                  '          if (eventName === "complete" || eventName === "done") {',
+          }
+
+          for old, new in client_replacements.items():
+              if old not in client:
+                  raise SystemExit(f"Expected client text not found: {old}")
+              client = client.replace(old, new, 1)
+
+          client_path.write_text(client)
+
+      - name: Commit unified chat runtime wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/api/streams-ai/messages/route.ts src/components/streams-ai/current-chat/new-face/hooks/useStreamsChatRuntime.js
+          git diff --cached --check
+          git commit -m "Route Streams chat through unified assistant runtime"
+          git push
