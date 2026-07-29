@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";
+import { memoryMessagesGET } from "@/lib/streams-ai/routes/messages-memory-active";
 import { requiresDeterministicStructureCheck } from "@/lib/streams-ai/routes/response-structure-validator";
 import { requireStreamsAIScope } from "@/lib/streams-ai/auth";
 import { buildUserMetadata, ensureSession, getHistoryForPrompt, persistChatTurn, resolveIdempotencyBase, resolveTurnId } from "@/lib/streams-ai/routes/messages-memory-provider-support";
