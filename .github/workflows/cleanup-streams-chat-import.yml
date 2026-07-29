@@ -1,0 +1,37 @@
+name: Clean Streams chat import
+
+on:
+  push:
+    paths:
+      - ".github/workflows/cleanup-streams-chat-import.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Remove stale memory runtime import
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("src/app/api/streams-ai/messages/route.ts")
+          source = path.read_text()
+          old = 'import { memoryMessagesGET, memoryMessagesPOST } from "@/lib/streams-ai/routes/messages-memory-active";'
+          new = 'import { memoryMessagesGET } from "@/lib/streams-ai/routes/messages-memory-active";'
+          if old not in source:
+              raise SystemExit("Expected stale import not found")
+          path.write_text(source.replace(old, new, 1))
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/api/streams-ai/messages/route.ts
+          git diff --cached --check
+          git commit -m "Remove stale memory runtime import"
+          git push
