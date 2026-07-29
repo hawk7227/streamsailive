@@ -1,0 +1,51 @@
+name: Switch unified assistant tools
+
+on:
+  push:
+    paths:
+      - ".github/workflows/switch-unified-assistant-tools.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  switch-tools:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update assistant orchestrator
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/lib/assistant-core/orchestrator.ts")
+          source = path.read_text()
+
+          replacements = {
+              'import { buildAssistantTools, executeAssistantTool } from "./tools";':
+                  'import { buildUnifiedAssistantTools, executeUnifiedAssistantTool } from "./unified-tools";',
+              'const tools = buildAssistantTools({ route, context: assembledContext });':
+                  'const tools = buildUnifiedAssistantTools({ route, context: assembledContext });',
+              'executeAssistantTool(\n                    { name: call.name, args: parsedArgs, route: route as AssistantMode, context: assembledContext },':
+                  'executeUnifiedAssistantTool(\n                    { name: call.name, args: parsedArgs, route: route as AssistantMode, context: assembledContext },',
+          }
+
+          for old, new in replacements.items():
+              if old not in source:
+                  raise SystemExit(f"Expected orchestrator text not found: {old}")
+              source = source.replace(old, new, 1)
+
+          path.write_text(source)
+
+      - name: Commit orchestrator switch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/assistant-core/orchestrator.ts
+          git diff --cached --check
+          git commit -m "Wire orchestrator to unified assistant tools"
+          git push
