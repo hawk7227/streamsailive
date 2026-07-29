@@ -90,9 +90,6 @@ function bearerFromRequest(request: NextRequest): string | null {
   const match = header.match(/^Bearer\s+(.+)$/i);
   if (match?.[1]?.trim()) return match[1].trim();
 
-  const tokenParam = request.nextUrl.searchParams.get("token");
-  if (tokenParam) return tokenParam.trim();
-
   const tokenCookie = tokenFromCookies(request);
   if (tokenCookie) return tokenCookie.trim();
 
@@ -165,7 +162,8 @@ function publicGuestTenantId() {
 }
 
 function publicGuestModeEnabled(request: NextRequest) {
-  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE === "false") return false;
+  if (process.env.STREAMS_AI_PUBLIC_GUEST_MODE !== "true") return false;
+  if (isProductionRuntime()) return false;
   const pathname = request.nextUrl.pathname || "";
   return pathname.startsWith("/api/streams-ai/");
 }
@@ -204,10 +202,6 @@ export async function requireStreamsAIScope(request: NextRequest): Promise<Strea
   const userClient = createStreamsAIUserClient(accessToken);
   const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
-    if (publicGuestModeEnabled(request)) {
-      return ensureStreamsAIAccountScope(publicGuestUserId(), publicScopeOptions("public-guest-invalid-token-fallback"), true);
-    }
-
     if (isTestModeEnabled(request)) {
       return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
     }
