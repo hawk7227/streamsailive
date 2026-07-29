@@ -19,6 +19,8 @@ type StreamsMessageRequestBody = Record<string, any> & {
   sessionId?: string;
   content?: string;
   message?: string;
+  messages?: Array<{ role?: string; content?: unknown }>;
+  context?: Record<string, unknown>;
   attachments?: any[];
   idempotencyKey?: string;
   turnId?: string;
