@@ -2,9 +2,9 @@
 
 ## Current authorized replacement slice
 
-- Streams Chat Duplicate Response / Double-Completion Repair
-- Scope is limited to the active chat response lifecycle and directly related tests.
-- Workspace, Builder, Visual Editor, preview, repository, GitHub, execution, and pull-request systems remain protected and out of scope.
+- Streams Chat Preview Lifecycle and Original Far-Right Visual Editor Restoration
+- Scope is limited to Chat preview lifecycle, preview state/synchronization, the existing Visual Editor runtime, existing bidirectional mapping, and directly related tests.
+- The three-column grid, ProjectWorkspaceShell, WorkspaceGrid column definitions, WorkspaceBottomTray, global navigation, repository/GitHub services, and pull-request systems remain protected and out of scope.
 - Universal Project Workspace Replacement Conversion
 - Streams Builder Preservation and Combination
 - Documents 1 and 2 remain the governing requirements.
@@ -16,6 +16,9 @@
 
 - Streams Chat response lifecycle: duplicate completion and obsolete-stream guards are implemented and source-tested; browser/runtime reproduction proof remains outstanding.
 - Chat turn identity: optimistic user and assistant messages now share stable turn and request identities, while persisted assistant identity reconciles without text-based deduplication.
+- Chat preview lifecycle: source-implemented so preview and visual-edit intent opens the existing requested surface before the assistant request begins; browser runtime proof remains outstanding.
+- Original far-right Visual Editor: existing WorkspaceGrid mount is preserved, Visual Edit Mode remains the default for mapped source, and external URLs are isolated as read-only browser content.
+- Bidirectional mapping: existing element-source mapping now exposes exact matched line/column coordinates and the editable preview accepts source-selection focus without guessing when matches are ambiguous.
 - Existing `/streams-ai` chat: protected and passing its response-integrity production contract.
 - Existing `/streams-ai/streams-builder` capability chain: preserved and mounted inside the universal project workspace shell.
 - Universal project workspace shell: implemented, mounted, production-tested, type-checked, built, and deployed.
@@ -39,8 +42,9 @@
 7. Add reviewed pull-request workflow — completed.
 8. Strengthen source mapping and patch precision while preserving fallbacks — completed and production-tested.
 9. Complete real browser verification evidence and active workspace controls — completed and production-tested.
-10. Complete remaining versioned mobile-safe API wrappers around existing services — active.
-11. Build KMP, SwiftUI, and Compose replacements only after the web replacement contract and APIs are stable and proven.
+10. Restore the Chat preview lifecycle and reconnect the original far-right Visual Editor without changing the workspace layout — source-implemented and locally tested; browser proof remains outstanding.
+11. Complete remaining versioned mobile-safe API wrappers around existing services — superseded only while the authorized preview/Visual Editor slice is active.
+12. Build KMP, SwiftUI, and Compose replacements only after the web replacement contract and APIs are stable and proven.
 
 ## Current production verification
 

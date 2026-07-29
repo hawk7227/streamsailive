@@ -2,9 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { BuilderChatConnection } from "./builderSystemContract";
+import { routePreviewSurfaceIntent } from "@/lib/streams-ai/runtime/architecture/product-intent-router";
+import { acceptChatCompletion, beginChatTurn, createChatTurnIdentity, isActiveChatTurn } from "@/components/streams-ai/current-chat/runtime/chatResponseLifecycle";
 
-type Message = { id?: string; role?: string; content?: string; status?: string };
+type Message = { id?: string; role?: string; content?: string; status?: string; turnId?: string; serverMessageId?: string };
 type Props = { connection: BuilderChatConnection; onConnectionChange: (next: BuilderChatConnection) => void };
+type ActiveChatTurn = { turnId: string; clientRequestId: string; assistantMessageId: string; sessionId: string; serverMessageId: string; state: string; completed: boolean };
 
 const COMPOSER_MIN_HEIGHT = 52;
 const COMPOSER_MAX_HEIGHT = 224;
@@ -12,6 +15,8 @@ const USER_COLLAPSE_LINES = 7;
 const ASSISTANT_COLLAPSE_LINES = 14;
 const PREVIEW_PATH = /(?:https?:\/\/[^\s]+)?\/streams-builder\/preview\/[0-9a-f-]{20,}/gi;
 const GENERATED_PATH = /generated\/previews\/[0-9a-f-]{20,}\.html/gi;
+const ACTIVE_PREVIEW_KEY = "streams-ai:active-builder-preview";
+const OPEN_PREVIEW_EVENT = "streams:open-builder-preview";
 
 function querySessionId() {
   try { return new URLSearchParams(window.location.search).get("sessionId") || ""; } catch { return ""; }
@@ -80,6 +85,10 @@ function publishWorkspaceStatus(statusText: string, detail: Record<string, unkno
   window.dispatchEvent(new CustomEvent("streams-builder:shared-context", { detail: { kind: "agent-status", statusText, ...detail } }));
 }
 
+function activePreview() {
+  try { return JSON.parse(window.sessionStorage.getItem(ACTIVE_PREVIEW_KEY) || "{}"); } catch { return {}; }
+}
+
 export default function ActualBuilderSessionChat({ connection, onConnectionChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -90,6 +99,8 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const answerRef = useRef("");
   const paintFrameRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const activeTurnRef = useRef<ActiveChatTurn | null>(null);
 
   const sessionId = connection.sessionId && connection.sessionId !== "agent-1" ? connection.sessionId : querySessionId();
   const visibleMessages = useMemo(() => messages.filter((message) => message.role === "user" || message.role === "assistant"), [messages]);
@@ -132,7 +143,7 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
   useEffect(() => { void hydrate(); }, [sessionId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end", behavior: running ? "smooth" : "auto" }); }, [visibleMessages.length, running]);
   useEffect(() => { resizeComposer(); }, [prompt]);
-  useEffect(() => () => { if (paintFrameRef.current !== null) window.cancelAnimationFrame(paintFrameRef.current); }, []);
+  useEffect(() => () => { abortRef.current?.abort(); if (paintFrameRef.current !== null) window.cancelAnimationFrame(paintFrameRef.current); }, []);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -146,15 +157,39 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
     const stamp = Date.now();
     const userId = `local-user-${stamp}`;
     const assistantId = `local-assistant-${stamp}`;
+    const turnId = crypto.randomUUID();
+    const clientRequestId = `builder-session-${turnId}`;
+    const requestController = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = requestController;
+    activeTurnRef.current = beginChatTurn(createChatTurnIdentity({ turnId, clientRequestId, assistantMessageId: assistantId, sessionId }));
+    const preview = activePreview();
+    const surfaceIntent = routePreviewSurfaceIntent(clean, { hasActivePreview: Boolean(preview.previewId || preview.previewUrl), hasEditableSource: true });
+    if (surfaceIntent) {
+      const previewIntentState = { ...preview, open: true, lifecycleState: "opening", targetSurface: surfaceIntent.surface, editorMode: surfaceIntent.mode, externalUrl: surfaceIntent.externalUrl || "", turnId, clientRequestId };
+      try { window.sessionStorage.setItem(ACTIVE_PREVIEW_KEY, JSON.stringify(previewIntentState)); } catch {}
+      window.dispatchEvent(new CustomEvent(OPEN_PREVIEW_EVENT, {
+        detail: {
+          ...previewIntentState,
+          externalUrl: surfaceIntent.externalUrl || "",
+          source: "builder-chat-intent",
+          reason: surfaceIntent.reason,
+          turnId,
+          clientRequestId,
+        },
+      }));
+      publishWorkspaceStatus(surfaceIntent.surface === "visual-editor" ? "Opening Visual Edit Mode." : "Opening frontend preview.", { sessionId, turnId, targetSurface: surfaceIntent.surface, previewLifecycleState: "opening" });
+    }
     answerRef.current = "";
-    setMessages((items) => [...items, { id: userId, role: "user", content: clean, status: "complete" }, { id: assistantId, role: "assistant", content: "", status: "streaming" }]);
+    setMessages((items) => [...items, { id: userId, role: "user", content: clean, status: "complete", turnId }, { id: assistantId, role: "assistant", content: "", status: "streaming", turnId }]);
 
     try {
       const response = await fetch("/api/streams-ai/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ sessionId, message: clean, runAssistant: true, idempotencyKey: `builder-session-${stamp}`, metadata: { source: "canonical-builder-session-chat", connectedWorkstation: "Primary Builder" } }),
+        body: JSON.stringify({ sessionId, message: clean, runAssistant: true, turnId, idempotencyKey: clientRequestId, metadata: { source: "canonical-builder-session-chat", connectedWorkstation: "Primary Builder", previewSurfaceIntent: surfaceIntent } }),
+        signal: requestController.signal,
       });
       if (!response.ok || !response.body) throw new Error((await response.text().catch(() => "")) || `Chat request failed: ${response.status}`);
       const reader = response.body.getReader();
@@ -170,6 +205,7 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
           buffer = buffer.slice(boundary + 2);
           boundary = buffer.indexOf("\n\n");
           if (!parsed) continue;
+          if (!isActiveChatTurn(activeTurnRef.current, turnId, clientRequestId) || requestController.signal.aborted) continue;
           if (parsed.event === "response" && typeof parsed.payload.token === "string") {
             answerRef.current += parsed.payload.token;
             paintAnswer(assistantId);
@@ -180,8 +216,14 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
             publishWorkspaceStatus(activity, { sessionId, payload: parsed.payload });
           }
           if (parsed.event === "error") throw new Error(String(parsed.payload.message || "StreamsAI could not complete the response."));
+          if (parsed.event === "complete") {
+            const completion = acceptChatCompletion(activeTurnRef.current, parsed.payload);
+            if (!completion.accepted) continue;
+            activeTurnRef.current = completion.turn;
+          }
         }
       }
+      if (activeTurnRef.current?.turnId !== turnId || !activeTurnRef.current?.completed) throw new Error("The response stream ended before a valid completion event.");
       if (paintFrameRef.current !== null) { window.cancelAnimationFrame(paintFrameRef.current); paintFrameRef.current = null; }
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: answerRef.current || "Completed.", status: "complete" } : item));
       const previewReady = containsPreview(answerRef.current);
@@ -189,12 +231,14 @@ export default function ActualBuilderSessionChat({ connection, onConnectionChang
       publishWorkspaceStatus(previewReady ? "Preview updated in the Builder workspace." : "Workspace updated.", { sessionId, previewReady });
       window.setTimeout(() => void hydrate(), 900);
     } catch (error) {
+      if (requestController.signal.aborted || activeTurnRef.current?.turnId !== turnId) return;
+      activeTurnRef.current = { ...activeTurnRef.current, state: "failed", completed: true };
       const message = error instanceof Error ? error.message : "StreamsAI chat failed.";
       setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, content: message, status: "failed" } : item));
       setStatus(message);
       publishWorkspaceStatus(`Workspace update failed: ${message}`, { sessionId, failed: true });
     } finally {
-      setRunning(false);
+      if (activeTurnRef.current?.turnId === turnId) setRunning(false);
     }
   }
 

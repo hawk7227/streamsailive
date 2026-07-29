@@ -7,6 +7,7 @@ import RuntimeCodeEditor from "./RuntimeCodeEditor";
 type PulledFileDetail = { repo: string; branch: string; path: string; folder: string; sha: string; content: string; route: string };
 type Props = { activeFile: PulledFileDetail; toolbar?: ReactNode; onContentChange?: (content: string) => void };
 type Tab = "frontend" | "code" | "diff" | "logs" | "media" | "devtools";
+type PreviewLifecycleState = "idle" | "opening" | "loading-source" | "generating" | "compiling" | "ready" | "refreshing" | "stale" | "failed" | "disconnected" | "blocked-from-embedding";
 type RuntimeEvent = {
   id?: string | number; eventType?: string; event_type?: string; message?: string | null; createdAt?: string; created_at?: string;
   path?: string; filePath?: string; file_path?: string; content?: string; after?: string; fullContent?: string; full_content?: string;
@@ -69,10 +70,13 @@ function eventFrame(event: RuntimeEvent, fallbackPath: string): PatchFrame | nul
 export default function LiveFrontendWorkstation({ activeFile, toolbar, onContentChange }: Props) {
   const route = normalizeRoute(activeFile.route || "/");
   const brainstormPreview = isBrainstormPreview(route);
-  const liveUrl = liveUrlFor(activeFile.repo, route);
+  const sourceLiveUrl = liveUrlFor(activeFile.repo, route);
   const ready = brainstormPreview || Boolean(activeFile.repo && activeFile.path);
   const [tab, setTab] = useState<Tab>("frontend");
   const [frameKey, setFrameKey] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewLifecycle, setPreviewLifecycle] = useState<PreviewLifecycleState>(ready ? "ready" : "idle");
+  const [previewStatus, setPreviewStatus] = useState("");
   const [codeDraft, setCodeDraft] = useState(activeFile.content || "");
   const [baseline, setBaseline] = useState(activeFile.content || "");
   const [proof, setProof] = useState<ProofLine[]>([]);
@@ -82,6 +86,8 @@ export default function LiveFrontendWorkstation({ activeFile, toolbar, onContent
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const animationToken = useRef(0);
   const draftRef = useRef(codeDraft);
+  const lastPreviewActionRef = useRef("");
+  const liveUrl = previewUrl || sourceLiveUrl;
 
   function addProof(message: string) {
     setProof((items) => [...items.slice(-79), {
@@ -145,6 +151,9 @@ export default function LiveFrontendWorkstation({ activeFile, toolbar, onContent
     setBaseline(activeFile.content || "");
     setHighlightRange(null);
     if (ready) addProof(brainstormPreview ? `Preview mounted: ${route}` : `Source mounted: ${activeFile.repo}@${activeFile.branch}:${activeFile.path}`);
+    setPreviewUrl("");
+    setPreviewLifecycle(ready ? "ready" : "idle");
+    setPreviewStatus(ready ? "Current source preview ready." : "No preview source is connected.");
   }, [activeFile.repo, activeFile.branch, activeFile.path, activeFile.sha, activeFile.content, route, ready, brainstormPreview]);
 
   useEffect(() => {
@@ -185,15 +194,32 @@ export default function LiveFrontendWorkstation({ activeFile, toolbar, onContent
       const timer = window.setInterval(() => void poll(), 1200);
       window.setTimeout(() => { stopped = true; window.clearInterval(timer); }, 15 * 60 * 1000);
     }
+    function onOpenPreview(event: Event) {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail || {};
+      if (detail.targetSurface === "visual-editor") return;
+      const actionId = String(detail.clientRequestId || detail.turnId || detail.previewId || detail.previewUrl || "preview-open");
+      const lifecycle = String(detail.lifecycleState || (detail.previewUrl ? "ready" : "opening")) as PreviewLifecycleState;
+      if (actionId === lastPreviewActionRef.current && lifecycle === "opening") return;
+      lastPreviewActionRef.current = actionId;
+      const nextUrl = String(detail.previewUrl || "");
+      if (nextUrl) setPreviewUrl(nextUrl);
+      setTab("frontend");
+      setPreviewLifecycle(lifecycle);
+      setPreviewStatus(lifecycle === "ready" ? "Preview ready." : nextUrl || ready ? "Opening the current preview while work continues…" : "Waiting for preview source…");
+      if (nextUrl) setFrameKey((value) => value + 1);
+      addProof(`Preview lifecycle: ${lifecycle}${nextUrl ? ` · ${nextUrl}` : ""}`);
+    }
     window.addEventListener("streams-builder-summary-event", onSummary);
     window.addEventListener("streams-builder:runtime-job", onRuntimeJob);
     window.addEventListener("streams-builder:worker-patch", onExternalPatch);
+    window.addEventListener("streams:open-builder-preview", onOpenPreview);
     return () => {
       window.removeEventListener("streams-builder-summary-event", onSummary);
       window.removeEventListener("streams-builder:runtime-job", onRuntimeJob);
       window.removeEventListener("streams-builder:worker-patch", onExternalPatch);
+      window.removeEventListener("streams:open-builder-preview", onOpenPreview);
     };
-  }, [activeFile.path]);
+  }, [activeFile.path, ready]);
 
   const diff = useMemo(() => {
     const before = baseline.split("\n");
@@ -225,13 +251,14 @@ export default function LiveFrontendWorkstation({ activeFile, toolbar, onContent
 
       <main className="workstationBody">
         {patchState ? <div className="patchCue" role="status">{patchState}</div> : null}
-        <iframe ref={frameRef} key={`${frameKey}-${liveUrl}`} title="Live frontend preview" src={ready ? liveUrl : "about:blank"} className={tab === "frontend" ? "visible" : "hidden"} />
+        <iframe ref={frameRef} key={`${frameKey}-${liveUrl}`} title="Live frontend preview" src={ready || previewUrl ? liveUrl : "about:blank"} className={tab === "frontend" ? "visible" : "hidden"} onLoad={() => { if (tab === "frontend" && (ready || previewUrl)) { setPreviewLifecycle("ready"); setPreviewStatus("Preview ready."); } }} />
         {tab === "code" ? <RuntimeCodeEditor value={codeDraft} filePath={activeFile.path || "brainstorm-preview"} repo={activeFile.repo} branch={activeFile.branch} sha={activeFile.sha} onChange={setDraft} highlightRange={highlightRange} /> : null}
         {tab === "diff" ? <pre className="diff">{diff}</pre> : null}
         {tab === "logs" ? <div className="proofList">{proof.length ? proof.map((item) => <p key={item.id} className={item.level}><span>{item.at}</span>{item.message}</p>) : <p>No runtime events yet.</p>}</div> : null}
         {tab === "media" ? <div className="empty">Screenshots and verified browser captures will appear here.</div> : null}
         <BrowserDevTools frameRef={frameRef} frameKey={frameKey} active={tab === "devtools"} />
-        {!ready && tab === "frontend" ? <div className="empty overlay">Start brainstorming or pull a source file to open the preview.</div> : null}
+        {tab === "frontend" && previewLifecycle !== "ready" ? <div className={ready || previewUrl ? "previewLifecycle stale" : "previewLifecycle"} role="status"><b>{previewLifecycle.replaceAll("-", " ")}</b><span>{previewStatus || "Preparing preview…"}</span>{ready && previewLifecycle !== "failed" ? <small>Showing the last available source while the preview updates.</small> : null}</div> : null}
+        {!ready && !previewUrl && tab === "frontend" && previewLifecycle === "idle" ? <div className="empty overlay">Start brainstorming or pull a source file to open the preview.</div> : null}
       </main>
 
       <style jsx>{`
@@ -245,7 +272,7 @@ export default function LiveFrontendWorkstation({ activeFile, toolbar, onContent
         .routeValue{max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#6ee7b7;font-size:9px;text-transform:uppercase}.routeValue b{color:#fff;text-transform:none;font-size:10px}
         .workstationBody{position:relative;min-width:0;min-height:0;overflow:hidden;background:#020617}.workstationBody iframe{display:block;width:100%;height:100%;border:0;background:#fff}.workstationBody iframe.hidden{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.workstationBody iframe.visible{position:relative}
         .diff{height:100%;overflow:auto;margin:0;padding:12px;color:#dbeafe;font:11px/17px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;box-sizing:border-box}.patchCue{position:absolute;z-index:50;top:10px;left:50%;transform:translateX(-50%);max-width:70%;padding:7px 12px;border:1px solid rgba(45,212,191,.55);border-radius:999px;background:rgba(2,6,23,.92);box-shadow:0 12px 30px rgba(0,0,0,.4);color:#99f6e4;font-size:10px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
-        .empty{height:100%;display:grid;place-content:center;padding:20px;text-align:center;color:#94a3b8}.empty.overlay{position:absolute;inset:0;background:#020617}.proofList{height:100%;overflow:auto;padding:10px;box-sizing:border-box;display:grid;align-content:start;gap:6px}.proofList p{margin:0;border-left:3px solid #64748b;background:#0f172a;padding:7px 9px;font-size:10px;line-height:1.4}.proofList p span{display:inline-block;width:76px;color:#94a3b8}.proofList p.success{border-left-color:#22c55e}.proofList p.warning{border-left-color:#f59e0b}.proofList p.error{border-left-color:#ef4444}
+        .empty{height:100%;display:grid;place-content:center;padding:20px;text-align:center;color:#94a3b8}.empty.overlay{position:absolute;inset:0;background:#020617}.previewLifecycle{position:absolute;inset:0;z-index:45;display:grid;place-content:center;gap:8px;padding:24px;text-align:center;background:#020617;color:#dbeafe}.previewLifecycle.stale{inset:auto 12px 12px;display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(56,189,248,.4);border-radius:10px;background:rgba(2,6,23,.9);text-align:left}.previewLifecycle b{text-transform:capitalize;font-size:11px}.previewLifecycle span,.previewLifecycle small{font-size:10px;color:#94a3b8}.proofList{height:100%;overflow:auto;padding:10px;box-sizing:border-box;display:grid;align-content:start;gap:6px}.proofList p{margin:0;border-left:3px solid #64748b;background:#0f172a;padding:7px 9px;font-size:10px;line-height:1.4}.proofList p span{display:inline-block;width:76px;color:#94a3b8}.proofList p.success{border-left-color:#22c55e}.proofList p.warning{border-left-color:#f59e0b}.proofList p.error{border-left-color:#ef4444}
         @media(max-width:1180px){.workstationToolbar{grid-template-columns:1fr}.sourceToolbar{justify-content:flex-start;flex-wrap:wrap}.routeValue{display:none}}
       `}</style>
     </section>

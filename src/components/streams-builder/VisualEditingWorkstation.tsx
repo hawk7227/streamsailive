@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RuntimeCodeEditor from "./RuntimeCodeEditor";
+import { resolveElementSourceMapping, type ElementSourceMapping } from "@/lib/streams-builder/element-source-mapping";
 
 type Props = {
   stationLabel: string;
@@ -34,6 +35,8 @@ type EditEvent = {
   width?: number;
   height?: number;
   transform?: string;
+  parentLayerId?: string;
+  sourceMapping?: ElementSourceMapping;
 };
 
 type PreviewBuildResult = {
@@ -199,6 +202,10 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   const [codeSelection, setCodeSelection] = useState<CodeSelection | null>(null);
   const [lastError, setLastError] = useState("");
   const [generatedContent, setGeneratedContent] = useState("");
+  const [externalUrl, setExternalUrl] = useState("");
+  const [editorNotice, setEditorNotice] = useState("");
+  const editableFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const lastOpenActionRef = useRef("");
 
   const ready = Boolean(repo && branch && filePath);
   const liveUrl = browserUrl || defaultUrl;
@@ -213,8 +220,14 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
   }
 
   function sendCodeFind(payload: EditEvent) {
-    const query = sourceValues(payload).find((value) => value.length > 2 && value.length < 240) || "";
-    if (query) window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "search", query } }));
+    const mapping = resolveElementSourceMapping({ route: sourceRoute, sourceFile: filePath, sourceContent: draftContent || content || "", selector: payload.selector, kind: payload.kind, original: payload.original, text: payload.text, src: payload.src, parentLayerId: payload.parentLayerId });
+    payload.sourceMapping = mapping;
+    if (mapping.strategy !== "unresolved") {
+      window.dispatchEvent(new CustomEvent("streams-builder:code-editor-command", { detail: { action: "search", query: mapping.matchedValue, filePath: mapping.sourceFile, startLine: mapping.sourceStartLine, startColumn: mapping.sourceStartColumn, endLine: mapping.sourceEndLine, endColumn: mapping.sourceEndColumn, mappingId: mapping.elementMappingId, confidence: mapping.confidence } }));
+      window.dispatchEvent(new CustomEvent("streams-builder:active-work-target", { detail: { repo, branch, filePath, route: sourceRoute, selectedElementId: payload.id || payload.selector || "", sourceMapping: mapping, editorMode: "editor" } }));
+      return;
+    }
+    chatEvent("source-mapping-unavailable", `Source mapping unavailable for ${payload.kind || "selected element"}. No approximate source was selected.`, { selectedElement: payload, sourceMapping: mapping });
   }
 
   function applyPreviewBuild(build: PreviewBuildResult | null) {
@@ -262,12 +275,46 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     setCommitSha("");
     setLastError("");
     setGeneratedContent("");
+    setExternalUrl("");
+    setEditorNotice(ready ? "Visual Edit Mode ready." : "Source mapping unavailable: pull an editable repository file first.");
     setFrameKey((value) => value + 1);
     setDrawerOpen(false);
     window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: { repo, branch, path: filePath, route: sourceRoute, content } }));
     onProof(`Visual editor mounted editable preview: ${repo || "no repo"}@${branch || "no branch"}:${sourceRoute}`);
     chatEvent("file-pulled", `Pulled ${filePath || "source file"}. Visual editor, code editor, preview build, and GitHub push status are tracked.`);
   }, [repo, branch, sourceRoute, filePath, defaultUrl]);
+
+  useEffect(() => {
+    function onOpenPreview(event: Event) {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail || {};
+      if (detail.targetSurface !== "visual-editor") return;
+      const actionId = String(detail.clientRequestId || detail.turnId || detail.previewId || detail.previewUrl || "visual-editor-open");
+      if (actionId === lastOpenActionRef.current) return;
+      lastOpenActionRef.current = actionId;
+      const requestedExternalUrl = String(detail.externalUrl || "");
+      const requestedPreviewUrl = String(detail.previewUrl || "");
+      if (requestedExternalUrl) {
+        setExternalUrl(requestedExternalUrl);
+        setBrowserUrl(requestedExternalUrl);
+        setViewMode("browser");
+        setEditorNotice("Read-only external page. Visual editing requires an authorized source repository and mapping.");
+      } else {
+        setExternalUrl("");
+        if (requestedPreviewUrl) setBrowserUrl(requestedPreviewUrl);
+        setViewMode("editor");
+        setEditorNotice(ready ? "Visual Edit Mode ready." : "Source mapping unavailable: the preview is visible but cannot be edited safely.");
+      }
+      setFrameKey((value) => value + 1);
+      chatEvent("visual-editor-opened", requestedExternalUrl ? `Opened ${requestedExternalUrl} in read-only browser mode.` : "Opened the original far-right Visual Editor in Visual Edit Mode.", { turnId: detail.turnId, clientRequestId: detail.clientRequestId, externalUrl: requestedExternalUrl, editorMode: requestedExternalUrl ? "browser-read-only" : "editor" });
+    }
+    window.addEventListener("streams:open-builder-preview", onOpenPreview);
+    return () => window.removeEventListener("streams:open-builder-preview", onOpenPreview);
+  }, [ready, repo, branch, filePath, sourceRoute]);
+
+  useEffect(() => {
+    if (!codeSelection?.text || !editableFrameRef.current?.contentWindow) return;
+    editableFrameRef.current.contentWindow.postMessage({ type: "streams-editor-focus-source", query: codeSelection.text, source: "streams-visual-editor" }, window.location.origin);
+  }, [codeSelection]);
 
   function applyDraft(next: string, proof: string) {
     setDraftContent(next);
@@ -492,20 +539,21 @@ export default function VisualEditingWorkstation({ stationLabel, route, filePath
     { id: "split", label: "Split" },
   ];
 
-  const reviewSrc = previewUrl ? reviewProxyUrl(previewUrl) : "";
+  const reviewSrc = externalUrl || (previewUrl ? reviewProxyUrl(previewUrl) : "");
   return (
     <section className={reviewFullscreen ? "visualEditor reviewFullscreen" : "visualEditor"}>
       <header className="editorHeader"><div><strong>{stationLabel} Visual Editing</strong><span>{repo || "No repo"} · {branch || "No branch"} · {sourceRoute} · {filePath || "No file"}</span></div><div className="modeButtons">{modeButtons.map((item) => <button key={item.id} type="button" className={viewMode === item.id ? "active" : ""} onClick={() => switchMode(item.id)}>{item.label}</button>)}</div></header>
       <div className="editorStatus"><span>Draft: {draftId || "not saved"}</span><span>Checkpoint: {checkpointId || "none"}</span><span>Patch: {patchState}</span><span>Preview: {previewBuildState}</span><span>Commit: {commitSha ? commitSha.slice(0, 8) : "none"}</span><span>Code selection: {codeSelection ? `${codeSelection.startLine}:${codeSelection.startColumn}` : "none"}</span></div>
+      {editorNotice ? <div className={externalUrl || !ready ? "editorNotice warning" : "editorNotice"} role="status">{editorNotice}</div> : null}
       {lastError ? <div className="errorBox"><b>Failed</b><span>{lastError}</span><button type="button" onClick={saveDraft} disabled={saving}>Retry Save + Preview</button></div> : null}
       <div className="editorActions"><button type="button" onClick={saveDraft} disabled={saving || !ready}>{saving ? "Working…" : "Save Draft"}</button><button type="button" onClick={generatePatch} disabled={saving || !ready}>Generate Patch</button><button type="button" onClick={pushToGitHub} disabled={!pushReady}>Push GitHub</button><button type="button" onClick={resetToOriginal}>Reset</button><button type="button" onClick={refreshPreview}>Refresh</button><button type="button" onClick={() => setDrawerOpen((value) => !value)}>Operations</button></div>
-      {viewMode === "editor" || viewMode === "advanced" ? <div className="previewPane"><iframe key={`editor-${frameKey}`} title="Editable frontend preview" src={editorUrl} /></div> : null}
+      {viewMode === "editor" || viewMode === "advanced" ? <div className="previewPane">{ready ? <iframe ref={editableFrameRef} key={`editor-${frameKey}`} title="Editable frontend preview" src={editorUrl} /> : <div className="reviewPending"><b>Source mapping unavailable</b><span>Pull an editable repository file before using Visual Edit Mode.</span></div>}</div> : null}
       {viewMode === "mobile" ? <div className="mobilePane"><div className="phoneFrame"><iframe key={`mobile-${frameKey}`} title="Mobile editable preview" src={editorUrl} /></div></div> : null}
       {viewMode === "code" ? <div className="codePanel"><RuntimeCodeEditor repo={repo} branch={branch} filePath={filePath} sha="current" value={draftContent} onChange={handleCodeChange} onSelectionChange={setCodeSelection} /></div> : null}
       {viewMode === "split" ? <div className="splitMode"><div className="codePanel"><RuntimeCodeEditor repo={repo} branch={branch} filePath={filePath} sha="current" value={draftContent} onChange={handleCodeChange} onSelectionChange={setCodeSelection} /></div><div className="splitPreview">{previewUrl ? <iframe key={`split-${frameKey}`} title="Real temporary split preview" src={reviewSrc} /> : <div className="reviewPending"><b>Real temporary preview required</b><span>Save Draft to create a temporary Git branch, wait for Vercel, then review the exact result beside the code.</span></div>}</div></div> : null}
-      {viewMode === "browser" ? <div className={reviewFullscreen ? "browserReview full" : "browserReview"}><div className="reviewToolbar"><button type="button" className={reviewDevice === "desktop" ? "active" : ""} onClick={() => updateReviewMode({ device: "desktop" })}>Desktop</button><button type="button" className={reviewDevice === "iphone-14-pro-max" ? "active" : ""} onClick={() => updateReviewMode({ device: "iphone-14-pro-max" })}>iPhone 14 Pro Max</button><button type="button" className={reviewBrowser === "safari" ? "active" : ""} onClick={() => updateReviewMode({ browser: "safari" })}>Safari</button><button type="button" className={reviewBrowser === "chrome" ? "active" : ""} onClick={() => updateReviewMode({ browser: "chrome" })}>Chrome</button><button type="button" onClick={() => updateReviewMode({ fullscreen: !reviewFullscreen })}>{reviewFullscreen ? "Exit Full Screen" : "Full Screen"}</button><button type="button" className={reviewSafeZone ? "active" : ""} onClick={() => updateReviewMode({ safeZone: !reviewSafeZone })}>Safe Zone</button></div><div className={`reviewFrame ${reviewDevice} ${reviewBrowser}`}>{reviewSafeZone ? <div className="safeZoneOverlay"><span>Safe zone</span></div> : null}{previewUrl ? <iframe key={`review-${frameKey}`} title="Real temporary Browser Review" src={reviewSrc} /> : <div className="reviewPending"><b>No real temporary preview yet</b><span>Save Draft to generate the patch, create a temporary Git branch, and wait for Vercel.</span></div>}</div><aside className="reviewPanel"><b>Real Temporary Preview</b><span>Status: {previewBuildState}</span><span>URL: {previewUrl || "not ready"}</span><span>Branch: {previewBranch || "not ready"}</span><span>Deployment: {deploymentId || "not ready"}</span><span>Push GitHub: {pushReady ? "ready" : "locked until preview succeeds and draft is unchanged"}</span><button type="button" onClick={pushToGitHub} disabled={!pushReady}>Push GitHub</button></aside></div> : null}
+      {viewMode === "browser" ? <div className={reviewFullscreen ? "browserReview full" : "browserReview"}><div className="reviewToolbar"><button type="button" className={reviewDevice === "desktop" ? "active" : ""} onClick={() => updateReviewMode({ device: "desktop" })}>Desktop</button><button type="button" className={reviewDevice === "iphone-14-pro-max" ? "active" : ""} onClick={() => updateReviewMode({ device: "iphone-14-pro-max" })}>iPhone 14 Pro Max</button><button type="button" className={reviewBrowser === "safari" ? "active" : ""} onClick={() => updateReviewMode({ browser: "safari" })}>Safari</button><button type="button" className={reviewBrowser === "chrome" ? "active" : ""} onClick={() => updateReviewMode({ browser: "chrome" })}>Chrome</button><button type="button" onClick={() => updateReviewMode({ fullscreen: !reviewFullscreen })}>{reviewFullscreen ? "Exit Full Screen" : "Full Screen"}</button><button type="button" className={reviewSafeZone ? "active" : ""} onClick={() => updateReviewMode({ safeZone: !reviewSafeZone })}>Safe Zone</button></div><div className={`reviewFrame ${reviewDevice} ${reviewBrowser}`}>{reviewSafeZone ? <div className="safeZoneOverlay"><span>Safe zone</span></div> : null}{reviewSrc ? <iframe key={`review-${frameKey}`} title={externalUrl ? "Read-only external website" : "Real temporary Browser Review"} src={reviewSrc} sandbox={externalUrl ? "allow-forms allow-popups allow-scripts allow-same-origin" : undefined} onError={() => { if (externalUrl) setEditorNotice("This website does not permit embedding. Open it in a new tab or use Browser Verification."); }} /> : <div className="reviewPending"><b>No real temporary preview yet</b><span>Save Draft to generate the patch, create a temporary Git branch, and wait for Vercel.</span></div>}</div><aside className="reviewPanel"><b>{externalUrl ? "Read-only External Website" : "Real Temporary Preview"}</b><span>Status: {externalUrl ? "Embedding depends on the website security policy" : previewBuildState}</span><span>URL: {externalUrl || previewUrl || "not ready"}</span><span>Branch: {externalUrl ? "not applicable" : previewBranch || "not ready"}</span><span>Deployment: {externalUrl ? "external" : deploymentId || "not ready"}</span><span>Push GitHub: {externalUrl ? "unavailable without source access" : pushReady ? "ready" : "locked until preview succeeds and draft is unchanged"}</span>{externalUrl ? <a href={externalUrl} target="_blank" rel="noreferrer">Open in new tab</a> : <button type="button" onClick={pushToGitHub} disabled={!pushReady}>Push GitHub</button>}</aside></div> : null}
       {drawerOpen ? <aside className="advancedDrawer"><b>Advanced source state</b><span>Source truth: {sourceTruthId}</span><span>Preview ID: {previewId || "none"}</span><span>Preview branch: {previewBranch || "none"}</span><span>Deployment ID: {deploymentId || "none"}</span><span>Preview logs: {previewLogs.length}</span><span>Selected: {selected?.selector || selected?.kind || "none"}</span><span>Edits: {edits.length}</span><span>Generated draft current: {generatedContent === draftContent ? "yes" : "no"}</span></aside> : null}
-      <style jsx>{`.visualEditor{height:100%;min-height:580px;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);background:#07101f;color:#fff;overflow:hidden}.editorHeader{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.16)}.editorHeader div:first-child{display:grid;gap:2px}.editorHeader strong{font-size:12px}.editorHeader span,.editorStatus span,.reviewPanel span,.advancedDrawer span{font-size:9px;color:#94a3b8}.modeButtons,.editorActions,.reviewToolbar{display:flex;gap:5px;align-items:center;overflow:auto}.modeButtons button,.editorActions button,.reviewToolbar button,.reviewPanel button,.errorBox button{height:28px;border:1px solid rgba(148,163,184,.25);border-radius:7px;background:#111c31;color:#dbeafe;font-size:9px;font-weight:900;padding:0 9px}.modeButtons button.active,.reviewToolbar button.active{background:#2563eb;border-color:#60a5fa;color:#fff}.editorStatus{display:flex;gap:12px;padding:5px 10px;border-bottom:1px solid rgba(148,163,184,.12);overflow:auto}.editorActions{padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12)}button:disabled{opacity:.4;cursor:not-allowed}.errorBox{display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(127,29,29,.36);border-bottom:1px solid rgba(248,113,113,.34);font-size:10px}.errorBox b{color:#fca5a5}.errorBox span{color:#fecaca;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.previewPane,.codePanel,.splitPreview,.browserReview,.mobilePane{min-height:0;overflow:hidden}.previewPane iframe,.splitPreview iframe,.reviewFrame iframe{width:100%;height:100%;border:0;background:#fff}.mobilePane{display:grid;place-items:center;padding:10px;overflow:auto}.phoneFrame{width:430px;height:740px;max-width:96%;border:10px solid #111827;border-radius:34px;overflow:hidden;background:#fff}.phoneFrame iframe{width:100%;height:100%;border:0}.splitMode{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:8px}.browserReview{display:grid;grid-template-columns:minmax(0,1fr) 240px;grid-template-rows:auto minmax(0,1fr);gap:0}.reviewToolbar{grid-column:1/-1;padding:6px 8px;border-bottom:1px solid rgba(148,163,184,.14)}.reviewFrame{position:relative;min-width:0;min-height:0;background:#0f172a;overflow:auto;display:grid;place-items:center}.reviewFrame.desktop iframe{width:100%;height:100%}.reviewFrame.iphone-14-pro-max iframe{width:430px;height:932px;max-width:96%;border:10px solid #111827;border-radius:34px}.reviewFrame.safari{box-shadow:inset 0 34px 0 #e5e7eb}.reviewFrame.chrome{box-shadow:inset 0 34px 0 #1f2937}.safeZoneOverlay{position:absolute;z-index:5;inset:72px 7% 42px;border:2px dashed #f59e0b;pointer-events:none}.safeZoneOverlay span{background:#f59e0b;color:#111827;font-size:9px;font-weight:900;padding:2px 5px}.reviewPanel{display:grid;align-content:start;gap:7px;padding:10px;border-left:1px solid rgba(148,163,184,.16);background:#08111f}.reviewPending{height:100%;display:grid;place-content:center;gap:8px;padding:30px;text-align:center;color:#cbd5e1}.reviewPending span{font-size:10px;color:#94a3b8}.advancedDrawer{position:absolute;right:10px;top:110px;z-index:20;width:280px;display:grid;gap:7px;padding:10px;border:1px solid rgba(148,163,184,.28);border-radius:12px;background:#08111f;box-shadow:0 18px 50px rgba(0,0,0,.45)}.reviewFullscreen{position:fixed;inset:0;z-index:50000;min-height:100dvh}.reviewFullscreen .browserReview{height:calc(100dvh - 120px)}@media(max-width:900px){.splitMode{grid-template-columns:1fr;overflow:auto}.browserReview{grid-template-columns:1fr}.reviewPanel{border-left:0;border-top:1px solid rgba(148,163,184,.16)}.editorHeader{align-items:flex-start;flex-direction:column}}`}</style>
+      <style jsx>{`.visualEditor{height:100%;min-height:580px;display:grid;grid-template-rows:auto auto auto auto auto minmax(0,1fr);background:#07101f;color:#fff;overflow:hidden}.editorHeader{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.16)}.editorHeader div:first-child{display:grid;gap:2px}.editorHeader strong{font-size:12px}.editorHeader span,.editorStatus span,.reviewPanel span,.advancedDrawer span{font-size:9px;color:#94a3b8}.modeButtons,.editorActions,.reviewToolbar{display:flex;gap:5px;align-items:center;overflow:auto}.modeButtons button,.editorActions button,.reviewToolbar button,.reviewPanel button,.errorBox button{height:28px;border:1px solid rgba(148,163,184,.25);border-radius:7px;background:#111c31;color:#dbeafe;font-size:9px;font-weight:900;padding:0 9px}.modeButtons button.active,.reviewToolbar button.active{background:#2563eb;border-color:#60a5fa;color:#fff}.editorStatus{display:flex;gap:12px;padding:5px 10px;border-bottom:1px solid rgba(148,163,184,.12);overflow:auto}.editorNotice{padding:5px 10px;border-bottom:1px solid rgba(34,197,94,.25);background:rgba(20,83,45,.25);color:#bbf7d0;font-size:9px}.editorNotice.warning{border-color:rgba(245,158,11,.3);background:rgba(120,53,15,.28);color:#fde68a}.editorActions{padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.12)}button:disabled{opacity:.4;cursor:not-allowed}.errorBox{display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(127,29,29,.36);border-bottom:1px solid rgba(248,113,113,.34);font-size:10px}.errorBox b{color:#fca5a5}.errorBox span{color:#fecaca;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.previewPane,.codePanel,.splitPreview,.browserReview,.mobilePane{min-height:0;overflow:hidden}.previewPane iframe,.splitPreview iframe,.reviewFrame iframe{width:100%;height:100%;border:0;background:#fff}.mobilePane{display:grid;place-items:center;padding:10px;overflow:auto}.phoneFrame{width:430px;height:740px;max-width:96%;border:10px solid #111827;border-radius:34px;overflow:hidden;background:#fff}.phoneFrame iframe{width:100%;height:100%;border:0}.splitMode{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:8px}.browserReview{display:grid;grid-template-columns:minmax(0,1fr) 240px;grid-template-rows:auto minmax(0,1fr);gap:0}.reviewToolbar{grid-column:1/-1;padding:6px 8px;border-bottom:1px solid rgba(148,163,184,.14)}.reviewFrame{position:relative;min-width:0;min-height:0;background:#0f172a;overflow:auto;display:grid;place-items:center}.reviewFrame.desktop iframe{width:100%;height:100%}.reviewFrame.iphone-14-pro-max iframe{width:430px;height:932px;max-width:96%;border:10px solid #111827;border-radius:34px}.reviewFrame.safari{box-shadow:inset 0 34px 0 #e5e7eb}.reviewFrame.chrome{box-shadow:inset 0 34px 0 #1f2937}.safeZoneOverlay{position:absolute;z-index:5;inset:72px 7% 42px;border:2px dashed #f59e0b;pointer-events:none}.safeZoneOverlay span{background:#f59e0b;color:#111827;font-size:9px;font-weight:900;padding:2px 5px}.reviewPanel{display:grid;align-content:start;gap:7px;padding:10px;border-left:1px solid rgba(148,163,184,.16);background:#08111f}.reviewPanel a{display:grid;place-items:center;min-height:28px;border:1px solid rgba(148,163,184,.25);border-radius:7px;background:#111c31;color:#dbeafe;font-size:9px;font-weight:900;text-decoration:none}.reviewPending{height:100%;display:grid;place-content:center;gap:8px;padding:30px;text-align:center;color:#cbd5e1}.reviewPending span{font-size:10px;color:#94a3b8}.advancedDrawer{position:absolute;right:10px;top:110px;z-index:20;width:280px;display:grid;gap:7px;padding:10px;border:1px solid rgba(148,163,184,.28);border-radius:12px;background:#08111f;box-shadow:0 18px 50px rgba(0,0,0,.45)}.reviewFullscreen{position:fixed;inset:0;z-index:50000;min-height:100dvh}.reviewFullscreen .browserReview{height:calc(100dvh - 120px)}@media(max-width:900px){.splitMode{grid-template-columns:1fr;overflow:auto}.browserReview{grid-template-columns:1fr}.reviewPanel{border-left:0;border-top:1px solid rgba(148,163,184,.16)}.editorHeader{align-items:flex-start;flex-direction:column}}`}</style>
     </section>
   );
 }

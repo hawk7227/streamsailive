@@ -25,6 +25,8 @@ describe("builder element source mapping", () => {
     expect(mapping.confidence).toBeGreaterThan(0.9);
     expect(mapping.sourceStartLine).toBeGreaterThan(0);
     expect(mapping.sourceEndLine).toBeGreaterThanOrEqual(mapping.sourceStartLine);
+    expect(mapping.sourceStartColumn).toBeGreaterThan(0);
+    expect(mapping.sourceEndColumn).toBeGreaterThan(mapping.sourceStartColumn);
     expect(mapping.matchedValue).toBe("Start Free Trial");
     expect(mapping.projectId).toBe("project-1");
   });
@@ -41,6 +43,8 @@ describe("builder element source mapping", () => {
     expect(mapping.strategy).toBe("unresolved");
     expect(mapping.sourceStartLine).toBe(0);
     expect(mapping.sourceEndLine).toBe(0);
+    expect(mapping.sourceStartColumn).toBe(0);
+    expect(mapping.sourceEndColumn).toBe(0);
     expect(mapping.confidence).toBe(0);
   });
 });
