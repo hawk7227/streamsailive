@@ -1,0 +1,55 @@
+name: Fix GitHub tool payload types
+
+on:
+  push:
+    paths:
+      - ".github/workflows/fix-github-tool-payload-types.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix-types:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fix strongly typed GitHub payloads
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/lib/assistant-core/github-tools.ts")
+          source = path.read_text()
+
+          old_helper = 'function boolArg(value: unknown, fallback = false): boolean { return typeof value === "boolean" ? value : fallback; }\n'
+          new_helper = old_helper + 'function stringArrayArg(value: unknown): string[] | undefined { if (!Array.isArray(value)) return undefined; const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()); return items.length ? items : undefined; }\n'
+          if old_helper not in source:
+              raise SystemExit("Expected boolArg helper not found")
+          source = source.replace(old_helper, new_helper, 1)
+
+          old_issue = '      case "github_create_issue": return githubApi.createGitHubIssue(github.token, owner, repo, cleanObject({ title: stringArg(a.title), body: stringArg(a.body), labels: a.labels, assignees: a.assignees }));'
+          new_issue = '      case "github_create_issue": return githubApi.createGitHubIssue(github.token, owner, repo, { title: stringArg(a.title), body: stringArg(a.body) || undefined, labels: stringArrayArg(a.labels), assignees: stringArrayArg(a.assignees), milestone: numberArg(a.milestone) || undefined });'
+          if old_issue not in source:
+              raise SystemExit("Expected github_create_issue case not found")
+          source = source.replace(old_issue, new_issue, 1)
+
+          old_merge = '      case "github_merge_pull_request": return githubApi.mergeGitHubPullRequest(github.token, owner, repo, numberArg(a.pullNumber), cleanObject({ merge_method: stringArg(a.mergeMethod, "squash"), commit_title: stringArg(a.commitTitle), commit_message: stringArg(a.commitMessage), sha: stringArg(a.sha) }));'
+          new_merge = '      case "github_merge_pull_request": return githubApi.mergeGitHubPullRequest(github.token, owner, repo, numberArg(a.pullNumber), { merge_method: stringArg(a.mergeMethod, "squash") as "merge" | "squash" | "rebase", commit_title: stringArg(a.commitTitle) || undefined, commit_message: stringArg(a.commitMessage) || undefined, sha: stringArg(a.sha) || undefined });'
+          if old_merge not in source:
+              raise SystemExit("Expected github_merge_pull_request case not found")
+          source = source.replace(old_merge, new_merge, 1)
+
+          path.write_text(source)
+
+      - name: Commit payload type fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/assistant-core/github-tools.ts
+          git diff --cached --check
+          git commit -m "Fix GitHub assistant payload types"
+          git push
