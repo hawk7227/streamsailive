@@ -74,3 +74,5 @@ jobs:
           git diff --cached --check
           git commit -m "Require authenticated Streams AI sessions"
           git push
+
+# retrigger: 2026-07-29
