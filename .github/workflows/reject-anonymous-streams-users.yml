@@ -1,0 +1,69 @@
+name: Reject anonymous Streams users
+
+on:
+  push:
+    paths:
+      - ".github/workflows/reject-anonymous-streams-users.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  reject-anonymous:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject anonymous Supabase identities
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/lib/streams-ai/auth.ts")
+          source = path.read_text()
+          old = '''  if (userError || !userData?.user?.id) {
+    if (isTestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
+    }
+
+    throw new StreamsAIAuthError(userError?.message || "Invalid STREAMS AI auth session.");
+  }
+
+  return ensureStreamsAIAccountScope(userData.user.id, {
+'''
+          new = '''  if (userError || !userData?.user?.id) {
+    if (isTestModeEnabled(request)) {
+      return ensureStreamsAIAccountScope(testUserId(), testScopeOptions("test-preview-invalid-token-fallback"), true);
+    }
+
+    throw new StreamsAIAuthError(userError?.message || "Invalid STREAMS AI auth session.");
+  }
+
+  const user = userData.user as typeof userData.user & { is_anonymous?: boolean };
+  const provider = String(user.app_metadata?.provider || "").toLowerCase();
+  const providers = Array.isArray(user.app_metadata?.providers)
+    ? user.app_metadata.providers.map((value: unknown) => String(value).toLowerCase())
+    : [];
+  if (user.is_anonymous === true || provider === "anonymous" || providers.includes("anonymous")) {
+    throw new StreamsAIAuthError("Sign in is required to use STREAMS AI.");
+  }
+
+  return ensureStreamsAIAccountScope(user.id, {
+'''
+          if old not in source:
+              raise SystemExit("Expected resolved-user auth block not found")
+          source = source.replace(old, new, 1)
+          source = source.replace("    userMetadata: userData.user.user_metadata,\n    userEmail: userData.user.email,", "    userMetadata: user.user_metadata,\n    userEmail: user.email,", 1)
+          path.write_text(source)
+
+      - name: Commit anonymous-user rejection
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/streams-ai/auth.ts
+          git diff --cached --check
+          git commit -m "Reject anonymous Streams AI users"
+          git push
