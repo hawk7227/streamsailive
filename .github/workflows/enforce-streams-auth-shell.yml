@@ -1,0 +1,92 @@
+name: Enforce Streams authenticated shell
+
+on:
+  push:
+    paths:
+      - ".github/workflows/enforce-streams-auth-shell.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-auth-shell:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add real auth boundary and sign out
+        shell: python
+        run: |
+          from pathlib import Path
+
+          shell_path = Path("src/components/streams-ai/current-chat/StreamsClientShell.jsx")
+          source = shell_path.read_text()
+          source = source.replace('import { useEffect, useState } from "react";\n', 'import { useEffect } from "react";\nimport { useRouter } from "next/navigation";\n', 1)
+
+          old_component = '''export default function StreamsClientShell() {
+  const { session, loading } = useAuth();
+  const [mounted, setMounted] = useState(true);
+  const chatRuntime = useStreamsChatRuntime();
+
+  useEffect(() => {
+    if (!loading || session) {
+      setMounted(true);
+    }
+  }, [session, loading]);
+
+  useEffect(() => installAdminBrowserToolFetchBridge(), []);
+  useEffect(() => installComposerUploadBridge(), []);
+
+  if (!mounted) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><StreamsAIComposerParityBridge chatRuntime={chatRuntime} /><StreamsAIInlineActivityBridge chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
+}
+'''
+          new_component = '''function AuthenticatedStreamsShell() {
+  const chatRuntime = useStreamsChatRuntime();
+  useEffect(() => installAdminBrowserToolFetchBridge(), []);
+  useEffect(() => installComposerUploadBridge(), []);
+  return <><StreamsOperatorShell chatRuntime={chatRuntime} /><StreamsAIComposerParityBridge chatRuntime={chatRuntime} /><StreamsAIInlineActivityBridge chatRuntime={chatRuntime} /><ActualRecentChatsOverlay chatRuntime={chatRuntime} /><ThreadAssetsHydrator chatRuntime={chatRuntime} /><StreamingRecoveryBanner chatRuntime={chatRuntime} /><MemoryControlsPanel /></>;
+}
+
+export default function StreamsClientShell() {
+  const router = useRouter();
+  const { session, user, loading, signOut } = useAuth();
+  const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+  const providers = Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers.map((value) => String(value).toLowerCase()) : [];
+  const anonymous = user?.is_anonymous === true || provider === "anonymous" || providers.includes("anonymous");
+
+  if (loading) return <main aria-label="Streams loading" style={{ minHeight: "100svh", background: "#080b18" }} />;
+  if (!session || !user || anonymous) {
+    return <main aria-label="Sign in required" style={{ minHeight: "100svh", display: "grid", placeItems: "center", background: "#080b18", color: "#f8fafc", padding: 24 }}><section style={{ width: "min(440px,100%)", border: "1px solid rgba(148,163,184,.22)", borderRadius: 20, padding: 28, background: "rgba(15,23,42,.92)", textAlign: "center" }}><h1 style={{ margin: "0 0 12px" }}>Sign in required</h1><p style={{ margin: "0 0 22px", color: "#cbd5e1", lineHeight: 1.6 }}>Your conversations and connected tools are private. Sign in to continue to STREAMS AI.</p><button type="button" onClick={async () => { await signOut?.(); router.replace("/login?redirect=%2Fstreams-ai"); }} style={{ width: "100%", minHeight: 44, border: 0, borderRadius: 12, background: "#7c3aed", color: "white", fontWeight: 700, cursor: "pointer" }}>Go to sign in</button></section></main>;
+  }
+  return <AuthenticatedStreamsShell />;
+}
+'''
+          if old_component not in source:
+              raise SystemExit("Expected StreamsClientShell component not found")
+          shell_path.write_text(source.replace(old_component, new_component, 1))
+
+          operator_path = Path("src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx")
+          operator = operator_path.read_text()
+          operator = operator.replace('import React, { useEffect, useMemo, useState } from "react";\n', 'import React, { useEffect, useMemo, useState } from "react";\nimport { useRouter } from "next/navigation";\nimport { useAuth } from "@/contexts/AuthContext";\n', 1)
+          old_sidebar = 'function Sidebar({ activeSection, setActiveSection, onNewChat }) {\n  return <aside className="operatorSidebar"><button type="button" className="operatorBrand" aria-label="Streams AI home" onClick={() => setActiveSection("home")}><span className="operatorBrandMark" aria-hidden="true">S</span></button><button type="button" className="operatorNewChat" aria-label="New session" title="New session" onClick={onNewChat}>+</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} /></aside>;\n}\n'
+          new_sidebar = 'function Sidebar({ activeSection, setActiveSection, onNewChat, onSignOut }) {\n  return <aside className="operatorSidebar"><button type="button" className="operatorBrand" aria-label="Streams AI home" onClick={() => setActiveSection("home")}><span className="operatorBrandMark" aria-hidden="true">S</span></button><button type="button" className="operatorNewChat" aria-label="New session" title="New session" onClick={onNewChat}>+</button><SidebarNav activeSection={activeSection} setActiveSection={setActiveSection} /><button type="button" className="operatorNewChat" aria-label="Sign out" title="Sign out" onClick={onSignOut}>↪</button></aside>;\n}\n'
+          if old_sidebar not in operator:
+              raise SystemExit("Expected operator Sidebar not found")
+          operator = operator.replace(old_sidebar, new_sidebar, 1)
+          operator = operator.replace('export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {\n  const chatRuntime = useAuthoritativeStreamsRuntime(baseRuntime);', 'export default function StreamsOperatorShell({ chatRuntime: baseRuntime }) {\n  const router = useRouter();\n  const { signOut } = useAuth();\n  const chatRuntime = useAuthoritativeStreamsRuntime(baseRuntime);', 1)
+          operator = operator.replace('  const newGeneralChat = () => {', '  const handleSignOut = async () => { await signOut?.(); router.replace("/login"); router.refresh(); };\n  const newGeneralChat = () => {', 1)
+          operator = operator.replace('<Sidebar activeSection={activeSection} setActiveSection={setActiveSection} onNewChat={newGeneralChat} />', '<Sidebar activeSection={activeSection} setActiveSection={setActiveSection} onNewChat={newGeneralChat} onSignOut={handleSignOut} />', 1)
+          operator_path.write_text(operator)
+
+      - name: Commit auth shell fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/streams-ai/current-chat/StreamsClientShell.jsx src/components/streams-ai/visual-operator/StreamsOperatorShell.jsx
+          git diff --cached --check
+          git commit -m "Enforce authenticated Streams shell and add sign out"
+          git push
