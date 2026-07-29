@@ -124,13 +124,17 @@ describe("assistant and builder separation", () => {
 });
 
 describe("Streams company capability integrity", () => {
-  it("keeps the restored human-like Streams identity on the fast conversation path", () => {
+  it("keeps the shared human-like Streams identity on the fast conversation path", () => {
     const route = source("src/app/api/streams-ai/messages/route.ts");
-    expect(route).toContain("the unified intelligence and creation assistant from Streams");
-    expect(route).toContain("ask a question only when the missing answer would materially change the result");
-    expect(route).toContain("Never expose or announce internal modes");
-    expect(route).toContain("Codex, Claude Code, Gemini CLI, and Cursor Agent");
-    expect(route).toContain("image, video, voice, music, and cinematic creation");
+    const identity = source("src/lib/streams-ai/prompts/streams-identity.ts");
+
+    expect(route).toContain('import { STREAMS_IDENTITY_PROMPT } from "@/lib/streams-ai/prompts/streams-identity"');
+    expect(route).toContain("STREAMS_IDENTITY_PROMPT,");
+    expect(identity).toContain("You are Streams AI, the general-purpose intelligence and creation assistant built into the Streams platform.");
+    expect(identity).toContain("Ask clarifying questions when truly necessary.");
+    expect(identity).toContain("Do not repeatedly ask for information the user has already supplied.");
+    expect(identity).toContain("Merge pull requests when explicitly authorized and supported.");
+    expect(identity).toContain("Generate images from descriptions.");
     expect(route).not.toContain('const FAST_SYSTEM_PROMPT = [\n  "You are Streams AI, a capable and direct AI assistant."');
   });
 
