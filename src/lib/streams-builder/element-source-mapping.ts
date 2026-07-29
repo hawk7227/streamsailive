@@ -19,7 +19,9 @@ export type ElementSourceMapping = {
   componentName: string;
   sourceFile: string;
   sourceStartLine: number;
+  sourceStartColumn: number;
   sourceEndLine: number;
+  sourceEndColumn: number;
   astNodePath: string;
   cssSelector: string;
   elementSignature: string;
@@ -32,6 +34,11 @@ export type ElementSourceMapping = {
 
 function lineAt(content: string, offset: number) {
   return content.slice(0, Math.max(0, offset)).split(/\r?\n/).length;
+}
+
+function columnAt(content: string, offset: number) {
+  const before = content.slice(0, Math.max(0, offset));
+  return before.length - before.lastIndexOf("\n");
 }
 
 function componentName(filePath: string) {
@@ -113,7 +120,9 @@ export function resolveElementSourceMapping(input: ElementSourceMappingInput): E
     componentName: componentName(input.sourceFile),
     sourceFile: input.sourceFile,
     sourceStartLine: range.start,
+    sourceStartColumn: offset >= 0 ? columnAt(source, offset) : 0,
     sourceEndLine: range.end,
+    sourceEndColumn: offset >= 0 ? columnAt(source, offset + matchedValue.length) : 0,
     astNodePath: range.start ? `${componentName(input.sourceFile)}:${range.start}-${range.end}` : "",
     cssSelector: String(input.selector || ""),
     elementSignature: hash(signatureSource),

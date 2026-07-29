@@ -138,6 +138,11 @@ export default function CanonicalPreviewEventBridge() {
         activeBuilderRunId: payload.metadata.builderRunId || active.activeBuilderRunId || "",
         activeAssetIds: linkedAssetIds,
         open: true,
+        lifecycleState: "ready",
+        targetSurface: active.targetSurface || "center-preview",
+        editorMode: active.editorMode || "browser",
+        turnId: active.turnId || "",
+        clientRequestId: active.clientRequestId || "",
       };
       writeActive(next);
       await patchSession(next.sessionId, {

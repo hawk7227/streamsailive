@@ -191,6 +191,26 @@ function injectEditableBridge(html: string, target: URL) {
     if (el.dataset.streamsEditableKind === 'text') { try { el.focus({ preventScroll: true }); } catch { el.focus(); } }
     selectElement(el);
   }
+  function focusSourceSelection(query) {
+    const needle = String(query || '').replace(/\s+/g, ' ').trim();
+    if (!needle) return;
+    const matches = Array.from(document.querySelectorAll('[data-streams-layer-id]')).filter(el => {
+      const payload = payloadFor(el);
+      return [payload.text, payload.original, payload.src].some(value => String(value || '').replace(/\s+/g, ' ').trim() === needle);
+    });
+    if (matches.length === 1) {
+      const el = matches[0];
+      el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      selectElement(el);
+      post('streams-editable-source-focus', { ...payloadFor(el), query: needle, matchCount: 1 });
+      return;
+    }
+    post('streams-editable-source-focus-ambiguous', { query: needle, matchCount: matches.length, matches: matches.slice(0, 12).map(payloadFor) });
+  }
+  window.addEventListener('message', event => {
+    if (event.origin !== window.location.origin || event.data?.source !== 'streams-visual-editor' || event.data?.type !== 'streams-editor-focus-source') return;
+    focusSourceSelection(event.data.query);
+  });
   function markEditable() {
     let index = 0;
     const nodes = Array.from(document.body.querySelectorAll('main,section,article,aside,nav,header,footer,form,ul,ol,li,div,h1,h2,h3,h4,h5,h6,p,span,b,strong,em,a,button,label,small,input,textarea,select,img,picture img,video,source'));
