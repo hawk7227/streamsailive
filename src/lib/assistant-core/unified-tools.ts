@@ -10,6 +10,11 @@ import {
   isAssistantGitHubTool,
   type AssistantFunctionToolDefinition,
 } from "./github-tools";
+import {
+  buildAssistantPreviewTools,
+  executeAssistantPreviewTool,
+  isAssistantPreviewTool,
+} from "./preview-tools";
 
 type JsonObject = Record<string, unknown>;
 
@@ -26,6 +31,7 @@ export function buildUnifiedAssistantTools(
   return [
     ...buildAssistantTools(input),
     ...buildAssistantGitHubTools(),
+    ...buildAssistantPreviewTools(),
   ];
 }
 
@@ -46,6 +52,16 @@ export async function executeUnifiedAssistantTool(
         name: input.name,
         args: input.args,
         context: input.context,
+      },
+      handlers,
+    );
+  }
+
+  if (isAssistantPreviewTool(input.name)) {
+    return executeAssistantPreviewTool(
+      {
+        name: input.name,
+        args: input.args,
       },
       handlers,
     );
