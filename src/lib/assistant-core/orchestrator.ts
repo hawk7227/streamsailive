@@ -5,7 +5,7 @@ import type OpenAI from "openai";
 import { routeRequest } from "./router";
 import { buildContext } from "./context";
 import { client } from "./openai";
-import { buildAssistantTools, executeAssistantTool } from "./tools";
+import { buildUnifiedAssistantTools, executeUnifiedAssistantTool } from "./unified-tools";
 import { TurnTimer } from "./timing";
 import { isChatQueryComplex } from "./complexQuerySignals";
 import type {
@@ -430,7 +430,7 @@ export async function runOrchestrator(req: NextRequest) {
             windowed_messages: Math.min(normalized.messages.length, CONTEXT_WINDOW_SIZE),
           });
 
-          const tools = buildAssistantTools({ route, context: assembledContext });
+          const tools = buildUnifiedAssistantTools({ route, context: assembledContext });
           // Select initial model based on route, context, and query complexity
           const initialModel = selectInitialModel(
             route,
@@ -504,7 +504,7 @@ export async function runOrchestrator(req: NextRequest) {
 
               try {
                 const result = await withToolTimeout(
-                  executeAssistantTool(
+                  executeUnifiedAssistantTool(
                     { name: call.name, args: parsedArgs, route: route as AssistantMode, context: assembledContext },
                     {
                       onProgress: (text: string) => {
