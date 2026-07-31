@@ -1,0 +1,11 @@
+/* Keep both Streams Builder columns together and restore their vertical position. */
+.streamsBuilderShell .workArea {
+  padding-top: 160px !important;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .streamsBuilderShell .workArea {
+    padding-top: 24px !important;
+  }
+}
