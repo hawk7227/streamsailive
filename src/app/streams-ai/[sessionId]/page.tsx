@@ -1,17 +1,5 @@
-import StreamsUnifiedRoot from "@/components/streams-ai/current-chat/StreamsUnifiedRoot";
-import StreamsAIMobileKeyboardBridge from "../StreamsAIMobileKeyboardBridge";
-import "@/components/streams-ai/visual-operator/streams-operator-message-states.css";
-import "@/components/streams-ai/current-chat/streams-builder-chat-theme.css";
-import mobileChatStyles from "../StreamsAIMobileChat.module.css";
-import mobileKeyboardStyles from "../StreamsAIMobileKeyboard.module.css";
+import { redirect } from "next/navigation";
 
 export default function StreamsAISessionPage() {
-  void mobileChatStyles;
-  void mobileKeyboardStyles;
-  return (
-    <>
-      <StreamsAIMobileKeyboardBridge />
-      <StreamsUnifiedRoot />
-    </>
-  );
+  redirect("/streams-ai");
 }
