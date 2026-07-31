@@ -4,9 +4,8 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import "./chat-markdown.css";
 
-const FRAME_MS = 18;
-const SETTLE_MS = 220;
-const AUTO_SCROLL_WITHIN_PX = 220;
+const STREAM_FLUSH_MS = 48;
+const AUTO_SCROLL_WITHIN_PX = 180;
 
 function normalizeMarkdownContent(content) {
   return String(content || "").replace(/\r\n/g, "\n").replace(/\u00a0/g, " ");
@@ -20,18 +19,22 @@ function getSafeHref(href = "") {
   return "";
 }
 
-function scrollStreamingMessage() {
+function findConversationScroller() {
+  return [
+    document.querySelector(".operatorChatScroll"),
+    document.querySelector(".startChatSurface"),
+    document.querySelector(".chatScroll"),
+    document.querySelector(".splitChatScroll"),
+  ].find(Boolean);
+}
+
+function keepStreamingMessageVisible() {
   if (typeof window === "undefined") return;
   window.requestAnimationFrame(() => {
-    const node = [
-      document.querySelector(".operatorChatScroll"),
-      document.querySelector(".startChatSurface"),
-      document.querySelector(".chatScroll"),
-      document.querySelector(".splitChatScroll"),
-    ].find(Boolean);
+    const node = findConversationScroller();
     if (!node) return;
     const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
-    if (distance < AUTO_SCROLL_WITHIN_PX) node.scrollTop = node.scrollHeight;
+    if (distance <= AUTO_SCROLL_WITHIN_PX) node.scrollTop = node.scrollHeight;
   });
 }
 
@@ -84,69 +87,59 @@ function Paragraph({ children }) {
   return <p>{children}</p>;
 }
 
-function nextFrameLength(currentLength, targetLength) {
-  const remaining = targetLength - currentLength;
-  if (remaining <= 0) return targetLength;
-  if (remaining > 240) return Math.min(targetLength, currentLength + 24);
-  if (remaining > 80) return Math.min(targetLength, currentLength + 12);
-  return Math.min(targetLength, currentLength + 5);
-}
+const markdownComponents = {
+  p: Paragraph,
+  code: CodeBlock,
+  table: Table,
+  a: SafeLink,
+  h1: ({ children }) => <h1>{children}</h1>,
+  h2: ({ children }) => <h2>{children}</h2>,
+  h3: ({ children }) => <h3>{children}</h3>,
+  h4: ({ children }) => <h4>{children}</h4>,
+  ul: ({ children }) => <ul>{children}</ul>,
+  ol: ({ children }) => <ol>{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+};
 
 function ChatMarkdownMessage({ content }) {
   const canonical = useMemo(() => normalizeMarkdownContent(content), [content]);
   const [displayText, setDisplayText] = useState(canonical);
-  const [settled, setSettled] = useState(true);
   const targetRef = useRef(canonical);
-  const displayRef = useRef(canonical);
-  const frameRef = useRef(null);
-  const settleRef = useRef(null);
+  const timerRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     targetRef.current = canonical;
-    window.clearTimeout(settleRef.current);
+    if (timerRef.current) return;
 
-    if (!canonical.startsWith(displayRef.current)) {
-      displayRef.current = canonical;
-      setDisplayText(canonical);
-      setSettled(false);
-    } else if (canonical !== displayRef.current) {
-      setSettled(false);
-    }
-
-    const pump = () => {
-      frameRef.current = null;
-      const target = targetRef.current;
-      const current = displayRef.current;
-      if (current === target) {
-        settleRef.current = window.setTimeout(() => setSettled(true), SETTLE_MS);
-        return;
-      }
-      const end = nextFrameLength(current.length, target.length);
-      const next = target.slice(0, end);
-      displayRef.current = next;
-      setDisplayText(next);
-      scrollStreamingMessage();
-      frameRef.current = window.setTimeout(pump, FRAME_MS);
-    };
-
-    if (!frameRef.current) frameRef.current = window.setTimeout(pump, FRAME_MS);
-    return undefined;
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      if (!mountedRef.current) return;
+      setDisplayText(targetRef.current);
+      keepStreamingMessageVisible();
+    }, STREAM_FLUSH_MS);
   }, [canonical]);
 
   useEffect(() => () => {
-    window.clearTimeout(frameRef.current);
-    window.clearTimeout(settleRef.current);
+    mountedRef.current = false;
+    window.clearTimeout(timerRef.current);
   }, []);
 
-  if (!settled) {
-    return <div className="chatMarkdown chatMarkdownStreaming" aria-live="polite" aria-atomic="false">{displayText}<span className="chatStreamingCaret" aria-hidden="true" /></div>;
-  }
+  const streaming = displayText !== canonical;
 
-  return <div className="chatMarkdown"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={{ p: Paragraph, code: CodeBlock, table: Table, a: SafeLink, h1: ({ children }) => <h1>{children}</h1>, h2: ({ children }) => <h2>{children}</h2>, h3: ({ children }) => <h3>{children}</h3>, h4: ({ children }) => <h4>{children}</h4>, ul: ({ children }) => <ul>{children}</ul>, ol: ({ children }) => <ol>{children}</ol>, li: ({ children }) => <li>{children}</li>, blockquote: ({ children }) => <blockquote>{children}</blockquote> }}>{displayText}</ReactMarkdown><style jsx>{`
-    .chatMarkdownStreaming{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;min-height:1.5em}
-    .chatStreamingCaret{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-.12em;background:currentColor;opacity:.7;animation:calmCaret 1s steps(1,end) infinite}
-    @keyframes calmCaret{0%,48%{opacity:.7}49%,100%{opacity:0}}
-  `}</style></div>;
+  return (
+    <div className={streaming ? "chatMarkdown chatMarkdownStreaming" : "chatMarkdown"} aria-live="polite" aria-atomic="false">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={markdownComponents}>{displayText}</ReactMarkdown>
+      {streaming ? <span className="chatStreamingCaret" aria-hidden="true" /> : null}
+      <style jsx>{`
+        .chatMarkdown{min-height:1.5em;overflow-wrap:anywhere;word-break:break-word;contain:layout style}
+        .chatMarkdownStreaming{opacity:1}
+        .chatStreamingCaret{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-.12em;background:currentColor;opacity:.65;animation:calmCaret 1s steps(1,end) infinite}
+        @keyframes calmCaret{0%,48%{opacity:.65}49%,100%{opacity:0}}
+      `}</style>
+    </div>
+  );
 }
 
 export default memo(ChatMarkdownMessage);
