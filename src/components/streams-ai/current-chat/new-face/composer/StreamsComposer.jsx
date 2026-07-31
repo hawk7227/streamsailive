@@ -29,39 +29,6 @@ export function autosizeComposerTextarea(node) {
   node.style.overflowY = node.scrollHeight > max ? "auto" : "hidden";
 }
 
-function looksLikeCursorArtifact(node) {
-  if (!(node instanceof HTMLElement)) return false;
-  const name = `${node.id || ""} ${String(node.className || "")}`.toLowerCase();
-  if (/custom.?cursor|cursor.?dot|cursor.?follow|mouse.?follow|pointer.?dot/.test(name)) return true;
-  const style = window.getComputedStyle(node);
-  const rect = node.getBoundingClientRect();
-  return style.position === "fixed"
-    && style.pointerEvents === "none"
-    && rect.width > 0
-    && rect.height > 0
-    && rect.width <= 48
-    && rect.height <= 48
-    && Number.parseInt(style.zIndex || "0", 10) >= 900;
-}
-
-function removeCursorArtifacts(root = document) {
-  const selectors = [
-    ".custom-cursor", ".customCursor", ".cursor-dot", ".cursorDot",
-    ".cursor-follower", ".cursorFollower", ".cursor-follow", ".mouse-dot",
-    ".mouse-follow", ".pointer-dot", "[data-custom-cursor]", "[data-cursor-dot]",
-    "#custom-cursor", "#cursor-dot", "[class*='customCursor']",
-    "[class*='cursor-follow']", "[class*='cursorFollower']",
-    "[class*='mouse-follow']", "[class*='pointer-dot']",
-  ];
-  selectors.forEach((selector) => root.querySelectorAll?.(selector).forEach((node) => node.remove()));
-  root.querySelectorAll?.("[style*='cursor: none'],[style*='cursor:none']").forEach((node) => node.style.removeProperty("cursor"));
-  root.querySelectorAll?.("div,span,canvas").forEach((node) => {
-    if (looksLikeCursorArtifact(node)) node.remove();
-  });
-  document.documentElement.style.setProperty("cursor", "auto", "important");
-  if (document.body) document.body.style.setProperty("cursor", "auto", "important");
-}
-
 export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelect, onModeChange, libraryFiles = [], onRemoveFile, isStreaming = false }) {
   const [message, setMessage] = useState("");
   const [activeMenu, setActiveMenu] = useState("");
@@ -75,20 +42,6 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
   const sawStreamingRef = useRef(false);
 
   useEffect(() => autosizeComposerTextarea(inputRef.current), [message, selectedTool]);
-
-  useEffect(() => {
-    removeCursorArtifacts();
-    const observer = new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of record.addedNodes) {
-          if (node instanceof HTMLElement) removeCursorArtifacts(node);
-        }
-      }
-      removeCursorArtifacts();
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -186,30 +139,10 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
     setActiveMenu("");
   }
 
-  const shellStyle = {
-    position: "relative", width: "100%", display: "grid", gridTemplateRows: "auto auto",
-    gap: 8, padding: "10px 12px", border: "1px solid rgba(139,92,246,.4)", borderRadius: 22,
-    background: "rgba(12,18,38,.96)", boxShadow: "0 10px 30px rgba(0,0,0,.28)",
-    boxSizing: "border-box", color: "#fff", overflow: "visible", cursor: "auto",
-  };
-  const inputStyle = {
-    display: "block", position: "relative", width: "100%", minWidth: 0, minHeight: MIN_HEIGHT,
-    maxHeight: maxTextareaHeight(), height: MIN_HEIGHT, resize: "none", overflowX: "hidden",
-    overflowY: "hidden", border: 0, outline: 0, boxShadow: "none", background: "transparent",
-    color: "#fff", padding: "8px 6px", margin: 0, font: "500 15px/1.5 Inter,system-ui,sans-serif",
-    whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word", boxSizing: "border-box",
-    cursor: "text", scrollbarWidth: "thin", zIndex: 1,
-  };
-  const actionStyle = {
-    position: "relative", zIndex: 2, display: "grid", gridTemplateColumns: "40px minmax(0,1fr) auto auto 44px",
-    alignItems: "center", gap: 8, minHeight: 50, width: "100%", borderTop: "1px solid rgba(148,163,184,.11)",
-    paddingTop: 7, background: "rgba(12,18,38,.96)", cursor: "auto",
-  };
-
   return (
     <>
       <MessageActionBridge />
-      <section ref={composerRef} className="calmStreamsComposer" style={shellStyle} data-feature="chat" aria-label="Streams composer" aria-busy={isStreaming ? "true" : "false"}>
+      <section ref={composerRef} className="calmStreamsComposer" data-feature="chat" aria-label="Streams composer" aria-busy={isStreaming ? "true" : "false"}>
         {files.length ? <div className="calmAttachments">{files.map((file) => {
           const isImage = file.kind === "image" || String(file.mimeType || "").startsWith("image/");
           const previewUrl = file.url || file.storageUrl || file.publicUrl || file.previewUrl;
@@ -218,9 +151,11 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
 
         {selectedTool ? <div className="calmToolPill"><span>{selectedTool.icon}</span><strong>{selectedTool.label}</strong><button type="button" onClick={() => setSelectedTool(null)}>×</button></div> : null}
 
-        <textarea ref={inputRef} className="calmComposerInput" style={inputStyle} value={message} placeholder={placeholder} rows={2} aria-label="Message Streams AI" spellCheck="true" onChange={(event) => { setMessage(event.target.value); autosizeComposerTextarea(event.target); }} onInput={(event) => autosizeComposerTextarea(event.currentTarget)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} />
+        <div className="calmTextRegion">
+          <textarea ref={inputRef} className="calmComposerInput" value={message} placeholder={placeholder} rows={2} aria-label="Message Streams AI" spellCheck="true" onChange={(event) => { setMessage(event.target.value); autosizeComposerTextarea(event.target); }} onInput={(event) => autosizeComposerTextarea(event.currentTarget)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} />
+        </div>
 
-        <div className="calmActionRow" style={actionStyle}>
+        <div className="calmActionRow">
           <button type="button" className="calmAdd" aria-label="Open tools" onClick={() => setActiveMenu(activeMenu === "tools" ? "" : "tools")}>+</button>
           <div className="calmSpacer" />
           <button type="button" className="calmMode" aria-label="Open mode menu" onClick={() => setActiveMenu(activeMenu === "model" ? "" : "model")}>{mode}<span>⌄</span></button>
@@ -234,13 +169,15 @@ export default function StreamsComposer({ onSubmit, onFilesSelected, onToolSelec
         {voicePanelOpen ? <RealtimeVoicePanel onClose={() => setVoicePanelOpen(false)} /> : null}
 
         <style jsx>{`
-          .calmStreamsComposer,.calmStreamsComposer *{cursor:auto!important}.calmComposerInput{cursor:text!important}.calmActionRow button,.calmMenu button,.calmToolPill button,.calmAttachment button{cursor:pointer!important}
-          .calmAdd,.calmSend{display:grid;place-items:center;border:0;color:#fff}.calmAdd{width:38px;height:38px;border-radius:12px;background:rgba(124,58,237,.14);border:1px solid rgba(192,132,252,.24);font-size:20px}.calmSend{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#d946ef,#7c3aed 62%,#06d9ff);font-size:19px;font-weight:900;box-shadow:0 0 13px rgba(124,58,237,.35)}.calmSend:disabled{opacity:.42;cursor:not-allowed!important}
+          .calmStreamsComposer{position:relative;width:100%;display:grid;grid-template-rows:auto auto;gap:8px;padding:10px 12px;border:1px solid rgba(139,92,246,.4);border-radius:22px;background:rgba(12,18,38,.96);box-shadow:0 10px 30px rgba(0,0,0,.28);box-sizing:border-box;color:#fff;overflow:visible;cursor:default}
+          .calmStreamsComposer *{box-sizing:border-box}.calmComposerInput{display:block;width:100%;min-width:0;min-height:${MIN_HEIGHT}px;max-height:${MAX_HEIGHT_DESKTOP}px;height:${MIN_HEIGHT}px;resize:none;overflow-x:hidden;overflow-y:hidden;border:0;outline:0;box-shadow:none;background:transparent;color:#fff;padding:8px 6px;margin:0;font:500 15px/1.5 Inter,system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;cursor:text;scrollbar-width:thin}.calmTextRegion{min-width:0;overflow:hidden}
+          .calmActionRow{position:relative;display:grid;grid-template-columns:40px minmax(0,1fr) auto auto 44px;align-items:center;gap:8px;min-height:50px;width:100%;border-top:1px solid rgba(148,163,184,.11);padding-top:7px;background:rgba(12,18,38,.96)}
+          .calmActionRow button,.calmMenu button,.calmToolPill button,.calmAttachment button{cursor:pointer}.calmAdd,.calmSend{display:grid;place-items:center;border:0;color:#fff}.calmAdd{width:38px;height:38px;border-radius:12px;background:rgba(124,58,237,.14);border:1px solid rgba(192,132,252,.24);font-size:20px}.calmSend{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#d946ef,#7c3aed 62%,#06d9ff);font-size:19px;font-weight:900;box-shadow:0 0 13px rgba(124,58,237,.35)}.calmSend:disabled{opacity:.42;cursor:not-allowed}
           .calmMode,.calmMic{height:30px;border:0;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:700;white-space:nowrap}.calmMode span{margin-left:3px}.calmMic{width:30px}
           .calmAttachments{display:flex;gap:6px;overflow-x:auto;padding:1px 2px 5px}.calmAttachment{display:flex;align-items:center;gap:6px;min-width:130px;max-width:210px;padding:5px 25px 5px 6px;border-radius:10px;background:rgba(255,255,255,.06);position:relative}.calmAttachment img{width:34px;height:34px;object-fit:cover;border-radius:7px}.calmAttachment strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.calmAttachment>button{position:absolute;right:5px;top:5px;border:0;background:transparent;color:#fff}
           .calmToolPill{align-self:flex-start;display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;background:rgba(124,58,237,.16);font-size:11px}.calmToolPill button{border:0;background:transparent;color:#fff}
           .calmMenu{position:absolute;z-index:500;bottom:calc(100% + 8px);width:min(340px,calc(100vw - 24px));padding:8px;border:1px solid rgba(192,132,252,.24);border-radius:16px;background:rgba(7,10,22,.98);box-shadow:0 20px 60px rgba(0,0,0,.4)}.calmMenu.tools{left:0}.calmMenu.model{right:0}.calmMenu button{width:100%;min-height:40px;display:grid;grid-template-columns:26px 1fr 56px;align-items:center;gap:7px;border:0;border-radius:10px;background:transparent;color:#fff;text-align:left;padding:6px 8px}.calmMenu button:hover{background:rgba(124,58,237,.16)}.calmMenu em{font-style:normal;color:#94a3b8;text-align:right;font-size:10px}
-          @media(max-width:760px){.calmActionRow{grid-template-columns:40px minmax(0,1fr) 44px!important}.calmMode,.calmMic{display:none}}
+          @media(max-width:760px){.calmComposerInput{max-height:${MAX_HEIGHT_MOBILE}px}.calmActionRow{grid-template-columns:40px minmax(0,1fr) 44px}.calmMode,.calmMic{display:none}}
         `}</style>
       </section>
     </>
