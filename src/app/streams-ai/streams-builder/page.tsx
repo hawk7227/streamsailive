@@ -1,5 +1,4 @@
 import "./workspace-grid.css";
-import "./workspace-offset.css";
 import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
 import PreviewCanvasFixStyles from "@/components/streams-builder/PreviewCanvasFixStyles";
 import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEditorCanvasFixStyles";
@@ -15,6 +14,18 @@ export const dynamic = "force-dynamic";
 export default function StreamsAIStreamsBuilderPage() {
   return (
     <>
+      <style>{`
+        .streamsBuilderShell .workArea {
+          padding-top: 160px !important;
+          box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+          .streamsBuilderShell .workArea {
+            padding-top: 24px !important;
+          }
+        }
+      `}</style>
       <WorkspaceGrid />
       <DefaultSplitWorkstationOpener />
       <WorkspaceBridgeSourceOfTruth />
