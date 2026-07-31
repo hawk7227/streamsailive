@@ -1,4 +1,5 @@
 import "./workspace-grid.css";
+import "./workspace-offset.css";
 import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
 import PreviewCanvasFixStyles from "@/components/streams-builder/PreviewCanvasFixStyles";
 import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEditorCanvasFixStyles";
