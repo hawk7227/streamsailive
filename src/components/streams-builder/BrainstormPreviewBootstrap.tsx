@@ -4,49 +4,85 @@ import { useEffect } from "react";
 import { BRAINSTORM_PREVIEW_HTML, BRAINSTORM_PREVIEW_ID } from "@/lib/streams-builder/brainstorm-preview-samples";
 
 const STORAGE_KEY = "streams-builder:active-file";
-
-function previewIdFromValue(value: string) {
-  return value.match(/bc0609ba-27f7-4a58-823b-f36754ec8ea5/i)?.[0] || "";
-}
+const PREVIEW_URL = "/streams-ai/streams-builder/sample-preview";
 
 export default function BrainstormPreviewBootstrap() {
   useEffect(() => {
-    let current: Record<string, unknown> = {};
-    try { current = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}"); } catch {}
+    let cancelled = false;
 
-    const currentId = previewIdFromValue(String(current.path || current.route || current.sha || ""));
-    const queryId = new URLSearchParams(window.location.search).get("previewId") || "";
-    const hasUsableCurrentFile = Boolean(String(current.path || "").trim() && String(current.content || "").trim());
-    const isEmptyBuilder = !hasUsableCurrentFile;
-    const shouldMount = currentId === BRAINSTORM_PREVIEW_ID || queryId === BRAINSTORM_PREVIEW_ID || isEmptyBuilder;
-    if (!shouldMount) return;
+    function mountVisual() {
+      if (cancelled) return;
 
-    const previewUrl = `/streams-builder/preview/${BRAINSTORM_PREVIEW_ID}`;
-    const mounted = {
-      repo: "",
-      branch: "",
-      path: `generated/previews/${BRAINSTORM_PREVIEW_ID}.html`,
-      folder: "generated/previews",
-      sha: `brainstorm-${BRAINSTORM_PREVIEW_ID}`,
-      content: BRAINSTORM_PREVIEW_HTML,
-      route: previewUrl,
-    };
+      const mounted = {
+        repo: "",
+        branch: "",
+        path: `generated/previews/${BRAINSTORM_PREVIEW_ID}.html`,
+        folder: "generated/previews",
+        sha: `frontend-visual-${BRAINSTORM_PREVIEW_ID}`,
+        content: BRAINSTORM_PREVIEW_HTML,
+        route: PREVIEW_URL,
+      };
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mounted));
-    window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
-    window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", { detail: { previewId: BRAINSTORM_PREVIEW_ID, previewUrl, operationId: mounted.sha, targetPane: "builder-three-column-canvas", brainstorm: true } }));
-    window.dispatchEvent(new CustomEvent("streams:open-builder-preview", { detail: { previewId: BRAINSTORM_PREVIEW_ID, previewUrl, lifecycleState: "ready", targetSurface: "builder", brainstorm: true } }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mounted));
+      window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
+      window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", {
+        detail: {
+          previewId: BRAINSTORM_PREVIEW_ID,
+          previewUrl: PREVIEW_URL,
+          operationId: mounted.sha,
+          targetPane: "builder-three-column-canvas",
+          brainstorm: true,
+          placeholder: true,
+        },
+      }));
+      window.dispatchEvent(new CustomEvent("streams:open-builder-preview", {
+        detail: {
+          previewId: BRAINSTORM_PREVIEW_ID,
+          previewUrl: PREVIEW_URL,
+          lifecycleState: "ready",
+          targetSurface: "builder",
+          brainstorm: true,
+          placeholder: true,
+        },
+      }));
 
-    const entries = [
-      ["brainstorm.source.loaded", `Loaded ${BRAINSTORM_PREVIEW_HTML.length} characters of brainstorm HTML into the code editor.`],
-      ["brainstorm.preview.mounted", `Mounted ${previewUrl} without a repository or branch.`],
-      ["brainstorm.preview.ready", "Landing-page source is available to Preview, Code Editor, Logs, DevTools, and Frontend UI."],
-    ];
-    for (const [phase, message] of entries) {
-      const detail = { source: "brainstorm-preview-bootstrap", phase, message, previewId: BRAINSTORM_PREVIEW_ID, previewUrl, filePath: mounted.path, repo: "", branch: "", brainstorm: true, at: new Date().toISOString() };
-      window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail }));
-      window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail }));
+      const entries = [
+        ["frontend.visual.started", "Frontend visual placeholder started."],
+        ["frontend.source.loaded", `Loaded ${BRAINSTORM_PREVIEW_HTML.length} characters of sample landing-page HTML into the Code Editor.`],
+        ["frontend.preview.mounted", `Mounted visual preview at ${PREVIEW_URL}.`],
+        ["frontend.preview.rendered", "Sample landing page rendered in Preview and Frontend UI."],
+        ["frontend.devtools.connected", "DevTools connected to the sample visual preview."],
+        ["frontend.visual.ready", "Frontend visual is ready for demonstration; no repository or branch is required."],
+      ];
+
+      for (const [phase, message] of entries) {
+        const detail = {
+          source: "hardcoded-frontend-visual",
+          phase,
+          message,
+          previewId: BRAINSTORM_PREVIEW_ID,
+          previewUrl: PREVIEW_URL,
+          filePath: mounted.path,
+          repo: "",
+          branch: "",
+          brainstorm: true,
+          placeholder: true,
+          at: new Date().toISOString(),
+        };
+        window.dispatchEvent(new CustomEvent("streams-builder-summary-event", { detail }));
+        window.dispatchEvent(new CustomEvent("streams-builder:chat-context-event", { detail }));
+      }
     }
+
+    mountVisual();
+    const retryOne = window.setTimeout(mountVisual, 250);
+    const retryTwo = window.setTimeout(mountVisual, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryOne);
+      window.clearTimeout(retryTwo);
+    };
   }, []);
 
   return null;
