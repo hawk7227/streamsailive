@@ -1,9 +1,8 @@
 import { type NextRequest } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { requireStreamsAIScope, type StreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { createStreamsAIServiceClient, streamsAISchema } from "@/lib/streams-ai/server";
+import { brainstormPreviewSource } from "@/lib/streams-builder/brainstorm-preview-samples";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,100 +10,73 @@ export const dynamic = "force-dynamic";
 function serviceClient() { return createStreamsAIServiceClient(); }
 function db() { return streamsAISchema(serviceClient()); }
 function clean(value: unknown, max = 240000) { return String(value || "").slice(0, max); }
-
 type PreviewScope = Pick<StreamsAIScope, "tenantId" | "userId">;
 
 async function signedUrl(asset: Record<string, any>) {
   const bucket = asset.storage_bucket || asset.storageBucket;
-  const pathValue = asset.storage_path || asset.storagePath;
-  if (!bucket || !pathValue) return asset.public_url || asset.publicUrl || asset.url || "";
+  const path = asset.storage_path || asset.storagePath;
+  if (!bucket || !path) return asset.public_url || asset.publicUrl || asset.url || "";
   try {
-    const { data } = await serviceClient().storage.from(bucket).createSignedUrl(pathValue, 60 * 60);
+    const { data } = await serviceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
     return data?.signedUrl || asset.public_url || asset.publicUrl || "";
-  } catch {
-    return asset.public_url || asset.publicUrl || "";
-  }
+  } catch { return asset.public_url || asset.publicUrl || ""; }
 }
 
 async function loadPreviewAssets(scope: PreviewScope, previewId: string) {
   const { data: links, error } = await db().from("streams_ai_preview_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("created_at", { ascending: false });
-  if (error) {
-    console.warn("[streams-builder-preview] optional preview assets unavailable", { previewId, message: error.message });
-    return [];
-  }
-  const assetIds = (links || []).map((row) => row.asset_id).filter(Boolean);
-  if (!assetIds.length) return [];
+  if (error || !links?.length) return [];
+  const assetIds = links.map((row) => row.asset_id).filter(Boolean);
   const { data: assets, error: assetsError } = await db().from("streams_ai_assets").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).in("id", assetIds);
-  if (assetsError) {
-    console.warn("[streams-builder-preview] optional assets unavailable", { previewId, message: assetsError.message });
-    return [];
-  }
+  if (assetsError) return [];
   const byId = new Map((assets || []).map((asset) => [asset.id, asset]));
-  return Promise.all((links || []).map(async (link) => {
+  return Promise.all(links.map(async (link) => {
     const asset = byId.get(link.asset_id) || null;
     const url = asset ? await signedUrl(asset) : "";
     return { ...link, asset: asset ? { ...asset, signedUrl: url, previewUrl: url, url } : null };
   }));
 }
 
-async function loadOwnedPreview(scope: PreviewScope, previewId: string) {
-  return db().from("streams_ai_previews").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", previewId).maybeSingle();
-}
-
-async function loadPublicPreview(previewId: string) {
-  return db().from("streams_ai_previews").select("*").eq("id", previewId).maybeSingle();
-}
-
-async function loadBundledBrainstormSource(previewId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(previewId)) return "";
+async function resolvePreview(request: NextRequest, previewId: string) {
+  let preview: Record<string, any> | null = null;
+  let scope: PreviewScope | null = null;
   try {
-    const filePath = path.join(process.cwd(), "generated", "previews", `${previewId}.html`);
-    const source = await readFile(filePath, "utf8");
-    return source.trim();
+    const authenticatedScope = await requireStreamsAIScope(request);
+    const result = await db().from("streams_ai_previews").select("*").eq("tenant_id", authenticatedScope.tenantId).eq("user_id", authenticatedScope.userId).eq("id", previewId).maybeSingle();
+    if (result.error) throw result.error;
+    preview = result.data || null;
+    scope = authenticatedScope;
   } catch {
-    return "";
+    const result = await db().from("streams_ai_previews").select("*").eq("id", previewId).maybeSingle();
+    if (result.error) throw result.error;
+    preview = result.data || null;
+    if (preview) scope = { tenantId: String(preview.tenant_id), userId: String(preview.user_id) };
   }
+  return { preview, scope };
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ previewId: string }> }) {
   try {
     const { previewId } = await params;
-    let preview: Record<string, any> | null = null;
-    let scope: PreviewScope | null = null;
+    const { preview, scope } = await resolvePreview(request, previewId);
+    const builtInSource = brainstormPreviewSource(previewId);
+    if ((!preview || !scope) && !builtInSource) return streamsAIJson({ ok: false, error: "Preview not found" }, 404);
 
-    try {
-      const authenticatedScope = await requireStreamsAIScope(request);
-      const result = await loadOwnedPreview(authenticatedScope, previewId);
-      if (result.error) throw result.error;
-      preview = result.data || null;
-      scope = authenticatedScope;
-    } catch {
-      const result = await loadPublicPreview(previewId);
-      if (result.error) throw result.error;
-      preview = result.data || null;
-      if (preview) scope = { tenantId: String(preview.tenant_id), userId: String(preview.user_id) };
-    }
-
-    if (!preview || !scope) return streamsAIJson({ ok: false, error: "Preview not found" }, 404);
-    const assets = await loadPreviewAssets(scope, previewId);
-    const { data: versions, error: versionsError } = await db().from("streams_ai_preview_versions").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(25);
-    if (versionsError) console.warn("[streams-builder-preview] optional preview versions unavailable", { previewId, message: versionsError.message });
-
-    const latestVersion = (versions || [])[0] || null;
-    const persistedSource = String(preview.source_code || preview.preview_html || latestVersion?.source_code || latestVersion?.preview_html || "").trim();
-    const bundledSource = persistedSource ? "" : await loadBundledBrainstormSource(previewId);
-    const source = persistedSource || bundledSource;
-    const hydratedPreview = source
-      ? {
-          ...preview,
-          source_code: source,
-          preview_html: source,
-          status: preview.status || "ready",
-          metadata: { ...(preview.metadata || {}), brainstorm: true, sourceOrigin: persistedSource ? "preview-record" : "bundled-brainstorm" },
-        }
-      : preview;
-
-    return streamsAIJson({ ok: true, preview: hydratedPreview, assets, versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
+    const versions = scope ? await db().from("streams_ai_preview_versions").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(25) : { data: [] as any[], error: null };
+    const latestVersion = (versions.data || [])[0] || null;
+    const persistedSource = String(preview?.source_code || preview?.preview_html || latestVersion?.source_code || latestVersion?.preview_html || "").trim();
+    const source = persistedSource || builtInSource;
+    const hydratedPreview = {
+      ...(preview || { id: previewId, title: "Brainstorm landing page", type: "html" }),
+      source_code: source,
+      preview_html: source,
+      status: "ready",
+      metadata: { ...(preview?.metadata || {}), brainstorm: true, placeholder: false, sourceOrigin: persistedSource ? "preview-record" : "built-in-brainstorm" },
+    };
+    const assets = scope ? await loadPreviewAssets(scope, previewId) : [];
+    return streamsAIJson({ ok: true, preview: hydratedPreview, assets, versions: versions.data || [], previewUrl: `/streams-builder/preview/${previewId}`, logs: [
+      { phase: "brainstorm.source.loaded", message: `Loaded ${source.length} characters of brainstorm HTML.` },
+      { phase: "brainstorm.preview.ready", message: "Brainstorm preview is ready without a repository connection." },
+    ] });
   } catch (error) { return streamsAIError(error); }
 }
 
@@ -121,10 +93,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.sourceCode !== undefined) patch.source_code = clean(body.sourceCode);
     if (body.previewHtml !== undefined) patch.preview_html = clean(body.previewHtml);
     if (body.metadata !== undefined) patch.metadata = body.metadata;
-
     const { data: preview, error } = await db().from("streams_ai_previews").update(patch).eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("id", previewId).select("*").single();
     if (error) throw error;
-
     const { data: latest } = await db().from("streams_ai_preview_versions").select("version_number").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(1).maybeSingle();
     const versionNumber = Number(latest?.version_number || 0) + 1;
     const { data: version } = await db().from("streams_ai_preview_versions").insert({ tenant_id: scope.tenantId, user_id: scope.userId, preview_id: previewId, version_number: versionNumber, source_code: preview.source_code || "", preview_html: preview.preview_html || "", metadata: { source: "preview-patch" }, created_at: now }).select("*").single();
