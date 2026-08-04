@@ -15,9 +15,38 @@ export default function StreamsAIStreamsBuilderPage() {
   return (
     <>
       <style>{`
+        html,
+        body {
+          width: 100%;
+          height: 100%;
+          min-height: 100dvh;
+          overflow: hidden;
+          background: #020713;
+        }
+
+        .streamsBuilderShell {
+          width: 100vw !important;
+          height: 100dvh !important;
+          min-height: 100dvh !important;
+          overflow: hidden !important;
+        }
+
         .streamsBuilderShell .workArea {
+          width: 100%;
+          height: 100% !important;
+          min-height: 0 !important;
           padding-top: 160px !important;
           box-sizing: border-box;
+          align-items: stretch !important;
+          overflow: hidden !important;
+        }
+
+        .streamsBuilderShell .operatorColumn,
+        .streamsBuilderShell .centerColumn,
+        .streamsBuilderShell .visualColumn {
+          height: 100% !important;
+          min-height: 0 !important;
+          align-self: stretch !important;
         }
 
         @media (max-width: 900px) {
