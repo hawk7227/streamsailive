@@ -1,4 +1,6 @@
 import { type NextRequest } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { requireStreamsAIScope, type StreamsAIScope } from "@/lib/streams-ai/auth";
 import { readJsonBody, streamsAIError, streamsAIJson } from "@/lib/streams-ai/api";
 import { createStreamsAIServiceClient, streamsAISchema } from "@/lib/streams-ai/server";
@@ -14,10 +16,10 @@ type PreviewScope = Pick<StreamsAIScope, "tenantId" | "userId">;
 
 async function signedUrl(asset: Record<string, any>) {
   const bucket = asset.storage_bucket || asset.storageBucket;
-  const path = asset.storage_path || asset.storagePath;
-  if (!bucket || !path) return asset.public_url || asset.publicUrl || asset.url || "";
+  const pathValue = asset.storage_path || asset.storagePath;
+  if (!bucket || !pathValue) return asset.public_url || asset.publicUrl || asset.url || "";
   try {
-    const { data } = await serviceClient().storage.from(bucket).createSignedUrl(path, 60 * 60);
+    const { data } = await serviceClient().storage.from(bucket).createSignedUrl(pathValue, 60 * 60);
     return data?.signedUrl || asset.public_url || asset.publicUrl || "";
   } catch {
     return asset.public_url || asset.publicUrl || "";
@@ -53,6 +55,17 @@ async function loadPublicPreview(previewId: string) {
   return db().from("streams_ai_previews").select("*").eq("id", previewId).maybeSingle();
 }
 
+async function loadBundledBrainstormSource(previewId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(previewId)) return "";
+  try {
+    const filePath = path.join(process.cwd(), "generated", "previews", `${previewId}.html`);
+    const source = await readFile(filePath, "utf8");
+    return source.trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ previewId: string }> }) {
   try {
     const { previewId } = await params;
@@ -66,8 +79,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       preview = result.data || null;
       scope = authenticatedScope;
     } catch {
-      // Generated preview URLs are intentionally shareable. The UUID is the
-      // capability token; this fallback is read-only and never permits writes.
       const result = await loadPublicPreview(previewId);
       if (result.error) throw result.error;
       preview = result.data || null;
@@ -77,10 +88,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!preview || !scope) return streamsAIJson({ ok: false, error: "Preview not found" }, 404);
     const assets = await loadPreviewAssets(scope, previewId);
     const { data: versions, error: versionsError } = await db().from("streams_ai_preview_versions").select("*").eq("tenant_id", scope.tenantId).eq("user_id", scope.userId).eq("preview_id", previewId).order("version_number", { ascending: false }).limit(25);
-    if (versionsError) {
-      console.warn("[streams-builder-preview] optional preview versions unavailable", { previewId, message: versionsError.message });
-    }
-    return streamsAIJson({ ok: true, preview, assets, versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
+    if (versionsError) console.warn("[streams-builder-preview] optional preview versions unavailable", { previewId, message: versionsError.message });
+
+    const latestVersion = (versions || [])[0] || null;
+    const persistedSource = String(preview.source_code || preview.preview_html || latestVersion?.source_code || latestVersion?.preview_html || "").trim();
+    const bundledSource = persistedSource ? "" : await loadBundledBrainstormSource(previewId);
+    const source = persistedSource || bundledSource;
+    const hydratedPreview = source
+      ? {
+          ...preview,
+          source_code: source,
+          preview_html: source,
+          status: preview.status || "ready",
+          metadata: { ...(preview.metadata || {}), brainstorm: true, sourceOrigin: persistedSource ? "preview-record" : "bundled-brainstorm" },
+        }
+      : preview;
+
+    return streamsAIJson({ ok: true, preview: hydratedPreview, assets, versions: versions || [], previewUrl: `/streams-builder/preview/${previewId}` });
   } catch (error) { return streamsAIError(error); }
 }
 
