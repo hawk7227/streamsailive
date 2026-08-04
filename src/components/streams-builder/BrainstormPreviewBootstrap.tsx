@@ -16,7 +16,9 @@ export default function BrainstormPreviewBootstrap() {
 
     const currentId = previewIdFromValue(String(current.path || current.route || current.sha || ""));
     const queryId = new URLSearchParams(window.location.search).get("previewId") || "";
-    const shouldMount = currentId === BRAINSTORM_PREVIEW_ID || queryId === BRAINSTORM_PREVIEW_ID || (!String(current.content || "").trim() && String(current.path || "").includes("generated/previews/"));
+    const hasUsableCurrentFile = Boolean(String(current.path || "").trim() && String(current.content || "").trim());
+    const isEmptyBuilder = !hasUsableCurrentFile;
+    const shouldMount = currentId === BRAINSTORM_PREVIEW_ID || queryId === BRAINSTORM_PREVIEW_ID || isEmptyBuilder;
     if (!shouldMount) return;
 
     const previewUrl = `/streams-builder/preview/${BRAINSTORM_PREVIEW_ID}`;
@@ -33,6 +35,7 @@ export default function BrainstormPreviewBootstrap() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mounted));
     window.dispatchEvent(new CustomEvent("streams-builder:pulled-file", { detail: mounted }));
     window.dispatchEvent(new CustomEvent("streams-builder:preview-mounted", { detail: { previewId: BRAINSTORM_PREVIEW_ID, previewUrl, operationId: mounted.sha, targetPane: "builder-three-column-canvas", brainstorm: true } }));
+    window.dispatchEvent(new CustomEvent("streams:open-builder-preview", { detail: { previewId: BRAINSTORM_PREVIEW_ID, previewUrl, lifecycleState: "ready", targetSurface: "builder", brainstorm: true } }));
 
     const entries = [
       ["brainstorm.source.loaded", `Loaded ${BRAINSTORM_PREVIEW_HTML.length} characters of brainstorm HTML into the code editor.`],
