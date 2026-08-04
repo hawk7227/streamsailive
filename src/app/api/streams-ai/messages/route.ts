@@ -327,7 +327,15 @@ async function builderResponse(request: NextRequest, body: StreamsMessageRequest
         emit(controller, "complete", { ok: true, sessionId, turnId, assistantMessageId: persisted.assistantMessageId, operationId: operation.operationId, previewId: operation.previewId, previewUrl: operation.previewUrl, artifacts: operation.artifacts, source: "streams-ai-builder-runtime", elapsedMs: Date.now() - startedAt });
       } catch (error: any) {
         const operation = error?.operation || null;
-        const safeMessage = operation?.failure?.safeMessage || "The frontend operation did not complete. Your conversation was preserved.";
+        const rawDetail = error instanceof Error ? error.message : String(error);
+        console.error("STREAMS_AI_MESSAGES_FAILURE", {
+          rawDetail,
+          stack: error instanceof Error ? error.stack : null,
+          sessionId,
+          turnId,
+          operationId: operation?.operationId || null,
+        });
+        const safeMessage = operation?.failure?.safeMessage || `The request failed: ${rawDetail}`;
         if (userMessageId) {
           try {
             const scope = await requireStreamsAIScope(request);
@@ -344,7 +352,7 @@ async function builderResponse(request: NextRequest, body: StreamsMessageRequest
             console.error("STREAMS_BUILDER_FAILURE_PERSISTENCE_FAILED", persistenceError);
           }
         }
-        emit(controller, "error", { message: safeMessage, detailCode: operation?.failure?.code || "STREAMS_BUILDER_FAILED", sessionId, turnId, operationId: operation?.operationId || null, failure: operation?.failure || null, retryable: operation?.failure?.retryable !== false, elapsedMs: Date.now() - startedAt });
+        emit(controller, "error", { message: safeMessage, rawDetail, detailCode: operation?.failure?.code || "STREAMS_BUILDER_FAILED", sessionId, turnId, operationId: operation?.operationId || null, failure: operation?.failure || null, retryable: operation?.failure?.retryable !== false, elapsedMs: Date.now() - startedAt });
       } finally {
         controller.close();
       }
@@ -403,3 +411,4 @@ export async function POST(request: NextRequest) {
     return new Response("Streams could not complete this response.", { status: 500 });
   }
 }
+
