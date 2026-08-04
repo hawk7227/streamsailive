@@ -1,5 +1,6 @@
 import "./workspace-grid.css";
 import WorkspaceGrid from "@/components/streams-builder/WorkspaceGrid";
+import BrainstormPreviewBootstrap from "@/components/streams-builder/BrainstormPreviewBootstrap";
 import PreviewCanvasFixStyles from "@/components/streams-builder/PreviewCanvasFixStyles";
 import VisualEditorCanvasFixStyles from "@/components/streams-builder/VisualEditorCanvasFixStyles";
 import VisualEditorCodeDock from "@/components/streams-builder/VisualEditorCodeDock";
@@ -56,6 +57,7 @@ export default function StreamsAIStreamsBuilderPage() {
         }
       `}</style>
       <WorkspaceGrid />
+      <BrainstormPreviewBootstrap />
       <DefaultSplitWorkstationOpener />
       <WorkspaceBridgeSourceOfTruth />
       <BuilderContextEventSink />
