@@ -1,0 +1,222 @@
+.orbStage{
+  appearance:none;
+  border:0;
+  padding:0;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+  background:transparent;
+  isolation:isolate;
+}
+
+.orbStage:focus-visible{
+  outline:2px solid #49dfff;
+  outline-offset:12px;
+  border-radius:50%;
+}
+
+.orbStage::after{
+  content:"";
+  position:absolute;
+  width:min(32vw,420px);
+  aspect-ratio:1;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(91,64,255,.20),rgba(126,50,255,.08) 45%,transparent 70%);
+  filter:blur(22px);
+  z-index:-1;
+  transition:opacity .35s ease,transform .35s ease;
+}
+
+.orb{
+  display:grid;
+  place-items:center;
+  overflow:visible;
+  background:radial-gradient(circle at 50% 48%,rgba(80,215,255,.12),rgba(80,74,255,.20) 28%,rgba(92,43,195,.22) 52%,rgba(4,8,24,.1) 70%);
+  border:1px solid rgba(132,102,255,.60);
+  box-shadow:0 0 28px rgba(58,104,255,.58),0 0 80px rgba(117,49,255,.38),inset 0 0 46px rgba(62,196,255,.23);
+  transition:transform .35s ease,filter .35s ease,box-shadow .35s ease;
+}
+
+.brainGlow{
+  position:absolute;
+  inset:16%;
+  border-radius:48%;
+  background:radial-gradient(circle,rgba(148,92,255,.28),rgba(72,40,180,.10) 60%,transparent 76%);
+  filter:blur(15px);
+  animation:idleGlow 4.6s ease-in-out infinite;
+}
+
+.brainGraphic{
+  position:absolute;
+  width:72%;
+  height:68%;
+  overflow:visible;
+  filter:drop-shadow(0 0 8px rgba(153,102,255,.85)) drop-shadow(0 0 20px rgba(97,65,255,.48));
+  transform-origin:center;
+  animation:brainFloat 5.5s ease-in-out infinite;
+}
+
+.brainBody{
+  fill:rgba(76,29,149,.32);
+  stroke:url(#brain-violet);
+  stroke-width:5;
+  stroke-linejoin:round;
+  filter:url(#brain-glow);
+}
+
+.brainFolds{
+  fill:none;
+  stroke:#c4b5fd;
+  stroke-width:3.6;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  opacity:.92;
+}
+
+.energyBeam{
+  position:absolute;
+  left:50%;
+  bottom:8%;
+  width:2px;
+  height:31%;
+  transform:translateX(-50%);
+  background:linear-gradient(180deg,rgba(196,181,253,.05),#9f67ff 45%,#32d8ff);
+  box-shadow:0 0 9px #8b5cf6,0 0 20px rgba(34,211,238,.55);
+  opacity:.65;
+}
+
+.voiceBars{
+  position:absolute;
+  left:50%;
+  bottom:14%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  width:42%;
+  height:34px;
+  transform:translateX(-50%);
+  opacity:0;
+  transition:opacity .25s ease;
+}
+
+.voiceBars i{
+  display:block;
+  width:3px;
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(180deg,#d8c8ff,#8b5cf6 55%,#22d3ee);
+  box-shadow:0 0 8px #8b5cf6;
+  transform-origin:center;
+}
+
+.orbStatus{
+  position:absolute;
+  bottom:25px;
+  left:50%;
+  transform:translateX(-50%);
+  color:#83dfff;
+  font-size:.67rem;
+  font-weight:800;
+  letter-spacing:.13em;
+  white-space:nowrap;
+  opacity:.72;
+  text-shadow:0 0 12px rgba(34,211,238,.55);
+}
+
+.orbitOne,.orbitTwo,.orbitThree{
+  animation:orbitSpin 17s linear infinite;
+  transition:border-color .3s ease,filter .3s ease;
+}
+
+.orbitTwo{animation-direction:reverse;animation-duration:22s}
+.orbitThree{animation-duration:27s}
+
+.isSpeaking::after{
+  opacity:1.35;
+  transform:scale(1.12);
+}
+
+.isSpeaking .orb{
+  transform:scale(1.035);
+  filter:saturate(1.12) brightness(1.08);
+  box-shadow:0 0 38px rgba(47,164,255,.82),0 0 105px rgba(122,57,255,.64),inset 0 0 54px rgba(90,217,255,.34);
+  animation:speakingOrb 1.05s ease-in-out infinite;
+}
+
+.isSpeaking .brainGraphic{
+  animation:speakingBrain .78s ease-in-out infinite;
+}
+
+.isSpeaking .brainGlow{
+  animation:speakingGlow .9s ease-in-out infinite;
+}
+
+.isSpeaking .voiceBars{opacity:1}
+.isSpeaking .voiceBars i{animation:voiceBar .68s ease-in-out infinite alternate}
+.isSpeaking .voiceBars i:nth-child(2){animation-delay:-.44s}
+.isSpeaking .voiceBars i:nth-child(3){animation-delay:-.18s}
+.isSpeaking .voiceBars i:nth-child(4){animation-delay:-.58s}
+.isSpeaking .voiceBars i:nth-child(5){animation-delay:-.28s}
+.isSpeaking .voiceBars i:nth-child(6){animation-delay:-.49s}
+.isSpeaking .voiceBars i:nth-child(7){animation-delay:-.12s}
+
+.isSpeaking .orbitOne,.isSpeaking .orbitTwo,.isSpeaking .orbitThree{
+  border-color:rgba(138,105,255,.48);
+  filter:drop-shadow(0 0 9px rgba(92,112,255,.48));
+}
+
+.isSpeaking .orbStatus{
+  color:#c4b5fd;
+  opacity:1;
+  animation:statusPulse 1s ease-in-out infinite;
+}
+
+@keyframes brainFloat{
+  0%,100%{transform:translateY(0) scale(1)}
+  50%{transform:translateY(-5px) scale(1.015)}
+}
+
+@keyframes idleGlow{
+  0%,100%{opacity:.58;transform:scale(.96)}
+  50%{opacity:.92;transform:scale(1.06)}
+}
+
+@keyframes orbitSpin{to{transform:rotate(384deg)}}
+
+@keyframes speakingOrb{
+  0%,100%{transform:scale(1.025)}
+  45%{transform:scale(1.055)}
+  70%{transform:scale(1.035)}
+}
+
+@keyframes speakingBrain{
+  0%,100%{transform:scale(1) translateY(0)}
+  36%{transform:scale(1.055) translateY(-2px)}
+  70%{transform:scale(1.018) translateY(1px)}
+}
+
+@keyframes speakingGlow{
+  0%,100%{opacity:.68;transform:scale(.98)}
+  50%{opacity:1;transform:scale(1.16)}
+}
+
+@keyframes voiceBar{
+  from{height:6px;opacity:.65}
+  to{height:31px;opacity:1}
+}
+
+@keyframes statusPulse{50%{opacity:.55}}
+
+@media(max-width:900px){
+  .orbStatus{bottom:8px}
+}
+
+@media(max-width:560px){
+  .orbStatus{bottom:-1px;font-size:.55rem}
+  .voiceBars{bottom:11%;gap:3px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .brainGlow,.brainGraphic,.orbitOne,.orbitTwo,.orbitThree,.isSpeaking .orb,.isSpeaking .voiceBars i,.isSpeaking .orbStatus{animation:none}
+}
