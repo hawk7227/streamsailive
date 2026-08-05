@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import styles from "./streams-workspace-landing.module.css";
 
 const icons = {
@@ -44,6 +45,84 @@ const outcomes = [
   { key: "shield", title: "Secure and private by design", text: "Your workspace is protected with account and workspace isolation." },
 ] as const;
 
+function InteractiveBrainOrb() {
+  const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    let stopTimer: ReturnType<typeof setTimeout> | undefined;
+    const startSpeaking = () => {
+      setSpeaking(true);
+      if (stopTimer) clearTimeout(stopTimer);
+      stopTimer = setTimeout(() => setSpeaking(false), 3200);
+    };
+    const stopSpeaking = () => {
+      if (stopTimer) clearTimeout(stopTimer);
+      setSpeaking(false);
+    };
+
+    const simulation = setInterval(startSpeaking, 8500);
+    const first = setTimeout(startSpeaking, 1800);
+    window.addEventListener("streams-ai:speaking", startSpeaking);
+    window.addEventListener("streams-ai:idle", stopSpeaking);
+
+    return () => {
+      clearInterval(simulation);
+      clearTimeout(first);
+      if (stopTimer) clearTimeout(stopTimer);
+      window.removeEventListener("streams-ai:speaking", startSpeaking);
+      window.removeEventListener("streams-ai:idle", stopSpeaking);
+    };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      className={`${styles.orbStage} ${speaking ? styles.isSpeaking : styles.isIdle}`}
+      onClick={() => setSpeaking((current) => !current)}
+      aria-label={speaking ? "A.S.K. AI is speaking. Activate to pause the simulation." : "A.S.K. AI is idle. Activate to preview speaking mode."}
+      aria-pressed={speaking}
+    >
+      <span className={styles.orbitOne}/><span className={styles.orbitTwo}/><span className={styles.orbitThree}/>
+      <span className={styles.orb}>
+        <span className={styles.brainGlow}/>
+        <svg className={styles.brainGraphic} viewBox="0 0 320 260" aria-hidden="true">
+          <defs>
+            <linearGradient id="brain-violet" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#d8c8ff"/>
+              <stop offset=".48" stopColor="#9f67ff"/>
+              <stop offset="1" stopColor="#6d4cff"/>
+            </linearGradient>
+            <filter id="brain-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <path className={styles.brainBody} d="M104 56c-26 0-45 17-44 41-17 9-22 31-13 48-16 16-8 42 15 50 1 23 21 38 43 34 12 12 33 13 47 1 12 12 31 11 41 0 18 5 38-8 41-27 19-7 29-28 21-45 15-16 9-40-9-49 2-24-16-43-39-45-12-20-38-27-57-14-13-10-33-9-46 6Z"/>
+          <g className={styles.brainFolds}>
+            <path d="M80 88c21-19 47-15 52 8 3 14-10 24-28 21-19-3-28 11-18 24"/>
+            <path d="M142 70c14 15 8 34-7 43-14 9-18 25-8 39"/>
+            <path d="M174 68c14 12 19 31 8 44-10 13-29 14-33 34"/>
+            <path d="M207 79c17 5 27 20 20 36-7 17-29 19-34 38"/>
+            <path d="M244 104c-16 10-16 29-3 38 15 11 16 28 4 39"/>
+            <path d="M61 148c18-7 35 1 37 16 2 14-10 24-27 23"/>
+            <path d="M112 155c15-8 34-2 38 13 4 14-8 26-24 24"/>
+            <path d="M164 153c16-8 35 0 39 15 4 14-8 26-24 24"/>
+            <path d="M213 149c17-4 32 5 33 20 2 13-8 24-24 26"/>
+            <path d="M88 199c13-9 29-6 37 5 7 10 3 20-6 28"/>
+            <path d="M143 198c14-9 31-4 36 9 4 11-1 21-11 29"/>
+            <path d="M194 197c16-7 32 0 34 15 2 9-5 18-13 23"/>
+          </g>
+        </svg>
+        <span className={styles.voiceBars} aria-hidden="true">
+          <i/><i/><i/><i/><i/><i/><i/>
+        </span>
+        <span className={styles.energyBeam}/>
+      </span>
+      <span className={styles.orbStatus}>{speaking ? "A.S.K. IS SPEAKING" : "A.S.K. IS LISTENING"}</span>
+    </button>
+  );
+}
+
 export default function StreamsWorkspaceLanding() {
   return (
     <main className={styles.page}>
@@ -61,10 +140,7 @@ export default function StreamsWorkspaceLanding() {
           </div>
         </div>
 
-        <div className={styles.orbStage} aria-hidden="true">
-          <div className={styles.orbitOne}/><div className={styles.orbitTwo}/><div className={styles.orbitThree}/>
-          <div className={styles.orb}><span/></div>
-        </div>
+        <InteractiveBrainOrb />
       </section>
 
       <section className={styles.pillars} aria-label="A.S.K. AI principles">
