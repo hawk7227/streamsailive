@@ -75,17 +75,7 @@
 }
 
 .energyBeam{
-  position:absolute;
-  inset:auto;
-  left:50%;
-  bottom:8%;
-  width:2px;
-  height:31%;
-  transform:translateX(-50%);
-  border-radius:999px;
-  background:linear-gradient(180deg,rgba(196,181,253,.05),#9f67ff 45%,#32d8ff);
-  box-shadow:0 0 9px #8b5cf6,0 0 20px rgba(34,211,238,.55);
-  opacity:.65;
+  display:none;
 }
 
 .voiceBars{
