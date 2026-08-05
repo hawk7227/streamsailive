@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./streams-workspace-landing.module.css";
+import brainStyles from "./streams-workspace-brain.module.css";
 
 const icons = {
   ask: (
@@ -77,15 +78,15 @@ function InteractiveBrainOrb() {
   return (
     <button
       type="button"
-      className={`${styles.orbStage} ${speaking ? styles.isSpeaking : styles.isIdle}`}
+      className={`${styles.orbStage} ${brainStyles.orbStage} ${speaking ? brainStyles.isSpeaking : brainStyles.isIdle}`}
       onClick={() => setSpeaking((current) => !current)}
       aria-label={speaking ? "A.S.K. AI is speaking. Activate to pause the simulation." : "A.S.K. AI is idle. Activate to preview speaking mode."}
       aria-pressed={speaking}
     >
-      <span className={styles.orbitOne}/><span className={styles.orbitTwo}/><span className={styles.orbitThree}/>
-      <span className={styles.orb}>
-        <span className={styles.brainGlow}/>
-        <svg className={styles.brainGraphic} viewBox="0 0 320 260" aria-hidden="true">
+      <span className={`${styles.orbitOne} ${brainStyles.orbitOne}`}/><span className={`${styles.orbitTwo} ${brainStyles.orbitTwo}`}/><span className={`${styles.orbitThree} ${brainStyles.orbitThree}`}/>
+      <span className={`${styles.orb} ${brainStyles.orb}`}>
+        <span className={brainStyles.brainGlow}/>
+        <svg className={brainStyles.brainGraphic} viewBox="0 0 320 260" aria-hidden="true">
           <defs>
             <linearGradient id="brain-violet" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="#d8c8ff"/>
@@ -97,8 +98,8 @@ function InteractiveBrainOrb() {
               <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
           </defs>
-          <path className={styles.brainBody} d="M104 56c-26 0-45 17-44 41-17 9-22 31-13 48-16 16-8 42 15 50 1 23 21 38 43 34 12 12 33 13 47 1 12 12 31 11 41 0 18 5 38-8 41-27 19-7 29-28 21-45 15-16 9-40-9-49 2-24-16-43-39-45-12-20-38-27-57-14-13-10-33-9-46 6Z"/>
-          <g className={styles.brainFolds}>
+          <path className={brainStyles.brainBody} d="M104 56c-26 0-45 17-44 41-17 9-22 31-13 48-16 16-8 42 15 50 1 23 21 38 43 34 12 12 33 13 47 1 12 12 31 11 41 0 18 5 38-8 41-27 19-7 29-28 21-45 15-16 9-40-9-49 2-24-16-43-39-45-12-20-38-27-57-14-13-10-33-9-46 6Z"/>
+          <g className={brainStyles.brainFolds}>
             <path d="M80 88c21-19 47-15 52 8 3 14-10 24-28 21-19-3-28 11-18 24"/>
             <path d="M142 70c14 15 8 34-7 43-14 9-18 25-8 39"/>
             <path d="M174 68c14 12 19 31 8 44-10 13-29 14-33 34"/>
@@ -113,12 +114,12 @@ function InteractiveBrainOrb() {
             <path d="M194 197c16-7 32 0 34 15 2 9-5 18-13 23"/>
           </g>
         </svg>
-        <span className={styles.voiceBars} aria-hidden="true">
+        <span className={brainStyles.voiceBars} aria-hidden="true">
           <i/><i/><i/><i/><i/><i/><i/>
         </span>
-        <span className={styles.energyBeam}/>
+        <span className={brainStyles.energyBeam}/>
       </span>
-      <span className={styles.orbStatus}>{speaking ? "A.S.K. IS SPEAKING" : "A.S.K. IS LISTENING"}</span>
+      <span className={brainStyles.orbStatus}>{speaking ? "A.S.K. IS SPEAKING" : "A.S.K. IS LISTENING"}</span>
     </button>
   );
 }
