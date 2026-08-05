@@ -62,16 +62,31 @@ function explicitlyRequestsDeterministicStructure(userContent: string, body: Str
     && requiresDeterministicStructureCheck(text);
 }
 
+/**
+ * The fast path calls the provider directly with NO TOOLS attached.
+ *
+ * It exists only to keep trivial greetings snappy. Anything else must reach
+ * runOrchestrator, which attaches the full tool registry (GitHub, preview,
+ * web, files) and runs the tool-call loop. Previously this function used a
+ * keyword blocklist, which sent most ordinary messages — including capability
+ * questions — down the tool-less path, so the assistant truthfully reported
+ * that it had no tools.
+ *
+ * Rule: opt IN to the fast path, never opt out. If in doubt, orchestrator.
+ */
+const TRIVIAL_GREETING = /^(hi|hey|hello|yo|sup|hiya|howdy|good (morning|afternoon|evening)|thanks|thank you|thx|ty|ok|okay|got it|cool|nice|great|perfect|bye|goodbye|see ya|night)[\s!.,?]*$/i;
+
 function shouldUseDirectProvider(body: StreamsMessageRequestBody, userContent: string) {
   if (body.runAssistant === false || !userContent) return false;
   if (body.metadata?.skipUserPersistence === true) return false;
   if (Array.isArray(body.attachments) && body.attachments.length > 0) return false;
   if (body.metadata?.enforceDeterministicStructure === true) return false;
   if (body.webSearchEnabled === true || body.metadata?.webSearchEnabled === true) return false;
-  if (userContent.length > 2500) return false;
 
-  const complexIntent = /\b(latest|today|current|news|search the web|research|sources?|citations?|upload|attached|file|image|video|audio|transcribe|analy[sz]e this link|https?:\/\/|build|deploy|git(?:\s*hub|\s*gib)?|repositor(?:y|ies)|repo|branch|commit|pull request|issue|workflow|calendar|email|send|create an image)\b/i;
-  return !complexIntent.test(userContent);
+  const text = userContent.trim();
+  if (text.length > 60) return false;
+
+  return TRIVIAL_GREETING.test(text);
 }
 
 function emit(controller: ReadableStreamDefaultController<Uint8Array>, event: string, payload: Record<string, unknown>) {
@@ -411,4 +426,5 @@ export async function POST(request: NextRequest) {
     return new Response("Streams could not complete this response.", { status: 500 });
   }
 }
+
 
