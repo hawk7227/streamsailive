@@ -42,6 +42,7 @@
   inset:16%;
   border-radius:48%;
   background:radial-gradient(circle,rgba(148,92,255,.28),rgba(72,40,180,.10) 60%,transparent 76%);
+  box-shadow:none;
   filter:blur(15px);
   animation:idleGlow 4.6s ease-in-out infinite;
 }
@@ -75,11 +76,13 @@
 
 .energyBeam{
   position:absolute;
+  inset:auto;
   left:50%;
   bottom:8%;
   width:2px;
   height:31%;
   transform:translateX(-50%);
+  border-radius:999px;
   background:linear-gradient(180deg,rgba(196,181,253,.05),#9f67ff 45%,#32d8ff);
   box-shadow:0 0 9px #8b5cf6,0 0 20px rgba(34,211,238,.55);
   opacity:.65;
@@ -87,6 +90,7 @@
 
 .voiceBars{
   position:absolute;
+  inset:auto;
   left:50%;
   bottom:14%;
   display:flex;
@@ -96,6 +100,9 @@
   width:42%;
   height:34px;
   transform:translateX(-50%);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
   opacity:0;
   transition:opacity .25s ease;
 }
