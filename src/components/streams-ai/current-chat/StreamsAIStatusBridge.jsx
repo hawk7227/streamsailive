@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import "./StreamsAIOperationStatusBridge";
+import ConversationStateEmitter from "./ConversationStateEmitter";
 import { canShowStreamsStatus, isVisibleSafeStatus, normalizeStatusText } from "./runtime/streamsStatusRegistry";
 
 export default function StreamsAIStatusBridge({ chatRuntime }) {
@@ -62,5 +63,11 @@ export default function StreamsAIStatusBridge({ chatRuntime }) {
   const runtimeShow = isVisibleSafeStatus(chatRuntime?.activity, Boolean(chatRuntime?.isStreaming));
   const text = externalStatus?.statusText || runtimeText;
   const show = Boolean(externalStatus?.visible || runtimeShow);
-  return <div className={show ? "streamsStatusBridge" : "streamsStatusBridge idle"}>{text}</div>;
+
+  return (
+    <>
+      <ConversationStateEmitter chatRuntime={chatRuntime} />
+      <div className={show ? "streamsStatusBridge" : "streamsStatusBridge idle"}>{text}</div>
+    </>
+  );
 }
