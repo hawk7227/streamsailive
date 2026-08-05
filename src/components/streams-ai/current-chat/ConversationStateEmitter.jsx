@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 const STATE_KEY = "streams-ai:conversation-state";
+const CHANNEL_NAME = "streams-ai:conversation-state";
 const CONTRACT_VERSION = "streams-ai-conversation-state.v1";
 const SESSION_CACHE_KEY = "streams-ai:sessions.cache.v1";
 
@@ -63,6 +64,11 @@ function emit(type, detail) {
   if (typeof window === "undefined") return;
   try { window.localStorage.setItem(STATE_KEY, JSON.stringify(detail)); } catch {}
   window.dispatchEvent(new CustomEvent(type, { detail }));
+  try {
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    channel.postMessage(detail);
+    channel.close();
+  } catch {}
   try { window.parent?.postMessage({ type, detail, source: "streams-ai-chat-frame", at: new Date().toISOString() }, window.location.origin); } catch {}
   postRuntimeEvent(detail);
 }
