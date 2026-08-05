@@ -142,17 +142,17 @@ export async function executeWebsiteBuild(input: {
   let stage: RuntimeOperation["stage"] = operation.stage;
   try {
     stage = "REQUIREMENTS_RESOLVED";
-    input.emit(stage, "Requirements resolved…", { operationId: operation.operationId });
+    input.emit(stage, "Got it — working out what the page needs…", { operationId: operation.operationId });
     operation = await operations.transition(input.scope, operation.operationId, stage);
 
     stage = "FILES_GENERATING";
-    input.emit(stage, "Generating the frontend…", { operationId: operation.operationId });
+    input.emit(stage, "Writing the page now. This takes about half a minute for a full document…", { operationId: operation.operationId });
     operation = await operations.transition(input.scope, operation.operationId, stage);
     const html = await withStageTimeout(stage, (signal) => withOpenAIRetry(
       () => generateFrontendHtml(input.userMessage, signal),
       {
         onRetry: (failure, nextAttempt, delayMs) => {
-          input.emit(stage, `Frontend provider retry ${nextAttempt} scheduled…`, {
+          input.emit(stage, `That attempt didn't land — retrying (${nextAttempt})…`, {
             operationId: operation.operationId,
             retryAttempt: nextAttempt,
             retryDelayMs: delayMs,
@@ -166,22 +166,22 @@ export async function executeWebsiteBuild(input: {
 
     stage = "FILES_WRITTEN";
     const sourceArtifact: RuntimeArtifact = { artifactId: crypto.randomUUID(), artifactType: "source", status: "saved", metadata: { format: "html", bytes: Buffer.byteLength(html) } };
-    input.emit(stage, "Frontend source saved…", { operationId: operation.operationId, bytes: Buffer.byteLength(html) });
+    input.emit(stage, "Page written. Saving the source…", { operationId: operation.operationId, bytes: Buffer.byteLength(html) });
     operation = await operations.transition(input.scope, operation.operationId, stage, { artifacts: [sourceArtifact] });
     await operations.snapshot(input.scope, operation.operationId, stage, [sourceArtifact], { htmlBytes: Buffer.byteLength(html) });
 
     stage = "BUILD_VALIDATING";
-    input.emit(stage, "Validating the frontend…", { operationId: operation.operationId });
+    input.emit(stage, "Checking the markup is valid and self-contained…", { operationId: operation.operationId });
     operation = await operations.transition(input.scope, operation.operationId, stage);
 
     stage = "PREVIEW_STARTING";
-    input.emit(stage, "Starting the preview…", { operationId: operation.operationId });
+    input.emit(stage, "Spinning up the preview…", { operationId: operation.operationId });
     operation = await operations.transition(input.scope, operation.operationId, stage);
     const preview = await withStageTimeout(stage, () => createPreview(input.scope, { sessionId: input.sessionId, projectId: input.projectId, title: "Generated frontend", html, operationId: operation.operationId }), input.signal);
     const previewArtifact: RuntimeArtifact = { artifactId: preview.previewId, artifactType: "preview", status: "ready", url: preview.previewUrl, metadata: { versionId: preview.versionId } };
 
     stage = "PREVIEW_READY";
-    input.emit(stage, "Preview ready…", { operationId: operation.operationId, ...preview });
+    input.emit(stage, "Preview is live — opening it in the pane…", { operationId: operation.operationId, ...preview });
     operation = await operations.transition(input.scope, operation.operationId, stage, { previewId: preview.previewId, previewUrl: preview.previewUrl, artifacts: [sourceArtifact, previewArtifact] });
     await operations.snapshot(input.scope, operation.operationId, stage, [sourceArtifact, previewArtifact], { previewId: preview.previewId, previewUrl: preview.previewUrl });
 
