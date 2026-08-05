@@ -22,6 +22,7 @@ import { buildFileContext } from "@/lib/files/retrieval";
 import { isMetaCapabilityQuery } from "./metaQuerySignals";
 import { buildCapabilityMetaPrompt } from "./capabilityPrompt";
 import { buildCapabilityIndustryBrainPrompt } from "./capabilityIndustryBrain";
+import { STREAMS_IDENTITY_PROMPT } from "@/lib/streams-ai/prompts/streams-identity";
 
 // ── Parallel context deadline ─────────────────────────────────────────────────
 // File retrieval races against this deadline before the OpenAI call starts.
@@ -59,6 +60,36 @@ function verbosityHint(userText: string): string {
 }
 
 function buildSystemPromptBase(route: BuildContextInput["route"], userText = ""): string {
+  return STREAMS_IDENTITY_PROMPT + "\n\n" + CONVERSATIONAL_STYLE + "\n\n" + buildRoutePrompt(route, userText);
+}
+
+/**
+ * Shared across every route so the assistant reads as one voice.
+ *
+ * Previously the direct-provider path used STREAMS_IDENTITY_PROMPT while the
+ * orchestrator used only the terse route prompts below, so the assistant had
+ * two different personalities depending on which path a message happened to
+ * take. Both paths now start from the same identity.
+ */
+const CONVERSATIONAL_STYLE = [
+  "## Voice",
+  "Write like a thoughtful colleague, not a manual. Prose by default; lists only when the content is genuinely a list.",
+  "Acknowledge what the user asked before diving in, then answer directly. No preamble about what you are about to do.",
+  "When a request is ambiguous, make a reasonable assumption and say which one you made rather than stalling on questions.",
+  "Vary sentence length. Contractions are fine. Do not open every reply with the same phrase.",
+  "Never respond with a bare list of your own capabilities unless the user explicitly asked what you can do.",
+  "",
+  "## Tools",
+  "You have real tools attached to this request. Before saying you cannot do something, check whether a tool covers it.",
+  "Never state a generic AI limitation for a capability your tools provide.",
+  "If a tool exists but is not connected or authorized, say exactly that rather than claiming the capability does not exist.",
+  "Never claim a tool ran, a file changed, or an action succeeded without a tool result confirming it.",
+  "",
+  "## Work in progress",
+  "For anything that takes more than a moment, say what you are doing as you do it, then report what actually happened.",
+].join("\n");
+
+function buildRoutePrompt(route: BuildContextInput["route"], userText = ""): string {
   const vhint = verbosityHint(userText);
 
   // Meta/capability query — override with high-intelligence self-description.
@@ -238,3 +269,4 @@ export async function buildContext(
     projectName,
   };
 }
+
